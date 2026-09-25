@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-start",
-  "body": "`eypres start` validates the whole deck first. On any error it prints the error(s) and exits non-zero without serving. Otherwise it serves the deck on a default port (overridable with `--port`), prints the link in the terminal, and opens the default browser. It never serves a half-broken deck at startup.",
+  "body": "`eypres start` validates the whole deck first. On an error it prints that single (first) error and exits non-zero without serving. Otherwise it serves the deck on a default port (overridable with `--port`), prints the link in the terminal, and opens the default browser. It never serves a half-broken deck at startup.",
   "properties": {
     "feature": "cli"
   },
