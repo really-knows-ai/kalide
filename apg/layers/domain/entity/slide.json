@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "slide",
+  "body": "A slide: one file slides/<number>[letter]-<label>.md; has position (number, optional letter), label (anchor), slide template, field values (frontmatter), body, sections, optional speaker notes.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [],
+  "in": []
+}
