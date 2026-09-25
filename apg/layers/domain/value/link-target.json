@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "link-target",
+  "body": "A link target: `#label` (must resolve to a slide label) or an http(s) URL.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
