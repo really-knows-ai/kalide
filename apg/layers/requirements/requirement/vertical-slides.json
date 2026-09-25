@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "vertical-slides",
+  "body": "A letter suffix (e.g. `3a-…`) makes a reveal.js vertical slide under numbered slide 3, ordered by letter; one level only. A letter slide without its number slide = error; duplicate number+letter = error.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
