@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "body-rule",
+  "body": "Body rule of a template: required | optional | disallowed, plus max_words, max_paragraphs, max_list_items, subheadings allowed.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
