@@ -26,6 +26,11 @@
       "kind": "uses",
       "source": "solution.person.template-author",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.presentation",
+      "properties": {}
     }
   ]
 }
