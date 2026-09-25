@@ -26,6 +26,11 @@
       "kind": "contains",
       "target": "solution.component.markdown-validator",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.template-registry",
+      "properties": {}
     }
   ],
   "in": [
