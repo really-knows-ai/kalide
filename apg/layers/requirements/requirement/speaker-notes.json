@@ -23,6 +23,11 @@
       "kind": "details",
       "source": "requirements.note.fix-speaker-notes-placement",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-reveal-pin",
+      "properties": {}
     }
   ]
 }
