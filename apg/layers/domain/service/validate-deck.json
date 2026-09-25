@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "validate-deck",
-  "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level; fail-fast — stop at and return the first validation error.",
+  "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level; fail-fast — stop at and return the first validation error in the fixed order: eypres.yaml → slide filenames (numbering, letters, label uniqueness) → each slide in number/letter order, top-to-bottom by line (frontmatter, body, sections, fields) → inter-slide #label links last (need all labels known).",
   "properties": {},
   "out": [
     {
