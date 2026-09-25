@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "cli-commands",
-  "body": "CLI commands: init, start (`--port`, `--no-open`), templates [name]; exit codes and terminal output, including the printed server URL; clean shutdown on termination signals.",
+  "body": "CLI commands: init, start (`--port`, `--no-open`), templates [name]; exit codes and terminal output, including the printed server URL. Shutdown: clean on SIGINT/SIGTERM (macOS) and Ctrl+C / Ctrl+Break (Windows, via os/signal `os.Interrupt`). A clean exit means exit code 0, the port released, and no leftover child processes.",
   "properties": {},
   "out": [],
   "in": [
