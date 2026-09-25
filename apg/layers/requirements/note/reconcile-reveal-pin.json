@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.speaker-notes",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.pdf-via-print",
+      "properties": {}
     }
   ],
   "in": []
