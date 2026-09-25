@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.speaker-notes",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.slide-parser",
+      "properties": {}
     }
   ],
   "in": []
