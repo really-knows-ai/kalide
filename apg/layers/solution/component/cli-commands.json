@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "cli-commands",
-  "body": "CLI commands: init, start (--port), templates [name]; exit codes and terminal output.",
+  "body": "CLI commands: init, start (`--port`, `--no-open`), templates [name]; exit codes and terminal output, including the printed server URL; clean shutdown on termination signals.",
   "properties": {},
   "out": [],
   "in": [
