@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-supported-targets-runners",
+  "body": "Source: the supported targets were 'darwin/arm64, darwin/amd64, windows/amd64, windows/arm64', with native CI for all four.\n\nInconsistency: GitHub-hosted native runners are not assured for every target on the private repo (feedback-36).\n\nResolution [with user]:\n- Required targets are darwin/arm64 (Apple silicon) and windows/amd64.\n- Intel macOS (darwin/amd64) is dropped and definitely unsupported.\n- windows/arm64 is conditional: it is built, verified and released only if a GitHub-hosted native runner is available to the private repo. Otherwise it is unsupported, with no manual or self-hosted fallback.\n- Runners: Apple silicon `macos-14`/`macos-latest`; `windows-latest`; `windows-11-arm` only if available.\n- Acceptance changes from \"four green jobs\" to \"one green native job per supported target\".\n\nUpdated nodes: supported-platforms, single-binary, go-static-embedded-binary, cli-binary, target-platform, native-ci-verification, native-e2e-ci, release-workflow, release-pipeline, github-releases, homebrew-install (arm64 only), scoop-install (arm64 conditional), publish-release. The historical notes fix-single-binary-targets and distribution-decisions are marked superseded.\n\n[autonomous]:\n- The Homebrew formula refuses on Intel Macs with a clear \"Apple silicon only\" message.\n- The manifests cover only the targets actually released.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
