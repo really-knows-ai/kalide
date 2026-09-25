@@ -9,6 +9,11 @@
       "kind": "publishes",
       "target": "domain.entity.deck-changed",
       "properties": {}
+    },
+    {
+      "kind": "publishes",
+      "target": "domain.entity.deck-rebuilt",
+      "properties": {}
     }
   ],
   "in": [
