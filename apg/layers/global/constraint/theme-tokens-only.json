@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "theme-tokens-only",
+  "body": "Template layouts and CSS must use only theme tokens (CSS variables) for colours, fonts and spacing — never hard-coded values.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
