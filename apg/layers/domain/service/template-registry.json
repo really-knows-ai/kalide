@@ -9,6 +9,11 @@
       "kind": "realised-by",
       "target": "solution.component.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.cli-commands",
+      "properties": {}
     }
   ],
   "in": [
