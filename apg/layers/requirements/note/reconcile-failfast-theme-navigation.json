@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "solution.component.deck-validator",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.theme-registry",
+      "properties": {}
     }
   ],
   "in": []
