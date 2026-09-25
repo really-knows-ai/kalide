@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "presentation",
+  "body": "Presentation: rendering a valid deck to reveal.js HTML, serving, watching and live-reloading.",
+  "properties": {
+    "attribute": "supporting"
+  },
+  "out": [],
+  "in": []
+}
