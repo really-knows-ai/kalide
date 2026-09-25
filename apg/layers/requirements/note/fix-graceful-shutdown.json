@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-graceful-shutdown",
+  "body": "source: native-ci-verification step 6 'terminate the process (SIGTERM on macOS; taskkill or process kill on Windows) and assert a clean exit'; inconsistency: a forced kill/taskkill on Windows cannot be caught, so clean shutdown could never be asserted there, and \"clean exit\" was undefined (feedback-38); resolution [with user]: `eypres start` shuts down cleanly on SIGINT/SIGTERM (macOS) and Ctrl+C / Ctrl+Break console events (Windows, via os/signal os.Interrupt); clean exit = exit code 0, listening port released, no leftover child processes; the CI e2e launches eypres in its own process group and stops it with SIGTERM (macOS) or CTRL_BREAK_EVENT to the process group (Windows); a forced kill is only a timeout fallback and fails the test. Updated cli-start, cli-commands, native-ci-verification (steps 1 and 6) and native-e2e-ci.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
