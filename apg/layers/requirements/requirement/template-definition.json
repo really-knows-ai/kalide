@@ -36,6 +36,11 @@
       "kind": "contains",
       "target": "requirements.requirement.template-controlled-effects",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
     }
   ],
   "in": [
