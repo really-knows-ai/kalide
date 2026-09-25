@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "package-manifest-update",
+  "body": "The release workflow updates the Homebrew formula and Scoop manifest to the new version, asset URLs and SHA-256 checksums for each target. AC: after a release, both files reference the new version and their checksums match the published assets.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
