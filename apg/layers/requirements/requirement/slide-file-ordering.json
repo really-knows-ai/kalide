@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.vertical-slides",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.unique-slide-labels",
+      "properties": {}
     }
   ],
   "in": [
