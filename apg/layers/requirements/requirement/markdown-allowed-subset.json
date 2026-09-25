@@ -6,7 +6,13 @@
   "properties": {
     "feature": "markdown"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.markdown-disallowed-errors",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
