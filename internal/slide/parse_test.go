@@ -1,0 +1,607 @@
+package slide
+
+import (
+	"fmt"
+	"slices"
+	"sort"
+	"strings"
+	"testing"
+)
+
+// fakeTemplate is one fake catalogue entry: a template's usage and, for
+// slide templates, its declared sections with their accepted section templates
+// and repeat bounds.
+type fakeTemplate struct {
+	usage    string
+	sections []string
+	accepted map[string][]string
+	min      map[string]int
+	max      map[string]int
+}
+
+// fakeCatalogue is a hand-written Catalogue: the parser only ever consumes the
+// interface, so tests can declare exactly the names a case needs without
+// dragging in internal/template. max <= 0 means unbounded, matching how the
+// parser reads SectionDecl (a positive max is a hard limit).
+type fakeCatalogue map[string]fakeTemplate
+
+func (c fakeCatalogue) LookupSlideTemplate(name string) (string, bool) {
+	t, ok := c[name]
+	if !ok {
+		return "", false
+	}
+	return t.usage, true
+}
+
+func (c fakeCatalogue) TemplateNames() []string {
+	names := make([]string, 0, len(c))
+	for name := range c {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (c fakeCatalogue) SectionNames(tmpl string) []string {
+	names := append([]string(nil), c[tmpl].sections...)
+	sort.Strings(names)
+	return names
+}
+
+func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, bool) {
+	t, ok := c[tmpl]
+	if !ok || !slices.Contains(t.sections, section) {
+		return nil, 0, 0, false
+	}
+	return t.accepted[section], t.min[section], t.max[section], true
+}
+
+// testCatalogue returns the catalogue most cases share. It exercises every
+// shape Parse branches on:
+//
+//   - content: two sections, "columns" accepting exactly one template and
+//     "gallery" accepting two (>1 => a template: is required);
+//   - limited / needs / once: "columns" with a hard max, a min, and a max of 1;
+//   - badnotes: a slide template that (illegally) declares the reserved
+//     "notes" section name.
+func testCatalogue() fakeCatalogue {
+	return fakeCatalogue{
+		"title": {usage: "slide"},
+		"content": {usage: "slide", sections: []string{"columns", "gallery"},
+			accepted: map[string][]string{
+				"columns": {"column"},
+				"gallery": {"fig", "card"},
+			}},
+		"limited": {usage: "slide", sections: []string{"columns"},
+			accepted: map[string][]string{"columns": {"column"}},
+			max:      map[string]int{"columns": 2}},
+		"needs": {usage: "slide", sections: []string{"columns"},
+			accepted: map[string][]string{"columns": {"column"}},
+			min:      map[string]int{"columns": 2}},
+		"once": {usage: "slide", sections: []string{"columns"},
+			accepted: map[string][]string{"columns": {"column"}},
+			max:      map[string]int{"columns": 1}},
+		"badnotes": {usage: "slide", sections: []string{NotesSection}},
+		"columns":  {usage: "section"},
+		"column":   {usage: "section"},
+		"fig":      {usage: "section"},
+		"card":     {usage: "section"},
+	}
+}
+
+// src joins lines into a source file with a trailing newline, so every test
+// case can be written one element per line and counted unambiguously.
+func src(lines ...string) []byte {
+	return []byte(strings.Join(lines, "\n") + "\n")
+}
+
+// parseOK parses src and fails the test on any error.
+func parseOK(t *testing.T, file string, src []byte, cat Catalogue) *Slide {
+	t.Helper()
+	s, err := Parse(file, src, cat)
+	if err != nil {
+		t.Fatalf("Parse(%s): unexpected error: %v", file, err)
+	}
+	return s
+}
+
+// wantParseError fails unless err is a *ParseError at exactly file:line whose
+// message contains every want substring. It also checks the rendered position
+// via ParseError.Error.
+func wantParseError(t *testing.T, err error, file string, line int, wants ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("Parse: got nil error, want error at %s:%d", file, line)
+	}
+	pe, ok := err.(*ParseError)
+	if !ok {
+		t.Fatalf("Parse error type = %T (%v), want *ParseError", err, err)
+	}
+	if pe.File != file || pe.Line != line {
+		t.Fatalf("Parse error = %s:%d: %s; want %s:%d", pe.File, pe.Line, pe.Msg, file, line)
+	}
+	if line > 0 {
+		if want := fmt.Sprintf("%s:%d: ", file, line); !strings.HasPrefix(pe.Error(), want) {
+			t.Fatalf("ParseError.Error() = %q, want prefix %q", pe.Error(), want)
+		}
+	}
+	for _, w := range wants {
+		if !strings.Contains(pe.Msg, w) {
+			t.Fatalf("Parse error message = %q, want it to contain %q", pe.Msg, w)
+		}
+	}
+}
+
+// TestParse covers internal/slide.Parse (deck-structure): frontmatter,
+// template resolution through the Catalogue contract, body/section structure,
+// section repeats, section frontmatter fences and reserved `# notes`.
+// Everything runs in-process against a fake Catalogue, so it holds under
+// -short.
+func TestParse(t *testing.T) {
+	t.Run("constants", testParseConstants)
+	t.Run("frontmatter", testParseFrontmatter)
+	t.Run("template", testParseTemplate)
+	t.Run("structure", testParseStructure)
+	t.Run("sections", testParseSections)
+	t.Run("repeats", testParseRepeats)
+	t.Run("section fence", testParseSectionFence)
+	t.Run("notes", testParseNotes)
+}
+
+// testParseConstants pins the reserved names and fences the parser enforces.
+func testParseConstants(t *testing.T) {
+	if NotesSection != "notes" {
+		t.Errorf("NotesSection = %q, want %q", NotesSection, "notes")
+	}
+	if SlideDelimiter != "---" {
+		t.Errorf("SlideDelimiter = %q, want %q", SlideDelimiter, "---")
+	}
+	if SectionFence != "```" {
+		t.Errorf("SectionFence = %q, want %q", SectionFence, "```")
+	}
+}
+
+// testParseFrontmatter covers the --- … --- frontmatter rules.
+func testParseFrontmatter(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("missing entirely", func(t *testing.T) {
+		_, err := Parse(file, []byte(""), cat)
+		wantParseError(t, err, file, 1, "missing slide frontmatter")
+	})
+
+	t.Run("not on line 1 errors at the offending line", func(t *testing.T) {
+		_, err := Parse(file, src("Title", "---", "template: title", "---"), cat)
+		wantParseError(t, err, file, 2, "slide frontmatter must start on line 1")
+	})
+
+	t.Run("unterminated errors at the opening line", func(t *testing.T) {
+		_, err := Parse(file, src("---", "template: title", "Body"), cat)
+		wantParseError(t, err, file, 1, "unterminated slide frontmatter", "---")
+	})
+
+	t.Run("missing template key", func(t *testing.T) {
+		_, err := Parse(file, src("---", "title: Hello", "---"), cat)
+		wantParseError(t, err, file, 1, `missing required key "template"`)
+	})
+
+	t.Run("empty template value", func(t *testing.T) {
+		_, err := Parse(file, src("---", `template: ""`, "---"), cat)
+		wantParseError(t, err, file, 1, `missing required key "template"`)
+	})
+}
+
+// testParseTemplate covers slide-template lookup and usage through Catalogue.
+func testParseTemplate(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("unknown template suggests the closest name", func(t *testing.T) {
+		_, err := Parse(file, src("---", "template: titel", "---"), cat)
+		wantParseError(t, err, file, 2, `unknown template "titel"`, `did you mean "title"?`)
+	})
+
+	t.Run("unknown template with nothing close has no suggestion", func(t *testing.T) {
+		_, err := Parse(file, src("---", "template: zzzzzzzz", "---"), cat)
+		wantParseError(t, err, file, 2, `unknown template "zzzzzzzz"`)
+		if strings.Contains(err.Error(), "did you mean") {
+			t.Fatalf("error unexpectedly suggested a template: %v", err)
+		}
+	})
+
+	t.Run("section template used as a slide", func(t *testing.T) {
+		_, err := Parse(file, src("---", "template: columns", "---"), cat)
+		wantParseError(t, err, file, 2,
+			`"columns" is a section template, not a slide template`)
+	})
+
+	t.Run("template line points at the key", func(t *testing.T) {
+		_, err := Parse(file, src("---", "title: X", "template: titel", "---"), cat)
+		wantParseError(t, err, file, 3, `did you mean "title"?`)
+	})
+}
+
+// testParseStructure covers the body-before-first-section boundary and the
+// parsed Slide/Section/Notes shape.
+func testParseStructure(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	slide := parseOK(t, file, src(
+		"---",
+		"template: content",
+		"title: Hello",
+		"---",
+		"",
+		"Intro line one",
+		"Intro line two",
+		"",
+		"# columns",
+		"body one",
+		"",
+		"# gallery",
+		"```",
+		"template: fig",
+		"```",
+		"gallery body",
+		"# notes",
+		"notes here",
+	), cat)
+
+	if slide.File != file {
+		t.Errorf("File = %q, want %q", slide.File, file)
+	}
+	if slide.Template != "content" || slide.TemplateLine != 2 {
+		t.Errorf("Template = %q line %d, want %q line 2", slide.Template, slide.TemplateLine, "content")
+	}
+	if slide.Frontmatter["title"] != "Hello" {
+		t.Errorf("Frontmatter[title] = %v, want %q", slide.Frontmatter["title"], "Hello")
+	}
+	if wantBody := "\nIntro line one\nIntro line two\n"; slide.Body != wantBody || slide.BodyLine != 5 {
+		t.Errorf("Body = %q line %d, want %q line 5", slide.Body, slide.BodyLine, wantBody)
+	}
+
+	if len(slide.Sections) != 2 {
+		t.Fatalf("len(Sections) = %d, want 2", len(slide.Sections))
+	}
+	columns, gallery := slide.Sections[0], slide.Sections[1]
+	if columns.Name != "columns" || columns.HeadingLine != 9 {
+		t.Errorf("Section[0] = %q line %d, want %q line 9", columns.Name, columns.HeadingLine, "columns")
+	}
+	if columns.Template != "column" {
+		t.Errorf("columns.Template = %q, want %q (resolved from the single accepted template)", columns.Template, "column")
+	}
+	if columns.Body != "body one\n" || columns.BodyLine != 10 {
+		t.Errorf("columns.Body = %q line %d, want %q line 10", columns.Body, columns.BodyLine, "body one\n")
+	}
+	if gallery.Name != "gallery" || gallery.HeadingLine != 12 {
+		t.Errorf("Section[1] = %q line %d, want %q line 12", gallery.Name, gallery.HeadingLine, "gallery")
+	}
+	if gallery.FenceLine != 13 || gallery.TemplateLine != 14 || gallery.Template != "fig" {
+		t.Errorf("gallery template = %q (fence %d, key %d), want %q (fence 13, key 14)",
+			gallery.Template, gallery.FenceLine, gallery.TemplateLine, "fig")
+	}
+	if gallery.Body != "gallery body" || gallery.BodyLine != 16 {
+		t.Errorf("gallery.Body = %q line %d, want %q line 16", gallery.Body, gallery.BodyLine, "gallery body")
+	}
+
+	if slide.Notes == nil {
+		t.Fatal("Notes = nil, want the # notes section")
+	}
+	if slide.Notes.HeadingLine != 17 || slide.Notes.Body != "notes here" || slide.Notes.BodyLine != 18 {
+		t.Errorf("Notes = line %d body %q line %d, want line 17 body %q line 18",
+			slide.Notes.HeadingLine, slide.Notes.Body, slide.Notes.BodyLine, "notes here")
+	}
+}
+
+// testParseSections covers section-name declaration and section-template
+// resolution errors.
+func testParseSections(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("undeclared section suggests the closest name", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# colums",
+		), cat)
+		wantParseError(t, err, file, 5, `unknown section "colums"`, `did you mean "columns"?`)
+	})
+
+	t.Run("explicit section template resolves", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: column",
+			"```",
+		), cat)
+		got := slide.Sections[0]
+		if got.Template != "column" || got.TemplateLine != 7 {
+			t.Errorf("Template = %q line %d, want %q line 7", got.Template, got.TemplateLine, "column")
+		}
+	})
+
+	t.Run("section template not accepted by the section", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: card",
+			"```",
+		), cat)
+		wantParseError(t, err, file, 7, `unknown template for section columns "card"`)
+	})
+}
+
+// testParseRepeats covers min/max repeat limits, including that max <= 0 is
+// unbounded.
+func testParseRepeats(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("max exceeded errors at the offending heading", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: limited",
+			"---",
+			"",
+			"# columns",
+			"a",
+			"# columns",
+			"b",
+			"# columns",
+			"c",
+		), cat)
+		wantParseError(t, err, file, 9, `section "columns": at most 2 allowed, found 3`)
+	})
+
+	t.Run("min unmet errors at the template line", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: needs",
+			"---",
+			"",
+			"# columns",
+		), cat)
+		wantParseError(t, err, file, 2, `section "columns": requires at least 2, found 1`)
+	})
+
+	t.Run("within min and max parses", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: needs",
+			"---",
+			"",
+			"# columns",
+			"a",
+			"# columns",
+			"b",
+		), cat)
+		if len(slide.Sections) != 2 {
+			t.Fatalf("len(Sections) = %d, want 2", len(slide.Sections))
+		}
+	})
+
+	t.Run("max <= 0 is unbounded", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"a",
+			"# columns",
+			"b",
+			"# columns",
+			"c",
+		), cat)
+		if len(slide.Sections) != 3 {
+			t.Fatalf("len(Sections) = %d, want 3 (unbounded)", len(slide.Sections))
+		}
+	})
+}
+
+// testParseSectionFence covers the ``` section-frontmatter fence: where it may
+// appear, its language-tag rule, and when template: is required.
+func testParseSectionFence(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("template required at the fence when >1 accepted", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# gallery",
+			"```",
+			"x: 1",
+			"```",
+		), cat)
+		wantParseError(t, err, file, 6,
+			`section "gallery": a template: is required when the section accepts more than one template`)
+	})
+
+	t.Run("template required at the heading when >1 accepted and no fence", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# gallery",
+		), cat)
+		wantParseError(t, err, file, 5,
+			`section "gallery": a template: is required when the section accepts more than one template`)
+	})
+
+	t.Run("template optional with exactly one accepted (fence present)", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"width: 2",
+			"```",
+		), cat)
+		got := slide.Sections[0]
+		if got.Template != "column" {
+			t.Errorf("Template = %q, want %q (the single accepted template)", got.Template, "column")
+		}
+		if got.FenceLine != 6 {
+			t.Errorf("FenceLine = %d, want 6", got.FenceLine)
+		}
+		if got.Frontmatter["width"] != 2 {
+			t.Errorf("Frontmatter[width] = %v (%T), want 2", got.Frontmatter["width"], got.Frontmatter["width"])
+		}
+	})
+
+	t.Run("template optional with exactly one accepted (no fence)", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"body",
+		), cat)
+		if got := slide.Sections[0].Template; got != "column" {
+			t.Errorf("Template = %q, want %q (the single accepted template)", got, "column")
+		}
+	})
+
+	t.Run("language tag on the fence errors at the fence line", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```yaml",
+			"width: 2",
+			"```",
+		), cat)
+		wantParseError(t, err, file, 6, `section frontmatter fence must not have a language tag ("yaml")`)
+	})
+
+	t.Run("fence not directly after the heading errors at the fence line", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"",
+			"```",
+			"width: 2",
+			"```",
+		), cat)
+		wantParseError(t, err, file, 7, "frontmatter fence is only allowed immediately after a section heading")
+	})
+}
+
+// testParseNotes covers the reserved `# notes` section: position, uniqueness,
+// reserved-name rejection and exclusion from repeat limits.
+func testParseNotes(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("notes followed by another section errors at the later heading", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# notes",
+			"note body",
+			"# columns",
+			"more",
+		), cat)
+		wantParseError(t, err, file, 7, `"notes" section must be the last section on the slide`)
+	})
+
+	t.Run("duplicate notes errors at the second heading", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# notes",
+			"first",
+			"# notes",
+			"second",
+		), cat)
+		wantParseError(t, err, file, 7, `duplicate "notes" section`)
+	})
+
+	t.Run("notes as a declared section name is reserved", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: badnotes",
+			"---",
+			"",
+			"# notes",
+			"body",
+		), cat)
+		wantParseError(t, err, file, 5, `"notes" is reserved and cannot be declared as a section name`)
+	})
+
+	t.Run("notes as a section template is reserved", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: notes",
+			"```",
+		), cat)
+		wantParseError(t, err, file, 7, `"notes" is reserved and cannot be used as a section template`)
+	})
+
+	t.Run("notes do not count toward a max", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: once",
+			"---",
+			"",
+			"# columns",
+			"a",
+			"# notes",
+			"b",
+		), cat)
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1 (notes excluded)", len(slide.Sections))
+		}
+		if slide.Notes == nil || slide.Notes.HeadingLine != 7 {
+			t.Fatalf("Notes = %+v, want the section at line 7", slide.Notes)
+		}
+	})
+
+	t.Run("notes do not satisfy a min", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: needs",
+			"---",
+			"",
+			"# columns",
+			"a",
+			"# notes",
+			"b",
+		), cat)
+		wantParseError(t, err, file, 2, `section "columns": requires at least 2, found 1`)
+	})
+}
