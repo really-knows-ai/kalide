@@ -6,7 +6,13 @@
   "properties": {
     "feature": "templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.number-date-formats",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
