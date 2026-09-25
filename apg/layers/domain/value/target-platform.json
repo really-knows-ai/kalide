@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "target-platform",
-  "body": "Supported target: exactly one of darwin/arm64, darwin/amd64, windows/amd64, windows/arm64. No other OS/arch (Linux is a non-goal).",
+  "body": "Supported target: darwin/arm64 or windows/amd64 (required), or windows/arm64 (conditional — only while a GitHub-hosted native runner is available). No other OS/arch: Intel macOS (darwin/amd64) and Linux are non-goals.",
   "properties": {},
   "out": [],
   "in": [
