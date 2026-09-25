@@ -26,6 +26,11 @@
       "kind": "contains",
       "target": "requirements.requirement.body-rules",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-variants",
+      "properties": {}
     }
   ],
   "in": [
