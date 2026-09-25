@@ -48,6 +48,11 @@
       "kind": "contains",
       "source": "requirements.user.template-author",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.cli-templates-show",
+      "properties": {}
     }
   ]
 }

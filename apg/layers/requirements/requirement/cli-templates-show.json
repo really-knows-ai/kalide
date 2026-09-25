@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-definition",
+      "properties": {}
     }
   ],
   "in": [
