@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "go-static-embedded-binary",
-  "body": "eypres must be written in Go and ship as a single self-contained static binary running on Windows and macOS with no external runtime or network dependency; all assets must be embedded via Go embed.",
+  "body": "eypres must be written in Go and ship as a single self-contained static binary running on macOS (arm64, amd64) and Windows (amd64, arm64) only — no Linux — with no external runtime or network dependency at run time; all assets must be embedded via Go embed.",
   "properties": {},
   "out": [],
   "in": []
