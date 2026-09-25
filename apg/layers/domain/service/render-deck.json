@@ -16,6 +16,11 @@
       "kind": "contains",
       "source": "domain.group.presentation",
       "properties": {}
+    },
+    {
+      "kind": "calls",
+      "source": "domain.service.watch-deck",
+      "properties": {}
     }
   ]
 }

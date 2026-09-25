@@ -19,6 +19,11 @@
       "kind": "calls",
       "target": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "calls",
+      "target": "domain.service.render-deck",
+      "properties": {}
     }
   ],
   "in": [
