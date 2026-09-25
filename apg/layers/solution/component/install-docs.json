@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "install-docs",
+  "body": "Install docs: plain-language install guide (repo access, token creation and setup per OS, add tap/bucket, install, upgrade).",
+  "properties": {},
+  "out": [],
+  "in": []
+}
