@@ -23,6 +23,11 @@
       "kind": "details",
       "source": "requirements.note.parked-kiosk-interactivity",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-failfast-theme-navigation",
+      "properties": {}
     }
   ]
 }
