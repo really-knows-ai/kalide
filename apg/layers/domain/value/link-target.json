@@ -5,5 +5,11 @@
   "body": "A link target: `#label` (must resolve to a slide label) or an http(s) URL.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    }
+  ]
 }
