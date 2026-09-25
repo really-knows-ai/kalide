@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.fix-native-e2e-definition",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-supported-targets-runners",
+      "properties": {}
     }
   ]
 }
