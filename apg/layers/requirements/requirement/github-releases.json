@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "github-releases",
+  "body": "On a version tag, a GitHub Actions release workflow builds the four binaries and publishes them, with checksums, as assets of a GitHub Release on the private repo. AC: a pushed tag `vX.Y.Z` yields a Release `vX.Y.Z` with the four binaries and a checksums file.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
