@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "template",
+  "body": "A built-in template: name, description, usage (slide|section), fields, sections (accepted section templates + min/max), body rule, html/template layout, example slide. Aggregate root of templating.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [],
+  "in": []
+}
