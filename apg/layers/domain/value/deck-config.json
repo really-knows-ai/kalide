@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "deck-config",
-  "body": "Deck config from eypres.yaml: title, author, date, theme (optional, default `default`), navigation (default|linear|grid, default `default`).",
+  "body": "Deck config from eypres.yaml: title (required), author (optional), date (optional, `YYYY-MM-DD`), theme (optional, default `default`), navigation (optional, default|linear|grid, default `default`). No other keys (unknown key = error with suggestion).",
   "properties": {},
   "out": [],
   "in": [
