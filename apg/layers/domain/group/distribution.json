@@ -32,6 +32,11 @@
       "kind": "contains",
       "target": "domain.service.install-eypres",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.container.release-pipeline",
+      "properties": {}
     }
   ],
   "in": [
