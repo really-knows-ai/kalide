@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "deck-config",
-  "body": "`eypres.yaml` holds deck-wide config: `title`, `author` (presenter), `date`, optional `theme`, and `navigation` (linear|free). Unknown keys = error with closest-match suggestion; wrong types = error.",
+  "body": "`eypres.yaml` holds deck-wide config: `title`, `author` (presenter), `date`, optional `theme` (default `default`), and optional `navigation` (default|linear|grid, default `default`). Unknown keys = error with closest-match suggestion; wrong types = error.",
   "properties": {
     "feature": "deck-structure"
   },
