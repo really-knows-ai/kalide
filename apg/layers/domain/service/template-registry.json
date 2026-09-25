@@ -15,6 +15,11 @@
       "kind": "calls",
       "source": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "calls",
+      "source": "domain.service.render-deck",
+      "properties": {}
     }
   ]
 }

@@ -4,7 +4,13 @@
   "name": "render-deck",
   "body": "Render deck: turn a valid deck into reveal.js HTML via template layouts and theme, with vertical stacks, anchors, notes, navigation config.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "calls",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
