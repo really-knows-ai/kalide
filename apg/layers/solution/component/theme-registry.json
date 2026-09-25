@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "theme-registry",
-  "body": "Theme registry: named themes (only `ey`) mapping to token CSS + fonts/logos; lookup by deck config.",
+  "body": "Theme registry: named themes (only `default`, the EY look, today) mapping to token CSS + fonts/logos; lookup by deck config, omitted theme resolves to `default`.",
   "properties": {},
   "out": [],
   "in": [
