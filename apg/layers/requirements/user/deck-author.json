@@ -39,6 +39,11 @@
       "kind": "contains",
       "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ],
   "in": []
