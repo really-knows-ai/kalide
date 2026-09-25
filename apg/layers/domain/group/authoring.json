@@ -1,0 +1,12 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "authoring",
+  "body": "Deck authoring: the deck author's content — deck, config, slides, sections, bodies.",
+  "properties": {
+    "attribute": "core",
+    "root": "deck"
+  },
+  "out": [],
+  "in": []
+}
