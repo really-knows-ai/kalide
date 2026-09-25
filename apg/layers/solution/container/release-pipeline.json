@@ -6,7 +6,13 @@
   "properties": {
     "kind": "service"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",

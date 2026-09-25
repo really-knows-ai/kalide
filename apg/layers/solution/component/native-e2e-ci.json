@@ -5,5 +5,11 @@
   "body": "Native e2e CI job: GitHub Actions matrix on native runners (macOS arm64, macOS x64, Windows x64, Windows arm64) running offline `eypres init && eypres start` against each target's built binary.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.release-pipeline",
+      "properties": {}
+    }
+  ]
 }
