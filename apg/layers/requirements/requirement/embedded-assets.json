@@ -18,6 +18,11 @@
       "kind": "contains",
       "source": "requirements.stakeholder.ey-brand-owner",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.cli-init",
+      "properties": {}
     }
   ]
 }
