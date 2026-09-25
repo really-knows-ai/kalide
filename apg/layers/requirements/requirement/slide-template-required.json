@@ -6,7 +6,13 @@
   "properties": {
     "feature": "deck-structure"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.slide-sections",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
