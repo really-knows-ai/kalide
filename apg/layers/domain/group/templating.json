@@ -32,6 +32,11 @@
       "kind": "contains",
       "target": "domain.value.body-rule",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.entity.theme",
+      "properties": {}
     }
   ],
   "in": []
