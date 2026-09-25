@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "deck-changed",
+  "body": "Event: a file under slides/, assets/ or eypres.yaml changed while serving.",
+  "properties": {
+    "kind": "event"
+  },
+  "out": [],
+  "in": []
+}
