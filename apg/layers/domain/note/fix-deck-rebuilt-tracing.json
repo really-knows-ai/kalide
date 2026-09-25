@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "note",
+  "name": "fix-deck-rebuilt-tracing",
+  "body": "source: domain.entity.deck-rebuilt realised-by solution.component.deck-page only; inconsistency: the event traced only to its browser consumer, not to the components that produce and deliver it (feedback-9); resolution: added realised-by deck-rebuilt → file-watcher (emits it after re-validation/re-render) and deck-rebuilt → http-server (its live-reload endpoint pushes it to browsers), keeping deck-page (reloads on it); component bodies updated to name those roles. Push transport left as \"live-reload endpoint\" (SSE vs websocket not fixed by the spec) [autonomous, per coordinator direction].",
+  "properties": {},
+  "out": [],
+  "in": []
+}
