@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "service",
+  "name": "install-eypres",
+  "body": "Install eypres: a user adds the tap (macOS) or bucket (Windows), supplies a GitHub token, and the package manager fetches the matching binary from the private release and installs it.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
