@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.body-rule",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.markdown-allowed-subset",
+      "properties": {}
     }
   ],
   "in": [
