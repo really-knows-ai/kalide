@@ -5,5 +5,11 @@
   "body": "Field type: text | number | date | boolean | enum | image | link | list(of one type) | <section-template>.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    }
+  ]
 }
