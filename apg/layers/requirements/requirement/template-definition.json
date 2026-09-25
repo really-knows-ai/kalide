@@ -58,6 +58,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.templates-gallery",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.parked-template-catalogue",
+      "properties": {}
     }
   ]
 }
