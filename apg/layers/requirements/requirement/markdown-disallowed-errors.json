@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "markdown-disallowed-errors",
+  "body": "Each of these in a body = error with file/line and guidance: images (use image fields), tables, blockquotes, fenced/indented code (except the section-frontmatter fence), horizontal rules, raw HTML, angle-bracket autolinks, GFM/other extensions (strikethrough, highlight, sup/sub, emoji shortcodes), `####`+ headings, lists nested deeper than one level.",
+  "properties": {
+    "feature": "markdown"
+  },
+  "out": [],
+  "in": []
+}
