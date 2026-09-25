@@ -19,6 +19,11 @@
       "kind": "realised-by",
       "target": "solution.component.http-server",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.templates-gallery",
+      "properties": {}
     }
   ],
   "in": [
