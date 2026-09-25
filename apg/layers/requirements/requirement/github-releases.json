@@ -48,6 +48,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.package-manifest-update",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-supported-targets-runners",
+      "properties": {}
     }
   ]
 }
