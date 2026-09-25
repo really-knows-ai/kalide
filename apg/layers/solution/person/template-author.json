@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "person",
+  "name": "template-author",
+  "body": "Template author (C4 person): adds templates/theme to the source and builds the binary.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
