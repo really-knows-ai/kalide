@@ -6,6 +6,12 @@
   "properties": {
     "attribute": "supporting"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.value.validation-error",
+      "properties": {}
+    }
+  ],
   "in": []
 }
