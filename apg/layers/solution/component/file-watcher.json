@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "file-watcher",
-  "body": "File watcher + live reload: cross-platform file watching with debounce; triggers rebuild and notifies browsers.",
+  "body": "File watcher + live reload: cross-platform file watching with debounce; on a change triggers re-validation/re-render and emits the deck-rebuilt notification (rendered deck or first error) to the http-server's live-reload endpoint.",
   "properties": {},
   "out": [],
   "in": [
