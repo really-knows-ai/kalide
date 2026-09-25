@@ -4,6 +4,12 @@
   "name": "distribution-decisions",
   "body": "Distribution decisions [with user]: (1) platforms are macOS arm64/amd64 and Windows amd64/arm64 only; Linux is an explicit non-goal. (2) Binaries are published as GitHub Releases assets on the private repo. (3) macOS installs via a Homebrew tap using HOMEBREW_GITHUB_API_TOKEN and a custom download strategy in the tap; Windows via a Scoop bucket. Scoop has no native auth-header support, so the manifest/installer must work around it (e.g. a pre-install script using the token); the exact mechanism is left to implementation. Install docs must explain token setup. (4) CI is GitHub Actions: every release runs offline `eypres init && eypres start` e2e on native runners for all four targets (cross-compile alone is insufficient); a tag-triggered release workflow builds, publishes and updates the formula/manifest (version + checksums). (5) Humans push and tag; agents never do (global.constraint.humans-push-and-tag). The single-binary AC now requires native CI verification. The single-binary → supported-platforms and native-ci-verification → single-binary depends-on edges are [autonomous].",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.distribution",
+      "properties": {}
+    }
+  ],
   "in": []
 }
