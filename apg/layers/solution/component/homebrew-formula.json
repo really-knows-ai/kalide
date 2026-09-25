@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "homebrew-formula",
+  "body": "Homebrew formula: the tap's `eypres` formula with a custom download strategy that uses `HOMEBREW_GITHUB_API_TOKEN` to fetch the darwin asset from the private GitHub Release.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
