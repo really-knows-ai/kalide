@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "pdf-via-print",
-  "body": "Output is live presenting only. PDF is obtained via reveal.js built-in print-to-PDF (`?print-pdf`) from the served deck; there is no build/export command.",
+  "body": "Output is live presenting only. PDF is obtained via core reveal.js print-to-PDF (`?print-pdf`) from the served deck, using the print styles bundled in the embedded reveal.js CSS (`dist/reveal.css`); reveal.js 6.x has no separate print plugin or print stylesheet. There is no build/export command.",
   "properties": {
     "feature": "presenting"
   },
