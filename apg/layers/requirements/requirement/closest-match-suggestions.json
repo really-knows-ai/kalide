@@ -6,7 +6,13 @@
   "properties": {
     "feature": "validation-errors"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.validation-error",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
