@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "whole-deck-validation",
+  "body": "The whole deck (config, filenames, frontmatter, sections, fields, bodies, links, images) is validated with uniform rules at every nesting level, collecting all errors (not stopping at the first).",
+  "properties": {
+    "feature": "validation-errors"
+  },
+  "out": [],
+  "in": []
+}
