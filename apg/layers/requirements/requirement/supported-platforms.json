@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "supported-platforms",
-  "body": "Supported platforms are exactly macOS (darwin/arm64, darwin/amd64) and Windows (windows/amd64, windows/arm64). Linux (and any other OS/arch) is an explicit non-goal: no Linux binaries are built, released or packaged. AC: each release contains exactly four binaries, one per supported target.",
+  "body": "Supported targets:\n- Required: darwin/arm64 (Apple silicon macOS) and windows/amd64.\n- Conditional: windows/arm64 is supported only while a GitHub-hosted native Windows ARM runner (`windows-11-arm`) is available to the private repo. If it is not available, windows/arm64 is simply unsupported: it is not built, released or packaged, and there is no manual or self-hosted fallback.\n\nExplicit non-goals: Intel macOS (darwin/amd64) is definitely not supported, and neither is Linux or any other OS/arch.\n\nAC: each release contains exactly one binary per supported target: darwin/arm64 and windows/amd64, plus windows/arm64 only when its native runner was available, and never a darwin/amd64 or Linux binary.",
   "properties": {
     "feature": "distribution"
   },
