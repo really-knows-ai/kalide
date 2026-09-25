@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "theme-registry",
+  "body": "Theme registry: named themes (only `ey`) mapping to token CSS + fonts/logos; lookup by deck config.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
