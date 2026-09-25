@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "service",
+  "name": "scaffold-deck",
+  "body": "Scaffold deck: `init` — check for existing slides/, assets/, eypres.yaml; write starter deck from embedded files.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
