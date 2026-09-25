@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "slide-parser",
-  "body": "Slide parser: splits slide frontmatter, `#` sections, section plain-fence frontmatter, bodies and notes, keeping line numbers.",
+  "body": "Slide parser: splits the slide's `---` … `---` YAML frontmatter (must start at line 1), the slide body (after frontmatter, before the first `#` heading), `#` sections, section plain-fence frontmatter, section bodies and notes, keeping line numbers.",
   "properties": {},
   "out": [],
   "in": [
