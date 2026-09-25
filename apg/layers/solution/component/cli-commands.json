@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "cli-commands",
+  "body": "CLI commands: init, start (--port), templates [name]; exit codes and terminal output.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
