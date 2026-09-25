@@ -6,6 +6,12 @@
   "properties": {
     "attribute": "supporting"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.service.render-deck",
+      "properties": {}
+    }
+  ],
   "in": []
 }
