@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "requirements.requirement.scoop-install",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.go-static-embedded-binary",
+      "properties": {}
     }
   ],
   "in": []
