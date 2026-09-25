@@ -6,7 +6,13 @@
   "properties": {
     "feature": "cli"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-init-refuse-existing",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
