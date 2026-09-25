@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "stakeholder",
+  "name": "ey-employees",
+  "body": "EY employees who need to build beautiful, consistent slide decks quickly from built-in templates.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
