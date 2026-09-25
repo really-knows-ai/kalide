@@ -32,6 +32,11 @@
       "kind": "contains",
       "target": "domain.entity.section",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.body",
+      "properties": {}
     }
   ],
   "in": []

@@ -5,5 +5,11 @@
   "body": "Markdown body of a slide/section/notes: restricted CommonMark subset (paragraphs, ##/### headings, lists ≤1 nesting; bold, italic, code, links, hard breaks). Measured for words, paragraphs, list items, subheadings.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    }
+  ]
 }
