@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.source-repo",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.supported-platforms",
+      "properties": {}
     }
   ],
   "in": [
