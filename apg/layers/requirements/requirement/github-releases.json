@@ -43,6 +43,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.scoop-install",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.package-manifest-update",
+      "properties": {}
     }
   ]
 }
