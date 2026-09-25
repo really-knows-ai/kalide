@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.single-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.supported-platforms",
+      "properties": {}
     }
   ],
   "in": []
