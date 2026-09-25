@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-cli-start-port",
+  "body": "source: 'serves the deck on a default port (overridable with `--port`)'; inconsistency: bind address, default port number and busy-port behaviour were undefined, and cli-start/live-reload lacked depends-on edges to embedded-assets/whole-deck-validation (feedback-6); resolution [with user]: bind 127.0.0.1 only; default port 8080; `--port` overrides; a busy default port falls back to the next free port and the printed link shows the actual port. Explicit busy `--port` [autonomous choice, user delegated]: this is an ERROR, not a fallback — an author who types a specific port has asked for that port (e.g. a bookmarked URL or a firewall rule), and silently serving elsewhere would surprise them; the error names the port and suggests another port or omitting `--port`. Added depends-on cli-start → embedded-assets and live-reload → whole-deck-validation.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
