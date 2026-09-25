@@ -30,6 +30,11 @@
       "kind": "details",
       "source": "domain.note.fix-deck-rebuilt-tracing",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-port-fallback-bound",
+      "properties": {}
     }
   ]
 }
