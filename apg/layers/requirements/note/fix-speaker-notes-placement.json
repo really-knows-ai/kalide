@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-speaker-notes-placement",
+  "body": "source: 'A `# notes` section holds speaker notes … allowed only on slides'; inconsistency: how many notes sections a slide may have, where they go, and whether they count toward section limits were undefined (feedback-5); resolution: at most one `# notes` per slide; it must be the last section; it does not count toward any section min/max; duplicates or non-last placement = error; `# notes` in a section template context stays an error — written into speaker-notes and the slide-parser component [with user]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
