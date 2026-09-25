@@ -5,5 +5,11 @@
   "body": "Named display format for number/date fields, defined by the template author; selected via `<field>_format`, else default_format.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    }
+  ]
 }
