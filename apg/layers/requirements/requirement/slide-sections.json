@@ -16,6 +16,11 @@
       "kind": "contains",
       "target": "requirements.requirement.speaker-notes",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.section",
+      "properties": {}
     }
   ],
   "in": [
