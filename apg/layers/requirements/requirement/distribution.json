@@ -6,7 +6,13 @@
   "properties": {
     "feature": "distribution"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.source-repo",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
