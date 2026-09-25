@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.field-types",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.field-rules",
+      "properties": {}
     }
   ],
   "in": []

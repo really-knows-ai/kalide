@@ -23,6 +23,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-field-value-syntax",
+      "properties": {}
     }
   ]
 }
