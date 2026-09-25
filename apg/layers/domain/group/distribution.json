@@ -39,6 +39,11 @@
       "kind": "drives",
       "source": "requirements.requirement.distribution",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.source-repo",
+      "properties": {}
     }
   ]
 }

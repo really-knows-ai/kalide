@@ -6,7 +6,13 @@
   "properties": {
     "feature": "distribution"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.group.distribution",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
