@@ -11,5 +11,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "solution.note.fix-port-fallback-bound",
+      "properties": {}
+    }
+  ]
 }

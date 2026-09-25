@@ -4,6 +4,12 @@
   "name": "fix-port-fallback-bound",
   "body": "source: design-decisions (4) 'Default port chosen by implementation; if busy, error with `--port` hint'; inconsistency: contradicted cli-start (default 8080, auto-fallback, explicit busy --port = error), and the fallback was unbounded (feedback-10); resolution [with user]: design-decisions (4) rewritten to match cli-start; fallback bounded to 8080..8099 (20 ports), then a plain-language error advising `--port` — reflected in design-decisions, requirements.requirement.cli-start and solution.component.http-server.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.note.design-decisions",
+      "properties": {}
+    }
+  ],
   "in": []
 }
