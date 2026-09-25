@@ -9,6 +9,11 @@
       "kind": "calls",
       "target": "domain.service.load-deck",
       "properties": {}
+    },
+    {
+      "kind": "calls",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": [
