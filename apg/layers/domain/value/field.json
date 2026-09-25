@@ -10,6 +10,11 @@
       "kind": "contains",
       "source": "domain.group.templating",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.field-rules",
+      "properties": {}
     }
   ]
 }
