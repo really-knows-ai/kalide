@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "parked-kiosk-interactivity",
+  "body": "PARKED: touchscreen/kiosk interactivity — tap areas and a `links-only` navigation mode. Not in scope; `navigation` accepts only linear|free for now but is an enum so it can grow.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
