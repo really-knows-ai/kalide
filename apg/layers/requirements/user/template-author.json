@@ -4,6 +4,12 @@
   "name": "template-author",
   "body": "EY brand/template owner acting as a user: authors templates (schema, Go html/template layout, example) compiled into the binary.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-definition",
+      "properties": {}
+    }
+  ],
   "in": []
 }
