@@ -9,6 +9,11 @@
       "kind": "contains",
       "target": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.container.browser-frontend",
+      "properties": {}
     }
   ],
   "in": []
