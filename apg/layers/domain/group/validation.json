@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "validation",
-  "body": "Validation: checking a deck against templates and rules, producing path-qualified validation errors.",
+  "body": "Validation: checking a deck against templates and rules fail-fast, producing a single path-qualified validation error (the first found).",
   "properties": {
     "attribute": "supporting"
   },
