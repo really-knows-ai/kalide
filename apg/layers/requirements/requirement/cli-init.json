@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.cli-init-refuse-existing",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
     }
   ],
   "in": [
