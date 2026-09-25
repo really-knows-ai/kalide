@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.source-repo",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.container.cli-binary",
+      "properties": {}
     }
   ],
   "in": []
