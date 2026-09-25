@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "file-watcher",
+  "body": "File watcher + live reload: cross-platform file watching with debounce; triggers rebuild and notifies browsers.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
