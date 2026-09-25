@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "constraint",
+  "name": "template-defects-build-time",
+  "body": "Template-definition defects (cycles, slide template in a section, required-body template as a field type, reserved names) must be caught at template build/load time and must never surface as deck-author errors.",
+  "properties": {
+    "attaches-to": "domain.entity.template"
+  },
+  "out": [],
+  "in": []
+}
