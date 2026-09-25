@@ -2,7 +2,9 @@ package mdcheck
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -105,6 +107,12 @@ type walkContext struct {
 	// listDepth is the nesting level of the list currently being visited: 0
 	// for a top-level list, 1 inside its items, and so on.
 	listDepth int
+
+	// themeCursor is the byte offset at which the next thematic-break scan
+	// resumes. goldmark's *ast.ThematicBreak carries no source segment of its
+	// own, so its position is recovered by scanning source lines in document
+	// order (visit is depth-first in document order).
+	themeCursor int
 }
 
 // walk walks the parsed document's children and returns every issue found, in
@@ -129,10 +137,17 @@ func walk(ctx *walkContext, doc ast.Node) []Issue {
 //  3. The allow-list is applied: an unknown kind is rejected (default-deny).
 //  4. Accepted nodes are descended into, tracking list nesting depth.
 func visit(ctx *walkContext, node ast.Node) []Issue {
-	if ctx.mode == InlineMode && blockConstructs[node.Kind()] {
-		return []Issue{ctx.newIssue(node, KindBlockConstruct,
-			fmt.Sprintf("%s is not allowed in an inline text field", constructName(node)),
-			"use inline formatting only: bold, italic, inline code or a link")}
+	if ctx.mode == InlineMode {
+		// Paragraph is the parser's wrapper for an inline field, so the first
+		// top-level paragraph is not an authoring block. Every later paragraph
+		// is a second block construct and is rejected, along with every other
+		// block kind.
+		isWrapperParagraph := node.Kind() == ast.KindParagraph && node.PreviousSibling() == nil
+		if blockConstructs[node.Kind()] || (node.Kind() == ast.KindParagraph && !isWrapperParagraph) {
+			return []Issue{ctx.newIssue(node, KindBlockConstruct,
+				fmt.Sprintf("%s is not allowed in an inline text field", constructName(node)),
+				"use inline formatting only: bold, italic, inline code or a link")}
+		}
 	}
 
 	if issues := checkDisallowed(ctx, node); len(issues) > 0 {
@@ -162,57 +177,37 @@ func visit(ctx *walkContext, node ast.Node) []Issue {
 // permitted shape, and the extension-syntax heuristics that the CommonMark core
 // parser leaves as literal text.
 //
-// This is the seam the phase-3 disallowed-construct task fills in. A non-empty
-// result is final for the node: visit records the issues and does not descend,
-// so a disallowed construct produces exactly one error. Returning nil falls
-// through to the default-deny allow-list check in visit, so an unrecognised
-// kind still fails closed.
+// A non-empty result is final for the node: visit records the issues and does
+// not descend, so a disallowed construct produces exactly one error. Returning
+// nil falls through to the default-deny allow-list check in visit, so an
+// unrecognised kind still fails closed.
 //
-// Implemented here (the shape rules that define the accepted subset):
+// Implemented here:
 //
-//   - headings: the CommonMark parser recognises both ATX (`## x`) and setext
-//     (`x` underlined with `---`) headings, and goldmark's AST does not record
-//     which form was used (*ast.Heading carries only Level). This check
-//     therefore enforces the level rule — 2 and 3 are accepted, `#` is reserved
-//     for slide sections and levels 4+ are not part of the slide typography.
-//     Rejecting setext headings specifically (only ATX `##`/`###` are allowed)
-//     requires inspecting the heading's source line and is the phase-3
-//     disallowed-construct task's job; see the seam note below.
-//   - lists: at most one nesting level (maxListDepth).
+//   - headings: ATX `##` / `###` only. `#` (reserved for slide sections) and
+//     `####`+ are rejected by level. Setext headings are rejected by inspecting
+//     the heading's source line, because goldmark's AST records only the level
+//     (*ast.Heading.Level) and not which form was used.
+//   - lists: at most one nesting level (maxListNesting).
 //   - emphasis: only level 1 (italic) and level 2 (bold).
-//
-// Deliberately NOT implemented here yet (the phase-3 disallowed-construct task
-// adds the tailored messages for these): images, tables, block quotes, fenced
-// and indented code, thematic breaks, raw HTML (block and inline),
-// angle-bracket autolinks, reference-style links and link reference
-// definitions, setext heading detection, `#`/`####+` heading guidance, and the
-// extension-syntax heuristics (~~strike~~, ==highlight==, ^sup^, ~sub~,
-// :emoji:). Until then most of them are still rejected by the default-deny
-// allow-list, just with the generic message.
-//
-// Seam for the phase-3 disallowed-construct task:
-//
-//   - add the construct-specific `case` clauses to this switch (block and
-//     inline raw HTML, image, autolink, thematic break, fenced/indented code,
-//     block quote, link reference definition, reference-style link, setext
-//     heading, tables, …);
-//   - to scan a text run, add a `case *ast.Text:` and regex-match
-//     n.Segment.Value(ctx.source), recording ctx.position(node);
-//   - text runs inside inline code must not be scanned. A CodeSpan's content is
-//     reachable as child Text nodes, so guard with an ancestor check (e.g. walk
-//     node.Parent() looking for *ast.CodeSpan) before matching;
-//   - table syntax is not part of CommonMark core and produces no AST node (a
-//     `| a | b |` block parses as an ordinary paragraph/Text), so tables must be
-//     rejected by a text-level heuristic, not by node kind;
-//   - ATX and setext headings are indistinguishable in the AST, so rejecting
-//     setext headings requires inspecting the heading's source line (the seam
-//     is the `case *ast.Heading:` clause above);
-//   - InlineMode currently accepts a Paragraph because the parser always wraps
-//     an inline field in one. If a second paragraph must be rejected as a block
-//     construct, count Paragraph children in InlineMode.
+//   - images, block quotes, fenced and indented code, thematic breaks, block
+//     and inline raw HTML, angle-bracket autolinks, reference-style links and
+//     link reference definitions.
+//   - tables: the CommonMark core has no table syntax, so a GFM table parses as
+//     an ordinary paragraph; it is caught by looking for a delimiter row among
+//     the paragraph's own source lines rather than by node kind.
+//   - the extension-syntax heuristics (~~strike~~, ==highlight==, ^sup^, ~sub~,
+//     :emoji:) that the core parser leaves as literal text. They scan ast.Text
+//     segments only — never inline code content, never link destinations — and
+//     backslash-escaped delimiters are masked out before matching.
 func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 	switch n := node.(type) {
 	case *ast.Heading:
+		if isSetextHeading(ctx.source, n) {
+			return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+				"setext headings are not allowed",
+				"use ATX headings instead: ## or ### at the start of the line")}
+		}
 		if n.Level != 2 && n.Level != 3 {
 			return []Issue{ctx.newIssue(node, KindUnsupportedConstruct,
 				fmt.Sprintf("heading level %d is not allowed", n.Level),
@@ -230,8 +225,226 @@ func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 				fmt.Sprintf("emphasis level %d is not allowed", n.Level),
 				"use *italic* or **bold**")}
 		}
+	case *ast.Image:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"images are not allowed in Markdown",
+			"use the slide's image field instead of a Markdown image")}
+	case *ast.Paragraph:
+		if hasTableDelimiterRow(ctx.source, n) {
+			return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+				"tables are not allowed",
+				"use a section template or a list instead of a Markdown table")}
+		}
+	case *ast.Blockquote:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"block quotes are not allowed",
+			"remove the > quote markers and keep the text in the body")}
+	case *ast.FencedCodeBlock:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"fenced code blocks are not allowed",
+			"remove the ``` code fence, or use inline code with backticks")}
+	case *ast.CodeBlock:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"indented code blocks are not allowed",
+			"remove the leading indentation, or use inline code with backticks")}
+	case *ast.ThematicBreak:
+		if off, ok := ctx.thematicBreakOffset(node); ok {
+			return []Issue{ctx.newIssueAt(off, KindDisallowedConstruct,
+				"thematic breaks (---) are not allowed",
+				"remove the --- line")}
+		}
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"thematic breaks (---) are not allowed",
+			"remove the --- line")}
+	case *ast.HTMLBlock:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"raw HTML is not allowed",
+			"write Markdown instead; HTML is not rendered")}
+	case *ast.RawHTML:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"inline raw HTML is not allowed",
+			"remove the HTML tag and use Markdown formatting")}
+	case *ast.AutoLink:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"angle-bracket autolinks are not allowed",
+			"use an inline link: [text](https://example.com)")}
+	case *ast.Link:
+		if n.Reference != nil {
+			return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+				"reference-style links are not allowed",
+				"use an inline link: [text](url)")}
+		}
+	case *ast.LinkReferenceDefinition:
+		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			"link reference definitions are not allowed",
+			"use an inline link: [text](url)")}
+	case *ast.Text:
+		return ctx.checkTextHeuristics(n)
 	}
 	return nil
+}
+
+// Extension-syntax heuristics. The CommonMark core parser has no extensions
+// registered, so these constructs are left as literal ast.Text and must be
+// rejected textually. The patterns are deliberately anchored on non-word
+// neighbours to avoid flagging ordinary prose such as "a == b", "~5 to ~10",
+// "10:30:45" or "x ^ y".
+var (
+	reStrike    = regexp.MustCompile(`~~\S(.*?\S)?~~`)
+	reHighlight = regexp.MustCompile(`==\S(.*?\S)?==`)
+	reSup       = regexp.MustCompile(`\^\S+?\^`)
+	reSub       = regexp.MustCompile(`(^|[^~\w])~[^\s~]+~([^~\w]|$)`)
+	reEmoji     = regexp.MustCompile(`(^|\s):[a-z0-9_+-]+:(\s|$)`)
+)
+
+// checkTextHeuristics scans one ast.Text run for extension syntax. Text inside
+// inline code is skipped (a CodeSpan's content is exposed as child Text nodes),
+// as are link destinations, which are node attributes rather than Text.
+func (ctx *walkContext) checkTextHeuristics(node *ast.Text) []Issue {
+	if insideCodeSpan(node) {
+		return nil
+	}
+	text := maskBackslashEscapes(string(node.Segment.Value(ctx.source)))
+
+	var issues []Issue
+	if reStrike.MatchString(text) {
+		issues = append(issues, ctx.newIssue(node, KindDisallowedConstruct,
+			"strikethrough (~~text~~) is not supported",
+			"remove the ~~ markers or use plain text"))
+	}
+	if reHighlight.MatchString(text) {
+		issues = append(issues, ctx.newIssue(node, KindDisallowedConstruct,
+			"highlight (==text==) is not supported",
+			"remove the == markers"))
+	}
+	if reSup.MatchString(text) {
+		issues = append(issues, ctx.newIssue(node, KindDisallowedConstruct,
+			"superscript (^text^) is not supported",
+			"remove the ^ markers or write the text normally"))
+	}
+	if reSub.MatchString(text) {
+		issues = append(issues, ctx.newIssue(node, KindDisallowedConstruct,
+			"subscript (~text~) is not supported",
+			"remove the ~ markers or write the text normally"))
+	}
+	if reEmoji.MatchString(text) {
+		issues = append(issues, ctx.newIssue(node, KindDisallowedConstruct,
+			"emoji shortcodes (:name:) are not supported",
+			"remove the :name: shortcode or paste the emoji character instead"))
+	}
+	return issues
+}
+
+// insideCodeSpan reports whether node is content of an inline code span.
+func insideCodeSpan(node ast.Node) bool {
+	for p := node.Parent(); p != nil; p = p.Parent() {
+		if _, ok := p.(*ast.CodeSpan); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// maskBackslashEscapes blanks out every CommonMark backslash escape (a
+// backslash followed by ASCII punctuation) so an escaped delimiter such as
+// `\~`, `\=`, `\^`, `\:` or `\[` is treated as literal text and cannot be
+// matched by the extension heuristics. Escapes keep their byte length, so the
+// masked string lines up with the source.
+func maskBackslashEscapes(s string) string {
+	escaped := false
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] == '\\' && isASCIIPunctuation(s[i+1]) {
+			escaped = true
+			break
+		}
+	}
+	if !escaped {
+		return s
+	}
+	b := []byte(s)
+	for i := 0; i+1 < len(b); i++ {
+		if b[i] == '\\' && isASCIIPunctuation(b[i+1]) {
+			b[i], b[i+1] = ' ', ' '
+			i++
+		}
+	}
+	return string(b)
+}
+
+// isASCIIPunctuation reports whether c is an ASCII punctuation byte, the set
+// of characters a backslash may escape in CommonMark.
+func isASCIIPunctuation(c byte) bool {
+	return (c >= '!' && c <= '/') ||
+		(c >= ':' && c <= '@') ||
+		(c >= '[' && c <= '`') ||
+		(c >= '{' && c <= '~')
+}
+
+// isSetextHeading reports whether the heading used a setext underline rather
+// than ATX `#` markers. goldmark does not record the form, so the source line
+// that starts the heading's first line is inspected: an ATX heading is preceded
+// only by spaces/tabs followed by one or more `#` markers.
+func isSetextHeading(src []byte, h *ast.Heading) bool {
+	segs := h.Lines()
+	if segs == nil || segs.Len() == 0 {
+		return false
+	}
+	start := segs.At(0).Start
+	if start > len(src) {
+		return false
+	}
+	i := start - 1
+	for i >= 0 && (src[i] == ' ' || src[i] == '\t') {
+		i--
+	}
+	return i < 0 || src[i] != '#'
+}
+
+// hasTableDelimiterRow reports whether a paragraph contains a GFM table
+// delimiter row (for example `| --- | :--: |`). CommonMark core has no tables,
+// so this is the only signal that the author wrote one.
+func hasTableDelimiterRow(src []byte, b lineBlock) bool {
+	segs := b.Lines()
+	if segs == nil {
+		return false
+	}
+	for i := 0; i < segs.Len(); i++ {
+		seg := segs.At(i)
+		if seg.Start < 0 || seg.Stop > len(src) || seg.Start > seg.Stop {
+			continue
+		}
+		if isTableDelimiterRow(string(src[seg.Start:seg.Stop])) {
+			return true
+		}
+	}
+	return false
+}
+
+// isTableDelimiterRow reports whether a single source line is a GFM table
+// delimiter row: every non-empty `|`-separated cell consists only of `-` and
+// `:` and at least one cell is present.
+func isTableDelimiterRow(line string) bool {
+	s := strings.TrimSpace(line)
+	if !strings.Contains(s, "|") || !strings.Contains(s, "-") {
+		return false
+	}
+	sawCell := false
+	for _, cell := range strings.Split(s, "|") {
+		cell = strings.TrimSpace(cell)
+		if cell == "" {
+			continue
+		}
+		if !strings.Contains(cell, "-") {
+			return false
+		}
+		sawCell = true
+		for i := 0; i < len(cell); i++ {
+			if cell[i] != '-' && cell[i] != ':' {
+				return false
+			}
+		}
+	}
+	return sawCell
 }
 
 // newIssue builds a positioned Issue for node.
@@ -245,6 +458,138 @@ func (ctx *walkContext) newIssue(node ast.Node, kind Kind, message, guidance str
 		Message:  message,
 		Guidance: guidance,
 	}
+}
+
+// newIssueAt builds an Issue positioned at a known source byte offset. It is
+// used for nodes that carry no source segment of their own (thematic breaks).
+func (ctx *walkContext) newIssueAt(offset int, kind Kind, message, guidance string) Issue {
+	line, col := ctx.positionAt(offset)
+	return Issue{
+		File:     ctx.file,
+		Line:     line,
+		Col:      col,
+		Kind:     kind,
+		Message:  message,
+		Guidance: guidance,
+	}
+}
+
+// thematicBreakOffset locates the source line of a *ast.ThematicBreak node.
+// goldmark gives thematic breaks no source segment, so the scan resumes at the
+// end of the node's preceding sibling (or the running cursor, whichever is
+// later) and returns the first thematic-break line at or after that point.
+func (ctx *walkContext) thematicBreakOffset(node ast.Node) (int, bool) {
+	start := ctx.themeCursor
+	if prev := node.PreviousSibling(); prev != nil {
+		if end := subtreeEnd(prev); end > start {
+			start = end
+		}
+	}
+	off, ok := findThematicBreakLine(ctx.source, start)
+	if ok {
+		// Advance past the found line so a run of consecutive thematic breaks
+		// is reported line by line rather than re-finding the first one.
+		ctx.themeCursor = lineStartAfter(ctx.source, off)
+	}
+	return off, ok
+}
+
+// lineStartAfter returns the offset of the line following the line that begins
+// at offset, or len(src) when that was the last line.
+func lineStartAfter(src []byte, offset int) int {
+	for i := offset; i < len(src); i++ {
+		if src[i] == '\n' {
+			return i + 1
+		}
+	}
+	return len(src)
+}
+
+// findThematicBreakLine returns the offset of the first CommonMark thematic
+// break line at or after start, or false when there is none.
+func findThematicBreakLine(src []byte, start int) (int, bool) {
+	if start < 0 {
+		start = 0
+	}
+	for i := start; i < len(src); {
+		lineEnd := i
+		for lineEnd < len(src) && src[lineEnd] != '\n' {
+			lineEnd++
+		}
+		line := src[i:lineEnd]
+		if marker, ok := thematicBreakMarker(line); ok {
+			return i + marker, true
+		}
+		if lineEnd >= len(src) {
+			break
+		}
+		i = lineEnd + 1
+	}
+	return 0, false
+}
+
+// thematicBreakMarker reports whether line is a CommonMark thematic break and,
+// if so, the byte offset within line of its first marker character: three or
+// more of the same character from `*`, `-` or `_`, optionally separated by
+// spaces or tabs and indented by at most three spaces.
+func thematicBreakMarker(line []byte) (int, bool) {
+	i := 0
+	for i < len(line) && i < 3 && line[i] == ' ' {
+		i++
+	}
+	first := -1
+	var marker byte
+	count := 0
+	for ; i < len(line); i++ {
+		c := line[i]
+		switch c {
+		case ' ', '\t', '\r':
+			continue
+		case '*', '-', '_':
+			if marker == 0 {
+				marker = c
+			} else if c != marker {
+				return 0, false
+			}
+			if first < 0 {
+				first = i
+			}
+			count++
+		default:
+			return 0, false
+		}
+	}
+	if marker == 0 || count < 3 {
+		return 0, false
+	}
+	return first, true
+}
+
+// subtreeEnd returns the greatest source byte offset contained in node's
+// subtree, or 0 when the subtree has no source extent.
+func subtreeEnd(node ast.Node) int {
+	end := 0
+	if isBlockKind(node.Kind()) {
+		if b, ok := node.(lineBlock); ok {
+			if segs := b.Lines(); segs != nil && segs.Len() > 0 {
+				end = segs.At(segs.Len() - 1).Stop
+			}
+		}
+	}
+	if r, ok := node.(*ast.RawHTML); ok && r.Segments != nil && r.Segments.Len() > 0 {
+		if e := r.Segments.At(r.Segments.Len() - 1).Stop; e > end {
+			end = e
+		}
+	}
+	if t, ok := node.(*ast.Text); ok && t.Segment.Stop > end {
+		end = t.Segment.Stop
+	}
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		if e := subtreeEnd(child); e > end {
+			end = e
+		}
+	}
+	return end
 }
 
 // position returns the 1-based file line and byte column of node's first
@@ -264,6 +609,12 @@ func (ctx *walkContext) position(node ast.Node) (line, col int) {
 	if !ok {
 		return 0, 0
 	}
+	return ctx.positionAt(offset)
+}
+
+// positionAt returns the 1-based file line and byte column of a source byte
+// offset, or (0, 0) when the offset cannot be mapped.
+func (ctx *walkContext) positionAt(offset int) (line, col int) {
 	fragLine, fragCol := ctx.lines.at(offset)
 	if fragLine < 1 {
 		return 0, 0
@@ -288,10 +639,14 @@ func nodeOffset(node ast.Node) (int, bool) {
 			return r.Segments.At(0).Start, true
 		}
 	}
-	if b, ok := node.(lineBlock); ok {
-		if segs := b.Lines(); segs != nil && segs.Len() > 0 {
-			seg := segs.At(0)
-			return seg.Start, true
+	// Only block nodes may consult Lines(): ast.BaseInline.Lines() panics
+	// ("can not call with inline nodes"), and inline nodes embed it.
+	if isBlockKind(node.Kind()) {
+		if b, ok := node.(lineBlock); ok {
+			if segs := b.Lines(); segs != nil && segs.Len() > 0 {
+				seg := segs.At(0)
+				return seg.Start, true
+			}
 		}
 	}
 	best := -1
@@ -307,6 +662,19 @@ func nodeOffset(node ast.Node) (int, bool) {
 		return t.Segment.Start, true
 	}
 	return 0, false
+}
+
+// isBlockKind reports whether k is a goldmark block node kind, for which the
+// Lines() source accessor is meaningful.
+func isBlockKind(k ast.NodeKind) bool {
+	switch k {
+	case ast.KindDocument, ast.KindParagraph, ast.KindTextBlock, ast.KindHeading,
+		ast.KindBlockquote, ast.KindList, ast.KindListItem, ast.KindCodeBlock,
+		ast.KindFencedCodeBlock, ast.KindHTMLBlock, ast.KindThematicBreak,
+		ast.KindLinkReferenceDefinition:
+		return true
+	}
+	return false
 }
 
 // constructName returns an author-facing name for node's kind.
