@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "deck-rebuilt",
-  "body": "Event: a deck was re-validated after a change; carries either the rendered deck or the validation errors. Triggers browser reload.",
+  "body": "Event: a deck was re-validated after a change; carries either the rendered deck or the single (first) validation error. Triggers browser reload.",
   "properties": {
     "kind": "event"
   },
