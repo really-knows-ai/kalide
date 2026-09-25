@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "tap-bucket-location-open",
+  "body": "OPEN — needs user confirmation. Tap/bucket location is a judgment call. Proposed: host both in the source repo (`Formula/` for Homebrew, `bucket/` for Scoop), so `brew tap really-knows-ai/ey-present <git url>` and `scoop bucket add ey-present <git url>` reuse users' existing git access to the private repo; there is one repo and the release workflow commits manifest updates in-tree. Alternative: separate `really-knows-ai/homebrew-tap` and Scoop bucket repos, which give conventional `brew tap really-knows-ai/tap` naming and keep manifest commits out of source history, but need extra repo access and cross-repo write tokens in CI. Authored as the proposal; requirements.requirement.tap-bucket-location and solution.container.package-channels are marked PROPOSED until confirmed.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
