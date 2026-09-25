@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "embedded-assets",
-  "body": "All assets — reveal.js, templates, EY theme CSS, EY fonts and logos, starter files, gallery/error pages — are embedded via Go `embed` and served from the binary.",
+  "body": "All assets — reveal.js, templates, the `default` theme CSS (EY look), EY fonts and logos, starter files, gallery/error pages — are embedded via Go `embed` and served from the binary.",
   "properties": {
     "feature": "cross-platform"
   },
