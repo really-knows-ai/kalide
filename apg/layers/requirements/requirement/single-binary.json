@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "single-binary",
+  "body": "Delivered as one self-contained static `eypres` binary (Go) for Windows and macOS (amd64/arm64); no runtime, network access or install step needed. AC: `eypres init && eypres start` works offline on a clean Windows and macOS machine.",
+  "properties": {
+    "feature": "cross-platform"
+  },
+  "out": [],
+  "in": []
+}
