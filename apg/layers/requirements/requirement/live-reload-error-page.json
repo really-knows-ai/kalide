@@ -6,7 +6,13 @@
   "properties": {
     "feature": "presenting"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.deck-rebuilt",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",

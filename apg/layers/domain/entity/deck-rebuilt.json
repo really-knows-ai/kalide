@@ -22,6 +22,11 @@
       "kind": "subscribes",
       "source": "domain.service.serve-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.live-reload-error-page",
+      "properties": {}
     }
   ]
 }
