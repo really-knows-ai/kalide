@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.theme-selection",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.navigation-mode",
+      "properties": {}
     }
   ],
   "in": [
