@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "requirements.requirement.pdf-via-print",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.embedded-assets",
+      "properties": {}
     }
   ],
   "in": []
