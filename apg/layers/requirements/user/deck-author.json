@@ -44,6 +44,11 @@
       "kind": "contains",
       "target": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "represents",
+      "target": "domain.entity.deck",
+      "properties": {}
     }
   ],
   "in": []
