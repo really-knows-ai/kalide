@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "requirements.requirement.supported-platforms",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.scoop-install",
+      "properties": {}
     }
   ],
   "in": []
