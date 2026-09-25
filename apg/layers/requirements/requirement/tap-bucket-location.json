@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "tap-bucket-location",
-  "body": "PROPOSED — pending user confirmation. The Homebrew tap and Scoop bucket are hosted in the source repo itself: `Formula/` holds the Homebrew formula (and its custom download strategy) and `bucket/` holds the Scoop manifest, so `brew tap really-knows-ai/ey-present <git url>` and `scoop bucket add ey-present <git url>` work with users' existing git access to the private repo. Alternative: separate `really-knows-ai/homebrew-tap` and Scoop bucket repos.",
+  "body": "The Homebrew tap and Scoop bucket are hosted in the source repo `really-knows-ai/ey-present` itself: `Formula/` holds the Homebrew formula (and its custom download strategy) and `bucket/` holds the Scoop manifest, so `brew tap really-knows-ai/ey-present <git url>` and `scoop bucket add ey-present <git url>` work with users' existing git access to the private repo. No separate tap/bucket repos. AC: both commands succeed against the repo's git URL for a user with repo access.",
   "properties": {
     "feature": "distribution"
   },
