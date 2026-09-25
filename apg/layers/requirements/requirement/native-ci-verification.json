@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.cli-start",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-init",
+      "properties": {}
     }
   ],
   "in": [
