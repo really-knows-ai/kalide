@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "theme",
+  "body": "A theme: named set of CSS variable tokens (colours, fonts, spacing) plus fonts/logos. Only `ey` exists now; deck-wide.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [],
+  "in": []
+}
