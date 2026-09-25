@@ -6,7 +6,13 @@
   "properties": {
     "feature": "markdown"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.body",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
