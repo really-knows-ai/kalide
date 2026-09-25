@@ -28,6 +28,11 @@
       "kind": "contains",
       "source": "solution.system.eypres",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.distribution",
+      "properties": {}
     }
   ]
 }

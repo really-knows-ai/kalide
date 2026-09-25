@@ -37,6 +37,11 @@
       "kind": "realised-by",
       "target": "solution.container.release-pipeline",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.container.package-channels",
+      "properties": {}
     }
   ],
   "in": [
