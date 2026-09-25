@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "deck-loader",
+  "body": "Deck loader: reads eypres.yaml, lists slides/, parses filenames (number, letter, label), orders and groups vertical stacks.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
