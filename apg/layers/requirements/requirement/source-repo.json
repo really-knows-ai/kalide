@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "source-repo",
+  "body": "Source lives in the private GitHub repo `github.com/really-knows-ai/ey-present` (git@github.com:really-knows-ai/ey-present.git). The Go module path is `github.com/really-knows-ai/ey-present`. AC: `go.mod` declares exactly that module path and all internal imports use it.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
