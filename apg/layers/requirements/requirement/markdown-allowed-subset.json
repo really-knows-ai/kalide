@@ -16,6 +16,11 @@
       "kind": "contains",
       "target": "requirements.requirement.inter-slide-links",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.body",
+      "properties": {}
     }
   ],
   "in": [
