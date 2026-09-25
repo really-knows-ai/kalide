@@ -20,6 +20,11 @@
       "kind": "realised-by",
       "source": "domain.entity.template",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.template-registry",
+      "properties": {}
     }
   ]
 }

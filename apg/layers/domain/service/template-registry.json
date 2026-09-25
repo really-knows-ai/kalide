@@ -4,7 +4,13 @@
   "name": "template-registry",
   "body": "Template registry: load built-in templates, run build-time checks (cycles, usage, reserved names, examples), look up templates, describe them for CLI/gallery.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-registry",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
