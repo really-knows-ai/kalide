@@ -1,0 +1,193 @@
+/* Default EY theme — tokens only.
+ *
+ * This file is the default theme's stylesheet. It declares the EY webfonts and
+ * then a single :root block of CSS custom properties (colour, font, spacing).
+ * It deliberately contains NO per-slide, per-element or per-layout styling:
+ * slide appearance is produced entirely by the compiled-in slide templates,
+ * which read these tokens. See global.constraint.theme-tokens-only and
+ * global.constraint.no-per-slide-styling.
+ *
+ * Every url() is relative to this file, which lives at the root of the
+ * embedded assets tree, so "fonts/…" and "logo/…" resolve to the embedded
+ * brand assets. Nothing here points at a network location.
+ */
+
+/* ------------------------------------------------------------------ *
+ * EY brand webfonts (fonts/ in the embedded assets tree).
+ * Adapted from the committed fonts/stylesheet.css.
+ * ------------------------------------------------------------------ */
+
+@font-face {
+    font-family: 'EY Gothic Comp Book';
+    src: url('fonts/EYGothicCompBook.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Comp Book';
+    src: url('fonts/EYGothicCompBook-Oblique.woff2') format('woff2');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Comp Demi';
+    src: url('fonts/EYGothicCompDemi.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Comp Demi';
+    src: url('fonts/EYGothicCompDemi-Oblique.woff2') format('woff2');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Cond Demi';
+    src: url('fonts/EYGothicCondDemi.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Cond Demi';
+    src: url('fonts/EYGothicCondDemi-Oblique.woff2') format('woff2');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Cond';
+    src: url('fonts/EYGothicCondMedium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EY Gothic Cond';
+    src: url('fonts/EYGothicCondMedium-Oblique.woff2') format('woff2');
+    font-weight: 500;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EYInterstate';
+    src: url('fonts/EYInterstate-Light.woff2') format('woff2');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EYInterstate';
+    src: url('fonts/EYInterstate-LightItalic.woff2') format('woff2');
+    font-weight: 300;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EYInterstate';
+    src: url('fonts/EYInterstate-Regular.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EYInterstate';
+    src: url('fonts/EYInterstate-Italic.woff2') format('woff2');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EYInterstate';
+    src: url('fonts/EYInterstate-Bold.woff2') format('woff2');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'EYInterstate';
+    src: url('fonts/EYInterstate-BoldItalic.woff2') format('woff2');
+    font-weight: bold;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Theme tokens. Templates consume these variables; nothing below this
+ * block restates a colour, font or spacing value.
+ * ------------------------------------------------------------------ */
+
+:root {
+    /* Brand colours */
+    --ey-yellow: #ffe600;
+    --ey-ink: #161d23;
+    --ey-ink-soft: #2e3a42;
+    --ey-white: #ffffff;
+    --ey-off-white: #f5f5f5;
+    --ey-grey: #747480;
+    --ey-grey-light: #d9d9d9;
+    --ey-accent: #1a7f9e;
+
+    /* Semantic surface + text colours */
+    --ey-bg: var(--ey-white);
+    --ey-bg-dark: var(--ey-ink);
+    --ey-fg: var(--ey-ink);
+    --ey-fg-muted: var(--ey-grey);
+    --ey-fg-on-dark: var(--ey-white);
+    --ey-highlight: var(--ey-yellow);
+    --ey-link: var(--ey-accent);
+    --ey-border: var(--ey-grey-light);
+
+    /* Typography */
+    --ey-font-display: 'EY Gothic Comp Demi', 'EY Gothic Cond Demi', 'EYInterstate', sans-serif;
+    --ey-font-heading: 'EY Gothic Cond Demi', 'EY Gothic Comp Demi', 'EYInterstate', sans-serif;
+    --ey-font-body: 'EYInterstate', 'EY Gothic Comp Book', sans-serif;
+    --ey-font-mono: 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+
+    --ey-font-size-title: 2.6rem;
+    --ey-font-size-heading: 1.6rem;
+    --ey-font-size-body: 1.15rem;
+    --ey-font-size-small: 0.9rem;
+    --ey-font-weight-light: 300;
+    --ey-font-weight-normal: normal;
+    --ey-font-weight-bold: bold;
+    --ey-line-height: 1.4;
+
+    /* Spacing scale */
+    --ey-space-0: 0;
+    --ey-space-1: 0.25rem;
+    --ey-space-2: 0.5rem;
+    --ey-space-3: 1rem;
+    --ey-space-4: 1.5rem;
+    --ey-space-5: 2.5rem;
+    --ey-space-6: 4rem;
+
+    /* Layout */
+    --ey-content-width: 90%;
+    --ey-radius: 0.25rem;
+    --ey-border-width: 2px;
+
+    /* EY logos, by background: -light ink for light backgrounds,
+     * -dark (white ink) for dark backgrounds (logo/ in the embedded tree). */
+    --ey-logo-light: url('logo/logo_full-light.svg');
+    --ey-logo-dark: url('logo/logo_full-dark.svg');
+    --ey-logo-small-light: url('logo/logo_small-light.svg');
+    --ey-logo-small-dark: url('logo/logo_small-dark.svg');
+}
