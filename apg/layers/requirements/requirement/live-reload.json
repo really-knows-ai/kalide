@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.live-reload-error-page",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.watch-deck",
+      "properties": {}
     }
   ],
   "in": [
