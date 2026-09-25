@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "slide-template-required",
-  "body": "Every slide file begins with YAML frontmatter that includes `template:` naming a slide-usage template. Missing frontmatter/`template:` = error; unknown template = error with suggestion; a section-usage template on a slide = error.",
+  "body": "Every slide file begins, at the very top of the file (line 1), with standard YAML frontmatter delimited by `---` … `---`, which includes `template:` naming a slide-usage template. (The plain ``` fence is used only for section frontmatter, never for slide frontmatter.) Content after the closing `---` and before the first `#` section heading is the slide's body. Missing/unterminated frontmatter or missing `template:` = error; frontmatter not at the top of the file = error; unknown template = error with suggestion; a section-usage template on a slide = error.",
   "properties": {
     "feature": "deck-structure"
   },
