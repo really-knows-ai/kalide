@@ -4,7 +4,13 @@
   "name": "publish-release",
   "body": "Publish release: on a human-pushed tag, build the four target binaries, verify each natively (offline `eypres init && eypres start`), publish them with checksums to GitHub Releases, and update the package manifests. Any failed target blocks publishing.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.release-workflow",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
