@@ -23,6 +23,11 @@
       "kind": "details",
       "source": "requirements.note.fix-reserved-names",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.number-date-formats",
+      "properties": {}
     }
   ]
 }
