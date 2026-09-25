@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "deck",
+  "body": "A deck: a directory containing eypres.yaml, slides/ and assets/. Aggregate root of authoring; owns its config and ordered slides.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [],
+  "in": []
+}
