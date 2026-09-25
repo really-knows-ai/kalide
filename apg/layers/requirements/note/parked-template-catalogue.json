@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "parked-template-catalogue",
+  "body": "PARKED: the concrete initial template catalogue (which slide/section templates ship first — e.g. title, agenda, columns, team/person, image+text) is not yet decided. To be specified before/with the templates phase; each will need name, description, usage, schema, layout, example.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
