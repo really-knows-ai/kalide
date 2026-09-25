@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "markdown-validator",
+  "body": "Markdown validator: CommonMark AST check against the allowed subset; measures words/paragraphs/list items/subheadings; strips styles for plain/max_length; renders allowed Markdown to HTML.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
