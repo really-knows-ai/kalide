@@ -23,6 +23,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.github-releases",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.single-binary",
+      "properties": {}
     }
   ]
 }

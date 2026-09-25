@@ -26,6 +26,11 @@
       "kind": "drives",
       "target": "domain.group.validation",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.supported-platforms",
+      "properties": {}
     }
   ],
   "in": [
