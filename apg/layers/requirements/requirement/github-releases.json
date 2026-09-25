@@ -38,6 +38,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.homebrew-install",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.scoop-install",
+      "properties": {}
     }
   ]
 }
