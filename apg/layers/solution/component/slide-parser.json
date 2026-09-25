@@ -25,6 +25,11 @@
       "kind": "realised-by",
       "source": "domain.service.load-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-slide-frontmatter-syntax",
+      "properties": {}
     }
   ]
 }
