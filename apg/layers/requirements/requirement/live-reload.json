@@ -21,6 +21,11 @@
       "kind": "drives",
       "target": "domain.entity.deck-changed",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ],
   "in": [
