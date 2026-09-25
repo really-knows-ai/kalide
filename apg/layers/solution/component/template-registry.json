@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.group.templating",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.template",
+      "properties": {}
     }
   ]
 }
