@@ -53,6 +53,11 @@
       "kind": "details",
       "source": "requirements.note.fix-native-e2e-definition",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.native-ci-verification",
+      "properties": {}
     }
   ]
 }

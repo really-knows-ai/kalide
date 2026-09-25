@@ -16,6 +16,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.single-binary",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-start",
+      "properties": {}
     }
   ],
   "in": [
