@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "template-definition",
+  "body": "Each built-in template defines: name, one-line description, `usage: slide | section` (exactly one), a field/section/body schema, a Go html/template layout, and an example slide that itself validates. Templates are compiled into the binary and not editable by deck authors.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
