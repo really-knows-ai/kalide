@@ -1,0 +1,12 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "templating",
+  "body": "Templating: built-in templates, their schemas (fields, types, formats, body rules, sections) and the theme they style against.",
+  "properties": {
+    "attribute": "core",
+    "root": "template"
+  },
+  "out": [],
+  "in": []
+}
