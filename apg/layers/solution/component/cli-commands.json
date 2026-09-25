@@ -5,5 +5,11 @@
   "body": "CLI commands: init, start (--port), templates [name]; exit codes and terminal output.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }
