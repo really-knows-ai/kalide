@@ -4,7 +4,13 @@
   "name": "load-deck",
   "body": "Load deck: read eypres.yaml, parse slide filenames into ordered/vertical positions, split frontmatter, sections, section fences and bodies (with line numbers).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.deck-loader",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
