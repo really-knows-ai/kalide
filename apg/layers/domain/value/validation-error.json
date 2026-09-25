@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "validation-error",
+  "body": "A validation error: file, optional line, path (e.g. column[1] › people[0] › name), message, fix hint, optional suggestion.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
