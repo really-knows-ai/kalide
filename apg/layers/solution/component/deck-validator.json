@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.group.validation",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.validate-deck",
+      "properties": {}
     }
   ]
 }
