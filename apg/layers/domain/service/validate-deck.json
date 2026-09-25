@@ -41,6 +41,11 @@
       "kind": "drives",
       "source": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-failfast-theme-navigation",
+      "properties": {}
     }
   ]
 }
