@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.field-rules",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.number-date-formats",
+      "properties": {}
     }
   ],
   "in": []
