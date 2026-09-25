@@ -1,0 +1,11 @@
+{
+  "layer": "solution",
+  "type": "container",
+  "name": "cli-binary",
+  "body": "The `eypres` CLI binary (Go, static, embedded assets): commands, loader, validator, renderer, HTTP server, watcher.",
+  "properties": {
+    "kind": "app"
+  },
+  "out": [],
+  "in": []
+}
