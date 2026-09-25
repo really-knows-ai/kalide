@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.link-target",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.unique-slide-labels",
+      "properties": {}
     }
   ],
   "in": [
