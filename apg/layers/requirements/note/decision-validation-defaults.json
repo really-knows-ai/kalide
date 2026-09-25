@@ -4,6 +4,12 @@
   "name": "decision-validation-defaults",
   "body": "Source: 'validates the whole deck… errors carry full path'. Unstated: whether validation stops at first error. Resolution: collect all errors in one pass (better for non-developer authors); ordered by file then line. Theme omitted = `ey` default. `navigation` omitted: default `linear` (unambiguous safest for presenters). [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
+    }
+  ],
   "in": []
 }
