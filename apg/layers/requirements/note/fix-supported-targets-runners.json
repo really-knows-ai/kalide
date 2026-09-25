@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "requirements.requirement.scoop-install",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.release-workflow",
+      "properties": {}
     }
   ],
   "in": []
