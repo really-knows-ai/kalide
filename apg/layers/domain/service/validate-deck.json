@@ -26,6 +26,11 @@
       "kind": "calls",
       "source": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ]
 }
