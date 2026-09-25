@@ -6,7 +6,13 @@
   "properties": {
     "feature": "validation-errors"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.error-reporting",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
