@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.native-ci-verification",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.supported-platforms",
+      "properties": {}
     }
   ],
   "in": [
