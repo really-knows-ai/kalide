@@ -23,6 +23,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.slide-sections",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.section-frontmatter",
+      "properties": {}
     }
   ]
 }
