@@ -28,6 +28,11 @@
       "kind": "contains",
       "source": "requirements.user.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.decision-validation-defaults",
+      "properties": {}
     }
   ]
 }
