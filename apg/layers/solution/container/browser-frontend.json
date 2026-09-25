@@ -1,0 +1,11 @@
+{
+  "layer": "solution",
+  "type": "container",
+  "name": "browser-frontend",
+  "body": "Browser front end: reveal.js deck page (with live-reload client and print-to-PDF), error page and /templates gallery, served by cli-binary.",
+  "properties": {
+    "kind": "app"
+  },
+  "out": [],
+  "in": []
+}
