@@ -6,7 +6,13 @@
   "properties": {
     "feature": "deck-structure"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.deck",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
