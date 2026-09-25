@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "closest-match-suggestions",
+  "body": "Unknown field, section, template, config key or theme names produce an error with a closest-match suggestion (\"did you mean …?\") when one is close.",
+  "properties": {
+    "feature": "validation-errors"
+  },
+  "out": [],
+  "in": []
+}
