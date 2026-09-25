@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "slide-parser",
+  "body": "Slide parser: splits slide frontmatter, `#` sections, section plain-fence frontmatter, bodies and notes, keeping line numbers.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
