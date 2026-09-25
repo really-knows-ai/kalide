@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "slide-template-required",
+  "body": "Every slide file begins with YAML frontmatter that includes `template:` naming a slide-usage template. Missing frontmatter/`template:` = error; unknown template = error with suggestion; a section-usage template on a slide = error.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
