@@ -21,6 +21,11 @@
       "kind": "contains",
       "target": "requirements.requirement.github-releases",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.native-ci-verification",
+      "properties": {}
     }
   ],
   "in": [
