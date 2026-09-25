@@ -15,6 +15,11 @@
       "kind": "drives",
       "source": "requirements.requirement.cli-init",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.cli-init-refuse-existing",
+      "properties": {}
     }
   ]
 }
