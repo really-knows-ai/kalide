@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "container",
   "name": "cli-binary",
-  "body": "The `eypres` CLI binary (Go, static, embedded assets): commands, loader, validator, renderer, HTTP server, watcher.",
+  "body": "The `eypres` CLI binary (Go module `github.com/really-knows-ai/ey-present`, static, embedded assets; built for darwin/arm64, darwin/amd64, windows/amd64, windows/arm64): commands, loader, validator, renderer, HTTP server, watcher.",
   "properties": {
     "kind": "app"
   },
