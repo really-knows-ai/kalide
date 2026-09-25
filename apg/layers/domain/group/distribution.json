@@ -1,0 +1,12 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "distribution",
+  "body": "Distribution: building, natively verifying, releasing and installing eypres on the supported macOS/Windows targets.",
+  "properties": {
+    "attribute": "supporting",
+    "root": "release"
+  },
+  "out": [],
+  "in": []
+}
