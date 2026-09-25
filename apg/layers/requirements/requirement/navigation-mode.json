@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "navigation-mode",
+  "body": "`navigation: linear | free` in `eypres.yaml` configures reveal.js navigation deck-wide (linear = next/prev walks all slides incl. vertical; free = standard 2D grid navigation). Any other value = error.",
+  "properties": {
+    "feature": "linking-navigation"
+  },
+  "out": [],
+  "in": []
+}
