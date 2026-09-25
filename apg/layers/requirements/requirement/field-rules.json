@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "field-rules",
-  "body": "Field rules: required, default, max_length (text, counted on stripped text), min_items/max_items (list), min/max (number/date), description. Wrong type or out-of-range value = error stating the rule and the actual value.",
+  "body": "Field rules: required, default, max_length (text: counts characters of the text after Markdown is stripped), min_items/max_items (list), min/max (number/date), description. Wrong type (e.g. a string for a `number`, a non-`YYYY-MM-DD` `date`) or out-of-range value = error stating the rule and the actual value.",
   "properties": {
     "feature": "templates"
   },
