@@ -5,5 +5,11 @@
   "body": "Deck config from eypres.yaml: title, author, date, theme (default ey), navigation (linear|free).",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    }
+  ]
 }
