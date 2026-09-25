@@ -28,6 +28,11 @@
       "kind": "realised-by",
       "source": "domain.group.distribution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.distribution-solution",
+      "properties": {}
     }
   ]
 }
