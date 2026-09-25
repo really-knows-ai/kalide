@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.live-reload",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.pdf-via-print",
+      "properties": {}
     }
   ],
   "in": [
