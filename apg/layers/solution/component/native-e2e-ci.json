@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.service.publish-release",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-native-e2e-definition",
+      "properties": {}
     }
   ]
 }

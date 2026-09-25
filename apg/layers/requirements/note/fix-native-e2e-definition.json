@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.cli-commands",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
     }
   ],
   "in": []
