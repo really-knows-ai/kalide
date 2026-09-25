@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.error-reporting",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.closest-match-suggestions",
+      "properties": {}
     }
   ],
   "in": [
