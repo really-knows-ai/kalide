@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "validation",
+  "body": "Validation: checking a deck against templates and rules, producing path-qualified validation errors.",
+  "properties": {
+    "attribute": "supporting"
+  },
+  "out": [],
+  "in": []
+}
