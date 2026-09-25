@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.number-date-formats",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.slide-template-required",
+      "properties": {}
     }
   ],
   "in": []

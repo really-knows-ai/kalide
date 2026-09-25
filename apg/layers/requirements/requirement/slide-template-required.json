@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.fix-slide-frontmatter-syntax",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-missing-template-depends",
+      "properties": {}
     }
   ]
 }
