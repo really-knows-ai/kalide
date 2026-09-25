@@ -56,6 +56,11 @@
       "kind": "contains",
       "target": "solution.component.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.theme-registry",
+      "properties": {}
     }
   ],
   "in": [
