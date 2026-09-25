@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "github-releases",
-  "body": "On a version tag, a GitHub Actions release workflow builds the four binaries and publishes them, with checksums, as assets of a GitHub Release on the private repo. AC: a pushed tag `vX.Y.Z` yields a Release `vX.Y.Z` with the four binaries and a checksums file.",
+  "body": "On a version tag, a GitHub Actions release workflow builds one binary per supported target (see supported-platforms) and publishes them, with checksums, as assets of a GitHub Release on the private repo. AC: a pushed tag `vX.Y.Z` yields a Release `vX.Y.Z` with a checksums file and one binary for each supported target: darwin/arm64 and windows/amd64 always, windows/arm64 only if its native runner was available, and never darwin/amd64 or Linux.",
   "properties": {
     "feature": "distribution"
   },
