@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "error-reporting",
+  "body": "Every error states file, line if known, full path, what is wrong and how to fix it, e.g. `slides/3-team.md:12 › column[1] › people[0] › name: required — add a name: value`. Same text in terminal and browser error page.",
+  "properties": {
+    "feature": "validation-errors"
+  },
+  "out": [],
+  "in": []
+}
