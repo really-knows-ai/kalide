@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "field",
+  "body": "A template field definition: name, type, rules (required, default, max_length, min/max_items, min/max, plain, description), formats for number/date.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
