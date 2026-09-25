@@ -20,6 +20,11 @@
       "kind": "details",
       "source": "requirements.note.fix-cli-start-port",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.deck-rebuilt",
+      "properties": {}
     }
   ]
 }

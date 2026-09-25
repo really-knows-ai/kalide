@@ -16,6 +16,11 @@
       "kind": "realised-by",
       "target": "solution.component.file-watcher",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.http-server",
+      "properties": {}
     }
   ],
   "in": [
