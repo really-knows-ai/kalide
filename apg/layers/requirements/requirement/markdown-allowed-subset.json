@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "markdown-allowed-subset",
+  "body": "Bodies accept: blocks — paragraphs, `##` and `###` subheadings, bulleted and numbered lists (max one nesting level); inline — core CommonMark bold, italic, inline code, `[]()` links, hard line breaks. `#` is reserved for section markers.",
+  "properties": {
+    "feature": "markdown"
+  },
+  "out": [],
+  "in": []
+}
