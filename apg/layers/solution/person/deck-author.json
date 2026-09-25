@@ -4,6 +4,12 @@
   "name": "deck-author",
   "body": "Deck author (C4 person): runs eypres init/start/templates, edits slides, presents in browser.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "uses",
+      "target": "solution.system.eypres",
+      "properties": {}
+    }
+  ],
   "in": []
 }
