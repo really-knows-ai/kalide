@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "live-reload",
+  "body": "While `eypres start` runs, changes to `slides/`, `assets/` or `eypres.yaml` are detected, the deck is re-validated and re-rendered, and the open browser reloads automatically.",
+  "properties": {
+    "feature": "presenting"
+  },
+  "out": [],
+  "in": []
+}
