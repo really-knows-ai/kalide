@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "target-platform",
+  "body": "Supported target: exactly one of darwin/arm64, darwin/amd64, windows/amd64, windows/arm64. No other OS/arch (Linux is a non-goal).",
+  "properties": {},
+  "out": [],
+  "in": []
+}
