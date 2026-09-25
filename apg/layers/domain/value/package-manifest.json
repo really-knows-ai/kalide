@@ -20,6 +20,11 @@
       "kind": "drives",
       "source": "requirements.requirement.scoop-install",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.tap-bucket-location",
+      "properties": {}
     }
   ]
 }
