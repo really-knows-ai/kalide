@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "release-workflow",
-  "body": "Release workflow: tag-triggered GitHub Actions workflow that builds the four binaries, gates on native-e2e-ci, publishes assets + checksums to the GitHub Release, and updates the Homebrew formula and Scoop manifest (version, URLs, checksums). Never pushes tags itself.",
+  "body": "Release workflow: GitHub Actions workflow triggered by a human-pushed tag. It builds the four binaries, gates on native-e2e-ci, publishes assets and checksums to the GitHub Release, then updates the Homebrew formula and Scoop manifest (version, URLs, checksums) and pushes them as a manifest-only commit touching only `Formula/` and `bucket/`. It never pushes code and never creates tags.",
   "properties": {},
   "out": [],
   "in": [
