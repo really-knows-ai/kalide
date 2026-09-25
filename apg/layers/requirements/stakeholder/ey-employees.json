@@ -4,6 +4,12 @@
   "name": "ey-employees",
   "body": "EY employees who need to build beautiful, consistent slide decks quickly from built-in templates.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.single-binary",
+      "properties": {}
+    }
+  ],
   "in": []
 }

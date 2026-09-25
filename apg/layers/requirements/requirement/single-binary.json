@@ -7,5 +7,11 @@
     "feature": "cross-platform"
   },
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.ey-employees",
+      "properties": {}
+    }
+  ]
 }
