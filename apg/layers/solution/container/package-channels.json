@@ -1,0 +1,11 @@
+{
+  "layer": "solution",
+  "type": "container",
+  "name": "package-channels",
+  "body": "Package channels: the Homebrew tap and Scoop bucket (proposed location: `Formula/` and `bucket/` in the source repo, pending confirmation) that users add to install eypres.",
+  "properties": {
+    "kind": "service"
+  },
+  "out": [],
+  "in": []
+}
