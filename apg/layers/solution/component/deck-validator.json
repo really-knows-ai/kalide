@@ -10,6 +10,11 @@
       "kind": "contains",
       "source": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.validation",
+      "properties": {}
     }
   ]
 }
