@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "theme-selection",
+  "body": "`theme` is optional and deck-wide only (never per slide). Only `ey` is allowed today (and is the default); any other value = error listing available themes. The theme mechanism is a registry so more themes can be added later without template changes.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
