@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "person",
+  "name": "maintainer",
+  "body": "Maintainer (C4 person): develops eypres, pushes and tags releases by hand; the release pipeline reacts to the tag.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
