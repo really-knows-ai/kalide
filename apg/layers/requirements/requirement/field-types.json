@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "field-types",
+  "body": "Field types: `text` (inline Markdown; `plain` flag strips styles silently), `number`, `date`, `boolean`, `enum`, `image` (path under assets/, existence checked), `link` (#label checked or http(s) URL), `list` (exactly one item type), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, of: person}`). No separate record types.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
