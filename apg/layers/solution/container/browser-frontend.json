@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "solution.component.templates-gallery",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.deck-page",
+      "properties": {}
     }
   ],
   "in": [

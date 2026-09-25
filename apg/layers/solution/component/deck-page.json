@@ -5,5 +5,11 @@
   "body": "Browser deck page: reveal.js runtime with rendered slides, live-reload client, full-page error view, print-to-PDF.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.browser-frontend",
+      "properties": {}
+    }
+  ]
 }
