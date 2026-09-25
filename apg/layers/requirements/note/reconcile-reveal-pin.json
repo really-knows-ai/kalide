@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "reconcile-reveal-pin",
+  "body": "Reconciliation of reveal.js usage against the real 6.0.2 release package (verified at ./reveal/: package.json version 6.0.2, license MIT; LICENSE reads \"Hakim El Hattab, http://hakim.se, and reveal.js contributors\").\n\nPin: reveal.js is pinned to 6.0.2 (MIT), vendored from the release package's dist/ into internal/assets/reveal/ and committed there with its LICENSE (it ships because we redistribute it). No npm install and no build step is needed to consume it; Node is only needed to develop reveal.js itself.\n\n6.x structure facts: core is dist/reveal.js (UMD) / dist/reveal.mjs (ESM); plugins live at dist/plugin/<name>.js (notes.js is the one we use); ?print-pdf is handled by core and the print styles are baked into dist/reveal.css — there is NO plugin/print-pdf and no separate print stylesheet in 6.x.\n\nMinimal vendored set (internal/assets/reveal/): dist/reveal.js, dist/reveal.css, dist/reset.css, dist/plugin/notes.js, LICENSE.\n\nNot vendored: the markdown, highlight, math, search and zoom plugins; reveal.mjs (ESM entry point); and the stock themes under dist/theme/ (the deck uses our own `default` EY-look theme).\n\nUpdated nodes: embedded-assets (pin + vendoring + no-build), speaker-notes (notes rendered via dist/plugin/notes.js; placement/limits rules unchanged), pdf-via-print (core ?print-pdf using dist/reveal.css print styles; no separate print plugin/stylesheet), solution.component.embedded-assets (vendored location internal/assets/reveal/ + minimal set). [with user]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
