@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "http-server",
+  "body": "HTTP server: serves deck page or error page, embedded assets, deck assets/, /templates gallery and live-reload endpoint on localhost.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
