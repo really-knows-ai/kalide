@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-native-e2e-definition",
+  "body": "source: native-ci-verification 'runs the offline `eypres init && eypres start` e2e'; inconsistency: `eypres start` blocks and opens a browser, so \"init && start\" can't pass/fail in CI, and \"offline\" was not defined (feedback-35); resolution [with user]: added `eypres start --no-open` (suppresses browser opening) to cli-start and cli-commands; e2e defined as the steps now in native-ci-verification and native-e2e-ci (temp dir, init, start --no-open, parse URL, poll to HTTP 200 with the two starter slides, verify reveal.js/theme assets are served from the binary, offline via blocked/disabled outbound network or asserting no outbound connections with the mechanism chosen per OS, then SIGTERM/taskkill and assert clean exit). Clean shutdown on termination signals was added to cli-start so this final step has a requirement behind it [autonomous, implied by the user's decision].",
+  "properties": {},
+  "out": [],
+  "in": []
+}
