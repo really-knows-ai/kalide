@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-slide-frontmatter-syntax",
+  "body": "source: 'Every slide file begins with YAML frontmatter'; inconsistency: slide frontmatter delimiter and the slide-body boundary were unspecified, and could be confused with the section plain-fence frontmatter (feedback-2); resolution: slide frontmatter is standard YAML delimited by `---` … `---` at the very top of the file; the plain ``` fence is only for section frontmatter; content between slide frontmatter and the first `#` heading is the slide body — written into slide-template-required, slide-sections, section-frontmatter and the slide-parser component [with user]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
