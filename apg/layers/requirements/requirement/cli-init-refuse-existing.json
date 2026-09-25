@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "cli-init-refuse-existing",
+  "body": "`eypres init` refuses (clear message, non-zero exit, nothing written) if any of `slides/`, `assets/` or `eypres.yaml` already exists. Other files (e.g. `.git`) do not block. There is no `--force` flag.",
+  "properties": {
+    "feature": "cli"
+  },
+  "out": [],
+  "in": []
+}
