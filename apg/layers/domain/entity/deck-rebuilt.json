@@ -17,6 +17,11 @@
       "kind": "publishes",
       "source": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "subscribes",
+      "source": "domain.service.serve-deck",
+      "properties": {}
     }
   ]
 }

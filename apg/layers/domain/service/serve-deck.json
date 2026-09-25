@@ -4,7 +4,13 @@
   "name": "serve-deck",
   "body": "Serve deck: HTTP serving of the rendered deck (or error page), embedded assets, deck assets/, /templates gallery, live-reload channel.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "subscribes",
+      "target": "domain.entity.deck-rebuilt",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
