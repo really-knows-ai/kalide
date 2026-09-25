@@ -5,5 +5,11 @@
   "body": "Renderer: executes Go html/template layouts with validated data, applies formats, theme CSS, reveal.js config (navigation), vertical stacks, anchors, notes.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }

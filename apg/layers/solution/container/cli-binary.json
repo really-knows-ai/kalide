@@ -36,6 +36,11 @@
       "kind": "contains",
       "target": "solution.component.deck-validator",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": [
