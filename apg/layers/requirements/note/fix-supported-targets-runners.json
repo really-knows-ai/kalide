@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.single-binary",
+      "properties": {}
     }
   ],
   "in": []
