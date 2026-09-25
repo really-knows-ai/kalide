@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "template-build-checks",
+  "body": "When templates are built/loaded, the registry rejects: template reference cycles, a section accepting a slide template, a required-body template used as a field type, use of the reserved `_format` suffix or `notes`/`body` names as declared fields/sections, and example slides that fail validation. These are build-time (test/startup) failures, never deck-author-facing errors.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
