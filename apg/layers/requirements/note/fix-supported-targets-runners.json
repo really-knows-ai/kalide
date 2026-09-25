@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "solution.component.release-workflow",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.target-platform",
+      "properties": {}
     }
   ],
   "in": []
