@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "inter-slide-links",
+  "body": "Links are standard Markdown `[text](#label)` to another slide's label (anchor), or `[text](http(s)://…)`. `#label` targets are checked; an unknown label = error. Any other link scheme = error. The same rules apply to `link` fields.",
+  "properties": {
+    "feature": "linking-navigation"
+  },
+  "out": [],
+  "in": []
+}
