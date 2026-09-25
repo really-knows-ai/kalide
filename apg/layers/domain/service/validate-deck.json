@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "validate-deck",
-  "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level; return all validation errors.",
+  "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level; fail-fast — stop at and return the first validation error.",
   "properties": {},
   "out": [
     {
