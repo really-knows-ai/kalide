@@ -41,11 +41,6 @@
       "kind": "drives",
       "source": "requirements.requirement.install-docs",
       "properties": {}
-    },
-    {
-      "kind": "calls",
-      "source": "domain.service.publish-release",
-      "properties": {}
     }
   ]
 }

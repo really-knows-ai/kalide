@@ -14,11 +14,6 @@
       "kind": "realised-by",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
-    },
-    {
-      "kind": "calls",
-      "target": "domain.service.install-eypres",
-      "properties": {}
     }
   ],
   "in": [
