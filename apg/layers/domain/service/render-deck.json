@@ -9,6 +9,11 @@
       "kind": "calls",
       "target": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": [
