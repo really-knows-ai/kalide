@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "decision-validation-defaults",
-  "body": "Source: 'validates the whole deck… errors carry full path'. Unstated: whether validation stops at first error. Resolution: collect all errors in one pass (better for non-developer authors); ordered by file then line. Theme omitted = `ey` default. `navigation` omitted: default `linear` (unambiguous safest for presenters). [autonomous]",
+  "body": "Source: 'validates the whole deck… errors carry full path'. Unstated: whether validation stops at first error. Resolution (revised by user): validation is fail-fast — stop at the first error and report exactly one clear error. Theme omitted = `default` (the single built-in EY-look theme). `navigation` omitted = `default` (reveal.js navigationMode). [with user]",
   "properties": {},
   "out": [
     {
