@@ -6,7 +6,13 @@
   "properties": {
     "feature": "templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
