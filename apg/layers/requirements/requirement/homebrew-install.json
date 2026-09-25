@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "homebrew-install",
+  "body": "macOS users install via a Homebrew tap: `brew tap really-knows-ai/ey-present <git url>` then `brew install eypres`. The formula downloads the matching darwin binary from the private GitHub Release using the user's `HOMEBREW_GITHUB_API_TOKEN`, via a custom download strategy defined in the tap. AC: on a clean macOS arm64 and amd64 machine with the token set, install succeeds and `eypres` runs; a missing/invalid token fails with a clear message.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
