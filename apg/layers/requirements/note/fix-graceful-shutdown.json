@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-start",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.cli-commands",
+      "properties": {}
     }
   ],
   "in": []
