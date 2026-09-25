@@ -58,6 +58,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.native-ci-verification",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-graceful-shutdown",
+      "properties": {}
     }
   ]
 }
