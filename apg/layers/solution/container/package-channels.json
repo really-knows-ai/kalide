@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "solution.component.homebrew-formula",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.scoop-manifest",
+      "properties": {}
     }
   ],
   "in": [

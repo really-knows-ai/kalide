@@ -5,5 +5,11 @@
   "body": "Scoop manifest: the bucket's `eypres` manifest plus a token-aware workaround (Scoop has no native auth-header support; e.g. a pre-install script using the user's GitHub token) to fetch the windows asset from the private GitHub Release. Exact mechanism is an implementation decision.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.package-channels",
+      "properties": {}
+    }
+  ]
 }
