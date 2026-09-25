@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.template-composition",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-build-checks",
+      "properties": {}
     }
   ],
   "in": [
