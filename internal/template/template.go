@@ -115,6 +115,19 @@ type Field struct {
 	// how a layout variant is selected (template-variants).
 	Variants []string
 
+	// Formats, for a number or date field, is the closed set of named display
+	// formats the author may select with this field's reserved
+	// `<field>_format` sibling key. For example a number field may declare
+	// compact, exact and percent. An empty Formats means the field takes no
+	// format selection. The names and their functions are defined by Format.
+	Formats []string
+
+	// DefaultFormat, for a number or date field, is the format used when the
+	// author writes no `<field>_format` key. It must be one of Formats (or a
+	// built-in name when Formats is empty); an empty DefaultFormat means an
+	// omitted selection leaves the value unformatted.
+	DefaultFormat string
+
 	// SectionTemplate, for a FieldSectionTemplate field, names the
 	// section-usage template whose fields describe this field's structured
 	// YAML value.

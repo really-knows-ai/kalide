@@ -225,25 +225,36 @@ func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]
 	}
 
 	declared := make(map[string]struct{}, len(tmpl.Fields))
+	fieldsByName := make(map[string]*Field, len(tmpl.Fields))
 	for i := range tmpl.Fields {
 		declared[tmpl.Fields[i].Name] = struct{}{}
+		fieldsByName[tmpl.Fields[i].Name] = &tmpl.Fields[i]
 	}
 
-	var unknown []string
+	// The reserved `<field>_format` sibling of a declared field is owned by
+	// Format: CheckValues verifies only that its selection names one of the
+	// field's valid formats (Format.Resolve is the single source of truth).
+	var unknown, formatKeys []string
 	for key := range data {
 		if _, ok := declared[key]; ok {
 			continue
 		}
-		if isFormatKey(key, declared) {
+		if _, ok := formatBase(key, declared); ok {
+			formatKeys = append(formatKeys, key)
 			continue
 		}
 		unknown = append(unknown, key)
 	}
 	sort.Strings(unknown)
+	sort.Strings(formatKeys)
 
 	candidates := declaredCandidates(tmpl)
 	for _, key := range unknown {
 		c.unknownKey(path, key, data[key], candidates)
+	}
+	for _, key := range formatKeys {
+		base, _ := formatBase(key, declared)
+		c.checkFormatKey(path, key, fieldsByName[base], data[key])
 	}
 
 	for i := range tmpl.Fields {
@@ -260,6 +271,39 @@ func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]
 		}
 		c.validateValue(fieldPath, f, value, depth)
 	}
+}
+
+// checkFormatKey verifies a reserved `<field>_format` selection against the
+// field's declared formats, using Format.Resolve so the checker and renderer
+// share one source of truth. An unknown name is reported with the valid names;
+// a selection on a field that carries no formats is an error too.
+func (c *checker) checkFormatKey(path []PathSegment, key string, f *Field, value any) {
+	if f == nil {
+		return
+	}
+	chosen, ok := value.(string)
+	if !ok {
+		c.add(formatPath(path, f.Name), "format", value,
+			fmt.Sprintf("type: expected a format name, got %s", describeValue(value)),
+			"name one of the field's formats with a string")
+		return
+	}
+	if _, err := BuiltinFormats.Resolve(f, chosen); err != nil {
+		valid := f.Formats
+		if len(valid) == 0 {
+			valid = BuiltinFormats.Names(formatKindOf(f.Type))
+		}
+		fix := "remove the key or check the template definition"
+		if len(valid) > 0 {
+			fix = "use one of: " + strings.Join(valid, ", ")
+		}
+		c.add(formatPath(path, f.Name), "format", value, err.Error(), fix)
+	}
+}
+
+// formatPath locates a `<field>_format` key within the data.
+func formatPath(path []PathSegment, field string) []PathSegment {
+	return appendSeg(path, PathSegment{Name: field + "_format"})
 }
 
 // validateValue checks one value against one field's type and rules.
@@ -587,15 +631,17 @@ func declaredCandidates(t *Template) []string {
 	return out
 }
 
-// isFormatKey reports whether key is the reserved `<field>_format` sibling of
-// a declared field, which Format owns and CheckValues skips.
-func isFormatKey(key string, declared map[string]struct{}) bool {
+// formatBase reports whether key is the reserved `<field>_format` sibling of a
+// declared field, which Format owns, and returns that field's name.
+func formatBase(key string, declared map[string]struct{}) (string, bool) {
 	if !strings.HasSuffix(key, "_format") {
-		return false
+		return "", false
 	}
 	base := strings.TrimSuffix(key, "_format")
-	_, ok := declared[base]
-	return ok
+	if _, ok := declared[base]; !ok {
+		return "", false
+	}
+	return base, true
 }
 
 // appendSeg returns a new path with seg appended, so paths never share backing
