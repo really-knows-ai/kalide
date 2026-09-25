@@ -34,6 +34,11 @@
       "kind": "details",
       "target": "requirements.requirement.github-releases",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.homebrew-install",
+      "properties": {}
     }
   ],
   "in": []
