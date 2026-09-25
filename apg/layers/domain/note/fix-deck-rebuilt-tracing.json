@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "domain.entity.deck-rebuilt",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.file-watcher",
+      "properties": {}
     }
   ],
   "in": []
