@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.error-reporting",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.theme-selection",
+      "properties": {}
     }
   ],
   "in": []
