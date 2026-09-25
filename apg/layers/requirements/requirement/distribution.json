@@ -36,6 +36,11 @@
       "kind": "contains",
       "target": "requirements.requirement.scoop-install",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.tap-bucket-location",
+      "properties": {}
     }
   ],
   "in": [
