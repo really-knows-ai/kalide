@@ -20,6 +20,11 @@
       "kind": "drives",
       "source": "requirements.requirement.native-ci-verification",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.package-manifest-update",
+      "properties": {}
     }
   ]
 }
