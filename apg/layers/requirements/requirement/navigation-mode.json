@@ -6,7 +6,13 @@
   "properties": {
     "feature": "linking-navigation"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.deck-config",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
