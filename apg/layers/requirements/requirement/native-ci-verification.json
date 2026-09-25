@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "native-ci-verification",
+  "body": "Every release runs the offline `eypres init && eypres start` e2e on native GitHub Actions runners for all four targets (macOS arm64, macOS x64, Windows x64, Windows arm64), using the binary built for that target. Cross-compilation alone is not sufficient. A failure on any target blocks publishing. AC: the release workflow shows four green native e2e jobs before the Release is published.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
