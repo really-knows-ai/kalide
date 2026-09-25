@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "number-date-formats",
+  "body": "`number` and `date` fields have named formats defined by the template author plus a `default_format`. The deck author picks one via a sibling `<field>_format` field; the `_format` suffix is reserved. Unknown format name = error listing valid ones; omitted = default_format.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
