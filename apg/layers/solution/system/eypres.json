@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "system",
+  "name": "eypres",
+  "body": "eypres: local slide-deck tool — single Go binary that validates Markdown/YAML decks against built-in EY templates and serves them with reveal.js.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
