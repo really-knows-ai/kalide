@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "user",
+  "name": "template-author",
+  "body": "EY brand/template owner acting as a user: authors templates (schema, Go html/template layout, example) compiled into the binary.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
