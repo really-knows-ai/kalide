@@ -7,6 +7,12 @@
     "attribute": "core",
     "root": "deck"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.entity.deck",
+      "properties": {}
+    }
+  ],
   "in": []
 }
