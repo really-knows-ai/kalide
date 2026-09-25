@@ -7,6 +7,12 @@
     "attribute": "core",
     "root": "template"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
   "in": []
 }
