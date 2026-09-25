@@ -26,6 +26,11 @@
       "kind": "drives",
       "source": "requirements.requirement.cli-start",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-gallery",
+      "properties": {}
     }
   ]
 }

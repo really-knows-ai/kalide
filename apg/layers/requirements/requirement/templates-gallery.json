@@ -6,7 +6,13 @@
   "properties": {
     "feature": "presenting"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.serve-deck",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
