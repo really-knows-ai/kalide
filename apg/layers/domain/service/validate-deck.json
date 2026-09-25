@@ -5,5 +5,11 @@
   "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level; return all validation errors.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.validation",
+      "properties": {}
+    }
+  ]
 }
