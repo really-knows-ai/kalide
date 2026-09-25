@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "templates-gallery",
+  "body": "Templates gallery page (/templates): renders each template's example and documentation.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
