@@ -21,6 +21,11 @@
       "kind": "contains",
       "target": "solution.component.slide-parser",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.markdown-validator",
+      "properties": {}
     }
   ],
   "in": [
