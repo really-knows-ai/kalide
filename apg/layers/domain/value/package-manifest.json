@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "package-manifest",
+  "body": "Package manifest: the Homebrew formula or Scoop manifest describing a release for a package manager — version, per-target asset URL and SHA-256 checksum, plus the token-aware download mechanism.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
