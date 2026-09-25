@@ -21,6 +21,11 @@
       "kind": "drives",
       "target": "domain.service.serve-deck",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ],
   "in": [
