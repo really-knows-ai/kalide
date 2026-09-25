@@ -33,6 +33,11 @@
       "kind": "realised-by",
       "source": "domain.group.distribution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.tap-bucket-location-open",
+      "properties": {}
     }
   ]
 }
