@@ -23,11 +23,6 @@
       "kind": "drives",
       "source": "requirements.requirement.unique-slide-labels",
       "properties": {}
-    },
-    {
-      "kind": "represents",
-      "source": "requirements.user.deck-author",
-      "properties": {}
     }
   ]
 }
