@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "speaker-notes",
+  "body": "A `# notes` section holds speaker notes (rendered into reveal.js speaker notes) and is allowed only on slides (a slide file's top level), never inside a section template. `notes` is reserved and cannot be declared as a template section name. Notes body follows the Markdown subset.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
