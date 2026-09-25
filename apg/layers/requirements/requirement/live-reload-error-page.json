@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "live-reload-error-page",
+  "body": "If an edit breaks the deck during live reload, the browser shows a clear full-page error (instead of a partial deck) and the terminal prints the same error(s); the server keeps running and recovers on the next valid edit.",
+  "properties": {
+    "feature": "presenting"
+  },
+  "out": [],
+  "in": []
+}
