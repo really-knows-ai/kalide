@@ -16,6 +16,11 @@
       "kind": "drives",
       "target": "domain.service.publish-release",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.native-ci-verification",
+      "properties": {}
     }
   ],
   "in": [
