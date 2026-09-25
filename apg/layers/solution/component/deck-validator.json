@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "deck-validator",
-  "body": "Deck validator: walks deck → slides → sections/fields recursively applying schema rules; collects path-qualified errors with hints and closest-match suggestions; formats them for terminal and browser.",
+  "body": "Deck validator: walks deck → slides → sections/fields recursively applying schema rules; fail-fast — stops at the first error and returns it path-qualified with hint and closest-match suggestion; formats it for terminal and browser.",
   "properties": {},
   "out": [],
   "in": [
