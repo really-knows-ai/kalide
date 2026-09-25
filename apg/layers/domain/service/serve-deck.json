@@ -14,6 +14,11 @@
       "kind": "calls",
       "target": "domain.service.render-deck",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.http-server",
+      "properties": {}
     }
   ],
   "in": [
