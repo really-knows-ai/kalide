@@ -1,0 +1,11 @@
+{
+  "layer": "solution",
+  "type": "container",
+  "name": "release-pipeline",
+  "body": "Release pipeline: GitHub Actions workflows in the private repo — native-runner CI/e2e for the four targets and the tag-triggered release workflow that publishes GitHub Releases assets and updates package manifests.",
+  "properties": {
+    "kind": "service"
+  },
+  "out": [],
+  "in": []
+}
