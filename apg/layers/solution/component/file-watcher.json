@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.entity.deck-changed",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.watch-deck",
+      "properties": {}
     }
   ]
 }

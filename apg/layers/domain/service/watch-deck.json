@@ -24,6 +24,11 @@
       "kind": "calls",
       "target": "domain.service.render-deck",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.file-watcher",
+      "properties": {}
     }
   ],
   "in": [
