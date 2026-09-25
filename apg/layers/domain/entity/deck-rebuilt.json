@@ -43,6 +43,11 @@
       "kind": "drives",
       "source": "requirements.requirement.live-reload-error-page",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.fix-deck-rebuilt-tracing",
+      "properties": {}
     }
   ]
 }
