@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "distribution",
+  "body": "eypres is built, verified, released and installed through a defined distribution pipeline: private GitHub source repo, native-CI verification, GitHub Releases assets, and Homebrew (macOS) / Scoop (Windows) install channels.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
