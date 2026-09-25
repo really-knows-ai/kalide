@@ -21,6 +21,11 @@
       "kind": "uses",
       "source": "solution.person.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "uses",
+      "source": "solution.person.template-author",
+      "properties": {}
     }
   ]
 }
