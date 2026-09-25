@@ -6,7 +6,13 @@
   "properties": {
     "feature": "cli"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.live-reload",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
