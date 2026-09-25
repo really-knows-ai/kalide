@@ -20,6 +20,11 @@
       "kind": "realised-by",
       "source": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.deck-rebuilt",
+      "properties": {}
     }
   ]
 }

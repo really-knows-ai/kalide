@@ -11,6 +11,11 @@
       "kind": "realised-by",
       "target": "solution.component.deck-page",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.file-watcher",
+      "properties": {}
     }
   ],
   "in": [
