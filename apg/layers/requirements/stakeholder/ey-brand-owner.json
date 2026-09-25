@@ -4,6 +4,12 @@
   "name": "ey-brand-owner",
   "body": "EY brand/template owners: build the fixed template set and EY theme into the eypres binary; want every deck to look consistent and on-brand.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.embedded-assets",
+      "properties": {}
+    }
+  ],
   "in": []
 }
