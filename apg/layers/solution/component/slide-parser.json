@@ -20,6 +20,11 @@
       "kind": "realised-by",
       "source": "domain.entity.section",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.load-deck",
+      "properties": {}
     }
   ]
 }

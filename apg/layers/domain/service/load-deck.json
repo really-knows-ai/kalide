@@ -9,6 +9,11 @@
       "kind": "realised-by",
       "target": "solution.component.deck-loader",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.slide-parser",
+      "properties": {}
     }
   ],
   "in": [
