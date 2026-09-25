@@ -25,6 +25,11 @@
       "kind": "realised-by",
       "source": "domain.service.serve-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-native-e2e-definition",
+      "properties": {}
     }
   ]
 }
