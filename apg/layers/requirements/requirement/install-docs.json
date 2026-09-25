@@ -16,6 +16,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.homebrew-install",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.scoop-install",
+      "properties": {}
     }
   ],
   "in": [
