@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "section",
+  "body": "A section: named by a `# name` heading in a slide, with optional plain-fence YAML frontmatter and a body; instantiates a section template. Nested sections exist only via template composition / section-typed fields.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [],
+  "in": []
+}
