@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.package-manifest-update",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.release-workflow",
+      "properties": {}
     }
   ],
   "in": []
