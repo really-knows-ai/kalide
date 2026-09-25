@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "slide-sections",
+  "body": "A top-level `# name` heading in a slide body starts a section named `name`; the section runs until the next `#` heading or end of file. Only one level of sections in Markdown. Section names must be declared by the slide's template; undeclared name = error with suggestion; repeat count outside the template's min/max = error.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
