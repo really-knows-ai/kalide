@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "cli-init",
+  "body": "`eypres init` in the current directory creates `slides/` with two valid starter slides, an empty `assets/` directory for images, and a valid `eypres.yaml`. AC: immediately after init, `eypres start` validates cleanly and serves the two starter slides.",
+  "properties": {
+    "feature": "cli"
+  },
+  "out": [],
+  "in": []
+}
