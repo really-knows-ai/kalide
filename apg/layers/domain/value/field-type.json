@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "field-type",
-  "body": "Field type: text | number | date | boolean | enum | image | link | list(of one type) | <section-template>.",
+  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum | image | link | list(of one type) | <section-template>.",
   "properties": {},
   "out": [],
   "in": [
