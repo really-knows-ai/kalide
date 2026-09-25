@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "scoop-install",
+  "body": "Windows users install via a Scoop bucket: `scoop bucket add ey-present <git url>` then `scoop install eypres`. The manifest obtains the matching windows binary from the private GitHub Release using a user-supplied GitHub token. Scoop has no native auth-header support for downloads, so the manifest/installer must work around it (e.g. a pre-install script that fetches the asset with the token); the exact mechanism is an implementation decision. AC: on a clean Windows amd64 and arm64 machine with the token set, install succeeds and `eypres` runs; a missing/invalid token fails with a clear message.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
