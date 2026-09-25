@@ -6,7 +6,13 @@
   "properties": {
     "kind": "app"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "solution.component.templates-gallery",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
