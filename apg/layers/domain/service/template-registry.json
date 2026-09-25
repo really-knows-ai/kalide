@@ -20,6 +20,11 @@
       "kind": "calls",
       "source": "domain.service.render-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.cli-templates-list",
+      "properties": {}
     }
   ]
 }

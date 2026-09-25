@@ -16,6 +16,11 @@
       "kind": "contains",
       "target": "requirements.requirement.templates-gallery",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": [
