@@ -4,6 +4,12 @@
   "name": "fix-ci-manifest-push",
   "body": "source: global.constraint.humans-push-and-tag 'Pushing … must be done by humans only'; inconsistency: package-manifest-update needs CI to commit formula/manifest updates in-tree (same-repo tap/bucket), which the constraint forbade (feedback-34); resolution [with user]: constraint narrowed — the CI release workflow may push manifest-only commits (version/URL/checksum updates under `Formula/` and `bucket/`); humans still push all code and create all tags; agents never push or tag. Reflected in the constraint, the package-manifest-update AC (commit touches only Formula/ and bucket/, no CI tags) and the release-workflow component.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "global.constraint.humans-push-and-tag",
+      "properties": {}
+    }
+  ],
   "in": []
 }
