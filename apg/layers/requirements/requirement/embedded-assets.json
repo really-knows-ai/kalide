@@ -28,6 +28,11 @@
       "kind": "details",
       "source": "requirements.note.open-font-logo-licensing",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.cli-start",
+      "properties": {}
     }
   ]
 }

@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.embedded-assets",
+      "properties": {}
     }
   ],
   "in": [
