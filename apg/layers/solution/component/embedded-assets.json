@@ -5,5 +5,11 @@
   "body": "Embedded assets: go:embed bundle of reveal.js, templates, EY theme (CSS tokens), fonts, logos, starter deck, page shells.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }
