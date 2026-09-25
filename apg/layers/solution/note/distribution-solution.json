@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "distribution-solution",
+  "body": "Distribution solution: the release pipeline and package channels are repo/CI artefacts (GitHub Actions YAML, a Ruby formula, a Scoop JSON manifest, docs), not Go code, so they will have no scanner code FQNs. Their implemented-by edges are therefore not authored. The plan should give them target-less tasks, or planned nodes if the scanner covers those files. The release workflow must never push or tag (global.constraint.humans-push-and-tag).",
+  "properties": {},
+  "out": [],
+  "in": []
+}
