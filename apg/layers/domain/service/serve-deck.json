@@ -9,6 +9,11 @@
       "kind": "subscribes",
       "target": "domain.entity.deck-rebuilt",
       "properties": {}
+    },
+    {
+      "kind": "calls",
+      "target": "domain.service.render-deck",
+      "properties": {}
     }
   ],
   "in": [

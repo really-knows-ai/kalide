@@ -21,6 +21,11 @@
       "kind": "calls",
       "source": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "calls",
+      "source": "domain.service.serve-deck",
+      "properties": {}
     }
   ]
 }
