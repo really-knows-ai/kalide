@@ -5,5 +5,11 @@
   "body": "Watch deck: watch deck files, debounce, publish deck-changed; on change reload→validate→render and publish deck-rebuilt.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.presentation",
+      "properties": {}
+    }
+  ]
 }

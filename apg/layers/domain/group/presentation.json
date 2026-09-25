@@ -16,6 +16,11 @@
       "kind": "contains",
       "target": "domain.service.serve-deck",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.watch-deck",
+      "properties": {}
     }
   ],
   "in": []
