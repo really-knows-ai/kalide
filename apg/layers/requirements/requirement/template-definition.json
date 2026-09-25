@@ -6,7 +6,13 @@
   "properties": {
     "feature": "templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-composition",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
