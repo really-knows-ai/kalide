@@ -26,6 +26,11 @@
       "kind": "calls",
       "source": "domain.service.serve-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.pdf-via-print",
+      "properties": {}
     }
   ]
 }
