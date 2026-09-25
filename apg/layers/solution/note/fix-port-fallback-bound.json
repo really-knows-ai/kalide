@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.note.design-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.cli-start",
+      "properties": {}
     }
   ],
   "in": []
