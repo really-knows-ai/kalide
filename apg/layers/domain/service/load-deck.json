@@ -26,6 +26,11 @@
       "kind": "calls",
       "source": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.slide-file-ordering",
+      "properties": {}
     }
   ]
 }
