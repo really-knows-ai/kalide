@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.user.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.user.template-author",
+      "properties": {}
     }
   ],
   "in": []
