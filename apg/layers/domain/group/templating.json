@@ -37,6 +37,11 @@
       "kind": "contains",
       "target": "domain.entity.theme",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": []
