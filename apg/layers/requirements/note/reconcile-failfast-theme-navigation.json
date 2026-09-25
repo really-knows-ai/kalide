@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "requirements.requirement.navigation-mode",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-config",
+      "properties": {}
     }
   ],
   "in": []

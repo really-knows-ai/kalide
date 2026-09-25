@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.decision-validation-defaults",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-failfast-theme-navigation",
+      "properties": {}
     }
   ]
 }
