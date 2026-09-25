@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "template-controlled-effects",
+  "body": "Fragments, transitions and backgrounds are set only by template layouts; deck authors cannot set them (any attempt, e.g. a `transition:` key, is an unknown-field error).",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
