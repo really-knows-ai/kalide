@@ -5,5 +5,11 @@
   "body": "Scaffold deck: `init` — check for existing slides/, assets/, eypres.yaml; write starter deck from embedded files.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    }
+  ]
 }
