@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "body-rules",
+  "body": "Every template has an implied `body` field: required / optional / disallowed, with limits max_words, max_paragraphs, max_list_items, subheadings allowed?. Body only comes from Markdown after the frontmatter; a `body:` key in YAML = error with guidance. Section templates used as field types take YAML data only.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
