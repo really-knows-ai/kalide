@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.release-workflow",
+      "properties": {}
     }
   ],
   "in": [
