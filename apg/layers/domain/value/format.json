@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "format",
+  "body": "Named display format for number/date fields, defined by the template author; selected via `<field>_format`, else default_format.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
