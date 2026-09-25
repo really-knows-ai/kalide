@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "single-binary",
-  "body": "Delivered as one self-contained static `eypres` binary (Go), built for exactly these supported targets: darwin/arm64, darwin/amd64, windows/amd64, windows/arm64. No runtime, network access or install step needed. The binary packages the whole tool (authoring/scaffolding, templating, validation, presentation). AC: `eypres init && eypres start` works offline on a clean machine for each of the four targets.",
+  "body": "Delivered as one self-contained static `eypres` binary (Go), built for exactly these supported targets: darwin/arm64, darwin/amd64, windows/amd64, windows/arm64 (no Linux — see supported-platforms). No runtime, network access or install step needed beyond placing the binary (Homebrew/Scoop channels are a convenience). The binary packages the whole tool (authoring/scaffolding, templating, validation, presentation). AC: for every release, `eypres init && eypres start` is verified offline on a native GitHub Actions runner for each of the four targets (see native-ci-verification); cross-compiling alone does not satisfy this AC.",
   "properties": {
     "feature": "cross-platform"
   },
