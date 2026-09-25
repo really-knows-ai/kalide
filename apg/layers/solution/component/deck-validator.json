@@ -20,6 +20,11 @@
       "kind": "realised-by",
       "source": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-failfast-theme-navigation",
+      "properties": {}
     }
   ]
 }

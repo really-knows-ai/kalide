@@ -39,6 +39,11 @@
       "kind": "details",
       "target": "domain.entity.theme",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.deck-validator",
+      "properties": {}
     }
   ],
   "in": []
