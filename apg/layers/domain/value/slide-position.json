@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "slide-position",
+  "body": "Parsed slide filename: number, optional letter (vertical child), label. Label is the deck-unique anchor.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
