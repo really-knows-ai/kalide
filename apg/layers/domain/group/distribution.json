@@ -7,6 +7,12 @@
     "attribute": "supporting",
     "root": "release"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.entity.release",
+      "properties": {}
+    }
+  ],
   "in": []
 }
