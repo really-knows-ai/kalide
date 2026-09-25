@@ -4,6 +4,12 @@
   "name": "design-decisions",
   "body": "Design decisions: (1) Goldmark-style CommonMark AST walk to whitelist nodes, extensions disabled. (2) Go html/template for layouts (auto-escaping). (3) Live reload via a lightweight server push (SSE/websocket) endpoint; rebuild atomically swaps the rendered deck or error state (never partial). (4) Default port chosen by implementation; if busy, error with `--port` hint. (5) No build/export: PDF via reveal.js ?print-pdf.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ],
   "in": []
 }

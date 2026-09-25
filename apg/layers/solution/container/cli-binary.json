@@ -73,6 +73,11 @@
       "kind": "realised-by",
       "source": "domain.group.authoring",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.design-decisions",
+      "properties": {}
     }
   ]
 }
