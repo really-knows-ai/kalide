@@ -23,6 +23,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.cli-init",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.open-font-logo-licensing",
+      "properties": {}
     }
   ]
 }

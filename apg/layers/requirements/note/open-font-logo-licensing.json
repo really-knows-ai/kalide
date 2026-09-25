@@ -4,6 +4,12 @@
   "name": "open-font-logo-licensing",
   "body": "OPEN: licensing of embedded EY fonts and logos. Decision for now: embed them (internal tool). Revisit before any distribution beyond EY.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.embedded-assets",
+      "properties": {}
+    }
+  ],
   "in": []
 }
