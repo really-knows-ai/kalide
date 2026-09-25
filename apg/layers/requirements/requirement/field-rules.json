@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "field-rules",
+  "body": "Field rules: required, default, max_length (text, counted on stripped text), min_items/max_items (list), min/max (number/date), description. Wrong type or out-of-range value = error stating the rule and the actual value.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
