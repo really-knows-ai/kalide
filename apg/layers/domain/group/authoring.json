@@ -22,6 +22,11 @@
       "kind": "contains",
       "target": "domain.entity.slide",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.slide-position",
+      "properties": {}
     }
   ],
   "in": []
