@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "templates-gallery",
+  "body": "The server serves a `/templates` gallery page showing every built-in template rendered from its example slide, with its description and field/section/body documentation.",
+  "properties": {
+    "feature": "presenting"
+  },
+  "out": [],
+  "in": []
+}
