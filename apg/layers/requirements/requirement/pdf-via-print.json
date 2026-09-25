@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "pdf-via-print",
+  "body": "Output is live presenting only. PDF is obtained via reveal.js built-in print-to-PDF (`?print-pdf`) from the served deck; there is no build/export command.",
+  "properties": {
+    "feature": "presenting"
+  },
+  "out": [],
+  "in": []
+}
