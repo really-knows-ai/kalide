@@ -1,0 +1,11 @@
+{{/*
+  column — section-usage template layout.
+
+  Context: map[string]any keyed by the section template's fields (see
+  ../README.md). The section renders inside the `content` slide's `# columns`
+  section; its implied body is optional. The fragment effect lives here.
+*/}}
+<div class="ey-column fragment">
+  {{ with .title }}<h3 class="ey-column__title">{{ . }}</h3>{{ end }}
+  {{ with .body }}<div class="ey-column__body">{{ . }}</div>{{ end }}
+</div>
