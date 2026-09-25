@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "section-frontmatter",
-  "body": "A plain ``` fence (no language tag) immediately after a section heading is that section's YAML frontmatter. It must include `template:` when the section accepts more than one section template; may be omitted when exactly one is accepted. A language tag on it = error; a fence anywhere else = error. The rest of the section is its body.",
+  "body": "A plain ``` fence (no language tag) immediately after a section heading is that section's YAML frontmatter; this fence form is used only for sections (slide frontmatter uses `---` … `---` at the top of the file). It must include `template:` when the section accepts more than one section template; may be omitted when exactly one is accepted. A language tag on it = error; a fence anywhere else = error. The rest of the section is its body.",
   "properties": {
     "feature": "deck-structure"
   },
