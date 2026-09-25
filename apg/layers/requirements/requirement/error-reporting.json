@@ -23,6 +23,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.live-reload-error-page",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-failfast-theme-navigation",
+      "properties": {}
     }
   ]
 }
