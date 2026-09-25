@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-start",
-  "body": "`eypres start` validates the whole deck first. On an error it prints that single (first) error and exits non-zero without serving. Otherwise it serves the deck on a default port (overridable with `--port`), prints the link in the terminal, and opens the default browser. It never serves a half-broken deck at startup.",
+  "body": "`eypres start` validates the whole deck first. On an error it prints that single (first) error and exits non-zero without serving. Otherwise it serves the deck bound to 127.0.0.1 only (never other interfaces), prints the link in the terminal (showing the actual port), and opens the default browser. Port: default 8080; if 8080 is busy, the next free port above it is tried automatically. `--port N` overrides the default; if an explicitly requested port is busy, `eypres start` exits non-zero with a plain-language error naming the port and suggesting another port or omitting `--port` (no silent fallback). It never serves a half-broken deck at startup.",
   "properties": {
     "feature": "cli"
   },
