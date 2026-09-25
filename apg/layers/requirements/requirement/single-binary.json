@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.group.presentation",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.authoring",
+      "properties": {}
     }
   ],
   "in": [
