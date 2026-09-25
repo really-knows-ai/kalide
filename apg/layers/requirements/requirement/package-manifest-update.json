@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "package-manifest-update",
-  "body": "The release workflow updates the Homebrew formula and Scoop manifest to the new version, asset URLs and SHA-256 checksums for each target. AC: after a release, both files reference the new version and their checksums match the published assets.",
+  "body": "The release workflow updates the Homebrew formula (`Formula/`) and Scoop manifest (`bucket/`) to the new version, asset URLs and SHA-256 checksums for each target, and pushes them as a manifest-only commit to really-knows-ai/ey-present (the one CI push the humans-push-and-tag constraint allows). AC: after a release, both files reference the new version and their checksums match the published assets; the CI commit touches only files under `Formula/` and `bucket/`; CI creates no tags.",
   "properties": {
     "feature": "distribution"
   },
