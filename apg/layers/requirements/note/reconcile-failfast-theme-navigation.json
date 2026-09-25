@@ -4,6 +4,12 @@
   "name": "reconcile-failfast-theme-navigation",
   "body": "Source: previous spec said (a) collect all errors in one pass, (b) theme named `ey` (default `ey`), (c) `navigation: linear | free`, default `linear`. Inconsistency: user decisions supersede these. Resolution: (1) validation is fail-fast — first error only, one clear error (file, full path, problem, fix hint) in terminal and live-reload browser error page; (2) the single built-in EY-look theme is named `default`; `theme` optional, default `default`, only allowed value `default`, future themes addable; (3) `navigation` uses reveal.js navigationMode values `default | linear | grid`, default `default`; `links-only` stays parked. Updated nodes: whole-deck-validation, error-reporting, cli-start, live-reload-error-page, theme-selection, deck-config, navigation-mode, parked-kiosk-interactivity, decision-validation-defaults, domain deck-config/theme/deck-rebuilt/validate-deck, solution theme-registry/deck-validator/embedded-assets/renderer. [with user]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
+    }
+  ],
   "in": []
 }
