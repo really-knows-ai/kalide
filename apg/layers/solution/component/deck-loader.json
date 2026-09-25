@@ -5,5 +5,11 @@
   "body": "Deck loader: reads eypres.yaml, lists slides/, parses filenames (number, letter, label), orders and groups vertical stacks.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }

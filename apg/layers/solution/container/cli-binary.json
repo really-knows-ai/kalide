@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "solution.component.cli-commands",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.deck-loader",
+      "properties": {}
     }
   ],
   "in": [
