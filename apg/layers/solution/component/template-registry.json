@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "template-registry",
+  "body": "Template registry / schema engine: embedded template definitions, schema model (fields, types, formats, body rules, sections), build-time checks, lookup and description.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
