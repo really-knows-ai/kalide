@@ -48,6 +48,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-failfast-theme-navigation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-validation-order",
+      "properties": {}
     }
   ]
 }

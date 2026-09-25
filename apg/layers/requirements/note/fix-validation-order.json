@@ -4,6 +4,12 @@
   "name": "fix-validation-order",
   "body": "source: 'fail-fast: stops at the first error'; inconsistency: \"first\" was undefined, so the reported error was non-deterministic (feedback-1); resolution: fixed validation order — (1) eypres.yaml, (2) slide filenames (numbering, letters, label uniqueness), (3) each slide in number/letter order, top-to-bottom by line (frontmatter, body, sections, fields), (4) inter-slide #label links last since they need all labels known — written into the requirement, validate-deck service and deck-validator component [with user]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
+    }
+  ],
   "in": []
 }
