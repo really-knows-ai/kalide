@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "solution.component.theme-registry",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": []
