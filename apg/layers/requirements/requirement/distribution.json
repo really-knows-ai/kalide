@@ -26,6 +26,11 @@
       "kind": "contains",
       "target": "requirements.requirement.native-ci-verification",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.homebrew-install",
+      "properties": {}
     }
   ],
   "in": [
