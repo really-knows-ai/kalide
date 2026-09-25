@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.github-releases",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.tap-bucket-location",
+      "properties": {}
     }
   ],
   "in": [
