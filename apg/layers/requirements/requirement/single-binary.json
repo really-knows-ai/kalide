@@ -6,7 +6,13 @@
   "properties": {
     "feature": "cross-platform"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.group.presentation",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
