@@ -4,6 +4,12 @@
   "name": "deck-author",
   "body": "EY employee who writes slide content in Markdown/YAML and presents it live. Not a developer.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-init",
+      "properties": {}
+    }
+  ],
   "in": []
 }
