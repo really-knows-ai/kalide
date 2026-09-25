@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "never-serve-broken-deck",
+  "body": "The server must never present a partially broken deck: if validation fails (startup or reload) no slides are rendered — startup exits, reload shows the full-page error.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
