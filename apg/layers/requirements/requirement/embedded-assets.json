@@ -33,6 +33,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.cli-start",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-reveal-pin",
+      "properties": {}
     }
   ]
 }
