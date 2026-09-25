@@ -4,6 +4,12 @@
   "name": "fix-deck-config-keys",
   "body": "source: 'eypres.yaml holds `title`, `author`, `date`, optional theme/navigation'; inconsistency: whether title/author/date are required, and date's format, were undefined (feedback-3); resolution: `title` required; `author`, `date` optional; `date` is `YYYY-MM-DD`; `theme` optional default `default`; `navigation` optional default `default`; unknown keys = error with suggestion, consistent with field rules — written into the deck-config requirement and domain value [with user]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-config",
+      "properties": {}
+    }
+  ],
   "in": []
 }
