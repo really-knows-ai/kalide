@@ -30,6 +30,11 @@
       "kind": "drives",
       "source": "requirements.requirement.cli-templates-show",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-build-checks",
+      "properties": {}
     }
   ]
 }
