@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "domain.value.field-type",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.field",
+      "properties": {}
     }
   ],
   "in": []
