@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "cli-templates-list",
+  "body": "`eypres templates` lists every built-in template with its name, usage (slide|section) and one-line description.",
+  "properties": {
+    "feature": "cli"
+  },
+  "out": [],
+  "in": []
+}
