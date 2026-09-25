@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "solution.note.spine-values-and-tier4",
       "properties": {}
+    },
+    {
+      "kind": "uses",
+      "source": "solution.person.maintainer",
+      "properties": {}
     }
   ]
 }
