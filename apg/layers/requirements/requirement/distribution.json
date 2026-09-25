@@ -31,6 +31,11 @@
       "kind": "contains",
       "target": "requirements.requirement.homebrew-install",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.scoop-install",
+      "properties": {}
     }
   ],
   "in": [
