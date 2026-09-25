@@ -41,6 +41,11 @@
       "kind": "contains",
       "target": "solution.component.renderer",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.http-server",
+      "properties": {}
     }
   ],
   "in": [
