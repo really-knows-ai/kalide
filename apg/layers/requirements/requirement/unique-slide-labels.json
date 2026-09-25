@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "unique-slide-labels",
+  "body": "The label (after the dash in the filename) is unique across the deck and is the slide's anchor id. Duplicate label = error naming both files.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
