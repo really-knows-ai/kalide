@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "global.constraint.go-static-embedded-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.humans-push-and-tag",
+      "properties": {}
     }
   ],
   "in": []

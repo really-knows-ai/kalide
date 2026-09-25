@@ -5,5 +5,11 @@
   "body": "Pushing to the remote and creating release tags must be done by humans only, never by agents; automation may only react to a human-pushed tag.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.distribution-decisions",
+      "properties": {}
+    }
+  ]
 }
