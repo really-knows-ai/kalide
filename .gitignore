@@ -3,3 +3,6 @@ apg/.trans/
 apg/.worktrees/
 
 .DS_Store
+
+# Cross-compiled binaries (module-root only; must not hide internal/assets/reveal/dist)
+/dist/
