@@ -16,6 +16,11 @@
       "kind": "drives",
       "target": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.deck-changed",
+      "properties": {}
     }
   ],
   "in": [
