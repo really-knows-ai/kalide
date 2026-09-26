@@ -5,7 +5,6 @@
   "homepage": "https://github.com/really-knows-ai/ey-present",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/really-knows-ai/ey-present/releases/download/v0.0.0/eypres-windows-amd64.exe",
       "hash": "<sha256-of-eypres-windows-amd64.exe>"
     }
   },

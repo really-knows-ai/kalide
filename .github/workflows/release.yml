@@ -159,13 +159,19 @@ jobs:
   #   - Formula/eypres.rb      version / url / sha256  (see its regeneration
   #                            contract and Formula/lib/…strategy.rb, which
   #                            requires the release-download URL form)
-  #   - bucket/eypres.json     version / 64bit.url / 64bit.hash, plus the whole
+  #   - bucket/eypres.json     version / 64bit.hash, plus the whole
   #                            architecture.arm64 block only when the release
   #                            actually shipped eypres-windows-arm64.exe
-  #                            (see bucket/README.md).
+  #                            (see bucket/README.md). The per-arch `url` is
+  #                            deliberately NOT written: the assets are private
+  #                            and Scoop's own downloader cannot authenticate, so
+  #                            `pre_install` fetches the asset itself and the
+  #                            manifest is hash-only (a `url` would make Scoop
+  #                            fetch it unauthenticated and 404 before
+  #                            `pre_install` runs).
   # checksums.txt is the release asset in `<hash>  <name>` (two spaces) form
-  # written by `build`; the SHAs and URLs come from it so the manifests match
-  # the exact published bytes.
+  # written by `build`; the SHAs come from it so the manifests match the exact
+  # published bytes.
   manifest:
     name: Update package manifests
     needs: publish
@@ -237,17 +243,21 @@ jobs:
           text = replace_once(text, r'^  sha256 "[^"]*"', f'  sha256 "{darwin}"')
           formula.write_text(text)
 
-          # --- bucket/eypres.json: version / urls / hashes / arm64 block -----
+          # --- bucket/eypres.json: version / hashes / arm64 block -----------
+          # The hash-only manifest: no per-arch `url` is written, because the
+          # release assets are private and Scoop's downloader cannot send an
+          # Authorization header. A `url` would make Scoop attempt an
+          # unauthenticated fetch (404) before `pre_install` runs; `pre_install`
+          # is the authenticated fetch that writes eypres.exe into $dir.
           bucket = pathlib.Path("bucket/eypres.json")
           manifest = json.loads(bucket.read_text())
           manifest["version"] = version
-          manifest["architecture"]["64bit"]["url"] = f"{base}/eypres-windows-amd64.exe"
+          manifest["architecture"]["64bit"].pop("url", None)
           manifest["architecture"]["64bit"]["hash"] = amd64
 
           arm64 = None
           if "eypres-windows-arm64.exe" in sums:
               arm64 = {
-                  "url": f"{base}/eypres-windows-arm64.exe",
                   "hash": sums["eypres-windows-arm64.exe"],
               }
           # Add when released, remove when not, so the entry always matches the
