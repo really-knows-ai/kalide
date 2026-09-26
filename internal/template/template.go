@@ -157,10 +157,17 @@ type Field struct {
 	MinItems int
 	MaxItems int
 
-	// Min and Max, for a number field, are inclusive bounds. A nil bound is
-	// absent, so a legitimate 0 is distinct from "unset".
+	// Min and Max, for a number field, are inclusive NUMBER bounds. A nil
+	// bound is absent, so a legitimate 0 is distinct from "unset". They do
+	// not apply to a date field; use MinDate and MaxDate for that.
 	Min *float64
 	Max *float64
+
+	// MinDate and MaxDate, for a date field, are inclusive bounds written as
+	// YYYY-MM-DD. An empty string is absent, mirroring Formats and
+	// DefaultFormat.
+	MinDate string
+	MaxDate string
 
 	// Description is the one-line help shown by `eypres templates` and the
 	// gallery.

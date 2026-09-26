@@ -314,7 +314,7 @@ func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth i
 	case FieldNumber:
 		c.validateNumber(path, f, value)
 	case FieldDate:
-		c.validateDate(path, value)
+		c.validateDate(path, f, value)
 	case FieldBoolean:
 		c.validateBoolean(path, value)
 	case FieldEnum:
@@ -403,23 +403,45 @@ func (c *checker) validateNumber(path []PathSegment, f *Field, value any) {
 	}
 }
 
-// validateDate checks that a date is a YYYY-MM-DD value.
-func (c *checker) validateDate(path []PathSegment, value any) {
+// validateDate checks that a date is a YYYY-MM-DD value and enforces the
+// field's inclusive MinDate/MaxDate bounds when set. Malformed-date and
+// non-date type errors are unchanged; a field with no bounds behaves exactly as
+// before. The value and each set bound are parsed as YYYY-MM-DD and compared as
+// dates.
+func (c *checker) validateDate(path []PathSegment, f *Field, value any) {
+	var actual string
 	switch d := value.(type) {
 	case time.Time:
-		return
+		actual = d.Format("2006-01-02")
 	case string:
-		if isISODate(d) {
+		if !isISODate(d) {
+			c.add(path, "date", value,
+				fmt.Sprintf("date: %s is not a YYYY-MM-DD date", strconv.Quote(d)),
+				"write the date as YYYY-MM-DD, for example 2024-01-02")
 			return
 		}
-		c.add(path, "date", value,
-			fmt.Sprintf("date: %s is not a YYYY-MM-DD date", strconv.Quote(d)),
-			"write the date as YYYY-MM-DD, for example 2024-01-02")
-		return
+		actual = d
 	default:
 		c.add(path, "type", value,
 			fmt.Sprintf("type: expected a YYYY-MM-DD date, got %s", describeValue(value)),
 			"write the date as YYYY-MM-DD")
+		return
+	}
+
+	actualDate, _ := time.Parse("2006-01-02", actual)
+	if isISODate(f.MinDate) {
+		if minDate, err := time.Parse("2006-01-02", f.MinDate); err == nil && actualDate.Before(minDate) {
+			c.add(path, "min", value,
+				fmt.Sprintf("min: %s is below the minimum %s", actual, f.MinDate),
+				fmt.Sprintf("use a date on or after %s", f.MinDate))
+		}
+	}
+	if isISODate(f.MaxDate) {
+		if maxDate, err := time.Parse("2006-01-02", f.MaxDate); err == nil && actualDate.After(maxDate) {
+			c.add(path, "max", value,
+				fmt.Sprintf("max: %s exceeds the maximum %s", actual, f.MaxDate),
+				fmt.Sprintf("use a date on or before %s", f.MaxDate))
+		}
 	}
 }
 

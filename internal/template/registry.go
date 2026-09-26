@@ -222,8 +222,9 @@ func (r *Registry) TemplateNames() []string {
 // SectionNames returns the section names declared by the template tmpl, in
 // declaration order. It never includes the reserved name "notes": notes are
 // reserved for the parser's speaker-notes section and are not declarable as a
-// section template. It returns nil for an unknown template or one that
-// declares no sections. It is part of the slide.Catalogue contract.
+// section template. It returns nil for an unknown template; for a known
+// template that declares no sections it returns an empty, non-nil slice. It is
+// part of the slide.Catalogue contract.
 func (r *Registry) SectionNames(tmpl string) []string {
 	t, ok := r.Lookup(tmpl)
 	if !ok || t == nil {
