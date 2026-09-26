@@ -214,6 +214,11 @@
       "kind": "details",
       "target": "domain.value.deck-config",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.group.distribution",
+      "properties": {}
     }
   ],
   "in": []
