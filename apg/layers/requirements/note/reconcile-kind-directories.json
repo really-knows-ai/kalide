@@ -34,6 +34,11 @@
       "kind": "details",
       "target": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.slide-template-required",
+      "properties": {}
     }
   ],
   "in": []
