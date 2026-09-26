@@ -4,7 +4,13 @@
   "name": "theme-registry",
   "body": "Theme registry: project themes (one per `templates/themes/<name>/`) mapping to their `theme.css` and files, registered by the template-library-loader; lookup by deck config, omitted theme resolves to `default`; unknown = error listing project themes. No built-in theme.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/theme.NewRegistry",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
