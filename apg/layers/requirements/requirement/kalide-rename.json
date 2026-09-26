@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.fix-kalide-rename-sweep-scope",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-kalide-rename-sweep-agents",
+      "properties": {}
     }
   ]
 }
