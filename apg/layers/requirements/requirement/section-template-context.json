@@ -11,6 +11,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.template-composition",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.section",
+      "properties": {}
     }
   ],
   "in": [
