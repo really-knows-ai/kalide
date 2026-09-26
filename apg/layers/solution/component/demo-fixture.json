@@ -9,6 +9,11 @@
       "kind": "implemented-by",
       "target": "examples/demo/templates/library.yaml",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "examples/demo/kalide.yaml",
+      "properties": {}
     }
   ],
   "in": [
