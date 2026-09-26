@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "tap-bucket-location-open",
-  "body": "RESOLVED [with user]: the tap and bucket live in the same repo — `Formula/` (Homebrew) and `bucket/` (Scoop) in really-knows-ai/ey-present — so `brew tap really-knows-ai/ey-present <git url>` and `scoop bucket add ey-present <git url>` reuse existing git access, and the release workflow commits manifest updates in-tree. Rejected alternative: separate `really-knows-ai/homebrew-tap` and Scoop bucket repos, which have conventional naming and keep source history clean but need extra repo access and cross-repo CI write tokens. PROPOSED markers were removed from requirements.requirement.tap-bucket-location and solution.container.package-channels.",
+  "body": "RESOLVED [with user]: the tap and bucket live in the same repo — `Formula/` (Homebrew) and `bucket/` (Scoop) in really-knows-ai/kalide (formerly really-knows-ai/ey-present; renamed per requirements.requirement.kalide-rename) — so `brew tap really-knows-ai/kalide <git url>` and `scoop bucket add kalide <git url>` reuse existing git access, and the release workflow commits manifest updates in-tree. Rejected alternative: separate `really-knows-ai/homebrew-tap` and Scoop bucket repos, which have conventional naming and keep source history clean but need extra repo access and cross-repo CI write tokens. PROPOSED markers were removed from requirements.requirement.tap-bucket-location and solution.container.package-channels.",
   "properties": {},
   "out": [
     {
