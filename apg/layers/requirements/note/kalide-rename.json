@@ -269,6 +269,11 @@
       "kind": "details",
       "target": "solution.container.package-channels",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.person.maintainer",
+      "properties": {}
     }
   ],
   "in": []
