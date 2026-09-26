@@ -64,6 +64,11 @@
       "kind": "details",
       "target": "solution.component.scoop-manifest",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.homebrew-formula",
+      "properties": {}
     }
   ],
   "in": []
