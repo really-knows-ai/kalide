@@ -15,11 +15,6 @@
   ],
   "in": [
     {
-      "kind": "contains",
-      "source": "requirements.stakeholder.ey-brand-owner",
-      "properties": {}
-    },
-    {
       "kind": "details",
       "source": "requirements.note.open-font-logo-licensing",
       "properties": {}

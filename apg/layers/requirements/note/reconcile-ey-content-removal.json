@@ -32,11 +32,6 @@
     },
     {
       "kind": "details",
-      "target": "requirements.stakeholder.ey-brand-owner",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "target": "requirements.user.template-author",
       "properties": {}
     },
