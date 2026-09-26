@@ -46,12 +46,15 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 
 // TestRunRoutesCommands asserts each recognised command reaches its handler.
 //
-// `init` and `start` are still the phase-1 stubs, so their routing is observable
-// through the handler name in the "not implemented" error (exit 1). `templates`
-// is now a real handler (phase-7 task 7): it reaches runTemplates, which lists
+// `init` is still the phase-1 stub, so its routing is observable through the
+// handler name in the "not implemented" error (exit 1). `start` now routes to
+// the real runStart handler (phase-7 task 6): in a directory with no
+// eypres.yaml it validates the deck first and prints exactly the single first
+// error (naming eypres.yaml) before it can serve, exiting non-zero. `templates`
+// is also a real handler (phase-7 task 7): it reaches runTemplates, which lists
 // the built-ins (exit 0), documents one by name (exit 0) and rejects an unknown
-// name (non-zero). The full list and show assertions belong to phase-7 task 9;
-// here we only pin down that the routes reach the real handler.
+// name (non-zero). The full start/templates assertions belong to phase-7 task 9;
+// here we only pin down that the routes reach the real handlers.
 func TestRunRoutesCommands(t *testing.T) {
 	stubs := []struct {
 		name    string
@@ -59,7 +62,6 @@ func TestRunRoutesCommands(t *testing.T) {
 		handler string
 	}{
 		{name: "init", args: []string{"init"}, handler: "init"},
-		{name: "start", args: []string{"start"}, handler: "start"},
 	}
 
 	for _, tt := range stubs {
@@ -79,6 +81,28 @@ func TestRunRoutesCommands(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("start validates before serving", func(t *testing.T) {
+		// An empty temp dir has no eypres.yaml, so runStart's whole-deck
+		// validation fails deterministically before any port is bound. This
+		// pins the route (not the stub) and the phase-5 single-error format;
+		// the full start behaviour is phase-7 task 9.
+		t.Chdir(t.TempDir())
+
+		code, stdout, stderr := runCLI("start")
+		if code == 0 {
+			t.Fatal("Run(start) exit = 0, want non-zero for a deck with no eypres.yaml")
+		}
+		if strings.Contains(stderr, "not implemented") {
+			t.Fatalf("Run(start) stderr = %q, want the real runStart handler, not the phase-1 stub", stderr)
+		}
+		if !strings.Contains(stderr, "eypres.yaml") {
+			t.Fatalf("Run(start) stderr = %q, want the first validation error naming eypres.yaml", stderr)
+		}
+		if strings.Contains(stdout, "Serving slides at") {
+			t.Fatalf("Run(start) stdout = %q, want no server for an invalid deck", stdout)
+		}
+	})
 
 	t.Run("templates list", func(t *testing.T) {
 		code, stdout, stderr := runCLI("templates")
