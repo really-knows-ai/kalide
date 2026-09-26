@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-e2e-seed-expectations",
+  "body": "source: native-ci-verification / native-e2e-ci expected \"the two starter slides\" and theme assets \"served from the binary\"; ey-employees said \"built-in templates\"; inconsistency: the seed has one `hello` slide and themes are no longer embedded (only reveal.js core is); resolution: e2e now expects the single hello slide, reveal.js from the embedded core and theme.css from the project's templates/themes/default/; ey-employees reworded to the project's template library. [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
