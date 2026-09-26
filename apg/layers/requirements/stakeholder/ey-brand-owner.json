@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "stakeholder",
   "name": "ey-brand-owner",
-  "body": "EY brand/template owners: build the fixed template set and the `default` theme (the EY look) into the eypres binary; want every deck to look consistent and on-brand.",
+  "body": "Template authors (brand/template owners, EY or otherwise): author project `templates/` libraries (templates, the `default` and other themes, media) outside the binary; want every deck using their library to look consistent and on-brand.",
   "properties": {},
   "out": [
     {
