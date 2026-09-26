@@ -259,6 +259,11 @@
       "kind": "details",
       "target": "solution.component.deck-loader",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.container.cli-binary",
+      "properties": {}
     }
   ],
   "in": []
