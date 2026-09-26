@@ -38,6 +38,11 @@
       "kind": "drives",
       "source": "requirements.requirement.template-controlled-effects",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-manifest",
+      "properties": {}
     }
   ]
 }
