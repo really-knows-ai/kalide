@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-build-checks",
-  "body": "When the project's templates are loaded (startup and reload), the registry rejects: template reference cycles, a section accepting a slide template, a required-body template used as a field type, use of the reserved `_format` suffix or `notes`/`body` names as declared fields/sections, references to undefined templates, and example slides that fail validation. These are reported as templates errors (step 4/7 of templates-dir-validation), path-qualified to the offending `template.yaml`/`example.md`, and are distinct from deck (slide) errors.",
+  "body": "When the project's templates are loaded (startup and reload), the registry rejects: template reference cycles; a section declaration accepting a template that lives in `templates/slides/` (directory-kind check — sections accept only templates under `templates/sections/`); a slide template (under `templates/slides/`) used as a field type; a template name present in both `slides/` and `sections/` (cross-kind name uniqueness); a required-body template used as a field type; use of the reserved `_format` suffix or `notes`/`body` names as declared fields/sections; references to undefined templates; and example slides that fail validation. These are reported as templates errors (step 4/7 of templates-dir-validation), path-qualified to the offending `template.yaml`/`example.md`, and are distinct from deck (slide) errors.",
   "properties": {
     "feature": "templates"
   },
