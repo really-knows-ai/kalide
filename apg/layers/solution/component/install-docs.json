@@ -7,11 +7,6 @@
   "out": [
     {
       "kind": "implemented-by",
-      "target": "INSTALL.md",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "README.md",
       "properties": {}
     }
