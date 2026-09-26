@@ -25,9 +25,10 @@
 #     the binaries and uploaded them as an artifact, so this workflow downloads
 #     that artifact into dist/ instead of rebuilding.
 #
-# Either way the job runs `go test ./e2e -run TestNativeRelease` with
-# EYPRES_BINARY pointing at the target binary, so the e2e test drives the exact
-# artifact for the runner's own target.
+# Either way the job runs
+# `go test ./e2e -run 'TestNativeRelease|TestDemoProject'` with EYPRES_BINARY
+# pointing at the target binary, so both e2e tests drive the exact artifact for
+# the runner's own target.
 #
 # The offline enforcement, URL parsing, process-group graceful stop and clean
 # exit assertions live in the e2e package (TestNativeRelease / the Harness).
@@ -102,8 +103,10 @@ jobs:
 
       # TestNativeRelease drives the target binary through init, a clean
       # start --no-open, URL/asset checks, offline enforcement and a graceful
-      # stop with clean-exit assertions.
+      # stop with clean-exit assertions. TestDemoProject drives the same
+      # binary against the examples/demo fixture with the same offline/clean-
+      # exit assertions.
       - name: Run native e2e
         env:
           EYPRES_BINARY: ${{ github.workspace }}/${{ matrix.binary }}
-        run: go test ./e2e -run TestNativeRelease -v
+        run: go test ./e2e -run 'TestNativeRelease|TestDemoProject' -v
