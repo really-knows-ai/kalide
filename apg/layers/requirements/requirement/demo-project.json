@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-demo-project",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.demo-fixture-placement",
+      "properties": {}
     }
   ]
 }
