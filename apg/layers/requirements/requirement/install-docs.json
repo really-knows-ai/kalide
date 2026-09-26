@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "install-docs",
-  "body": "Install documentation explains, in plain language for non-developers, how to get repo access, create a GitHub token with the needed scope, set it (`HOMEBREW_GITHUB_API_TOKEN` on macOS; the token setting the Scoop install uses on Windows), add the tap/bucket, install, and upgrade. AC: following the docs on a clean machine of each OS gets `eypres` installed.",
+  "body": "Install documentation explains, in plain language for non-developers, how to get repo access (really-knows-ai/kalide), create a GitHub token with the needed scope, set it (`HOMEBREW_GITHUB_API_TOKEN` on macOS; `KALIDE_GITHUB_TOKEN` for the Scoop install on Windows), add the tap/bucket (`really-knows-ai/kalide` / `kalide`), install, and upgrade. AC: following the docs on a clean machine of each OS gets `kalide` installed.",
   "properties": {
     "feature": "distribution"
   },
