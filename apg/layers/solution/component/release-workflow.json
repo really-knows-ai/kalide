@@ -36,6 +36,11 @@
       "kind": "details",
       "source": "requirements.note.fix-supported-targets-runners",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }
