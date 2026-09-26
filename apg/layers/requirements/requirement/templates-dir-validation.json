@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "templates-dir-validation",
+  "body": "Templates dir validation: before any deck validation, render or serve (startup and every reload), eypres validates the project's `templates/` directory, fail-fast in a fixed order: (1) `library.yaml` present and valid; (2) layout (templates-dir-layout); (3) each template in name order: `template.yaml`, `layout.html.tmpl`, `example.md` present, `template.yaml` well-formed against the schema vocabulary, layout parses as html/template; (4) the template-build-checks across the set; (5) each theme in name order has `theme.css`; (6) references resolve: every relative url(…)/src/href in theme stylesheets and layouts resolves to an existing file inside `templates/` (no escapes); (7) each example.md validates against its template. The first failure is reported as a templates error: path-qualified (e.g. `templates/templates/content/template.yaml:12`), with a hint and closest-match suggestion where applicable, in the terminal at startup and in the full-page error on reload — the same error-reporting format as deck errors, labelled as a templates error. AC: one test per step shows the expected first error; a valid dir proceeds to deck validation.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
