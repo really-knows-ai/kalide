@@ -204,6 +204,11 @@
       "kind": "details",
       "target": "domain.entity.deck-changed",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.deck",
+      "properties": {}
     }
   ],
   "in": []
