@@ -93,6 +93,11 @@
       "kind": "details",
       "source": "requirements.note.source-repo-module-path",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "solution.system.kalide",
+      "properties": {}
     }
   ]
 }
