@@ -7,12 +7,12 @@
   "out": [
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/ey-present/internal/watch.Watch",
+      "target": "go.github.com/really-knows-ai/kalide/internal/watch.Watch",
       "properties": {}
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/ey-present/internal/watch.watcher.rel",
+      "target": "go.github.com/really-knows-ai/kalide/internal/watch.watcher.rel",
       "properties": {}
     }
   ],

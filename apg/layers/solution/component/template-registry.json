@@ -7,12 +7,12 @@
   "out": [
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/ey-present/internal/template.NewRegistry",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.NewRegistry",
       "properties": {}
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/ey-present/internal/template.NewRegistryFromLibrary",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.NewRegistryFromLibrary",
       "properties": {}
     }
   ],

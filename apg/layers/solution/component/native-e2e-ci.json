@@ -12,7 +12,7 @@
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/ey-present/e2e.TestNativeRelease",
+      "target": "go.github.com/really-knows-ai/kalide/e2e.TestNativeRelease",
       "properties": {}
     },
     {
