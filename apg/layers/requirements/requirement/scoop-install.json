@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.tap-bucket-location",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.install-kalide",
+      "properties": {}
     }
   ],
   "in": [
