@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "container",
   "name": "package-channels",
-  "body": "Package channels: the Homebrew tap (`Formula/`) and Scoop bucket (`bucket/`), both hosted in the source repo really-knows-ai/ey-present, which users add to install eypres.",
+  "body": "Package channels: the Homebrew tap `really-knows-ai/kalide` (`Formula/kalide.rb`) and Scoop bucket `kalide` (`bucket/kalide.json`), both hosted in the source repo really-knows-ai/kalide, which users add to install kalide.",
   "properties": {
     "kind": "service"
   },
