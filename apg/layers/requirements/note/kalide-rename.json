@@ -219,6 +219,11 @@
       "kind": "details",
       "target": "domain.group.distribution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.file-watcher",
+      "properties": {}
     }
   ],
   "in": []
