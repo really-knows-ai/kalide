@@ -67,6 +67,11 @@
       "kind": "contains",
       "target": "domain.service.load-template-library",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.slide-metadata",
+      "properties": {}
     }
   ],
   "in": [
