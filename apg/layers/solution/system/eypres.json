@@ -51,6 +51,11 @@
       "kind": "uses",
       "source": "solution.person.maintainer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-eypres-template-source",
+      "properties": {}
     }
   ]
 }
