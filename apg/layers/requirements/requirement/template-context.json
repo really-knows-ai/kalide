@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.deck-data-in-templates",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
