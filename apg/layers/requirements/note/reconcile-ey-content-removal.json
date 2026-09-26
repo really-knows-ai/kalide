@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "solution.person.template-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.stakeholder.brand-owner",
+      "properties": {}
     }
   ],
   "in": []
