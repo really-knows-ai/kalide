@@ -194,6 +194,11 @@
       "kind": "details",
       "target": "domain.service.load-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
     }
   ],
   "in": []
