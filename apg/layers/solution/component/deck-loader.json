@@ -31,6 +31,11 @@
       "kind": "realised-by",
       "source": "domain.service.load-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }
