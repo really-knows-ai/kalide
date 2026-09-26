@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": []
