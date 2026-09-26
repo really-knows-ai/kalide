@@ -56,6 +56,11 @@
       "kind": "details",
       "source": "solution.note.demo-fixture-placement",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }

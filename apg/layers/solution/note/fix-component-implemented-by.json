@@ -74,6 +74,11 @@
       "kind": "details",
       "target": "solution.component.install-docs",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
     }
   ],
   "in": []
