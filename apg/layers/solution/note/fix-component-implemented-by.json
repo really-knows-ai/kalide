@@ -79,6 +79,11 @@
       "kind": "details",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.theme-registry",
+      "properties": {}
     }
   ],
   "in": []
