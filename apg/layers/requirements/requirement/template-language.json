@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "template-language",
+  "body": "Template language: layouts (`layout.html.tmpl`) are standard Go html/template only — no third-party template engine, no Sprig.\n- Content arrives pre-rendered: the body, `text` fields (inline Markdown) and each named section (rendered through its section template) are passed as safe HTML. Other fields are passed as typed values: number/date already formatted per their `_format`, boolean, enum, list, image/link URLs.\n- Layouts never parse or render Markdown; there is no markdown helper.\n- The custom function set is minimal and centrally defined and documented. v1 has exactly one helper: `media \"path\"`, resolving a file in `templates/media/` or the theme directory to its served URL. Adding a helper is a spec change.\n- Layouts have no file, environment or network access.\n- Layout parse and execute errors are file:line-qualified templates errors (parse at templates-dir-validation step 3; execute errors during example/deck render reported as templates errors).\nAC: a layout using any function other than the documented set fails to parse with a file:line templates error; a layout referencing `{{media \"logo.svg\"}}` renders the served URL; body/text/section values render unescaped as HTML while other string values are auto-escaped.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
