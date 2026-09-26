@@ -30,9 +30,10 @@ package manager requirement, and no setup step.
   `eypres-windows-arm64.exe`) to a folder on your `PATH` and run it in a
   terminal (PowerShell or Command Prompt).
 
-The file is self-contained: the reveal.js runtime, fonts and everything
-needed to render and serve a deck are inside it. Slide and section templates
-and themes are **not** built into the binary — they live in each project's
+The file is self-contained: the reveal.js runtime and everything needed to
+serve a deck are inside it. Slide and section templates, themes, fonts, logos
+and any other media are **not** built into the binary at all — there is no
+built-in fallback of any kind. Every one of those comes from the project's
 own `templates/` library (see [The templates/ library](#the-templates-library)
 below); `eypres init` seeds a small unbranded starter library to get you
 going.
@@ -115,9 +116,9 @@ Validates the whole deck and then serves it with live reload.
 
 Lists every template in the project's **own `templates/` library** — its
 name, whether it is a `slide` or a `section`, and a one-line description.
-There is no built-in fallback: if the current folder has no valid
-`templates/` directory, `eypres templates` (and `eypres start`) reports the
-problem instead of listing anything.
+There is no built-in fallback of any kind: if the current folder has no
+valid `templates/` directory, `eypres templates` (and `eypres start`)
+reports the problem instead of listing anything.
 
 ### `eypres templates <name>`
 
@@ -171,9 +172,11 @@ Use `eypres templates` to see what each template in the project's
 ## The templates/ library
 
 Every deck owns its own `templates/` library: the set of slide templates,
-section templates, themes and media files it renders against. There is no
-built-in, embedded design system — `eypres init` seeds a minimal unbranded
-starter library, and you extend or replace it as the deck needs.
+section templates, themes, fonts, logos and media files it renders against.
+There is no built-in, embedded design system of any kind — `eypres init`
+seeds a minimal unbranded starter library, and you extend or replace it as
+the deck needs. Everything visual — every template, theme, font, logo and
+piece of media — comes from this library; the binary supplies none of it.
 
 ```
 templates/
@@ -248,11 +251,12 @@ Unrelated files such as a `.git` folder or a `README` do not get in the way.
 
 ## Working offline
 
-`eypres` needs no internet connection. The reveal.js runtime and fonts are
-embedded inside the `eypres` file itself, and the deck's own `templates/`
-library and slide files live on disk next to it. The page it serves contains
-no links to external websites and loads nothing from a CDN. You can author
-and present on a machine with no network.
+`eypres` needs no internet connection. The reveal.js runtime is embedded
+inside the `eypres` file itself, and the deck's own `templates/` library
+(including its templates, themes, fonts, logos and media) and slide files
+live on disk next to it. The page it serves contains no links to external
+websites and loads nothing from a CDN. You can author and present on a
+machine with no network.
 
 ## Making a PDF
 
