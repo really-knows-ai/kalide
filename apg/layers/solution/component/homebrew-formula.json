@@ -9,6 +9,11 @@
       "kind": "implemented-by",
       "target": "Formula/eypres.rb",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "Formula/lib/github_private_release_download_strategy.rb",
+      "properties": {}
     }
   ],
   "in": [
