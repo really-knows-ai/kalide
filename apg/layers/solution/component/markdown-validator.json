@@ -4,7 +4,13 @@
   "name": "markdown-validator",
   "body": "Markdown validator: CommonMark AST check against the allowed subset; measures words/paragraphs/list items/subheadings; strips styles for plain/max_length; renders allowed Markdown to HTML.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/mdcheck.Check",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
