@@ -21,6 +21,11 @@
       "kind": "contains",
       "target": "requirements.requirement.template-media",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.templates-dir-required",
+      "properties": {}
     }
   ],
   "in": [
