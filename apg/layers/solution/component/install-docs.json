@@ -4,7 +4,13 @@
   "name": "install-docs",
   "body": "Install docs: plain-language install guide (repo access, token creation and setup per OS, add tap/bucket, install, upgrade).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "INSTALL.md",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
