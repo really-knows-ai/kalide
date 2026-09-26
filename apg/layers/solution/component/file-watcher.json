@@ -4,7 +4,13 @@
   "name": "file-watcher",
   "body": "File watcher + live reload: cross-platform file watching (slides/, assets/, eypres.yaml, and recursively all of templates/ — library.yaml, slides/, sections/, themes/, media/) with debounce; on a change triggers template reload, re-validation/re-render and emits the deck-rebuilt notification (rendered deck or first error) to the http-server's live-reload endpoint.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/watch.Watch",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
