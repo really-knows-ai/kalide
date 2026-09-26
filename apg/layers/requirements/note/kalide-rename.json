@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-templates-show",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.live-reload",
+      "properties": {}
     }
   ],
   "in": []
