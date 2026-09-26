@@ -23,14 +23,14 @@ import (
 	"github.com/really-knows-ai/kalide/internal/watch"
 )
 
-// This file implements Reloader, the live-reload half of `eypres start`
+// This file implements Reloader, the live-reload half of `kalide start`
 // (requirements.requirement.live-reload,
 // requirements.requirement.live-reload-error-page): the SSE endpoint, the
 // client script that connects the open browser to it, and the state machine
 // that keeps the served page in step with the watched deck.
 //
 // It consumes the debounced event channel internal/watch.Watch produces (one
-// Event per burst of edits to slides/, assets/ or eypres.yaml) and, for each
+// Event per burst of edits to slides/, assets/ or kalide.yaml) and, for each
 // event, re-runs the whole-deck validator and the renderer through an injected
 // Pipeline:
 //
@@ -45,7 +45,7 @@ import (
 //     reloads it automatically).
 //
 // The validator and renderer are reached only through the Pipeline seam, so
-// internal/cli (`eypres start`) injects nothing and gets the real pipeline,
+// internal/cli (`kalide start`) injects nothing and gets the real pipeline,
 // while tests inject fakes that drive the valid/invalid/recovery transitions
 // without touching the filesystem or the renderer.
 
@@ -124,7 +124,7 @@ type ReloadOptions struct {
 	Events <-chan watch.Event
 
 	// Page is the document initially published (with the client script
-	// injected). `eypres start` passes the page it already rendered; when nil,
+	// injected). `kalide start` passes the page it already rendered; when nil,
 	// Start renders one through Pipeline.
 	Page *Page
 
@@ -265,7 +265,7 @@ func NewReloader(opts ReloadOptions) (*Reloader, error) {
 // pipeline when ReloadOptions.Page was nil. It is idempotent: only the first
 // call does anything, and it returns the same result on every call.
 //
-// `eypres start` calls Start before printing the URL or opening the browser, so
+// `kalide start` calls Start before printing the URL or opening the browser, so
 // the very first page a browser loads already carries the client script. Run
 // calls Start itself, so callers that use Run need not call it separately.
 func (r *Reloader) Start() error {
@@ -324,7 +324,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 // page (deck or full-page error) and, on a successful pipeline run, broadcasts a
 // reload to every connected SSE client. It is the single re-validate + re-render
 // step Run performs per watch event, exported so a caller that owns the event
-// loop (`eypres start`, or a test driving the state machine directly) can drive
+// loop (`kalide start`, or a test driving the state machine directly) can drive
 // it without a watch channel.
 //
 // A pipeline infrastructure failure is reported to the log and leaves the
@@ -332,7 +332,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 func (r *Reloader) Reload() {
 	p, err := r.pipeline(r.fsys)
 	if err != nil {
-		fmt.Fprintln(r.log, "eypres: reload failed:", err)
+		fmt.Fprintln(r.log, "kalide: reload failed:", err)
 		return
 	}
 	r.publish(p)

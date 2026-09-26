@@ -1,5 +1,5 @@
 // Package assets embeds the static, offline core assets that ship inside the
-// eypres binary.
+// kalide binary.
 //
 // The embedded tree holds two sub-trees:
 //

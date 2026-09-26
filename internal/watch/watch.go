@@ -3,7 +3,7 @@
 //
 // It is the file-watching half of live reload (domain.service.watch-deck): the
 // watched paths are the deck's slides/ subtree, its assets/ subtree and its
-// eypres.yaml. The watcher never reads, validates or renders a deck; it only
+// kalide.yaml. The watcher never reads, validates or renders a deck; it only
 // reports that something under those paths changed. internal/server consumes
 // the events to re-validate and re-render the deck and to push a reload to the
 // open browser (requirements.requirement.live-reload).
@@ -27,7 +27,7 @@ import (
 
 // AssetsDir is the fixed name of the deck's asset directory at the root of a
 // deck, alongside deck.SlidesDir ("slides") and deck.ConfigFile
-// ("eypres.yaml"). It is watched recursively so an edit to any served asset
+// ("kalide.yaml"). It is watched recursively so an edit to any served asset
 // triggers a reload. Unlike slides/, it is optional in a deck, so a missing
 // assets/ directory is not an error.
 const AssetsDir = "assets"
@@ -74,7 +74,7 @@ type Event struct {
 //   - the assets/ subtree (AssetsDir) recursively;
 //   - the templates/ subtree (TemplatesDir) recursively — slides/, sections/,
 //     themes/<name>/, media/ and the top-level library.yaml; and
-//   - the eypres.yaml file (deck.ConfigFile) at the root.
+//   - the kalide.yaml file (deck.ConfigFile) at the root.
 //
 // fsnotify is not recursive, so Watch walks slides/, assets/ and templates/ at
 // startup and registers every directory it finds. A directory created later is
@@ -126,9 +126,9 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 		done:     make(chan struct{}),
 	}
 
-	// The root is watched non-recursively. eypres.yaml is observed through it
+	// The root is watched non-recursively. kalide.yaml is observed through it
 	// rather than by watching the file directly: editors usually save by
-	// writing a temporary file and renaming it over eypres.yaml, which replaces
+	// writing a temporary file and renaming it over kalide.yaml, which replaces
 	// the inode and would silently lose a direct file watch. The root watch
 	// also notices a slides/ or assets/ directory that appears after startup.
 	if err := w.add(root); err != nil {
@@ -213,7 +213,7 @@ func (w *watcher) dropTree(dir string) {
 }
 
 // rel reports whether ev is relevant to the deck and, if so, its path relative
-// to the root as a slash-separated string. Relevant paths are eypres.yaml at
+// to the root as a slash-separated string. Relevant paths are kalide.yaml at
 // the root and anything at or beneath slides/, assets/ or templates/
 // (including templates/library.yaml).
 func (w *watcher) rel(ev fsnotify.Event) (string, bool) {

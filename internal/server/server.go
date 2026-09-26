@@ -1,7 +1,7 @@
 // Package server serves a validated deck over HTTP on the loopback interface.
 //
-// It is the http-server component of `eypres start`
-// (solution.component.http-server): `eypres start` validates the whole deck
+// It is the http-server component of `kalide start`
+// (solution.component.http-server): `kalide start` validates the whole deck
 // first, then hands the rendered page to Listen, which binds 127.0.0.1 only and
 // serves the presentation together with every asset it references.
 //
@@ -34,7 +34,7 @@
 //     formatted validation error — the document a reloader publishes when a
 //     watched edit breaks the deck (requirements.requirement.live-reload-error-page).
 //
-// internal/cli consumes Listen for `eypres start` (phase-7 task 6): once the
+// internal/cli consumes Listen for `kalide start` (phase-7 task 6): once the
 // deck validates it calls Listen, prints (Server).URL, and releases the port
 // with (Server).Shutdown.
 package server
@@ -109,7 +109,7 @@ type Page struct {
 	Doc htmltmpl.HTML
 
 	// Title is the deck title, or "" when unknown (the pages fall back to
-	// "eypres").
+	// "kalide").
 	Title string
 
 	// Err is the formatted first validation error shown when Doc is the
@@ -168,7 +168,7 @@ type Options struct {
 	FS fs.FS
 
 	// Page is the document initially served at "/". When nil the server
-	// answers 503 until SetPage supplies one; `eypres start` always passes
+	// answers 503 until SetPage supplies one; `kalide start` always passes
 	// the rendered deck.
 	Page *Page
 
@@ -232,7 +232,7 @@ func Listen(opts Options) (*Server, error) {
 
 	s.mux = mux
 	// The /templates gallery is a fixed route every server serves, so it is
-	// registered here rather than by the caller: `eypres start` prints the
+	// registered here rather than by the caller: `kalide start` prints the
 	// URL only after Listen returns, so the gallery is reachable as soon as
 	// the deck is. It documents the project's loaded templates/ library
 	// (templates-gallery) when one was given; a nil Library leaves the
@@ -284,7 +284,7 @@ func listenExplicit(port int) (net.Listener, error) {
 	ln, err := net.Listen("tcp", net.JoinHostPort(Host, strconv.Itoa(port)))
 	if err != nil {
 		if isAddrInUse(err) {
-			return nil, fmt.Errorf("port %d is already in use: choose another port with --port, or omit --port and let eypres pick a free one", port)
+			return nil, fmt.Errorf("port %d is already in use: choose another port with --port, or omit --port and let kalide pick a free one", port)
 		}
 		return nil, fmt.Errorf("listen on %s:%d: %w", Host, port, err)
 	}
@@ -353,7 +353,7 @@ func (s *Server) Handle(pattern string, handler http.Handler) {
 
 // Shutdown gracefully stops the server, releasing the listening port, and
 // returns once in-flight requests have finished or ctx is done. It is the
-// clean shutdown `eypres start` performs on SIGINT/SIGTERM or Ctrl+C/Ctrl+Break
+// clean shutdown `kalide start` performs on SIGINT/SIGTERM or Ctrl+C/Ctrl+Break
 // (requirements.requirement.cli-start).
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s == nil || s.httpSrv == nil {

@@ -39,7 +39,7 @@ const themesURLPrefix = "/assets/templates/themes/"
 // `navigation` value passed straight through as reveal.js's navigationMode.
 //
 // cfg is the deck's configuration (internal/deck.LoadConfig); Title drives the
-// document <title> (empty falls back to "eypres"), Theme selects the stylesheet
+// document <title> (empty falls back to "kalide"), Theme selects the stylesheet
 // in themeReg and Navigation is the reveal.js navigationMode — "default",
 // "linear" or "grid", with an omitted/empty value resolving to reveal.js's own
 // default (navigation-mode). d is the deck's ordered slide model

@@ -27,7 +27,7 @@
     parsing the page in its own template namespace (each page is standalone).
 
   Execution context (a struct or map[string]any supplying these keys):
-    .Title    string   the document <title>. Empty falls back to "eypres".
+    .Title    string   the document <title>. Empty falls back to "kalide".
     .Message  string   the single author-facing error, exactly as
                        validate.Format(verr) rendered it. Shown verbatim and
                        html/template-escaped. Empty falls back to a generic
@@ -46,7 +46,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ with .Title }}{{ . }}{{ else }}eypres{{ end }}</title>
+  <title>{{ with .Title }}{{ . }}{{ else }}kalide{{ end }}</title>
 
   {{/* This page is a built-in embedded shell (not project-theme-styled),
        so it never links the project's theme stylesheet. */}}

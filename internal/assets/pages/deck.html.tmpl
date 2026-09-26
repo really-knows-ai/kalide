@@ -15,13 +15,13 @@
 
   Execution context (a struct or map[string]any supplying these keys):
     .Title       string        deck title for the document <title>.
-                               Empty falls back to "eypres".
+                               Empty falls back to "kalide".
     .ThemeCSS    string        URL of the resolved theme stylesheet
                                (theme-registry Stylesheet, e.g.
                                "/assets/theme.css"). Empty falls back to
                                "/assets/theme.css".
     .Navigation  string        navigationMode passed straight through from
-                               eypres.yaml `navigation`: "default", "linear"
+                               kalide.yaml `navigation`: "default", "linear"
                                or "grid". Empty falls back to "default".
     .Slides      template.HTML rendered slides: the outer <section> elements
                                internal/render built (letter slides already
@@ -46,7 +46,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ with .Title }}{{ . }}{{ else }}eypres{{ end }}</title>
+  <title>{{ with .Title }}{{ . }}{{ else }}kalide{{ end }}</title>
 
   {{/* Embedded reveal.js base styles, then the resolved theme tokens. */}}
   <link rel="stylesheet" href="/assets/reveal/dist/reset.css">

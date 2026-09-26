@@ -48,7 +48,7 @@ import (
 
 const (
 	// galleryPath is the route the gallery is registered under, exactly the
-	// path `eypres start`'s terminal output and the e2e test address.
+	// path `kalide start`'s terminal output and the e2e test address.
 	galleryPath = "/templates"
 
 	// galleryPageName is the gallery page's path within the embedded pages
@@ -66,7 +66,7 @@ const (
 
 	// gallerySyntheticBase names the synthetic wrapper slide template before
 	// it is made unique against the registry.
-	gallerySyntheticBase = "__eypres_gallery_example"
+	gallerySyntheticBase = "__kalide_gallery_example"
 )
 
 // galleryHandler returns the HTTP handler serving the /templates gallery for
@@ -144,7 +144,7 @@ func (g *galleryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// The page is derived from compiled-in templates, so it is stable, but it
-	// is also served by a long-running `eypres start`; no-store keeps a stale
+	// is also served by a long-running `kalide start`; no-store keeps a stale
 	// page from surviving a rebuild.
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
