@@ -129,6 +129,11 @@
       "kind": "details",
       "target": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.distribution",
+      "properties": {}
     }
   ],
   "in": []
