@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "templating",
-  "body": "Templating: built-in templates, their schemas (fields, types, formats, body rules, sections) and the theme they style against.",
+  "body": "Templating: the project's template library (`templates/` dir) — its templates, their schemas (fields, types, formats, body rules, sections), themes and media.",
   "properties": {
     "attribute": "core",
     "root": "template"
