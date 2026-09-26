@@ -209,6 +209,11 @@
       "kind": "details",
       "target": "domain.entity.deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.deck-config",
+      "properties": {}
     }
   ],
   "in": []
