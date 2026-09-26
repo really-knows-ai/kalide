@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "template-library-loader",
+  "body": "Template library loader: reads the project's `templates/` via an fs.FS rooted at it, validates it fail-fast in the templates-dir-validation order, parses each `template.yaml` into the template schema model and registers templates (template-registry) and themes (theme-registry); returns the first templates error path-qualified. Replaces template.Builtins / theme.Builtin as the single source for start, templates, gallery and reload.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
