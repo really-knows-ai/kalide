@@ -1,4 +1,4 @@
-// Package validate contains the ey-present deck validator: it walks a deck in
+// Package validate contains the kalide deck validator: it walks a deck in
 // a fixed deterministic order and reports exactly the first error found.
 //
 // This file defines the single author-facing error shape, ValidationError, and
