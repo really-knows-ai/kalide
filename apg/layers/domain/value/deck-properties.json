@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "deck-properties",
+  "body": "A deck's author-declared `properties:` block: arbitrary string keys, chosen freely by the author, each mapped to a simple typed YAML scalar value (string, number, boolean or date). Deck-wide: available to every slide layout and every section template under the `deck.properties` context (template-context). Values travel as typed values — a string is escaped text, never Markdown and never pre-rendered safe HTML. A mapping or sequence value is not allowed. Belongs to deck-config (domain.value.deck-config).",
+  "properties": {},
+  "out": [],
+  "in": []
+}
