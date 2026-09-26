@@ -89,6 +89,7 @@ func TestCheckValues(t *testing.T) {
 	linkTextTmpl := newSlide("linktext", Field{Name: "text", Type: FieldText})
 	numTmpl := newSlide("num", Field{Name: "num", Type: FieldNumber, Min: &zero, Max: float64Ptr(100)})
 	dateTmpl := newSlide("date", Field{Name: "date", Type: FieldDate})
+	dateBoundsTmpl := newSlide("datebounds", Field{Name: "date", Type: FieldDate, MinDate: "2020-01-01", MaxDate: "2025-12-31"})
 	boolTmpl := newSlide("bool", Field{Name: "flag", Type: FieldBoolean})
 	enumTmpl := newSlide("enum", Field{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}})
 	imageTmpl := newSlide("image", Field{Name: "img", Type: FieldImage})
@@ -274,6 +275,65 @@ func TestCheckValues(t *testing.T) {
 			tmpl: dateTmpl,
 			data: map[string]any{"date": 20260925},
 			want: []wantErr{we("type", "date", 20260925,
+				"type: expected a YYYY-MM-DD date, got a number", "write the date as YYYY-MM-DD")},
+		},
+		{
+			name: "date within bounds",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": "2023-06-15"},
+		},
+		{
+			name: "date time.Time within bounds",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC)},
+		},
+		{
+			name: "date below min",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": "2019-12-31"},
+			want: []wantErr{we("min", "date", "2019-12-31",
+				"min: 2019-12-31 is below the minimum 2020-01-01", "use a date on or after 2020-01-01")},
+		},
+		{
+			name: "date above max",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": "2026-01-01"},
+			want: []wantErr{we("max", "date", "2026-01-01",
+				"max: 2026-01-01 exceeds the maximum 2025-12-31", "use a date on or before 2025-12-31")},
+		},
+		{
+			name: "date equal to min passes (inclusive)",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": "2020-01-01"},
+		},
+		{
+			name: "date equal to max passes (inclusive)",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": "2025-12-31"},
+		},
+		{
+			// An unset MinDate/MaxDate leaves the date range unchecked.
+			name: "date no bounds",
+			tmpl: newSlide("nobounds", Field{Name: "date", Type: FieldDate, MinDate: "", MaxDate: ""}),
+			data: map[string]any{"date": "1900-01-01"},
+		},
+		{
+			// A malformed date still yields the `date` rule error, not a
+			// range error, even with bounds set.
+			name: "date malformed with bounds",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": "2023/06/15"},
+			want: []wantErr{we("date", "date", "2023/06/15",
+				`date: "2023/06/15" is not a YYYY-MM-DD date`,
+				"write the date as YYYY-MM-DD, for example 2024-01-02")},
+		},
+		{
+			// A non-string non-date still yields the `type` rule error, not a
+			// range error, even with bounds set.
+			name: "date wrong type with bounds",
+			tmpl: dateBoundsTmpl,
+			data: map[string]any{"date": 20230615},
+			want: []wantErr{we("type", "date", 20230615,
 				"type: expected a YYYY-MM-DD date, got a number", "write the date as YYYY-MM-DD")},
 		},
 
