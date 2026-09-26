@@ -1,0 +1,158 @@
+# Release for eypres.
+#
+# Trigger: ONLY a human-pushed version tag vX.Y.Z. There is deliberately no
+# workflow_dispatch and no scheduled/other trigger. This workflow never creates
+# or moves a tag and never pushes code; the manifest commit (updating Formula/
+# and bucket/) is the one CI push allowed by
+# global.constraint.humans-push-and-tag, and lives in the separate, later job
+# (phase-09 task-5) — see the seam after `publish` below.
+#
+# Shape:
+#   build   -> cross-build the supported targets with the Makefile's single
+#              `release` entry point (VERSION = the tag), produce checksums.txt
+#              (SHA-256) and upload the binaries + checksums as one artifact;
+#   native-e2e -> call the reusable native-e2e.yml in release mode, which
+#              downloads that artifact and runs the offline native e2e on one
+#              runner per supported target (its own matrix);
+#   publish -> create the GitHub Release vX.Y.Z with the binaries + checksums,
+#              but only after every native e2e job has passed (`needs`).
+#
+# Target set (supported-platforms): darwin/arm64 and windows/amd64 are always
+# built; windows/arm64 is built only while the GitHub-hosted `windows-11-arm`
+# runner is available to this private repo, signalled by the repository
+# variable WINDOWS_ARM_RUNNER == "true" (the same toggle native-e2e.yml reads).
+# Never darwin/amd64, never Linux.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Least privilege by default; only `publish` needs to write.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build release binaries
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The Makefile is the single build entry point; the release recipe is a
+      # CGO_ENABLED=0 cross-build for exactly darwin/arm64, windows/amd64 and
+      # windows/arm64 with -trimpath and the version stamped in. VERSION is the
+      # pushed tag, passed through to `-X main.version`.
+      - name: Build release binaries
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make release
+
+      # windows/arm64 is built/released only while its native runner exists. The
+      # Makefile still cross-builds it unconditionally, so drop it here before
+      # checksums and upload when the runner is unavailable — then the artifact,
+      # checksums.txt and the Release carry exactly the supported targets.
+      - name: Drop windows/arm64 when its runner is unavailable
+        if: ${{ vars.WINDOWS_ARM_RUNNER != 'true' }}
+        shell: bash
+        run: rm -f dist/eypres-windows-arm64.exe
+
+      # SHA-256 checksums over exactly the binaries shipped in this release, in
+      # a fixed order. Format is `<hash>  <filename>` (two spaces), the form the
+      # phase-09 task-5 manifest job and the Homebrew/Scoop manifests consume.
+      - name: Write checksums.txt (SHA-256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          : > checksums.txt
+          for f in eypres-darwin-arm64 eypres-windows-amd64.exe eypres-windows-arm64.exe; do
+            if [ -f "$f" ]; then
+              shasum -a 256 "$f" >> checksums.txt
+            fi
+          done
+          cat checksums.txt
+
+      # One artifact, downloaded by native-e2e.yml into dist/ in release mode.
+      # Files sit at the artifact root so they land at dist/<name>, the paths
+      # native-e2e.yml's matrix expects.
+      - name: Upload binaries and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: eypres-binaries
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Native verification of the exact artifacts built above, on one native runner
+  # per supported target. The reusable workflow owns the per-target matrix and
+  # downloads the `eypres-binaries` artifact (release mode) instead of
+  # rebuilding, so each target's own binary is what gets tested.
+  native-e2e:
+    name: Native e2e
+    needs: build
+    uses: ./.github/workflows/native-e2e.yml
+    with:
+      release: true
+      artifact-name: eypres-binaries
+      version: ${{ github.ref_name }}
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Publish only after the build and EVERY native e2e job inside the reusable
+  # workflow have succeeded: `needs: native-e2e` gates on the whole called
+  # workflow, so any target's failure blocks publishing.
+  publish:
+    name: Publish release
+    needs: [build, native-e2e]
+    runs-on: macos-14
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      # Re-fetch the very artifact native e2e verified.
+      - uses: actions/download-artifact@v4
+        with:
+          name: eypres-binaries
+          path: dist
+
+      # Create the GitHub Release vX.Y.Z on the private repo with the binaries
+      # and checksums.txt. `--verify-tag` guarantees the tag already exists
+      # (the human pushed it); gh must never create one.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            dist/eypres-darwin-arm64
+            dist/eypres-windows-amd64.exe
+          )
+          if [ -f dist/eypres-windows-arm64.exe ]; then
+            assets+=(dist/eypres-windows-arm64.exe)
+          fi
+          assets+=(dist/checksums.txt)
+          gh release create "$TAG" "${assets[@]}" \
+            --verify-tag \
+            --title "$TAG" \
+            --notes "eypres $TAG. Assets: the supported platform binaries and checksums.txt (SHA-256)."
+
+  # ---------------------------------------------------------------------------
+  # SEAM (phase-09 task-5): the manifest job attaches here and declares
+  # `needs: publish`. It regenerates Formula/eypres.rb and bucket/eypres.json
+  # from this release tag, the asset URLs and checksums.txt (Scoop arm64 entry
+  # only when eypres-windows-arm64.exe shipped), commits as the GitHub Actions
+  # bot, asserts the diff touches only Formula/ and bucket/, and pushes that
+  # manifest-only commit. It does NOT exist yet and is intentionally not
+  # implemented in this task.
+  # ---------------------------------------------------------------------------
