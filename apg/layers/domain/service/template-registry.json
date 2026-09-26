@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "template-registry",
-  "body": "Template registry: load built-in templates, run build-time checks (cycles, usage, reserved names, examples), look up templates, describe them for CLI/gallery.",
+  "body": "Template registry: hold the project's loaded templates, run the load-time checks (cycles, usage, reserved names, references, examples), look up templates, describe them for CLI/gallery.",
   "properties": {},
   "out": [
     {
