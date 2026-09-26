@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "homebrew-install",
-  "body": "Apple silicon macOS users install via a Homebrew tap: `brew tap really-knows-ai/ey-present <git url>` then `brew install eypres`. The formula downloads the darwin/arm64 binary from the private GitHub Release using the user's `HOMEBREW_GITHUB_API_TOKEN`, via a custom download strategy defined in the tap. Intel macOS is not supported: on an Intel Mac the formula refuses to install with a clear \"Apple silicon only\" message. AC: on a clean Apple silicon Mac with the token set, install succeeds and `eypres` runs; a missing/invalid token fails with a clear message.",
+  "body": "Apple silicon macOS users install via a Homebrew tap: `brew tap really-knows-ai/kalide <git url>` then `brew install kalide` (formula `Formula/kalide.rb`). The formula downloads the darwin/arm64 binary (`kalide-darwin-arm64`) from the private GitHub Release using the user's `HOMEBREW_GITHUB_API_TOKEN`, via a custom download strategy defined in the tap. Intel macOS is not supported: on an Intel Mac the formula refuses to install with a clear \"Apple silicon only\" message. AC: on a clean Apple silicon Mac with the token set, install succeeds and `kalide` runs; a missing/invalid token fails with a clear message.",
   "properties": {
     "feature": "distribution"
   },
