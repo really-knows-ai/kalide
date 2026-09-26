@@ -4,6 +4,12 @@
   "name": "kalide",
   "body": "kalide: local slide-deck tool — single Go binary that validates Markdown/YAML decks against the project's own `templates/` library (no built-in templates) and serves them with reveal.js. (Name: portmanteau of Greek Kalón — the ideal of the beautiful and good — and Slide; formerly \"ey-present\"/\"eypres\".)",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "solution.container.browser-frontend",
+      "properties": {}
+    }
+  ],
   "in": []
 }

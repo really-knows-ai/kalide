@@ -28,6 +28,11 @@
       "kind": "realised-by",
       "source": "domain.group.presentation",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "solution.system.kalide",
+      "properties": {}
     }
   ]
 }
