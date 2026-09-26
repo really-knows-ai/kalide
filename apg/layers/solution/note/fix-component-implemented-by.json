@@ -4,6 +4,12 @@
   "name": "fix-component-implemented-by",
   "body": "source: reconciliation finding that 15 solution components (embedded-assets, renderer, file-watcher, deck-validator, deck-loader, slide-parser, markdown-validator, cli-commands, deck-page, templates-gallery, release-workflow, scoop-manifest, homebrew-formula, install-docs, native-e2e-ci) had no implemented-by edges; inconsistency: solution tier did not trace to code; resolution: linked each to scanned code/File nodes that survive plan phase 7. Phase-7 delete targets (assets.Fonts/Logo/Templates/Starter, fonts/logo/templates/starter dirs, theme.css, template.Builtins/builtinTemplates, theme.Builtin/Default) were deliberately NOT used; embedded-assets points at assets.go (modified by phase-7 task-27 to embed only reveal+pages) plus assets.Reveal/assets.Pages. No plan task deletes template.NewRegistry/theme.NewRegistry, so template-registry and theme-registry edges were kept. [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.embedded-assets",
+      "properties": {}
+    }
+  ],
   "in": []
 }
