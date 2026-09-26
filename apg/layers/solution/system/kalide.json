@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "solution.note.spine-values-and-tier4",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-kalide-template-source",
+      "properties": {}
     }
   ]
 }
