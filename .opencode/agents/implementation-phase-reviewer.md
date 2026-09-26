@@ -76,8 +76,9 @@ phase's related spec:
 - `Satisfies` claims hold against the referenced Requirements/Constraints
   (e.g. CGO_ENABLED=0, single `cmd/eypres` binary, Makefile as the single build
   entry, no push/tag);
-- ownership was respected (source vs tests vs release artifacts) and quality is
-  acceptable.
+- ownership was respected (source vs tests vs release artifacts; `e2e/**` and
+  the `examples/**` demo fixture belong to e2e-test-implementer only) and
+  quality is acceptable.
 
 ## Outcome
 Either attach Feedback (`apg_review_add`), resolve/reject items after the
