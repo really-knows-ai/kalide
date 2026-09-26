@@ -4,6 +4,12 @@
   "name": "project-templates-decisions",
   "body": "Project-templates decisions [with user]: (1) no fallback — binary ships no templates/themes/fonts/logos/media; missing `templates/` = error. (2) Asset scope: templates, themes, fonts, logos and any media type (e.g. video), type-agnostic. (3) Git-based sharing (push/pull) is FUTURE/out of scope; forward compatibility is secured by global.constraint.template-library-shareable (self-contained dir + library.yaml identity + format version). (4) `templates/` validated fail-fast before deck validation/render/serve. [autonomous] design choices: fixed layout `library.yaml`, `templates/<name>/`, `themes/<name>/`, `media/`; template schema moves from Go (`internal/template.builtinTemplates`) to per-template `template.yaml`; hand-written structured examples are dropped in favour of parsing `example.md`; init seed is embedded in internal/scaffold (the only template content in the binary, written once, never read by render paths); `default` remains the implicit theme name, resolved against the project. ASSUMPTION [autonomous, confirm]: reveal.js runtime and the deck/error/gallery page shells are engine, not \"assets\", so they stay embedded but must be unbranded and styled only via the project theme.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.project-templates",
+      "properties": {}
+    }
+  ],
   "in": []
 }
