@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "template-registry",
-  "body": "Template registry / schema engine: embedded template definitions, schema model (fields, types, formats, body rules, sections), build-time checks, lookup and description.",
+  "body": "Template registry / schema engine: schema model (fields, types, formats, body rules, sections) populated from project `template.yaml` manifests by the template-library-loader, load-time checks, lookup and description. Holds no compiled-in templates.",
   "properties": {},
   "out": [],
   "in": [
