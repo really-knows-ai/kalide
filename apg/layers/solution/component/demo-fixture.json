@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "demo-fixture",
+  "body": "Demo fixture: the non-EY-branded demo project at `examples/demo/` (library.yaml, a few slide templates e.g. title/content/columns, section templates e.g. column/person, one theme, one media file, sample slides/eypres.yaml), used as the fixture by the integration tests and the e2e harness; distinct from the init seed.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
