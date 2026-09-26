@@ -7,11 +7,6 @@
   "out": [
     {
       "kind": "uses",
-      "target": "solution.system.eypres",
-      "properties": {}
-    },
-    {
-      "kind": "uses",
       "target": "solution.system.kalide",
       "properties": {}
     }

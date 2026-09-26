@@ -34,11 +34,6 @@
     },
     {
       "kind": "realised-by",
-      "target": "solution.system.eypres",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
       "target": "solution.container.browser-frontend",
       "properties": {}
     },
