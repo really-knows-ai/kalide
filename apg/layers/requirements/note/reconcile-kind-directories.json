@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-init-minimal-seed",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.template",
+      "properties": {}
     }
   ],
   "in": []
