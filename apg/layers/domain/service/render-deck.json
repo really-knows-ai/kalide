@@ -41,6 +41,11 @@
       "kind": "drives",
       "source": "requirements.requirement.pdf-via-print",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-language",
+      "properties": {}
     }
   ]
 }
