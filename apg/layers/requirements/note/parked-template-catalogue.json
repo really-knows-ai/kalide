@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "parked-template-catalogue",
-  "body": "PARKED: the concrete initial template catalogue (which slide/section templates ship first — e.g. title, agenda, columns, team/person, image+text) is not yet decided. To be specified before/with the templates phase; each will need name, description, usage, schema, layout, example.",
+  "body": "PARKED: the concrete EY template catalogue (e.g. title, agenda, columns, team/person, image+text) is no longer part of the binary; it becomes an EY template library (a `templates/` dir, later shareable via git). The current title/content/column templates, EY theme.css, fonts and logos are to be migrated into such a library (e.g. an example/testdata project) rather than deleted without trace. Each template needs name, description, usage, template.yaml schema, layout, example.",
   "properties": {},
   "out": [
     {
