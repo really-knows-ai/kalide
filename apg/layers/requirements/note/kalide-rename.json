@@ -84,6 +84,11 @@
       "kind": "details",
       "target": "requirements.requirement.native-ci-verification",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.cli-init-refuse-existing",
+      "properties": {}
     }
   ],
   "in": []
