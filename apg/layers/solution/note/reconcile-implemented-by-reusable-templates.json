@@ -4,6 +4,12 @@
   "name": "reconcile-implemented-by-reusable-templates",
   "body": "source: final implementation review — template-library-loader and demo-fixture had no implemented-by edges; init-seed, template-registry, theme-registry, http-server lacked edges to the new code. inconsistency: spine did not reach the built code. resolution: added implemented-by edges (all targets now resolve in the scanned graph): template-library-loader -> template.LoadLibrary, template.Library, template.LibraryError; demo-fixture -> examples/demo/templates/library.yaml, examples/demo/eypres.yaml; init-seed -> scaffold.writeHelloSeed; template-registry -> template.NewRegistryFromLibrary; theme-registry -> theme.LoadDir; http-server -> server.mediaHandler. [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    }
+  ],
   "in": []
 }
