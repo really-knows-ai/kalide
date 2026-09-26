@@ -25,6 +25,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-schema-in-go",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
+      "properties": {}
     }
   ]
 }
