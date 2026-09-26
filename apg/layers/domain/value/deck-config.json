@@ -25,6 +25,11 @@
       "kind": "details",
       "source": "requirements.note.fix-deck-config-keys",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.kalide-rename",
+      "properties": {}
     }
   ]
 }

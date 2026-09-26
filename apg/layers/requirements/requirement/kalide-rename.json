@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.group.distribution",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.deck-config",
+      "properties": {}
     }
   ],
   "in": [
