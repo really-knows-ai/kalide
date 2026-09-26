@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-cli-init-seed-depends",
+  "body": "source: 'cli-init depends-on embedded-assets' (starter deck came from internal/assets Starter()); inconsistency: the init seed now lives in internal/scaffold, not the embedded engine assets; resolution: dropped cli-init→embedded-assets, cli-init now reaches the layout via cli-init-minimal-seed→templates-dir-layout [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
