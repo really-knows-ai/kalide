@@ -149,6 +149,11 @@
       "kind": "details",
       "target": "requirements.requirement.demo-project",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.project-templates",
+      "properties": {}
     }
   ],
   "in": []
