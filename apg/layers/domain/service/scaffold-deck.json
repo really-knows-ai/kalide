@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "scaffold-deck",
-  "body": "Scaffold deck: `init` — check for existing slides/, assets/, templates/, eypres.yaml; write the minimal unbranded seed (deck + templates/) from the scaffold's embedded seed.",
+  "body": "Scaffold deck: `init` — check for existing slides/, assets/, templates/, kalide.yaml; write the minimal unbranded seed (deck + templates/) from the scaffold's embedded seed.",
   "properties": {},
   "out": [
     {
