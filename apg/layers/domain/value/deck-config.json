@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "deck-config",
-  "body": "Deck config from kalide.yaml (the legacy name eypres.yaml is not recognised): title (required), author (optional), date (optional, `YYYY-MM-DD`), theme (optional, default `default`), navigation (optional, default|linear|grid, default `default`). No other keys (unknown key = error with suggestion).",
+  "body": "Deck config from kalide.yaml (the legacy name eypres.yaml is not recognised): title (required), author (optional), date (optional, `YYYY-MM-DD`), theme (optional, default `default`), navigation (optional, default|linear|grid, default `default`), and properties (optional — arbitrary author-declared deck-wide key/value pairs, each value a typed YAML scalar; see domain.value.deck-properties). properties is the one additional allowed top-level key; every other unknown key = error with a closest-match suggestion.",
   "properties": {},
   "out": [],
   "in": [
