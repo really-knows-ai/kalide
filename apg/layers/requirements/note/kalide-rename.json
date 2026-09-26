@@ -134,6 +134,11 @@
       "kind": "details",
       "target": "requirements.requirement.distribution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.navigation-mode",
+      "properties": {}
     }
   ],
   "in": []
