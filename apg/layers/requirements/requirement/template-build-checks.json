@@ -28,6 +28,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.number-date-formats",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.templates-dir-validation",
+      "properties": {}
     }
   ]
 }

@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-build-checks",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
