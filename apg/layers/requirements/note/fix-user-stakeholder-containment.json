@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "fix-user-stakeholder-containment",
-  "body": "Source: 'Users ⊂ Stakeholders' (deck author ⊂ EY employees; template author ⊂ brand owners). Inconsistency: the graph schema permits `contains` only into requirements.requirement, so user→stakeholder containment cannot be an edge. Resolution: the relationship is recorded in this note; cross-cutting requirements single-binary (ey-employees) and embedded-assets (ey-brand-owner) hang directly off the stakeholders; all others off the users. [autonomous]",
+  "body": "Source: 'Users ⊂ Stakeholders' (deck author ⊂ EY employees; template author ⊂ brand owners). Inconsistency: the graph schema permits `contains` only into requirements.requirement, so user→stakeholder containment cannot be an edge. Resolution: the relationship is recorded in this note; cross-cutting requirements single-binary (ey-employees) and embedded-assets (brand-owner) hang directly off the stakeholders; all others off the users. [autonomous]",
   "properties": {},
   "out": [
     {
