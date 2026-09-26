@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "stakeholder",
+  "name": "brand-owner",
+  "body": "Brand/template owners (any organisation): author project `templates/` libraries (templates, the `default` and other themes, media) outside the binary; want every deck using their library to look consistent and on-brand.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
