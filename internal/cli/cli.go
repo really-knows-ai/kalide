@@ -28,8 +28,10 @@ Usage:
 // non-zero on error.
 //
 //   - no arguments and `help` print usage and return 0;
-//   - `init`, `start` and `templates [name]` route to their commands, which
-//     are not implemented yet and return a "not implemented" error;
+//   - `templates [name]` routes to runTemplates, which lists the built-in
+//     templates or documents one by name;
+//   - `init` and `start` route to their commands, which are not implemented
+//     yet and return a "not implemented" error;
 //   - an unknown command or malformed arguments print usage and return 2.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
@@ -51,7 +53,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprint(stderr, usage)
 			return 2
 		}
-		return notImplemented("templates", stderr)
+		return runTemplates(args[2:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "eypres: unknown command %q\n\n", cmd)
 		fmt.Fprint(stderr, usage)
