@@ -4,6 +4,12 @@
   "name": "reconcile-schema-in-go",
   "body": "source: user goal 'move all templates and assets out of the binary'; inconsistency: code graph shows template schemas are Go code (internal/template/builtins.go builtinTemplates, called by template.Builtins, used by cli.runStart, cli.runTemplates, server.NewReloader, server.galleryHandler), and theme.Default binds to embedded assets.FS theme.css (theme.Builtin used by render.RenderDeck, validate.Validate, validate.themeResolves, server.NewReloader); moving only files would leave templates in the binary. Resolution: added template-manifest (schema as data in template.yaml) and the template-library-loader component replacing Builtins/Builtin at every call site; reconciled template-definition, template-build-checks, theme-selection, embedded-assets, cli-init(-refuse-existing), cli-templates-list, templates-gallery, live-reload, go-static-embedded-binary, template-defects-build-time (defects are now author-facing templates errors, not programming errors). [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-manifest",
+      "properties": {}
+    }
+  ],
   "in": []
 }
