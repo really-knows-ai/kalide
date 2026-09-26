@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-definition",
-  "body": "Each project template (in `templates/templates/<name>/`) defines: name (its directory name), one-line description, `usage: slide | section` (exactly one), a field/section/body schema (in `template.yaml`, see template-manifest), a Go html/template layout (`layout.html.tmpl`), and an example slide (`example.md`) that itself validates. Templates are project files owned by the template author; deck authors select them but never define per-slide styling.",
+  "body": "Each project template lives in `templates/slides/<name>/` (a slide template) or `templates/sections/<name>/` (a section template); its kind is determined by that directory (see templates-dir-layout). It defines: name (its directory name, unique across slides and sections), one-line description, a field/section/body schema (in `template.yaml`, see template-manifest), a Go html/template layout (`layout.html.tmpl`, see template-language), and an example slide (`example.md`) that itself validates. Templates are project files owned by the template author; deck authors select them but never define per-slide styling.",
   "properties": {
     "feature": "templates"
   },
