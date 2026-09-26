@@ -413,6 +413,24 @@ func TestServer(t *testing.T) {
 		if !strings.Contains(body, `class="ey-gallery__name">item`) {
 			t.Errorf("gallery does not list the fixture %q section template:\n%s", "item", body)
 		}
+		// The item section's Layout.Name is a full manifest path
+		// (templates/sections/item/layout.html.tmpl), not the bare template
+		// name "item". Its preview must actually render the example's
+		// content through that layout, not fall back to the
+		// "Example unavailable" placeholder (regression coverage for the
+		// gallerySectionExample fix in commit 02fcf3a).
+		if strings.Contains(body, "Example unavailable") {
+			t.Errorf("gallery reports an unavailable example for the fixture library:\n%s", body)
+		}
+		if !strings.Contains(body, `class="item"`) {
+			t.Errorf("gallery does not render the item section's <li class=\"item\"> layout output:\n%s", body)
+		}
+		if !strings.Contains(body, "First item") {
+			t.Errorf("gallery does not render the item section example's title %q:\n%s", "First item", body)
+		}
+		if !strings.Contains(body, "Details about the first item.") {
+			t.Errorf("gallery does not render the item section example's body:\n%s", body)
+		}
 	})
 
 	t.Run("broken templates library serves the error page", func(t *testing.T) {
