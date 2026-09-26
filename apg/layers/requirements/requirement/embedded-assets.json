@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-ey-content-removal",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.brand-owner",
+      "properties": {}
     }
   ]
 }
