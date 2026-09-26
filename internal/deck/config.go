@@ -65,13 +65,18 @@ type Config struct {
 }
 
 // LoadConfig reads and validates the deck configuration at path within fsys —
-// typically ConfigFile at the root of a deck directory.
+// typically ConfigFile at the root of a deck directory. themes is the project
+// theme registry to resolve the `theme` key against — typically the one
+// theme.LoadDir built from the project's templates/themes directory. It must
+// not be nil: LoadConfig no longer falls back to any package-global theme
+// lookup (theme-selection); the caller is responsible for building and
+// passing the registry.
 //
 // Rules (deck-config):
 //   - title is required and must be a string;
 //   - author and date are optional; date must be YYYY-MM-DD;
-//   - theme is optional, defaults to "default", and must resolve in the theme
-//     registry;
+//   - theme is optional, defaults to "default" (which must exist in themes),
+//     and must otherwise resolve in themes;
 //   - navigation is optional, defaults to "default", and must be default,
 //     linear or grid;
 //   - any other key is an unknown key, rejected with a closest-match "did you
@@ -80,7 +85,11 @@ type Config struct {
 // Every error that can be tied to a source location is positioned as
 // file:line; an unknown theme carries its position through
 // theme.UnknownThemeError.WithPosition.
-func LoadConfig(fsys fs.FS, path string) (*Config, error) {
+func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error) {
+	if themes == nil {
+		return nil, fmt.Errorf("%s: no theme registry given", path)
+	}
+
 	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
@@ -106,6 +115,7 @@ func LoadConfig(fsys fs.FS, path string) (*Config, error) {
 		Navigation: NavigationDefault,
 	}
 	haveTitle := false
+	haveTheme := false
 
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		key := mapping.Content[i]
@@ -153,7 +163,7 @@ func LoadConfig(fsys fs.FS, path string) (*Config, error) {
 			if !isNull(val) && val.Value != "" {
 				name = val.Value
 			}
-			if _, err := theme.Lookup(name); err != nil {
+			if _, err := themes.Lookup(name); err != nil {
 				var unknown *theme.UnknownThemeError
 				if errors.As(err, &unknown) {
 					return nil, unknown.WithPosition(path, line)
@@ -161,6 +171,7 @@ func LoadConfig(fsys fs.FS, path string) (*Config, error) {
 				return nil, positioned(path, line, "theme %q: %v", name, err)
 			}
 			cfg.Theme = name
+			haveTheme = true
 
 		case "navigation":
 			if !isNull(val) && !isString(val) {
@@ -189,6 +200,15 @@ func LoadConfig(fsys fs.FS, path string) (*Config, error) {
 
 	if !haveTitle {
 		return nil, positioned(path, nodeLine(mapping, 1), `missing required key "title"`)
+	}
+	if !haveTheme {
+		if _, err := themes.Lookup(cfg.Theme); err != nil {
+			var unknown *theme.UnknownThemeError
+			if errors.As(err, &unknown) {
+				return nil, unknown.WithPosition(path, nodeLine(mapping, 1))
+			}
+			return nil, positioned(path, nodeLine(mapping, 1), "theme %q: %v", cfg.Theme, err)
+		}
 	}
 	return cfg, nil
 }
