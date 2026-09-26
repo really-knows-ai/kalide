@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "navigation-mode",
-  "body": "`navigation: default | linear | grid` in `eypres.yaml` sets reveal.js `navigationMode` deck-wide, passing the value straight through (reveal.js semantics). Optional; omitted = `default`. Any other value = error listing valid values.",
+  "body": "`navigation: default | linear | grid` in `kalide.yaml` sets reveal.js `navigationMode` deck-wide, passing the value straight through (reveal.js semantics). Optional; omitted = `default`. Any other value = error listing valid values.",
   "properties": {
     "feature": "linking-navigation"
   },
