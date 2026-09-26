@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-definition",
-  "body": "Each built-in template defines: name, one-line description, `usage: slide | section` (exactly one), a field/section/body schema, a Go html/template layout, and an example slide that itself validates. Templates are compiled into the binary and not editable by deck authors.",
+  "body": "Each project template (in `templates/templates/<name>/`) defines: name (its directory name), one-line description, `usage: slide | section` (exactly one), a field/section/body schema (in `template.yaml`, see template-manifest), a Go html/template layout (`layout.html.tmpl`), and an example slide (`example.md`) that itself validates. Templates are project files owned by the template author; deck authors select them but never define per-slide styling.",
   "properties": {
     "feature": "templates"
   },
