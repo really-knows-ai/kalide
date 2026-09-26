@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.templates-dir-layout",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
