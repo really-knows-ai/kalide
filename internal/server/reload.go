@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	libpath "path"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,11 +134,16 @@ type ReloadOptions struct {
 	Pipeline Pipeline
 
 	// Registry is the template registry the built-in pipeline validates
-	// against. When nil, template.Builtins() is used. Unused when Pipeline is
-	// set.
+	// against. When nil, it is built from the project's templates/ library
+	// (template.LoadLibrary(fsys, template.TemplatesDir) +
+	// template.NewRegistryFromLibrary), loaded once when the Reloader is
+	// built. Unused when Pipeline is set. Tests inject a registry to bypass
+	// the on-disk library entirely.
 	Registry *template.Registry
 
-	// Themes is the theme registry. When nil, theme.Builtin() is used.
+	// Themes is the theme registry. When nil, it is built from the project's
+	// templates/themes directory (theme.LoadDir), loaded once alongside
+	// Registry. Unused when Pipeline is set.
 	Themes *theme.Registry
 
 	// Title is the fallback document title used for the error page when the
@@ -168,9 +174,20 @@ type Reloader struct {
 	initial  *Page
 
 	// reg and themes are the built-in pipeline's collaborators; nil when a
-	// caller injected its own Pipeline.
-	reg    *template.Registry
-	themes *theme.Registry
+	// caller injected its own Pipeline. funcMap is the loaded library's
+	// layout func map (template.LayoutFuncMap), threaded into every
+	// render.RenderDeck call so a library layout using `media` renders.
+	reg     *template.Registry
+	themes  *theme.Registry
+	funcMap htmltmpl.FuncMap
+
+	// libErr is set when the built-in pipeline's one-time load of the
+	// project's templates/ library (LoadLibrary, NewRegistryFromLibrary or
+	// theme.LoadDir) failed. renderDefault publishes it as the full-page
+	// error, exactly like an invalid deck: a broken library is never
+	// silently substituted with a stale or built-in one, and it is never
+	// allowed to serve a broken deck.
+	libErr error
 
 	mu       sync.Mutex
 	subs     map[chan struct{}]struct{}
@@ -243,18 +260,31 @@ func NewReloader(opts ReloadOptions) (*Reloader, error) {
 	}
 
 	reg := opts.Registry
-	if reg == nil {
-		built, err := template.Builtins()
-		if err != nil {
-			return nil, fmt.Errorf("server: reload: built-in templates: %w", err)
+	themes := opts.Themes
+	var lib *template.Library
+	var libErr error
+	if reg == nil || themes == nil {
+		if fsys == nil {
+			return nil, errors.New("server: reload: no deck root or filesystem given")
 		}
-		reg = built
-	}
-	r.themes = opts.Themes
-	if r.themes == nil {
-		r.themes = theme.Builtin()
+		lib, libErr = template.LoadLibrary(fsys, template.TemplatesDir)
+		if libErr == nil {
+			if reg == nil {
+				reg, libErr = template.NewRegistryFromLibrary(lib)
+			}
+			if libErr == nil && themes == nil {
+				themes, libErr = theme.LoadDir(fsys, libpath.Join(template.TemplatesDir, template.ThemesDir))
+			}
+		}
 	}
 	r.reg = reg
+	r.themes = themes
+	r.libErr = libErr
+	var mediaFS fs.FS
+	if lib != nil {
+		mediaFS = lib.Media
+	}
+	r.funcMap = template.LayoutFuncMap(mediaFS, MediaPath)
 	r.pipeline = r.renderDefault
 	return r, nil
 }
@@ -482,7 +512,14 @@ func injectLiveReload(doc htmltmpl.HTML, eventPath string) htmltmpl.HTML {
 // (requirements.requirement.whole-deck-validation): a validation failure is
 // published as the full-page error with its single formatted error; only a
 // valid deck is parsed and rendered.
+//
+// A project templates/ library that failed to load (libErr, set once by
+// NewReloader) is reported the same way as an invalid deck — the full-page
+// error, never a stale or partially-loaded deck (never-serve-broken-deck).
 func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
+	if r.libErr != nil {
+		return NewErrorPage(r.title, validate.New("templates", 0, nil, r.libErr.Error(), ""))
+	}
 	if r.reg == nil {
 		return nil, errors.New("no template registry")
 	}
@@ -491,7 +528,7 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 		return NewErrorPage(r.errorTitle(fsys), verr)
 	}
 
-	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile)
+	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, r.themes)
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +540,7 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := render.RenderDeck(cfg, d, parsed, r.reg, r.themes)
+	doc, err := render.RenderDeck(cfg, d, parsed, r.reg, r.themes, r.funcMap)
 	if err != nil {
 		return nil, err
 	}
@@ -511,9 +548,15 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 }
 
 // errorTitle is the title shown on the error page: the deck's configured title
-// when the config can still be read, otherwise the configured fallback.
+// when the config can still be read, otherwise the configured fallback. When
+// the project theme registry is nil (templates/ failed to load, so
+// deck.LoadConfig has nothing to resolve `theme` against), it falls back to
+// the configured title directly rather than calling LoadConfig at all.
 func (r *Reloader) errorTitle(fsys fs.FS) string {
-	if cfg, err := deck.LoadConfig(fsys, deck.ConfigFile); err == nil && cfg.Title != "" {
+	if r.themes == nil {
+		return r.title
+	}
+	if cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, r.themes); err == nil && cfg.Title != "" {
 		return cfg.Title
 	}
 	return r.title

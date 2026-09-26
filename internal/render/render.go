@@ -82,15 +82,22 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // must name a slide-usage template. label is the slide's deck label (the text
 // after the dash in its filename, deck.Slide.Label), which becomes the anchor id
 // on the root <section>; unique-slide-labels guarantees it is unique across the
-// deck. reg is the populated template registry the slide was validated against.
+// deck. reg is the populated template registry the slide was validated against
+// — typically built from the project's templates/ library
+// (template.NewRegistryFromLibrary). funcMap is the library's layout func map
+// (template.LayoutFuncMap, `media` bound to the served templates/media URL base,
+// plus the number/date format functions); a nil funcMap falls back to
+// template.LayoutFuncMap(nil, ""), under which `media` always fails as if no
+// templates/media directory existed.
 //
 // The layout is executed with a map[string]any keyed by field name, as the
 // template layouts document: text fields carry rendered inline HTML (plain
 // fields carry escaped text), number and date fields carry their formatted
 // display string, `body` carries the rendered Markdown body HTML, and each
 // declared section name carries a slice of instance maps in source order. The
-// format functions are also exposed to the layout through html/template's
-// FuncMap, so a layout may format a value itself.
+// format functions and `media` are exposed to the layout through funcMap, so a
+// library layout may format a value or resolve a media URL itself
+// (template-media, template-language).
 //
 // When parsed has a `# notes` section, RenderSlide appends an
 // `<aside class="notes">` inside the slide with its rendered body; the embedded
@@ -99,7 +106,7 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // A definition failure (unknown or non-slide template, missing layout, an
 // unresolvable format) is returned as a *RenderError. RenderSlide is
 // deterministic: the same slide always renders to the same fragment.
-func RenderSlide(parsed *slide.Slide, label string, reg *template.Registry) (htmltmpl.HTML, error) {
+func RenderSlide(parsed *slide.Slide, label string, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	if parsed == nil {
 		return "", &RenderError{Err: errors.New("nil slide")}
 	}
@@ -122,7 +129,10 @@ func RenderSlide(parsed *slide.Slide, label string, reg *template.Registry) (htm
 		return "", &RenderError{File: parsed.File, Err: err}
 	}
 
-	root, err := parseLayouts(slideTmpl, reg)
+	if funcMap == nil {
+		funcMap = template.LayoutFuncMap(nil, "")
+	}
+	root, err := parseLayouts(slideTmpl, reg, funcMap)
 	if err != nil {
 		return "", &RenderError{File: parsed.File, Err: err}
 	}
@@ -349,16 +359,18 @@ func dateString(raw any) string {
 // parseLayouts parses the slide template and every layout reachable from it —
 // declared section templates and section-template-as-type fields, at every
 // depth — into one html/template namespace keyed by layout name, so a composed
-// layout can invoke another with `{{ template "<name>" . }}`. The format
-// functions are installed through the catalogue's FuncMap, so a layout may call
-// one directly.
-func parseLayouts(slideTmpl *template.Template, reg *template.Registry) (*htmltmpl.Template, error) {
+// layout can invoke another with `{{ template "<name>" . }}`. funcMap is the
+// library's layout func map (template.LayoutFuncMap): `media` plus the
+// number/date format functions, installed on the namespace root so every
+// library layout using `media` or a format function parses and executes
+// (template-media, template-language).
+func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
 	// The namespace root carries its own name only so html/template has a
 	// handle; it deliberately differs from every layout name. Naming the root
 	// after the slide's own layout would make root.New(layoutName(slideTmpl))
 	// shadow that layout with an empty associated template, so executing the
 	// slide layout would fail with "is an incomplete template".
-	root := htmltmpl.New("layouts").Funcs(template.BuiltinFormats.FuncMap())
+	root := htmltmpl.New("layouts").Funcs(funcMap)
 	for _, t := range reachableTemplates(slideTmpl, reg) {
 		if t.Layout.Text == "" {
 			return nil, fmt.Errorf("template %q has no layout text", t.Name)

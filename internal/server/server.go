@@ -55,6 +55,8 @@ import (
 	"time"
 
 	"github.com/really-knows-ai/ey-present/internal/assets"
+	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
 
@@ -169,6 +171,20 @@ type Options struct {
 	// answers 503 until SetPage supplies one; `eypres start` always passes
 	// the rendered deck.
 	Page *Page
+
+	// Library is the project's loaded templates/ library
+	// (template.LoadLibrary). When non-nil, Listen mounts mediaHandler's
+	// MediaPath route over its Media filesystem and builds the /templates
+	// gallery (galleryHandler) from it (template-media, templates-gallery).
+	// A nil Library disables template-media serving and falls the gallery
+	// back to template.Builtins().
+	Library *template.Library
+
+	// Themes is the project's loaded theme registry (theme.LoadDir). When
+	// non-nil, Listen mounts mediaHandler's ThemesPath route over it, so a
+	// theme's on-disk files (its theme.css and any files beside it) are
+	// served (theme-selection, template-media).
+	Themes *theme.Registry
 }
 
 // Server is a running HTTP server bound to loopback. Obtain one from Listen.
@@ -206,14 +222,32 @@ func Listen(opts Options) (*Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(rootPath, s.handlePage)
 	mux.Handle(AssetsPath, http.StripPrefix(AssetsPath, newAssetHandler(assets.FS, deckAssetsFS(opts))))
+	// mediaHandler serves templates/media/** and templates/themes/<name>/**
+	// straight from the loaded project library and theme registry
+	// (template-media); it is mounted here, alongside the embedded reveal.js
+	// assets, so it is reachable as soon as the server is, and — like every
+	// route on this mux — only ever over the loopback bind (Host).
+	mux.Handle(MediaPath, mediaHandler(opts.Library, opts.Themes))
+	mux.Handle(ThemesPath, mediaHandler(opts.Library, opts.Themes))
 
 	s.mux = mux
-	// The /templates gallery (phase-7 task 5) is a fixed route every server
-	// serves, so it is registered here rather than by the caller: `eypres
-	// start` prints the URL only after Listen returns, so the gallery is
-	// reachable as soon as the deck is. It is populated from the compiled-in
-	// template registry (gallery.go).
-	s.Handle(galleryPath, galleryHandler(nil))
+	// The /templates gallery is a fixed route every server serves, so it is
+	// registered here rather than by the caller: `eypres start` prints the
+	// URL only after Listen returns, so the gallery is reachable as soon as
+	// the deck is. It documents the project's loaded templates/ library
+	// (templates-gallery) when one was given, falling back to
+	// template.Builtins() otherwise (gallery.go).
+	var galleryReg *template.Registry
+	if opts.Library != nil {
+		if reg, err := template.NewRegistryFromLibrary(opts.Library); err == nil {
+			galleryReg = reg
+		}
+	}
+	var galleryFuncMap htmltmpl.FuncMap
+	if opts.Library != nil {
+		galleryFuncMap = template.LayoutFuncMap(opts.Library.Media, MediaPath)
+	}
+	s.Handle(galleryPath, galleryHandler(galleryReg, galleryFuncMap))
 
 	s.httpSrv = &http.Server{
 		Handler:           mux,
