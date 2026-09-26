@@ -23,6 +23,11 @@
       "kind": "details",
       "source": "requirements.note.source-repo-module-path",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }
