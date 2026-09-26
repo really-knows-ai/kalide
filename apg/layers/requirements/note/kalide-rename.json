@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "requirements.requirement.templates-dir-required",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.cli-templates-show",
+      "properties": {}
     }
   ],
   "in": []
