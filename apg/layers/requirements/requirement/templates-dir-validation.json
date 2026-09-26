@@ -16,6 +16,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.templates-dir-layout",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.error-reporting",
+      "properties": {}
     }
   ],
   "in": [
