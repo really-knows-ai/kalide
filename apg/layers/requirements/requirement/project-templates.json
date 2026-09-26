@@ -46,6 +46,11 @@
       "kind": "contains",
       "target": "requirements.requirement.template-language",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.demo-project",
+      "properties": {}
     }
   ],
   "in": [
