@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "requirements.note.fix-graceful-shutdown",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }
