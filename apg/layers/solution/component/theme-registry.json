@@ -9,6 +9,11 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/ey-present/internal/theme.NewRegistry",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/theme.LoadDir",
+      "properties": {}
     }
   ],
   "in": [
