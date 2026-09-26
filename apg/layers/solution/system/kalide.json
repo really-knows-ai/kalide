@@ -36,6 +36,11 @@
       "kind": "uses",
       "source": "solution.person.maintainer",
       "properties": {}
+    },
+    {
+      "kind": "uses",
+      "source": "solution.person.template-author",
+      "properties": {}
     }
   ]
 }
