@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.deck-data-in-templates",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.slide-metadata",
+      "properties": {}
     }
   ],
   "in": [
