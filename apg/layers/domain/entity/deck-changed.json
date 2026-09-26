@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "domain.note.fix-deck-changed-templates-scope",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }

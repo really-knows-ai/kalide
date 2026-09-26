@@ -199,6 +199,11 @@
       "kind": "details",
       "target": "domain.service.scaffold-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.deck-changed",
+      "properties": {}
     }
   ],
   "in": []
