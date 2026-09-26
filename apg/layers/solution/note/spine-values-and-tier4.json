@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.system.eypres",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.system.kalide",
+      "properties": {}
     }
   ],
   "in": []
