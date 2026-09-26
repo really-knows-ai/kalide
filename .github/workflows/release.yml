@@ -2,10 +2,9 @@
 #
 # Trigger: ONLY a human-pushed version tag vX.Y.Z. There is deliberately no
 # workflow_dispatch and no scheduled/other trigger. This workflow never creates
-# or moves a tag and never pushes code; the manifest commit (updating Formula/
-# and bucket/) is the one CI push allowed by
-# global.constraint.humans-push-and-tag, and lives in the separate, later job
-# (phase-09 task-5) — see the seam after `publish` below.
+# or moves a tag; the manifest commit (updating Formula/ and bucket/) is the one
+# CI push allowed by global.constraint.humans-push-and-tag, and lives in the
+# separate, later `manifest` job below.
 #
 # Shape:
 #   build   -> cross-build the supported targets with the Makefile's single
@@ -15,7 +14,10 @@
 #              downloads that artifact and runs the offline native e2e on one
 #              runner per supported target (its own matrix);
 #   publish -> create the GitHub Release vX.Y.Z with the binaries + checksums,
-#              but only after every native e2e job has passed (`needs`).
+#              but only after every native e2e job has passed (`needs`);
+#   manifest -> regenerate Formula/eypres.rb and bucket/eypres.json from the
+#              release tag + checksums.txt, assert only Formula/ and bucket/
+#              changed, and push that manifest commit as the Actions bot.
 #
 # Target set (supported-platforms): darwin/arm64 and windows/amd64 are always
 # built; windows/arm64 is built only while the GitHub-hosted `windows-11-arm`
@@ -30,7 +32,8 @@ on:
     tags:
       - 'v*.*.*'
 
-# Least privilege by default; only `publish` needs to write.
+# Least privilege by default; only `publish` (release) and `manifest` (the
+# manifest-only push) need to write.
 permissions:
   contents: read
 
@@ -147,12 +150,147 @@ jobs:
             --title "$TAG" \
             --notes "eypres $TAG. Assets: the supported platform binaries and checksums.txt (SHA-256)."
 
-  # ---------------------------------------------------------------------------
-  # SEAM (phase-09 task-5): the manifest job attaches here and declares
-  # `needs: publish`. It regenerates Formula/eypres.rb and bucket/eypres.json
-  # from this release tag, the asset URLs and checksums.txt (Scoop arm64 entry
-  # only when eypres-windows-arm64.exe shipped), commits as the GitHub Actions
-  # bot, asserts the diff touches only Formula/ and bucket/, and pushes that
-  # manifest-only commit. It does NOT exist yet and is intentionally not
-  # implemented in this task.
-  # ---------------------------------------------------------------------------
+  # Regenerate the Homebrew/Scoop manifests after the Release exists, then push
+  # them as the GitHub Actions bot. This is the one CI push allowed by
+  # global.constraint.humans-push-and-tag; it never creates or moves a tag.
+  #
+  # The two manifests are pure placeholders at rest, so regeneration is a small
+  # deterministic rewrite of exactly the lines their contracts name:
+  #   - Formula/eypres.rb      version / url / sha256  (see its regeneration
+  #                            contract and Formula/lib/…strategy.rb, which
+  #                            requires the release-download URL form)
+  #   - bucket/eypres.json     version / 64bit.url / 64bit.hash, plus the whole
+  #                            architecture.arm64 block only when the release
+  #                            actually shipped eypres-windows-arm64.exe
+  #                            (see bucket/README.md).
+  # checksums.txt is the release asset in `<hash>  <name>` (two spaces) form
+  # written by `build`; the SHAs and URLs come from it so the manifests match
+  # the exact published bytes.
+  manifest:
+    name: Update package manifests
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # Check out the default branch so the bot commit lands on it rather than
+      # on the detached tag ref.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      # Fetch the one machine-readable input: the checksums.txt uploaded with
+      # the Release by `publish` (over the already-existing tag vX.Y.Z).
+      - name: Download checksums.txt from the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$TAG" --pattern checksums.txt --dir dist
+          cat dist/checksums.txt
+
+      # Rewrite only the placeholder lines the artifacts' regeneration contracts
+      # name. python3 is used (present on the runner) so the URL/sha256 pairs are
+      # matched by asset name rather than by brittle line numbers.
+      - name: Regenerate Formula/eypres.rb and bucket/eypres.json
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$TAG" <<'PY'
+          import json, pathlib, re, sys
+
+          tag = sys.argv[1]
+          version = tag[1:] if tag.startswith("v") else tag
+          base = f"https://github.com/really-knows-ai/ey-present/releases/download/{tag}"
+
+          # checksums.txt: `<hash>  <name>` (two spaces, shasum -a 256).
+          sums = {}
+          for line in pathlib.Path("dist/checksums.txt").read_text().splitlines():
+              line = line.strip()
+              if not line:
+                  continue
+              digest, name = line.split(None, 1)
+              sums[name.strip()] = digest.strip()
+
+          darwin = sums["eypres-darwin-arm64"]
+          amd64 = sums["eypres-windows-amd64.exe"]
+
+          # --- Formula/eypres.rb: version / url / sha256 ---------------------
+          formula = pathlib.Path("Formula/eypres.rb")
+          text = formula.read_text()
+
+          def replace_once(text, pattern, replacement):
+              new, n = re.subn(pattern, replacement, text, flags=re.MULTILINE)
+              if n != 1:
+                  raise SystemExit(f"formula: expected exactly one match for {pattern!r}, got {n}")
+              return new
+
+          text = replace_once(text, r'^  url "https://github\.com/[^"]*"',
+                              f'  url "{base}/eypres-darwin-arm64"')
+          text = replace_once(text, r'^  version "[^"]*"', f'  version "{version}"')
+          text = replace_once(text, r'^  sha256 "[^"]*"', f'  sha256 "{darwin}"')
+          formula.write_text(text)
+
+          # --- bucket/eypres.json: version / urls / hashes / arm64 block -----
+          bucket = pathlib.Path("bucket/eypres.json")
+          manifest = json.loads(bucket.read_text())
+          manifest["version"] = version
+          manifest["architecture"]["64bit"]["url"] = f"{base}/eypres-windows-amd64.exe"
+          manifest["architecture"]["64bit"]["hash"] = amd64
+
+          arm64 = None
+          if "eypres-windows-arm64.exe" in sums:
+              arm64 = {
+                  "url": f"{base}/eypres-windows-arm64.exe",
+                  "hash": sums["eypres-windows-arm64.exe"],
+              }
+          # Add when released, remove when not, so the entry always matches the
+          # assets actually shipped.
+          if arm64 is None:
+              manifest["architecture"].pop("arm64", None)
+          else:
+              manifest["architecture"]["arm64"] = arm64
+
+          bucket.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
+      # The diff guard: the bot push may only ever touch Formula/ and bucket/.
+      # Fail before staging/committing anything if any other path changed.
+      - name: Assert the diff touches only Formula/ and bucket/
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=$(git status --porcelain | awk '{print $2}')
+          if [ -z "$paths" ]; then
+            echo "No manifest changes to commit (already current)."
+            exit 0
+          fi
+          echo "$paths"
+          bad=$(printf '%s\n' "$paths" | grep -Ev '^(Formula/|bucket/)' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::manifest job touched paths outside Formula/ and bucket/:"
+            printf '%s\n' "$bad"
+            exit 1
+          fi
+
+      # Commit as the github-actions bot on the default branch and push. If the
+      # regeneration produced no change, skip the commit entirely.
+      - name: Commit and push manifest update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Manifests already current; nothing to commit or push."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/ bucket/
+          git commit -m "Update package manifests for ${GITHUB_REF_NAME}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
