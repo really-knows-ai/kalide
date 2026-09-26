@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "embedded-assets",
-  "body": "Embedded assets: `go:embed` bundle of reveal.js, templates, the `default` theme (EY look, CSS tokens), fonts, logos, starter deck, page shells. reveal.js is vendored at `internal/assets/reveal/`, copied from the 6.0.2 release package's `dist/` and committed there with its `LICENSE`; the minimal vendored set is `dist/reveal.js`, `dist/reveal.css`, `dist/reset.css`, `dist/plugin/notes.js` and `LICENSE`.",
+  "body": "Embedded engine assets: `go:embed` bundle of the vendored reveal.js runtime and the unbranded engine page shells (deck, error, gallery) only — no templates, theme, fonts, logos or starter deck. reveal.js is vendored at `internal/assets/reveal/`, copied from the 6.0.2 release package's `dist/` and committed with its `LICENSE`; minimal set `dist/reveal.js`, `dist/reveal.css`, `dist/reset.css`, `dist/plugin/notes.js`, `LICENSE`.",
   "properties": {},
   "out": [],
   "in": [
