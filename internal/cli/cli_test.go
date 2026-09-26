@@ -45,22 +45,24 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 }
 
 // TestRunRoutesCommands asserts each recognised command reaches its handler.
-// The phase-1 handlers are stubs that report "not implemented" with exit 1, so
-// routing is observable through the handler name in the error message. The
-// templates list and templates show forms both reach the templates handler.
+//
+// `init` and `start` are still the phase-1 stubs, so their routing is observable
+// through the handler name in the "not implemented" error (exit 1). `templates`
+// is now a real handler (phase-7 task 7): it reaches runTemplates, which lists
+// the built-ins (exit 0), documents one by name (exit 0) and rejects an unknown
+// name (non-zero). The full list and show assertions belong to phase-7 task 9;
+// here we only pin down that the routes reach the real handler.
 func TestRunRoutesCommands(t *testing.T) {
-	tests := []struct {
+	stubs := []struct {
 		name    string
 		args    []string
 		handler string
 	}{
 		{name: "init", args: []string{"init"}, handler: "init"},
 		{name: "start", args: []string{"start"}, handler: "start"},
-		{name: "templates list", args: []string{"templates"}, handler: "templates"},
-		{name: "templates show", args: []string{"templates", "title"}, handler: "templates"},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range stubs {
 		t.Run(tt.name, func(t *testing.T) {
 			code, stdout, stderr := runCLI(tt.args...)
 			if code != 1 {
@@ -77,6 +79,45 @@ func TestRunRoutesCommands(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("templates list", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates")
+		if code != 0 {
+			t.Fatalf("Run(templates) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stdout == "" {
+			t.Fatal("Run(templates) stdout = \"\", want the built-in template list")
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates) stderr = %q, want empty", stderr)
+		}
+	})
+
+	t.Run("templates show", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates", "title")
+		if code != 0 {
+			t.Fatalf("Run(templates title) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stdout == "" {
+			t.Fatal("Run(templates title) stdout = \"\", want the title template documented")
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates title) stderr = %q, want empty", stderr)
+		}
+	})
+
+	t.Run("templates unknown", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates", "no-such-template")
+		if code == 0 {
+			t.Fatal("Run(templates no-such-template) exit = 0, want non-zero")
+		}
+		if !strings.Contains(stderr, "unknown template") {
+			t.Fatalf("Run(templates no-such-template) stderr = %q, want an unknown-template error", stderr)
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates no-such-template) stdout = %q, want empty", stdout)
+		}
+	})
 }
 
 func TestRunTemplatesRejectsExtraArgs(t *testing.T) {
