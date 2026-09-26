@@ -19,10 +19,13 @@ package e2e
 //     non-zero exit, prints the refusal, and leaves every file
 //     byte-for-byte unchanged.
 //
-// `eypres start` serving the hello seed is deliberately out of scope here:
-// start still validates against the builtin (EY) starter content until
-// phase 3 wires template-backed rendering through it, so a start/serve
-// assertion on the hello seed belongs to that later phase, not this one.
+// `eypres start` serving the hello seed IS in scope here (phase 5 deferred
+// it; phase 3 wires template-backed rendering through it, so it lands in
+// this test): after init, `eypres start --no-open` serves the hello seed
+// itself — the single hello slide, its templates/media (there is none in the
+// seed, so this is exercised through the theme route) and the default
+// theme's stylesheet, both fetched 200 with a correct Content-Type — and
+// /templates lists exactly the hello seed's own template.
 //
 // The flow needs no network. Offline enforcement (blocking network syscalls) is
 // phase 9 and is deliberately out of scope here too.
@@ -30,13 +33,16 @@ package e2e
 // It builds a binary, so it is skipped under -short.
 
 import (
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/really-knows-ai/ey-present/internal/server"
 	"github.com/really-knows-ai/ey-present/internal/template"
 )
 
@@ -97,6 +103,51 @@ func TestInitStart(t *testing.T) {
 	// `eypres start` uses: template.LoadLibrary and, inside it,
 	// template.NewRegistryFromLibrary.
 	assertSeedLoads(t, h.WorkDir())
+
+	// `eypres start --no-open` serves the hello seed itself: the deck page
+	// carries the one hello slide, the seed's default theme stylesheet is
+	// fetched 200 with a css Content-Type through the same
+	// templates/themes/<name>/ route mediaHandler mounts, and /templates
+	// lists exactly the seed's own "hello" template (no built-in fallback).
+	//
+	// The seed ships no templates/media/ file (helloseed.go's tree has none),
+	// so MediaPath is not exercised here: there is nothing under it to fetch.
+	h.Start()
+
+	body, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	if !strings.Contains(body, "Hello, world") {
+		t.Errorf("served deck page does not carry the hello slide's title:\n%s", body)
+	}
+
+	themeResp, err := h.Get(server.ThemesPath + "default/theme.css")
+	if err != nil {
+		t.Fatalf("GET %sdefault/theme.css: %v", server.ThemesPath, err)
+	}
+	themeBody, err := io.ReadAll(themeResp.Body)
+	_ = themeResp.Body.Close()
+	if err != nil {
+		t.Fatalf("read theme response body: %v", err)
+	}
+	if themeResp.StatusCode != http.StatusOK {
+		t.Errorf("GET %sdefault/theme.css status = %d, want 200 (body = %q)",
+			server.ThemesPath, themeResp.StatusCode, themeBody)
+	}
+	if ct := themeResp.Header.Get("Content-Type"); !strings.Contains(ct, "css") {
+		t.Errorf("GET %sdefault/theme.css Content-Type = %q, want it to mention css", server.ThemesPath, ct)
+	}
+
+	gallery, err := h.GetString("/templates")
+	if err != nil {
+		t.Fatalf("GET /templates: %v", err)
+	}
+	if !strings.Contains(gallery, `class="ey-gallery__name">hello`) {
+		t.Errorf("gallery does not list the seed's %q template:\n%s", "hello", gallery)
+	}
+
+	h.Stop()
 
 	// Snapshot the scaffolded tree so the second init can be proven not to have
 	// touched it.

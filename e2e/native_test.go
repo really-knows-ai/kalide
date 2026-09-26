@@ -20,20 +20,27 @@ package e2e
 //   - a second `eypres init` in the same directory refuses without touching
 //     anything already on disk.
 //
-// Serving the scaffolded deck (`eypres start`), polling the served page for
-// starter-slide content, crawling its assets (reveal.js, the theme
-// stylesheet, embedded fonts and logos) and asserting the eypres process
-// makes no outbound connection are restored once start validates against the
-// hello seed's own templates (a task added by the phase-3 writer) and
-// finalized in phase-06 task-5. Until then this test only exercises init.
+// Serving the scaffolded deck (`eypres start`) and fetching the hello
+// slide's own theme stylesheet from templates/themes/default/ are exercised
+// below, now that start validates against the hello seed's own templates/
+// library. reveal.js and the rest of the embedded assets are crawled by
+// TestEmbeddedAssets in internal/server; here the native-release check is
+// that the served page carries the reveal.js script tag and the seed's
+// stylesheet, both fetched 200. Asserting the eypres process makes no
+// outbound connection is phase-06 task-5's offline-enforcement pass and stays
+// out of scope here.
 //
 // It builds (or runs) a real binary, so it is skipped under -short.
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/really-knows-ai/ey-present/internal/server"
 )
 
 // TestNativeRelease is the end-to-end native release init verification
@@ -88,6 +95,59 @@ func TestNativeRelease(t *testing.T) {
 	// The written seed loads and validates cleanly through the same path
 	// `eypres start` uses.
 	assertSeedLoads(t, h.WorkDir())
+
+	// `eypres start --no-open` serves the hello seed itself: the deck page
+	// carries the single hello slide, the embedded reveal.js core is fetched
+	// 200, and the seed's own default theme stylesheet
+	// (templates/themes/default/theme.css) is fetched 200 from the project
+	// library through the same route mediaHandler mounts.
+	h.Start()
+
+	body, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	if !strings.Contains(body, "Hello, world") {
+		t.Errorf("served deck page does not carry the hello slide's title:\n%s", body)
+	}
+	if !strings.Contains(body, "reveal.js") {
+		t.Errorf("served deck page does not reference reveal.js:\n%s", body)
+	}
+
+	revealResp, err := h.Get(server.AssetsPath + "reveal/dist/reveal.js")
+	if err != nil {
+		t.Fatalf("GET %sreveal/dist/reveal.js: %v", server.AssetsPath, err)
+	}
+	revealBody, err := io.ReadAll(revealResp.Body)
+	_ = revealResp.Body.Close()
+	if err != nil {
+		t.Fatalf("read reveal.js response body: %v", err)
+	}
+	if revealResp.StatusCode != http.StatusOK {
+		t.Errorf("GET %sreveal/dist/reveal.js status = %d, want 200", server.AssetsPath, revealResp.StatusCode)
+	}
+	if len(revealBody) == 0 {
+		t.Error("GET reveal/dist/reveal.js served an empty body")
+	}
+
+	themeResp, err := h.Get(server.ThemesPath + "default/theme.css")
+	if err != nil {
+		t.Fatalf("GET %sdefault/theme.css: %v", server.ThemesPath, err)
+	}
+	themeBody, err := io.ReadAll(themeResp.Body)
+	_ = themeResp.Body.Close()
+	if err != nil {
+		t.Fatalf("read theme response body: %v", err)
+	}
+	if themeResp.StatusCode != http.StatusOK {
+		t.Errorf("GET %sdefault/theme.css status = %d, want 200 (body = %q)",
+			server.ThemesPath, themeResp.StatusCode, themeBody)
+	}
+	if ct := themeResp.Header.Get("Content-Type"); !strings.Contains(ct, "css") {
+		t.Errorf("GET %sdefault/theme.css Content-Type = %q, want it to mention css", server.ThemesPath, ct)
+	}
+
+	h.Stop()
 
 	// Snapshot the scaffolded tree so the second init can be proven not to
 	// have touched it.

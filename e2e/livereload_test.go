@@ -12,9 +12,10 @@ package e2e
 //   - a breaking edit swaps the page for the full-page error carrying the
 //     single first formatted validation error, prints the identical error to the
 //     terminal, and a fixing edit recovers the deck;
-//   - /templates serves the gallery of every built-in template;
+//   - /templates serves the gallery of the project's templates/ library;
 //   - `eypres templates` and `eypres templates <name>` print the list and one
-//     template's documentation;
+//     template's documentation, both read from the project's templates/
+//     library;
 //   - a graceful stop exits 0, releases the port and leaves no child behind
 //     (the harness asserts the last two in Stop).
 //
@@ -38,9 +39,12 @@ import (
 	"github.com/really-knows-ai/ey-present/internal/server"
 )
 
-// The fixture deck. It uses only the built-in `title` template, whose body is
-// disallowed and whose `title` field is required: two minimal, always-valid
-// slides, one of which can be edited and broken deterministically.
+// The fixture deck. Since `eypres start` now requires a valid project
+// templates/ library (theme.LoadDir, deck.LoadConfig against it), the test
+// provisions one with `eypres init` (the embedded hello seed) before Start
+// and drives the seed's own `hello` template: a required `title` field and an
+// optional Markdown body, both always-valid, so two minimal slides can be
+// edited and one broken deterministically.
 const (
 	deckConfig = `title: Integration Deck
 author: Ada Lovelace
@@ -50,12 +54,10 @@ navigation: grid
 `
 
 	introSlide = `---
-template: title
+template: hello
 title: Integration Deck
-subtitle: A real on-disk deck
-date: 2026-09-25
-date_format: long
 ---
+A real on-disk deck.
 
 # notes
 Greet the audience.
@@ -63,27 +65,25 @@ Greet the audience.
 `
 )
 
-// agendaSlide renders the second (editable) slide with the given subtitle.
-// Every value is valid: the title template takes data only and requires the
-// title field.
+// agendaSlide renders the second (editable) slide with the given subtitle in
+// its body. Every value is valid: the hello template requires only the title
+// field and takes an optional body.
 func agendaSlide(subtitle string) string {
 	return fmt.Sprintf(`---
-template: title
+template: hello
 title: Agenda
-subtitle: %s
-date: 2026-09-25
-date_format: long
 ---
+%s
 
 `, subtitle)
 }
 
 // brokenAgendaSlide drops the required `title` field, so whole-deck validation
-// reports exactly one error: the required-field violation of the title slide.
+// reports exactly one error: the required-field violation of the hello slide.
 const brokenAgendaSlide = `---
-template: title
-subtitle: now broken
+template: hello
 ---
+now broken
 
 `
 
@@ -99,8 +99,15 @@ func TestStartLiveReload(t *testing.T) {
 	}
 
 	h := NewHarness(t)
+
+	// `eypres start` now requires a valid project templates/ library
+	// (theme.LoadDir, deck.LoadConfig resolving `theme` against it): seed one
+	// with the embedded hello seed before writing the fixture deck over it.
+	if _, stderr, code := h.Run("init"); code != 0 {
+		t.Fatalf("eypres init exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
 	h.WriteFile("eypres.yaml", []byte(deckConfig))
-	h.WriteFile("slides/1-intro.md", []byte(introSlide))
+	h.WriteFile("slides/1-hello.md", []byte(introSlide))
 	h.WriteFile("slides/2-agenda.md", []byte(agendaSlide("What we will cover")))
 
 	h.Start()
@@ -189,19 +196,19 @@ func TestStartLiveReload(t *testing.T) {
 		return err == nil && strings.Contains(b, "Recovered") && strings.Contains(b, "Agenda")
 	})
 
-	// GET /templates serves the gallery of every built-in template.
+	// GET /templates serves the gallery of the project's templates/ library —
+	// just the hello seed's one template now that the gallery documents the
+	// project library instead of the compiled-in built-ins.
 	gallery, err := h.GetString("/templates")
 	if err != nil {
 		t.Fatalf("GET /templates: %v", err)
 	}
-	for _, name := range []string{"title", "content", "column"} {
-		if !strings.Contains(gallery, `class="ey-gallery__name">`+name) {
-			t.Errorf("gallery does not list built-in template %q", name)
-		}
+	if !strings.Contains(gallery, `class="ey-gallery__name">hello`) {
+		t.Errorf("gallery does not list the project template %q:\n%s", "hello", gallery)
 	}
 
-	// `eypres templates` lists every built-in; `eypres templates <name>` shows
-	// one template's documentation sections.
+	// `eypres templates` lists the project's templates/ library; `eypres
+	// templates <name>` shows one template's documentation sections.
 	stdout, stderr, code := h.Run("templates")
 	if code != 0 {
 		t.Fatalf("eypres templates exit = %d, want 0 (stderr = %q)", code, stderr)
@@ -209,28 +216,26 @@ func TestStartLiveReload(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("eypres templates stderr = %q, want empty", stderr)
 	}
-	if !strings.Contains(stdout, "Built-in templates:") {
+	if !strings.Contains(stdout, "Templates:") {
 		t.Errorf("eypres templates output is missing the list header:\n%s", stdout)
 	}
-	for _, name := range []string{"title", "content", "column"} {
-		if !strings.Contains(stdout, name) {
-			t.Errorf("eypres templates output does not name %q:\n%s", name, stdout)
-		}
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("eypres templates output does not name %q:\n%s", "hello", stdout)
 	}
 
-	stdout, stderr, code = h.Run("templates", "content")
+	stdout, stderr, code = h.Run("templates", "hello")
 	if code != 0 {
-		t.Fatalf("eypres templates content exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("eypres templates hello exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
 	if stderr != "" {
-		t.Errorf("eypres templates content stderr = %q, want empty", stderr)
+		t.Errorf("eypres templates hello stderr = %q, want empty", stderr)
 	}
-	if !strings.Contains(stdout, "content (slide)") {
-		t.Errorf("eypres templates content output is missing the identity line:\n%s", stdout)
+	if !strings.Contains(stdout, "hello (slide)") {
+		t.Errorf("eypres templates hello output is missing the identity line:\n%s", stdout)
 	}
 	for _, section := range []string{"Fields:", "Sections:", "Body:", "Example:"} {
 		if !strings.Contains(stdout, section) {
-			t.Errorf("eypres templates content output is missing section %q:\n%s", section, stdout)
+			t.Errorf("eypres templates hello output is missing section %q:\n%s", section, stdout)
 		}
 	}
 
