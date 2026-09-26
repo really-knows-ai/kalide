@@ -57,6 +57,11 @@
       "kind": "realised-by",
       "target": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.deck-properties",
+      "properties": {}
     }
   ],
   "in": [
