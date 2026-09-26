@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.project-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": []
