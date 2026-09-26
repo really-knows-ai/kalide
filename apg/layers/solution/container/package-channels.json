@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "solution.note.distribution-solution",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "solution.system.kalide",
+      "properties": {}
     }
   ]
 }
