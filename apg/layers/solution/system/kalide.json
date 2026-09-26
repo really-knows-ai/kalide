@@ -26,5 +26,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "realised-by",
+      "source": "domain.group.presentation",
+      "properties": {}
+    }
+  ]
 }
