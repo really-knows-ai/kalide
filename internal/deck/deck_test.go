@@ -23,8 +23,8 @@ func TestDeck(t *testing.T) {
 // testDeckConstants pins the fixed names and navigation vocabulary the loaders
 // rely on.
 func testDeckConstants(t *testing.T) {
-	if ConfigFile != "eypres.yaml" {
-		t.Errorf("ConfigFile = %q, want %q", ConfigFile, "eypres.yaml")
+	if ConfigFile != "kalide.yaml" {
+		t.Errorf("ConfigFile = %q, want %q", ConfigFile, "kalide.yaml")
 	}
 	if SlidesDir != "slides" {
 		t.Errorf("SlidesDir = %q, want %q", SlidesDir, "slides")
@@ -35,7 +35,7 @@ func testDeckConstants(t *testing.T) {
 	}
 }
 
-// configFS returns a fake deck filesystem whose eypres.yaml holds yaml.
+// configFS returns a fake deck filesystem whose kalide.yaml holds yaml.
 func configFS(yaml string) fstest.MapFS {
 	return fstest.MapFS{ConfigFile: &fstest.MapFile{Data: []byte(yaml)}}
 }
@@ -120,22 +120,22 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("title required when file is empty", func(t *testing.T) {
 		_, err := LoadConfig(configFS(""), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:1:", `missing required key "title"`)
+		wantErr(t, err, "kalide.yaml:1:", `missing required key "title"`)
 	})
 
 	t.Run("title required when omitted but other keys present", func(t *testing.T) {
 		_, err := LoadConfig(configFS("author: Ada\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:1:", `missing required key "title"`)
+		wantErr(t, err, "kalide.yaml:1:", `missing required key "title"`)
 	})
 
 	t.Run("blank title is missing", func(t *testing.T) {
 		_, err := LoadConfig(configFS("author: Ada\ntitle: \"  \"\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:2:", `missing required key "title"`)
+		wantErr(t, err, "kalide.yaml:2:", `missing required key "title"`)
 	})
 
 	t.Run("null title is missing", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title:\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:1:", `missing required key "title"`)
+		wantErr(t, err, "kalide.yaml:1:", `missing required key "title"`)
 	})
 
 	t.Run("valid dates are kept", func(t *testing.T) {
@@ -162,12 +162,12 @@ func testLoadConfig(t *testing.T) {
 			"title: Deck\n"+
 				"author: Ada\n"+
 				"date: 25/09/2026\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:3:")
+		wantErr(t, err, "kalide.yaml:3:")
 	})
 
 	t.Run("non-string scalar date is rejected", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\ndate: 2026\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:2:", `key "date"`, "not a valid date")
+		wantErr(t, err, "kalide.yaml:2:", `key "date"`, "not a valid date")
 	})
 
 	t.Run("empty or null date is allowed", func(t *testing.T) {
@@ -208,7 +208,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("unknown navigation mode is rejected", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\nnavigation: diagonal\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:2:", `unknown navigation mode "diagonal"`, "default, linear, grid")
+		wantErr(t, err, "kalide.yaml:2:", `unknown navigation mode "diagonal"`, "default, linear, grid")
 	})
 
 	t.Run("navigation wrong type is rejected", func(t *testing.T) {
@@ -232,19 +232,19 @@ func testLoadConfig(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				_, err := LoadConfig(configFS(tt.yaml), ConfigFile, themes)
-				wantErr(t, err, "eypres.yaml:1:", `key "title"`, "expected a string, got "+tt.want)
+				wantErr(t, err, "kalide.yaml:1:", `key "title"`, "expected a string, got "+tt.want)
 			})
 		}
 	})
 
 	t.Run("author wrong type is rejected", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\nauthor: 42\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:2:", `key "author"`, "expected a string, got a number")
+		wantErr(t, err, "kalide.yaml:2:", `key "author"`, "expected a string, got a number")
 	})
 
 	t.Run("theme wrong type is rejected", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\ntheme: 42\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:2:", `key "theme"`, "expected a string, got a number")
+		wantErr(t, err, "kalide.yaml:2:", `key "theme"`, "expected a string, got a number")
 	})
 
 	t.Run("theme omitted, empty or null resolves to default", func(t *testing.T) {
@@ -277,7 +277,7 @@ func testLoadConfig(t *testing.T) {
 	t.Run("unknown theme is positioned and suggests", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\ntheme: defalt\n"), ConfigFile, themes)
 		wantErr(t, err,
-			`eypres.yaml:2: unknown theme "defalt": did you mean "default"? (available themes: default, sunset)`)
+			`kalide.yaml:2: unknown theme "defalt": did you mean "default"? (available themes: default, sunset)`)
 
 		var unknown *theme.UnknownThemeError
 		if !errors.As(err, &unknown) {
@@ -293,7 +293,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("misspelled config key suggests closest", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\ntitel: Nope\n"), ConfigFile, themes)
-		wantErr(t, err, `eypres.yaml:2: unknown key "titel": did you mean "title"?`)
+		wantErr(t, err, `kalide.yaml:2: unknown key "titel": did you mean "title"?`)
 	})
 
 	t.Run("misspelled navigation key suggests navigation", func(t *testing.T) {
@@ -303,7 +303,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("far-off unknown key has no suggestion", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\nzzzzzzzz: x\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:2:", `unknown key "zzzzzzzz"`)
+		wantErr(t, err, "kalide.yaml:2:", `unknown key "zzzzzzzz"`)
 		if strings.Contains(err.Error(), "did you mean") {
 			t.Errorf("error = %q, want no suggestion", err.Error())
 		}
@@ -311,7 +311,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("non-mapping root is rejected", func(t *testing.T) {
 		_, err := LoadConfig(configFS("- one\n- two\n"), ConfigFile, themes)
-		wantErr(t, err, "eypres.yaml:1:", "expected a mapping of config keys, got a list")
+		wantErr(t, err, "kalide.yaml:1:", "expected a mapping of config keys, got a list")
 	})
 
 	t.Run("malformed yaml reports the file", func(t *testing.T) {
@@ -321,6 +321,17 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("missing config file", func(t *testing.T) {
 		_, err := LoadConfig(fstest.MapFS{}, ConfigFile, themes)
+		wantErr(t, err, ConfigFile)
+	})
+
+	t.Run("dir with only eypres.yaml is treated as no deck config", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"eypres.yaml": &fstest.MapFile{Data: []byte("title: Old Deck\n")},
+		}
+		_, err := LoadConfig(fsys, ConfigFile, themes)
+		if err == nil {
+			t.Fatal("LoadConfig succeeded on dir with only eypres.yaml, want error")
+		}
 		wantErr(t, err, ConfigFile)
 	})
 

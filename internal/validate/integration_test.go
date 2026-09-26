@@ -31,7 +31,7 @@ func TestValidateIntegration(t *testing.T) {
 
 	t.Run("valid deck through the built-ins", func(t *testing.T) {
 		dir := writeDeck(t, map[string]string{
-			"eypres.yaml":         "title: Integration Deck\n",
+			"kalide.yaml":         "title: Integration Deck\n",
 			"slides/1-title.md":   builtinTitleExample,
 			"slides/2-content.md": builtinContentExample,
 		})
@@ -52,15 +52,15 @@ func TestValidateIntegration(t *testing.T) {
 		{
 			name: "config error",
 			files: map[string]string{
-				"eypres.yaml":       "navigation: diagonal\n",
+				"kalide.yaml":       "navigation: diagonal\n",
 				"slides/1-title.md": builtinTitleExample,
 			},
-			want: `eypres.yaml:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
+			want: `kalide.yaml:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
 		},
 		{
 			name: "filename error",
 			files: map[string]string{
-				"eypres.yaml":         "title: T\n",
+				"kalide.yaml":         "title: T\n",
 				"slides/notaslide.md": "not a slide\n",
 			},
 			want: "slides/notaslide.md: filename must be <number>[letter]-<label>.md",
@@ -68,7 +68,7 @@ func TestValidateIntegration(t *testing.T) {
 		{
 			name: "frontmatter field error",
 			files: map[string]string{
-				"eypres.yaml":   "title: T\n",
+				"kalide.yaml":   "title: T\n",
 				"slides/1-a.md": "---\ntemplate: content\n---\n\nbody.\n\n# columns\n\nA\n\n# columns\n\nB\n",
 			},
 			want: `slides/1-a.md › heading: required: field "heading" is required but missing — add a heading: value`,
@@ -76,7 +76,7 @@ func TestValidateIntegration(t *testing.T) {
 		{
 			name: "body rule error",
 			files: map[string]string{
-				"eypres.yaml":   "title: T\n",
+				"kalide.yaml":   "title: T\n",
 				"slides/1-a.md": "---\ntemplate: content\nheading: H\n---\n\none.\n\ntwo.\n\nthree.\n\n# columns\n\nA\n\n# columns\n\nB\n",
 			},
 			want: "slides/1-a.md:5 › body: max_paragraphs: the body has 3 paragraphs, maximum is 2 — shorten the body to at most 2 paragraphs",
@@ -84,7 +84,7 @@ func TestValidateIntegration(t *testing.T) {
 		{
 			name: "inter-slide link error",
 			files: map[string]string{
-				"eypres.yaml":          "title: T\n",
+				"kalide.yaml":          "title: T\n",
 				"slides/1-overview.md": "---\ntemplate: content\nheading: H\n---\n\nSee [x](#zzz).\n\n# columns\n\nA\n\n# columns\n\nB\n",
 			},
 			want: `slides/1-overview.md:6: unknown link label "zzz" — use the label of one of the deck's slides`,
@@ -185,7 +185,7 @@ func TestValidateIntegrationFixtureLibrary(t *testing.T) {
 
 	t.Run("valid deck through the fixture library", func(t *testing.T) {
 		dir := writeFixtureDeck(t, map[string]string{
-			"eypres.yaml":       "title: Fixture Deck\ntheme: plain\n",
+			"kalide.yaml":       "title: Fixture Deck\ntheme: plain\n",
 			"slides/1-hello.md": "---\ntemplate: hello\ntitle: Hi there\n---\n",
 		})
 		reg, themes := loadFixtureLibrary(t, dir)
@@ -200,7 +200,7 @@ func TestValidateIntegrationFixtureLibrary(t *testing.T) {
 
 	t.Run("missing required field is positioned on disk", func(t *testing.T) {
 		dir := writeFixtureDeck(t, map[string]string{
-			"eypres.yaml":       "title: Fixture Deck\ntheme: plain\n",
+			"kalide.yaml":       "title: Fixture Deck\ntheme: plain\n",
 			"slides/1-hello.md": "---\ntemplate: hello\n---\n",
 		})
 		reg, themes := loadFixtureLibrary(t, dir)
@@ -216,7 +216,7 @@ func TestValidateIntegrationFixtureLibrary(t *testing.T) {
 
 	t.Run("unknown theme in deck config", func(t *testing.T) {
 		dir := writeFixtureDeck(t, map[string]string{
-			"eypres.yaml":       "title: Fixture Deck\ntheme: not-a-theme\n",
+			"kalide.yaml":       "title: Fixture Deck\ntheme: not-a-theme\n",
 			"slides/1-hello.md": "---\ntemplate: hello\ntitle: Hi there\n---\n",
 		})
 		reg, themes := loadFixtureLibrary(t, dir)
@@ -224,14 +224,14 @@ func TestValidateIntegrationFixtureLibrary(t *testing.T) {
 		if !invalid {
 			t.Fatal("Validate() invalid = false, want the unknown theme to fail")
 		}
-		want := `eypres.yaml:2: unknown theme "not-a-theme" (available themes: plain)`
+		want := `kalide.yaml:2: unknown theme "not-a-theme" (available themes: plain)`
 		if got := Format(verr); got != want {
 			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 		}
 	})
 }
 
-// writeFixtureDeck writes files (a deck's eypres.yaml and slides/) to a fresh
+// writeFixtureDeck writes files (a deck's kalide.yaml and slides/) to a fresh
 // t.TempDir(), then copies the phase-3 fixture templates/ library alongside
 // them, so the deck has its own templates/ tree on disk.
 func writeFixtureDeck(t *testing.T, files map[string]string) string {

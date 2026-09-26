@@ -1,6 +1,6 @@
 package cli
 
-// Tests for `eypres start` and `eypres templates` (cli-start,
+// Tests for `kalide start` and `kalide templates` (cli-start,
 // cli-templates-list, cli-templates-show), against the project's own
 // templates/ library — the phase-3 fixture library
 // (internal/template/testdata/library/templates), copied into each test's
@@ -9,7 +9,7 @@ package cli
 // The start tests pin the contract that matters most: a broken deck is never
 // served. `start` in a directory with no templates/ at all must fail cleanly
 // naming the missing directory (no-built-in-fallback); with a library but no
-// eypres.yaml it must print exactly the single first validation error and
+// kalide.yaml it must print exactly the single first validation error and
 // exit non-zero, with nothing written to stdout.
 //
 // The valid-deck serving path is deliberately not exercised here: runStart
@@ -53,7 +53,7 @@ func TestStartAndTemplates(t *testing.T) {
 
 	t.Run("start invalid deck prints first error and never serves", func(t *testing.T) {
 		// The fixture templates/ library loads, but the project has no
-		// eypres.yaml, so whole-deck validation fails deterministically
+		// kalide.yaml, so whole-deck validation fails deterministically
 		// before the watcher or server is created.
 		chdirFixtureLibrary(t)
 
@@ -67,8 +67,8 @@ func TestStartAndTemplates(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(start) stdout = %q, want empty for an invalid deck", stdout)
 		}
-		if !strings.Contains(stderr, "eypres.yaml") {
-			t.Fatalf("Run(start) stderr = %q, want the first error to name eypres.yaml", stderr)
+		if !strings.Contains(stderr, "kalide.yaml") {
+			t.Fatalf("Run(start) stderr = %q, want the first error to name kalide.yaml", stderr)
 		}
 	})
 

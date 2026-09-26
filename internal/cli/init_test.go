@@ -73,6 +73,12 @@ func TestInit(t *testing.T) {
 		} else if !fi.IsDir() {
 			t.Errorf("assets is not a directory, want a directory")
 		}
+		if _, err := os.Stat(filepath.Join(dir, "eypres.yaml")); err == nil {
+			t.Errorf("init unexpectedly produced eypres.yaml")
+		}
+		if strings.Contains(strings.ToLower(stdout), "eypres") {
+			t.Errorf("Run(init) stdout contains 'eypres': %q", stdout)
+		}
 	})
 
 	// Each deck path blocks init on its own. Scaffold checks the three in a
@@ -219,6 +225,25 @@ func TestInit(t *testing.T) {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("second Run(init) stderr = %q, want refusal mentioning %q", stderr, want)
 			}
+		}
+	})
+
+	t.Run("init in temp dirs never produces eypres.yaml and its output contains no eypres", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		code, stdout, stderr := runCLI("init")
+		if code != 0 {
+			t.Fatalf("Run(init) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if strings.Contains(strings.ToLower(stdout), "eypres") {
+			t.Errorf("Run(init) stdout contains 'eypres': %q", stdout)
+		}
+		if strings.Contains(strings.ToLower(stderr), "eypres") {
+			t.Errorf("Run(init) stderr contains 'eypres': %q", stderr)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "eypres.yaml")); err == nil {
+			t.Errorf("init produced eypres.yaml, want only kalide.yaml")
 		}
 	})
 }

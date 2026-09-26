@@ -212,20 +212,20 @@ func TestUnknownThemeErrorWithPosition(t *testing.T) {
 		t.Fatalf("error type = %T, want *UnknownThemeError", err)
 	}
 
-	positioned := unknown.WithPosition("eypres.yaml", 3)
-	want := `eypres.yaml:3: unknown theme "defalt": did you mean "default"? (available themes: default)`
+	positioned := unknown.WithPosition("kalide.yaml", 3)
+	want := `kalide.yaml:3: unknown theme "defalt": did you mean "default"? (available themes: default)`
 	if got := positioned.Error(); got != want {
 		t.Fatalf("positioned error = %q, want %q", got, want)
 	}
 
 	// WithPosition must not mutate the original.
-	if strings.Contains(err.Error(), "eypres.yaml") {
+	if strings.Contains(err.Error(), "kalide.yaml") {
 		t.Fatalf("WithPosition mutated the original error: %q", err.Error())
 	}
 
 	// A file with unknown line omits the line number.
-	noLine := unknown.WithPosition("eypres.yaml", 0)
-	want = `eypres.yaml: unknown theme "defalt": did you mean "default"? (available themes: default)`
+	noLine := unknown.WithPosition("kalide.yaml", 0)
+	want = `kalide.yaml: unknown theme "defalt": did you mean "default"? (available themes: default)`
 	if got := noLine.Error(); got != want {
 		t.Fatalf("positioned error (no line) = %q, want %q", got, want)
 	}

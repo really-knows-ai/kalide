@@ -247,7 +247,7 @@ func testBrokenDecks(t *testing.T) {
 		}
 
 		_, _, _, err := loadDeckDir(dir)
-		wantErr(t, err, "eypres.yaml:2:", `unknown navigation mode "diagonal"`)
+		wantErr(t, err, "kalide.yaml:2:", `unknown navigation mode "diagonal"`)
 		if strings.Contains(err.Error(), "filename") {
 			t.Errorf("error = %q, want the config error before the filename error", err.Error())
 		}

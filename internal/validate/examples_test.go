@@ -2,9 +2,11 @@ package validate
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // fixtureLibraryDir is the phase-3 fixture library's project root, relative
@@ -247,4 +249,31 @@ func mustFixtureRegistry(t *testing.T) *template.Registry {
 		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
 	}
 	return reg
+}
+
+// TestExamplesDemoValidates proves examples/demo validates cleanly through
+// Validate using kalide.yaml.
+func TestExamplesDemoValidates(t *testing.T) {
+	demoDir := filepath.Join("..", "..", "examples", "demo")
+	if _, err := os.Stat(demoDir); err != nil {
+		t.Skipf("examples/demo not found at %s: %v", demoDir, err)
+	}
+
+	fsys := os.DirFS(demoDir)
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	themes, err := theme.LoadDir(fsys, filepath.Join(template.TemplatesDir, template.ThemesDir))
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
+
+	if verr, invalid := Validate(fsys, reg, themes); invalid {
+		t.Fatalf("Validate(examples/demo) failed: %s", Format(verr))
+	}
 }

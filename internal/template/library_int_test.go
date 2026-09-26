@@ -27,7 +27,7 @@ func writeFile(t *testing.T, path string, data []byte) {
 }
 
 // TestLoadLibraryIntMissingTemplatesDir proves LoadLibrary reports a
-// *LibraryError naming the expected templates/ path with the `eypres init`
+// *LibraryError naming the expected templates/ path with the `kalide init`
 // hint when a project has no templates/ directory at all — no built-in
 // fallback is substituted.
 func TestLoadLibraryIntMissingTemplatesDir(t *testing.T) {
@@ -36,7 +36,7 @@ func TestLoadLibraryIntMissingTemplatesDir(t *testing.T) {
 	}
 	projectDir := t.TempDir()
 	// A project root with no templates/ entry whatsoever.
-	writeFile(t, filepath.Join(projectDir, "eypres.yaml"), []byte("title: demo\n"))
+	writeFile(t, filepath.Join(projectDir, "kalide.yaml"), []byte("title: demo\n"))
 
 	fsys := os.DirFS(projectDir)
 	lib, err := LoadLibrary(fsys, TemplatesDir)
@@ -48,12 +48,12 @@ func TestLoadLibraryIntMissingTemplatesDir(t *testing.T) {
 		t.Errorf("Path = %q, want %q", libErr.Path, TemplatesDir)
 	}
 	if libErr.Hint == "" || !containsHint(libErr.Hint) {
-		t.Errorf("Hint = %q, want it to mention `eypres init`", libErr.Hint)
+		t.Errorf("Hint = %q, want it to mention `kalide init`", libErr.Hint)
 	}
 }
 
 // TestLoadLibraryIntTemplatesIsRegularFile proves LoadLibrary reports a
-// *LibraryError naming the expected templates/ path with the `eypres init`
+// *LibraryError naming the expected templates/ path with the `kalide init`
 // hint when templates/ exists but is a regular file, not a directory.
 func TestLoadLibraryIntTemplatesIsRegularFile(t *testing.T) {
 	if testing.Short() {
@@ -72,13 +72,13 @@ func TestLoadLibraryIntTemplatesIsRegularFile(t *testing.T) {
 		t.Errorf("Path = %q, want %q", libErr.Path, TemplatesDir)
 	}
 	if libErr.Hint == "" || !containsHint(libErr.Hint) {
-		t.Errorf("Hint = %q, want it to mention `eypres init`", libErr.Hint)
+		t.Errorf("Hint = %q, want it to mention `kalide init`", libErr.Hint)
 	}
 }
 
-// containsHint reports whether hint mentions the `eypres init` remediation.
+// containsHint reports whether hint mentions the `kalide init` remediation.
 func containsHint(hint string) bool {
-	return hint == "run `eypres init` to create one"
+	return hint == "run `kalide init` to create one"
 }
 
 // TestLoadLibraryIntFullLibrary proves a complete on-disk library — slides,

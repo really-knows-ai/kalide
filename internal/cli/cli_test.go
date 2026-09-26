@@ -16,7 +16,7 @@ const fixtureLibraryDir = "../template/testdata/library"
 
 // chdirFixtureLibrary copies the phase-3 fixture templates/ library into a
 // fresh temp directory and chdirs the test into it (t.Chdir, restored when
-// the test ends), so `eypres templates` has a project library to read.
+// the test ends), so `kalide templates` has a project library to read.
 func chdirFixtureLibrary(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -62,6 +62,9 @@ func TestRunNoArgsPrintsUsage(t *testing.T) {
 	if !strings.Contains(stdout, "Usage:") {
 		t.Fatalf("Run() stdout = %q, want usage text", stdout)
 	}
+	if strings.Contains(strings.ToLower(stdout), "eypres") {
+		t.Errorf("Run() stdout contains 'eypres': %q", stdout)
+	}
 	if stderr != "" {
 		t.Fatalf("Run() stderr = %q, want empty", stderr)
 	}
@@ -77,6 +80,9 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 			if !strings.Contains(stdout, "Usage:") {
 				t.Fatalf("Run(%q) stdout = %q, want usage text", arg, stdout)
 			}
+			if strings.Contains(strings.ToLower(stdout), "eypres") {
+				t.Errorf("Run(%q) stdout contains 'eypres': %q", arg, stdout)
+			}
 			if stderr != "" {
 				t.Fatalf("Run(%q) stderr = %q, want empty", arg, stderr)
 			}
@@ -90,7 +96,7 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 // `init` routes to runInit (phase-8 task 3), `start` to runStart (phase-7
 // task 6) and `templates` to runTemplates (phase-7 task 7). The start case
 // validates the deck before it can serve and exits non-zero in a directory
-// with no eypres.yaml; templates lists the built-ins (exit 0), documents one
+// with no kalide.yaml; templates lists the built-ins (exit 0), documents one
 // by name (exit 0) and rejects an unknown name (non-zero). The init case
 // scaffolds a starter deck, so it is run in a throwaway temp directory and
 // never in the package directory. Full per-command coverage lives in the
@@ -156,7 +162,7 @@ func TestRunRoutesCommands(t *testing.T) {
 	})
 
 	t.Run("start validates before serving", func(t *testing.T) {
-		// A project with the fixture templates/ library but no eypres.yaml:
+		// A project with the fixture templates/ library but no kalide.yaml:
 		// the library loads, then whole-deck validation fails
 		// deterministically before any port is bound. This pins the route
 		// (not the stub) and the phase-5 single-error format; the full start
@@ -165,16 +171,34 @@ func TestRunRoutesCommands(t *testing.T) {
 
 		code, stdout, stderr := runCLI("start")
 		if code == 0 {
-			t.Fatal("Run(start) exit = 0, want non-zero for a deck with no eypres.yaml")
+			t.Fatal("Run(start) exit = 0, want non-zero for a deck with no kalide.yaml")
 		}
 		if strings.Contains(stderr, "not implemented") {
 			t.Fatalf("Run(start) stderr = %q, want the real runStart handler, not the phase-1 stub", stderr)
 		}
-		if !strings.Contains(stderr, "eypres.yaml") {
-			t.Fatalf("Run(start) stderr = %q, want the first validation error naming eypres.yaml", stderr)
+		if !strings.Contains(stderr, "kalide.yaml") {
+			t.Fatalf("Run(start) stderr = %q, want the first validation error naming kalide.yaml", stderr)
 		}
 		if strings.Contains(stdout, "Serving slides at") {
 			t.Fatalf("Run(start) stdout = %q, want no server for an invalid deck", stdout)
+		}
+	})
+
+	t.Run("start with valid eypres.yaml still fails naming kalide.yaml", func(t *testing.T) {
+		dir := chdirFixtureLibrary(t)
+		// Write a valid eypres.yaml - it must be ignored by kalide
+		if err := os.WriteFile(filepath.Join(dir, "eypres.yaml"), []byte("title: Old Eypres Deck\ntheme: plain\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		code, stdout, stderr := runCLI("start")
+		if code == 0 {
+			t.Fatal("Run(start) exit = 0 with only eypres.yaml, want non-zero failure")
+		}
+		if !strings.Contains(stderr, "kalide.yaml") {
+			t.Fatalf("Run(start) stderr = %q, want error naming kalide.yaml", stderr)
+		}
+		if strings.Contains(stdout, "Serving slides at") {
+			t.Fatalf("Run(start) stdout = %q, want no server started", stdout)
 		}
 	})
 

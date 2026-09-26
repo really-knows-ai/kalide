@@ -19,7 +19,7 @@ import (
 
 // demoProjectDir is the repository's non-EY demo project (examples/demo),
 // relative to this package. It is a real project on disk: its own
-// eypres.yaml, slides/, assets/ and templates/ library — never copied into a
+// kalide.yaml, slides/, assets/ and templates/ library — never copied into a
 // temp dir and never embedded into the binary (demo-project).
 const demoProjectDir = "../../examples/demo"
 
@@ -144,8 +144,8 @@ func TestDemoProject(t *testing.T) {
 				t.Fatalf("embedded assets.FS unexpectedly contains an %q entry", e.Name())
 			}
 		}
-		if _, err := fs.Stat(assets.FS, "examples/demo/eypres.yaml"); err == nil {
-			t.Fatal("embedded assets.FS unexpectedly resolves examples/demo/eypres.yaml")
+		if _, err := fs.Stat(assets.FS, "examples/demo/kalide.yaml"); err == nil {
+			t.Fatal("embedded assets.FS unexpectedly resolves examples/demo/kalide.yaml")
 		}
 		if _, err := fs.Stat(assets.FS, "examples/demo/templates/media/badge.svg"); err == nil {
 			t.Fatal("embedded assets.FS unexpectedly resolves examples/demo/templates/media/badge.svg")

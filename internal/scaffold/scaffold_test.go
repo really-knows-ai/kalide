@@ -29,6 +29,7 @@ func TestInit(t *testing.T) {
 	t.Run("existing block path refuses and writes nothing", testInitRefuses)
 	t.Run("multiple block paths are all named", testInitNamesAllConflicts)
 	t.Run("unrelated entries do not block", testInitUnrelated)
+	t.Run("existing eypres.yaml does not block init and init never writes eypres.yaml", testInitExistingEypresYAML)
 	t.Run("scaffolded deck passes load and whole-deck validation", testInitScaffoldValidates)
 	t.Run("seed carries no EY branding", testSeedHasNoEYReferences)
 }
@@ -203,6 +204,34 @@ func testInitUnrelated(t *testing.T) {
 	}
 	if info, err := os.Stat(filepath.Join(dir, "assets")); err != nil || !info.IsDir() {
 		t.Errorf("expected assets/ to be a directory after Init, stat err = %v", err)
+	}
+}
+
+// testInitExistingEypresYAML asserts that an existing eypres.yaml in the
+// directory does not block init (Init succeeds and writes kalide.yaml) and
+// that Init never writes eypres.yaml.
+func testInitExistingEypresYAML(t *testing.T) {
+	dir := t.TempDir()
+	eypresContent := "title: Old Eypres Deck\n"
+	writeFile(t, filepath.Join(dir, "eypres.yaml"), eypresContent)
+
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v, want nil (eypres.yaml must not block init)", err)
+	}
+
+	if got := readString(t, filepath.Join(dir, "eypres.yaml")); got != eypresContent {
+		t.Errorf("eypres.yaml modified by init: got %q, want %q", got, eypresContent)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "kalide.yaml")); err != nil {
+		t.Fatalf("kalide.yaml was not written by init: %v", err)
+	}
+
+	cleanDir := t.TempDir()
+	if err := Init(cleanDir); err != nil {
+		t.Fatalf("Init() error = %v, want nil", err)
+	}
+	if _, err := os.Stat(filepath.Join(cleanDir, "eypres.yaml")); err == nil {
+		t.Errorf("Init unexpectedly created eypres.yaml in clean dir")
 	}
 }
 

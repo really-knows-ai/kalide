@@ -34,16 +34,16 @@ func testFormat(t *testing.T) {
 		"slides/3-team.md › name: required — add a name: value")
 
 	checkFormat(t, "path omitted when empty",
-		ValidationError{File: "eypres.yaml", Line: 4, What: `missing required key "title"`},
-		`eypres.yaml:4: missing required key "title"`)
+		ValidationError{File: "kalide.yaml", Line: 4, What: `missing required key "title"`},
+		`kalide.yaml:4: missing required key "title"`)
 
 	checkFormat(t, "fix clause omitted when empty",
 		ValidationError{File: "slides/1-a.md", Line: 3, Path: []string{"body"}, What: "disallowed: the body is not allowed"},
 		"slides/1-a.md:3 › body: disallowed: the body is not allowed")
 
 	checkFormat(t, "no line and no path",
-		ValidationError{File: "eypres.yaml", What: "boom"},
-		"eypres.yaml: boom")
+		ValidationError{File: "kalide.yaml", What: "boom"},
+		"kalide.yaml: boom")
 
 	t.Run("New copies the path", func(t *testing.T) {
 		segments := []string{"one", "two"}
@@ -75,25 +75,25 @@ func testOrdering(t *testing.T) {
 	reg := mustBuiltins(t)
 
 	t.Run("config beats filenames and slides", func(t *testing.T) {
-		wantError(t, reg, deckFiles("eypres.yaml", "navigation: diagonal\n", "slides/notaslide.md", "not a slide\n", "slides/1-a.md", "---\ntemplate: content\n---\n"),
-			`eypres.yaml:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`)
+		wantError(t, reg, deckFiles("kalide.yaml", "navigation: diagonal\n", "slides/notaslide.md", "not a slide\n", "slides/1-a.md", "---\ntemplate: content\n---\n"),
+			`kalide.yaml:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`)
 	})
 
 	t.Run("filenames beat slide contents", func(t *testing.T) {
-		wantError(t, reg, deckFiles("eypres.yaml", "title: T\n", "slides/notaslide.md", "not a slide\n", "slides/1-a.md", "---\ntemplate: content\n---\n"),
+		wantError(t, reg, deckFiles("kalide.yaml", "title: T\n", "slides/notaslide.md", "not a slide\n", "slides/1-a.md", "---\ntemplate: content\n---\n"),
 			"slides/notaslide.md: filename must be <number>[letter]-<label>.md")
 	})
 
 	// A content slide with a missing required heading and an unknown body link:
 	// the step-3 field error must win over the step-4 link error.
 	t.Run("slides beat links", func(t *testing.T) {
-		wantError(t, reg, deckFiles("eypres.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: content\n---\n\nSee [x](#nope).\n\n# columns\n\nA\n\n# columns\n\nB\n"),
+		wantError(t, reg, deckFiles("kalide.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: content\n---\n\nSee [x](#nope).\n\n# columns\n\nA\n\n# columns\n\nB\n"),
 			`slides/1-a.md › heading: required: field "heading" is required but missing — add a heading: value`)
 	})
 
 	t.Run("horizontal slide beats its vertical slide", func(t *testing.T) {
 		preg := mustRegistry(t, plainTemplate())
-		wantError(t, preg, deckFiles("eypres.yaml", "title: T\n", "slides/1-first.md", "---\ntemplate: plain\n---\n\nSee [x](#zzz).\n", "slides/1a-second.md", "---\ntemplate: plain\n---\n\nSee [y](#yyy).\n"),
+		wantError(t, preg, deckFiles("kalide.yaml", "title: T\n", "slides/1-first.md", "---\ntemplate: plain\n---\n\nSee [x](#zzz).\n", "slides/1a-second.md", "---\ntemplate: plain\n---\n\nSee [y](#yyy).\n"),
 			`slides/1-first.md:5: unknown link label "zzz" — use the label of one of the deck's slides`)
 	})
 }
@@ -102,7 +102,7 @@ func testOrdering(t *testing.T) {
 // same single error.
 func testDeterminism(t *testing.T) {
 	reg := mustBuiltins(t)
-	files := deckFiles("eypres.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: content\n---\n\n# columns\n\nA\n\n# columns\n\nB\n")
+	files := deckFiles("kalide.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: content\n---\n\n# columns\n\nA\n\n# columns\n\nB\n")
 	want := `slides/1-a.md › heading: required: field "heading" is required but missing — add a heading: value`
 
 	first := ""
@@ -131,7 +131,7 @@ func testNestingDepth(t *testing.T) {
 	mid := &template.Template{Name: "mid", Usage: template.UsageSection, Fields: []template.Field{{Name: "people", Type: template.FieldList, Item: &template.Field{Type: template.FieldSectionTemplate, SectionTemplate: "person"}}}}
 	deep := &template.Template{Name: "deep", Usage: template.UsageSlide, Fields: []template.Field{{Name: "block", Type: template.FieldSectionTemplate, SectionTemplate: "mid"}}}
 
-	wantError(t, mustRegistry(t, deep, mid, person), deckFiles("eypres.yaml", "title: T\n", "slides/1-deep.md", "---\ntemplate: deep\nblock:\n  people:\n    - {}\n---\n"),
+	wantError(t, mustRegistry(t, deep, mid, person), deckFiles("kalide.yaml", "title: T\n", "slides/1-deep.md", "---\ntemplate: deep\nblock:\n  people:\n    - {}\n---\n"),
 		`slides/1-deep.md › block › people › [0] › name: required: field "name" is required but missing — add a name: value`)
 }
 
@@ -140,17 +140,17 @@ func testNestingDepth(t *testing.T) {
 // fields.
 func testLinks(t *testing.T) {
 	t.Run("unknown label with suggestion in a body", func(t *testing.T) {
-		wantError(t, mustRegistry(t, plainTemplate()), deckFiles("eypres.yaml", "title: T\n", "slides/1-overview.md", "---\ntemplate: plain\n---\n\nSee [the plan](#overveiw).\n"),
+		wantError(t, mustRegistry(t, plainTemplate()), deckFiles("kalide.yaml", "title: T\n", "slides/1-overview.md", "---\ntemplate: plain\n---\n\nSee [the plan](#overveiw).\n"),
 			`slides/1-overview.md:5: unknown link label "overveiw" — did you mean "overview"?`)
 	})
 
 	t.Run("bad scheme in a body", func(t *testing.T) {
-		wantError(t, mustRegistry(t, plainTemplate()), deckFiles("eypres.yaml", "title: T\n", "slides/1-bad.md", "---\ntemplate: plain\n---\n\nSee [ftp](ftp://example.com).\n"),
+		wantError(t, mustRegistry(t, plainTemplate()), deckFiles("kalide.yaml", "title: T\n", "slides/1-bad.md", "---\ntemplate: plain\n---\n\nSee [ftp](ftp://example.com).\n"),
 			`slides/1-bad.md:5: link destination "ftp://example.com" uses the unsupported "ftp" scheme — use a #label link or an http(s) URL, for example [text](#label) or [text](https://example.com)`)
 	})
 
 	t.Run("first link in a body is reported by line", func(t *testing.T) {
-		wantError(t, mustRegistry(t, plainTemplate()), deckFiles("eypres.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: plain\n---\n\nSee [x](#zzz).\n\nAnd [y](#yyy).\n"),
+		wantError(t, mustRegistry(t, plainTemplate()), deckFiles("kalide.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: plain\n---\n\nSee [x](#zzz).\n\nAnd [y](#yyy).\n"),
 			`slides/1-a.md:5: unknown link label "zzz" — use the label of one of the deck's slides`)
 	})
 
@@ -159,11 +159,11 @@ func testLinks(t *testing.T) {
 
 		// CheckValues collects links in field declaration order, so the link
 		// field is reported before the inline link in the text field.
-		wantError(t, mustRegistry(t, refs), deckFiles("eypres.yaml", "title: T\n", "slides/1-refs.md", "---\ntemplate: refs\ntarget: \"#nope\"\nnote: \"see [x](#nope2)\"\n---\n"),
+		wantError(t, mustRegistry(t, refs), deckFiles("kalide.yaml", "title: T\n", "slides/1-refs.md", "---\ntemplate: refs\ntarget: \"#nope\"\nnote: \"see [x](#nope2)\"\n---\n"),
 			`slides/1-refs.md › target: unknown link label "nope" — use the label of one of the deck's slides`)
 
 		// With the link field valid, the inline text link is the first offender.
-		wantError(t, mustRegistry(t, refs), deckFiles("eypres.yaml", "title: T\n", "slides/1-refs.md", "---\ntemplate: refs\ntarget: \"https://example.com\"\nnote: \"see [x](#nope2)\"\n---\n"),
+		wantError(t, mustRegistry(t, refs), deckFiles("kalide.yaml", "title: T\n", "slides/1-refs.md", "---\ntemplate: refs\ntarget: \"https://example.com\"\nnote: \"see [x](#nope2)\"\n---\n"),
 			`slides/1-refs.md › note: unknown link label "nope2" — use the label of one of the deck's slides`)
 	})
 }
@@ -172,7 +172,7 @@ func testLinks(t *testing.T) {
 // including a known inter-slide #label link.
 func testValidDeck(t *testing.T) {
 	reg := mustRegistry(t, plainTemplate())
-	verr, invalid := Validate(mapDeck(deckFiles("eypres.yaml", "title: T\n", "slides/1-overview.md", "---\ntemplate: plain\n---\n", "slides/2-detail.md", "---\ntemplate: plain\n---\n\nBack to [overview](#overview).\n")), reg, exampleThemeRegistry())
+	verr, invalid := Validate(mapDeck(deckFiles("kalide.yaml", "title: T\n", "slides/1-overview.md", "---\ntemplate: plain\n---\n", "slides/2-detail.md", "---\ntemplate: plain\n---\n\nBack to [overview](#overview).\n")), reg, exampleThemeRegistry())
 	if invalid {
 		t.Fatalf("Validate() invalid = true with %q, want a valid deck", Format(verr))
 	}
@@ -186,19 +186,19 @@ func testValidDeck(t *testing.T) {
 func testBodyRules(t *testing.T) {
 	t.Run("required body missing", func(t *testing.T) {
 		needsBody := &template.Template{Name: "needsbody", Usage: template.UsageSlide, Body: template.BodyRule{Mode: template.BodyRequired}}
-		wantError(t, mustRegistry(t, needsBody), deckFiles("eypres.yaml", "title: T\n", "slides/1-empty.md", "---\ntemplate: needsbody\n---\n"),
+		wantError(t, mustRegistry(t, needsBody), deckFiles("kalide.yaml", "title: T\n", "slides/1-empty.md", "---\ntemplate: needsbody\n---\n"),
 			"slides/1-empty.md:4 › body: required: the body is required but missing — add body text after the frontmatter")
 	})
 
 	t.Run("max_words exceeded", func(t *testing.T) {
 		short := &template.Template{Name: "short", Usage: template.UsageSlide, Body: template.BodyRule{Mode: template.BodyOptional, MaxWords: 3}}
-		wantError(t, mustRegistry(t, short), deckFiles("eypres.yaml", "title: T\n", "slides/1-short.md", "---\ntemplate: short\n---\n\none two three four\n"),
+		wantError(t, mustRegistry(t, short), deckFiles("kalide.yaml", "title: T\n", "slides/1-short.md", "---\ntemplate: short\n---\n\none two three four\n"),
 			"slides/1-short.md:4 › body: max_words: the body is 4 words, maximum is 3 — shorten the body to at most 3 words")
 	})
 
 	t.Run("max_paragraphs exceeded", func(t *testing.T) {
 		onepara := &template.Template{Name: "onepara", Usage: template.UsageSlide, Body: template.BodyRule{Mode: template.BodyOptional, MaxParagraphs: 1}}
-		wantError(t, mustRegistry(t, onepara), deckFiles("eypres.yaml", "title: T\n", "slides/1-para.md", "---\ntemplate: onepara\n---\n\nfirst paragraph.\n\nsecond paragraph.\n"),
+		wantError(t, mustRegistry(t, onepara), deckFiles("kalide.yaml", "title: T\n", "slides/1-para.md", "---\ntemplate: onepara\n---\n\nfirst paragraph.\n\nsecond paragraph.\n"),
 			"slides/1-para.md:4 › body: max_paragraphs: the body has 2 paragraphs, maximum is 1 — shorten the body to at most 1 paragraphs")
 	})
 }
