@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.template-language",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.templating",
+      "properties": {}
     }
   ],
   "in": [
