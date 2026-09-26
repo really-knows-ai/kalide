@@ -353,7 +353,12 @@ func dateString(raw any) string {
 // functions are installed through the catalogue's FuncMap, so a layout may call
 // one directly.
 func parseLayouts(slideTmpl *template.Template, reg *template.Registry) (*htmltmpl.Template, error) {
-	root := htmltmpl.New(layoutName(slideTmpl)).Funcs(template.BuiltinFormats.FuncMap())
+	// The namespace root carries its own name only so html/template has a
+	// handle; it deliberately differs from every layout name. Naming the root
+	// after the slide's own layout would make root.New(layoutName(slideTmpl))
+	// shadow that layout with an empty associated template, so executing the
+	// slide layout would fail with "is an incomplete template".
+	root := htmltmpl.New("layouts").Funcs(template.BuiltinFormats.FuncMap())
 	for _, t := range reachableTemplates(slideTmpl, reg) {
 		if t.Layout.Text == "" {
 			return nil, fmt.Errorf("template %q has no layout text", t.Name)
