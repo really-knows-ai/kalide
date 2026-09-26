@@ -224,6 +224,11 @@
       "kind": "details",
       "target": "solution.component.file-watcher",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": []
