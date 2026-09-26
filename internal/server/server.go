@@ -16,7 +16,7 @@
 //
 // Serving: the current Page is served at "/" (a rendered deck, or the
 // full-page error document), and the AssetsPath prefix serves the embedded
-// internal/assets tree (reveal.js, fonts, logo, theme.css, pages) first and the
+// internal/assets tree (reveal.js, pages) first and the
 // deck's own assets/ directory after it, so the deck page's `/assets/…` URLs
 // and author image paths written `assets/…` both resolve
 // (global.constraint.go-static-embedded-binary).
