@@ -156,7 +156,7 @@ func TestInitStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /templates: %v", err)
 	}
-	if !strings.Contains(gallery, `class="ey-gallery__name">hello`) {
+	if !strings.Contains(gallery, `class="gallery-page__name">hello`) {
 		t.Errorf("gallery does not list the seed's %q template:\n%s", "hello", gallery)
 	}
 
