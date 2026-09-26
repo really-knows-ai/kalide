@@ -28,6 +28,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-kind-directories",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }
