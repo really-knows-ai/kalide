@@ -21,6 +21,11 @@
       "kind": "contains",
       "target": "requirements.requirement.section-template-context",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
     }
   ],
   "in": [

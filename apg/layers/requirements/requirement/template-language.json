@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.fix-media-helper-base",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.template-context",
+      "properties": {}
     }
   ]
 }
