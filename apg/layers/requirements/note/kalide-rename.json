@@ -169,6 +169,11 @@
       "kind": "details",
       "target": "requirements.note.tap-bucket-location-open",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.open-font-logo-licensing",
+      "properties": {}
     }
   ],
   "in": []
