@@ -1,0 +1,9 @@
+description: "Hello slide: a required title and an optional body."
+fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 80
+    description: Slide title.
+body:
+  mode: optional

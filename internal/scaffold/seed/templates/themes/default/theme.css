@@ -1,0 +1,30 @@
+:root {
+  --hello-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --hello-bg: #ffffff;
+  --hello-fg: #1a1a1a;
+  --hello-accent: #4a4a4a;
+}
+
+body {
+  font-family: var(--hello-font);
+  background: var(--hello-bg);
+  color: var(--hello-fg);
+}
+
+.hello-slide {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.hello-title {
+  font-size: 2.5em;
+  font-weight: 600;
+  margin: 0 0 0.4em 0;
+}
+
+.hello-body {
+  font-size: 1.1em;
+  color: var(--hello-accent);
+}
