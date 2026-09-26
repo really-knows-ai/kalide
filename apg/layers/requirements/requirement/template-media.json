@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.media-asset",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",

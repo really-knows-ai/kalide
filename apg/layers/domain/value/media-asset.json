@@ -5,5 +5,11 @@
   "body": "Media asset: any file (font, logo, image, video, …) in the template library, addressed by its relative path within `templates/`; type-agnostic.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-media",
+      "properties": {}
+    }
+  ]
 }
