@@ -4,6 +4,12 @@
   "name": "reconcile-template-language",
   "body": "source: layouts were only \"Go html/template\"; inconsistency: data passed to layouts, helper functions and Markdown handling were unspecified; resolution: new requirement template-language (standard html/template, no Sprig; pre-rendered safe HTML for body/text/sections, typed values otherwise; no markdown helper; v1 helper set = `media` only, changes are spec changes; no file/env/network access; file:line templates errors). Wired: contained by project-templates; drives domain.entity.template (→ solution.component.template-registry) and domain.service.render-deck (→ solution.component.renderer); depends-on template-media; templates-dir-validation depends-on it. Bodies of renderer, template-registry, template-library-loader and templates-dir-validation (steps 3, 6, 7) updated. [with user]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
+    }
+  ],
   "in": []
 }

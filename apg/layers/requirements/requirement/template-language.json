@@ -33,6 +33,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-template-language",
+      "properties": {}
     }
   ]
 }
