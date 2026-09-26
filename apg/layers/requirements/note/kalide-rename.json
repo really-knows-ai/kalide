@@ -39,6 +39,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-media",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.tap-bucket-location",
+      "properties": {}
     }
   ],
   "in": []
