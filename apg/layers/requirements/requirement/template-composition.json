@@ -28,6 +28,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.section-frontmatter",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
+      "properties": {}
     }
   ]
 }

@@ -39,6 +39,11 @@
       "kind": "details",
       "target": "requirements.requirement.slide-template-required",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-composition",
+      "properties": {}
     }
   ],
   "in": []
