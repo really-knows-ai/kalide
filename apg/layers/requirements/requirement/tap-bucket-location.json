@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "tap-bucket-location",
-  "body": "The Homebrew tap and Scoop bucket are hosted in the source repo `really-knows-ai/ey-present` itself: `Formula/` holds the Homebrew formula (and its custom download strategy) and `bucket/` holds the Scoop manifest, so `brew tap really-knows-ai/ey-present <git url>` and `scoop bucket add ey-present <git url>` work with users' existing git access to the private repo. No separate tap/bucket repos. AC: both commands succeed against the repo's git URL for a user with repo access.",
+  "body": "The Homebrew tap and Scoop bucket are hosted in the source repo `really-knows-ai/kalide` itself: `Formula/` holds the Homebrew formula `Formula/kalide.rb` (and its custom download strategy) and `bucket/` holds the Scoop manifest `bucket/kalide.json`, so `brew tap really-knows-ai/kalide <git url>` and `scoop bucket add kalide <git url>` work with users' existing git access to the private repo. No separate tap/bucket repos. AC: both commands succeed against the repo's git URL (git@github.com:really-knows-ai/kalide.git) for a user with repo access.",
   "properties": {
     "feature": "distribution"
   },
