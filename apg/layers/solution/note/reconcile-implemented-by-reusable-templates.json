@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "solution.component.demo-fixture",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": []

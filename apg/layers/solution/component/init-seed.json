@@ -36,6 +36,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-kind-directories",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.reconcile-implemented-by-reusable-templates",
+      "properties": {}
     }
   ]
 }
