@@ -76,8 +76,10 @@ func TestRunRoutesCommands(t *testing.T) {
 		}
 		for _, want := range []string{
 			"eypres.yaml",
-			"slides/1-title.md",
-			"slides/2-content.md",
+			"slides/1-hello.md",
+			"templates/library.yaml",
+			"templates/slides/hello/template.yaml",
+			"templates/themes/default/theme.css",
 			"assets/",
 		} {
 			if !strings.Contains(stdout, want) {
@@ -88,8 +90,10 @@ func TestRunRoutesCommands(t *testing.T) {
 		// The advertised paths must actually exist in the temp dir.
 		for _, created := range []string{
 			"eypres.yaml",
-			"slides/1-title.md",
-			"slides/2-content.md",
+			"slides/1-hello.md",
+			"templates/library.yaml",
+			"templates/slides/hello/template.yaml",
+			"templates/themes/default/theme.css",
 			"assets",
 		} {
 			if _, err := os.Stat(filepath.Join(dir, created)); err != nil {
@@ -106,7 +110,7 @@ func TestRunRoutesCommands(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(init) second run stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"eypres.yaml", "slides/", "assets/", "never overwrites"} {
+		for _, want := range []string{"eypres.yaml", "slides/", "templates/", "assets/", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) second run stderr = %q, want refusal mentioning %q", stderr, want)
 			}

@@ -24,8 +24,12 @@ import (
 // filesystem form.
 var initCreatedPaths = []string{
 	"eypres.yaml",
-	"slides/1-title.md",
-	"slides/2-content.md",
+	"slides/1-hello.md",
+	"templates/library.yaml",
+	"templates/slides/hello/template.yaml",
+	"templates/slides/hello/layout.html.tmpl",
+	"templates/slides/hello/example.md",
+	"templates/themes/default/theme.css",
 }
 
 // TestInit covers `eypres init` end to end from the command surface: success,
@@ -82,6 +86,7 @@ func TestInit(t *testing.T) {
 		display string // how the refusal names it
 	}{
 		{name: "slides dir exists", path: "slides", isDir: true, display: "slides/"},
+		{name: "templates dir exists", path: "templates", isDir: true, display: "templates/"},
 		{name: "assets dir exists", path: "assets", isDir: true, display: "assets/"},
 		{name: "eypres.yaml file exists", path: "eypres.yaml", isDir: false, display: "eypres.yaml"},
 	}
@@ -133,7 +138,7 @@ func TestInit(t *testing.T) {
 				}
 			}
 			// ...and init wrote nothing at all: no other deck path appeared.
-			for _, other := range []string{"eypres.yaml", "slides", "assets"} {
+			for _, other := range []string{"eypres.yaml", "slides", "templates", "assets"} {
 				if other == b.path {
 					continue
 				}
@@ -189,7 +194,7 @@ func TestInit(t *testing.T) {
 		}
 		// No force behaviour: the rejected flag must not have scaffolded
 		// anything into the still-empty directory.
-		for _, p := range []string{"eypres.yaml", "slides", "assets"} {
+		for _, p := range []string{"eypres.yaml", "slides", "templates", "assets"} {
 			if _, err := os.Lstat(filepath.Join(dir, p)); err == nil {
 				t.Errorf("%s was created by `init --force`, want the argument rejected with no writes", p)
 			}
@@ -210,7 +215,7 @@ func TestInit(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("second Run(init) stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"slides/", "assets/", "eypres.yaml", "never overwrites"} {
+		for _, want := range []string{"slides/", "templates/", "assets/", "eypres.yaml", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("second Run(init) stderr = %q, want refusal mentioning %q", stderr, want)
 			}
