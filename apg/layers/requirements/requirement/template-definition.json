@@ -68,6 +68,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.slide-template-required",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
+      "properties": {}
     }
   ]
 }
