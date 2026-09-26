@@ -92,6 +92,39 @@ now broken
 // error page and the terminal print this identical string.
 const wantBrokenError = `slides/2-agenda.md › title: required: field "title" is required but missing — add a title: value`
 
+// helloTemplateYAML and helloLayoutTmpl are the seed's own
+// templates/slides/hello manifest and layout (internal/scaffold/seed), kept
+// here so a broken/edited templates/ tree can be restored to the exact seed
+// state the rest of the test (gallery, `eypres templates`) depends on.
+const helloTemplateYAML = `description: "Hello slide: a required title and an optional body."
+fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 80
+    description: Slide title.
+body:
+  mode: optional
+`
+
+// helloLayoutTmpl renders the hello layout with a marker paragraph appended,
+// so a templates/ edit produces a distinctive, greppable change in the served
+// page without altering the fields the rest of the test depends on.
+func helloLayoutTmpl(marker string) string {
+	return fmt.Sprintf(`{{/*
+  hello — slide-usage template layout.
+
+  Context: map[string]any keyed by field name. %s is required; %s
+  is the slide's Markdown body, rendered as HTML, when the author gave one.
+*/}}
+<section class="hello-slide">
+  <h1 class="hello-title">{{ .title }}</h1>
+  <p class="hello-marker">%s</p>
+  {{ with .body }}<div class="hello-body">{{ . }}</div>{{ end }}
+</section>
+`, "`title`", "`body`", marker)
+}
+
 // TestStartLiveReload is the end-to-end live-reload test described above.
 func TestStartLiveReload(t *testing.T) {
 	if testing.Short() {
@@ -164,6 +197,58 @@ func TestStartLiveReload(t *testing.T) {
 		return err == nil && strings.Contains(b, marker)
 	})
 	s.Close()
+
+	// Editing a templates/ slide template also live-reloads: internal/watch
+	// now watches the templates/ tree (task-1/task-8) and the built-in
+	// pipeline reloads the project's templates/ Library fresh on every
+	// reload (task-2/task-3) rather than serving one cached at construction,
+	// so a layout edit is picked up exactly like a slide edit.
+	ts := openSSE(t, h)
+	defer ts.Close()
+	waitLine(t, ts, ": connected", 5*time.Second)
+
+	var layoutMarker string
+	layoutDeadline := time.Now().Add(10 * time.Second)
+	for i := 1; ; i++ {
+		layoutMarker = fmt.Sprintf("layout-edit-%d", i)
+		h.WriteFile("templates/slides/hello/layout.html.tmpl", []byte(helloLayoutTmpl(layoutMarker)))
+		if drainFor(ts, "data: reload", 500*time.Millisecond) {
+			break
+		}
+		if time.Now().After(layoutDeadline) {
+			t.Fatalf("no SSE reload after editing a templates/ layout\nstdout:\n%s\nstderr:\n%s",
+				h.Stdout(), h.Stderr())
+		}
+	}
+	waitFor(t, 5*time.Second, "the edited template layout to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, layoutMarker)
+	})
+	ts.Close()
+
+	// Breaking templates/ (invalid YAML in a template.yaml) shows the error
+	// page — a broken library publishes the error page, never a stale or
+	// broken deck (never-serve-broken-deck).
+	h.WriteFile("templates/slides/hello/template.yaml", []byte("description: [this is not valid yaml\n"))
+	waitFor(t, 10*time.Second, "the templates/ error page to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, "Deck error") && strings.Contains(b, "ey-error__message")
+	})
+	brokenTemplatesBody, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET / (broken templates/ error page): %v", err)
+	}
+	if strings.Contains(brokenTemplatesBody, layoutMarker) {
+		t.Errorf("error page still serves the stale deck page after breaking templates/:\n%s", brokenTemplatesBody)
+	}
+
+	// Restoring templates/ (fixing the template.yaml back to the seed's own
+	// manifest) recovers the deck.
+	h.WriteFile("templates/slides/hello/template.yaml", []byte(helloTemplateYAML))
+	waitFor(t, 10*time.Second, "the deck to recover after fixing templates/", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, "Integration Deck") && !strings.Contains(b, "Deck error")
+	})
 
 	// A breaking edit: GET / becomes the full-page error carrying the single
 	// first formatted error, and the same error is printed to the terminal.
