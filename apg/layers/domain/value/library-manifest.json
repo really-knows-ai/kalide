@@ -5,5 +5,11 @@
   "body": "Library manifest (`templates/library.yaml`): name identifier, optional description, format version (required, currently 1). Identity for future git-based sharing.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-dir-layout",
+      "properties": {}
+    }
+  ]
 }
