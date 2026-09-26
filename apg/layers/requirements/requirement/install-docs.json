@@ -8,11 +8,6 @@
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.service.install-eypres",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "target": "requirements.requirement.homebrew-install",
       "properties": {}
