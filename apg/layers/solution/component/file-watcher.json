@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "file-watcher",
-  "body": "File watcher + live reload: cross-platform file watching (slides/, assets/, templates/, eypres.yaml) with debounce; on a change triggers template reload, re-validation/re-render and emits the deck-rebuilt notification (rendered deck or first error) to the http-server's live-reload endpoint.",
+  "body": "File watcher + live reload: cross-platform file watching (slides/, assets/, eypres.yaml, and recursively all of templates/ — library.yaml, slides/, sections/, themes/, media/) with debounce; on a change triggers template reload, re-validation/re-render and emits the deck-rebuilt notification (rendered deck or first error) to the http-server's live-reload endpoint.",
   "properties": {},
   "out": [],
   "in": [
