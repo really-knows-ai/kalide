@@ -4,7 +4,13 @@
   "name": "load-template-library",
   "body": "Load template library: locate the project's `templates/`, validate it fail-fast (templates-dir-validation), and build the template and theme registries from its files; the first failure is a templates error.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "drives",

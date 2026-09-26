@@ -10,6 +10,11 @@
       "kind": "realised-by",
       "source": "domain.entity.template-library",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.load-template-library",
+      "properties": {}
     }
   ]
 }
