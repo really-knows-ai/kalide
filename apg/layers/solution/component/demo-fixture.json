@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.entity.template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.demo-fixture-placement",
+      "properties": {}
     }
   ]
 }
