@@ -1,0 +1,242 @@
+{{/*
+  gallery — the /templates gallery page shell.
+
+  internal/server's gallery handler (phase-7 task-5) serves this page: for
+  every built-in template it shows the template's name, usage (slide|section),
+  one-line description, the template's example slide rendered through
+  internal/render, and its field/section/body documentation
+  (requirements.requirement.templates-gallery).
+
+  It is a standalone page: OFFLINE, referencing only the embedded assets tree
+  served under /assets/ (the EY theme stylesheet, which declares the brand
+  fonts and tokens, and the EY logo), never a CDN or any network location
+  (global.constraint.go-static-embedded-binary).
+
+  Embedding / access:
+    The pages sub-tree is embedded by internal/assets and exposed as
+    assets.Pages() (an fs.FS rooted at pages/), so this file's path is
+    "gallery.html.tmpl". internal/server does, in effect:
+
+      template.Must(template.New("gallery").
+          ParseFS(assets.Pages(), "gallery.html.tmpl"))
+
+    parsing the page in its own template namespace (each page is standalone).
+
+  Execution context (a struct or map[string]any supplying these keys):
+
+    .Title      string   document heading and <title>. Empty falls back to
+                         "Templates".
+    .Subtitle   string   optional line under the heading.
+    .Templates  iterable of template entries, one per registered template, in
+                         the order internal/server provides (the registry's
+                         sorted name order). Each entry supplies:
+
+      .Name         string        template name, e.g. "content".
+      .Usage        string        "slide" or "section".
+      .Description  string        the one-line description.
+      .Example      template.HTML the example slide, already rendered through
+                                  internal/render (RenderSlide for a slide
+                                  example); injected verbatim inside a framed
+                                  preview. internal/server marks it safe.
+      .Fields       iterable      the declared fields; each supplies:
+          .Name        string
+          .Type        string     field type, e.g. "text", "number".
+          .Required    bool
+          .Default     string     display form of the default, "" when none.
+          .Limits      string     human display of the applied rules, e.g.
+                                  "max 80 chars", "2–4 items", "≥ 0"; "" when
+                                  unbounded.
+          .Formats     string     named formats and the default, e.g.
+                                  "compact, exact, percent (default compact)";
+                                  "" when the field takes no format.
+          .Description string
+                                  A template with no fields may pass an empty
+                                  (or nil) .Fields; the "no fields" sentence
+                                  is then shown.
+      .Sections     iterable      the declared sections; each supplies:
+          .Name        string
+          .Accepted    string     accepted section-template names, joined for
+                                  display, e.g. "column".
+          .Repeats     string     allowed repeat count, e.g. "2–4", "≥ 1",
+                                  "any"; "" when unrestricted.
+          .Description string
+                                  An empty (or nil) .Sections means the
+                                  template declares none.
+      .Body         entry         the implied-body rule; supplies:
+          .Mode        string     "required", "optional" or "disallowed".
+          .Limits      string     human display of the limits, e.g.
+                                  "max 2 paragraphs"; "" when unbounded.
+          .Summary     string     a one-line plain-language sentence.
+
+  Everything the template prints is html/template-escaped except .Example,
+  which is already-rendered HTML marked safe by internal/server. The page
+  never invents template content: it only presents what internal/server hands
+  it from the registry.
+
+  Hook slots:
+    "live-reload" is a named block, exactly like the deck and error pages', so
+    internal/server may override it with {{ define "live-reload" }} before
+    parsing and inject its SSE client script. The gallery is static, so an
+    empty block is the default.
+*/}}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ with .Title }}{{ . }}{{ else }}Templates{{ end }}</title>
+
+  {{/* Embedded EY theme stylesheet: brand @font-face rules and the token
+       block. Served from the root of the embedded assets tree. */}}
+  <link rel="stylesheet" href="/assets/theme.css">
+  <style>
+    /* Page chrome only, consuming the tokens declared in /assets/theme.css;
+       no colour, font or spacing value is restated here
+       (global.constraint.theme-tokens-only). */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      padding: var(--ey-space-5);
+      background: var(--ey-bg);
+      color: var(--ey-fg);
+      font-family: var(--ey-font-body);
+      line-height: var(--ey-line-height);
+    }
+    .ey-gallery { width: var(--ey-content-width); max-width: 72rem; margin: 0 auto; }
+    .ey-gallery__header { border-bottom: var(--ey-border-width) solid var(--ey-highlight); padding-bottom: var(--ey-space-3); }
+    .ey-gallery__logo { height: 2.5rem; }
+    .ey-gallery__title {
+      font-family: var(--ey-font-display);
+      font-size: var(--ey-font-size-title);
+      margin: var(--ey-space-4) 0 var(--ey-space-2);
+    }
+    .ey-gallery__subtitle { margin: 0; color: var(--ey-fg-muted); }
+    .ey-gallery__list { list-style: none; margin: 0; padding: 0; }
+    .ey-gallery__item {
+      margin: var(--ey-space-5) 0;
+      padding: var(--ey-space-4);
+      border: var(--ey-border-width) solid var(--ey-border);
+      border-radius: var(--ey-radius);
+    }
+    .ey-gallery__name { font-family: var(--ey-font-heading); font-size: var(--ey-font-size-heading); margin: 0; }
+    .ey-gallery__usage {
+      display: inline-block;
+      margin-left: var(--ey-space-2);
+      padding: 0 var(--ey-space-1);
+      border-radius: var(--ey-radius);
+      background: var(--ey-highlight);
+      color: var(--ey-ink);
+      font-family: var(--ey-font-mono);
+      font-size: var(--ey-font-size-small);
+      vertical-align: middle;
+    }
+    .ey-gallery__description { margin: var(--ey-space-2) 0 var(--ey-space-3); color: var(--ey-fg-muted); }
+    .ey-gallery__preview {
+      margin: 0 0 var(--ey-space-4);
+      padding: var(--ey-space-3);
+      border: var(--ey-border-width) dashed var(--ey-border);
+      border-radius: var(--ey-radius);
+      background: var(--ey-off-white);
+      overflow-x: auto;
+    }
+    .ey-gallery__preview > section, .ey-gallery__preview > div { margin: 0; }
+    .ey-gallery__docs h3 {
+      font-family: var(--ey-font-heading);
+      font-size: var(--ey-font-size-body);
+      margin: var(--ey-space-3) 0 var(--ey-space-2);
+    }
+    .ey-gallery__table { width: 100%; border-collapse: collapse; font-size: var(--ey-font-size-small); }
+    .ey-gallery__table th, .ey-gallery__table td {
+      text-align: left;
+      padding: var(--ey-space-1) var(--ey-space-2);
+      border-bottom: 1px solid var(--ey-border);
+      vertical-align: top;
+    }
+    .ey-gallery__table th { font-family: var(--ey-font-heading); }
+    .ey-gallery__table code { font-family: var(--ey-font-mono); }
+    .ey-gallery__empty { color: var(--ey-fg-muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <main class="ey-gallery">
+    <header class="ey-gallery__header">
+      {{/* -light logo ink is dark, for the light surface above. */}}
+      <img class="ey-gallery__logo" src="/assets/logo/logo_full-light.svg" alt="EY">
+      <h1 class="ey-gallery__title">{{ with .Title }}{{ . }}{{ else }}Templates{{ end }}</h1>
+      {{ with .Subtitle }}<p class="ey-gallery__subtitle">{{ . }}</p>{{ end }}
+    </header>
+
+    <ul class="ey-gallery__list">
+      {{ range .Templates }}
+      <li class="ey-gallery__item">
+        <h2 class="ey-gallery__name">{{ .Name }}<span class="ey-gallery__usage">{{ .Usage }}</span></h2>
+        {{ with .Description }}<p class="ey-gallery__description">{{ . }}</p>{{ end }}
+
+        {{/* The example slide, rendered through internal/render. */}}
+        {{ with .Example }}<div class="ey-gallery__preview">{{ . }}</div>{{ end }}
+
+        <div class="ey-gallery__docs">
+          <h3>Fields</h3>
+          {{ if .Fields }}
+          <table class="ey-gallery__table">
+            <thead>
+              <tr><th>Field</th><th>Type</th><th>Required</th><th>Default</th><th>Rules</th><th>Formats</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              {{ range .Fields }}
+              <tr>
+                <td><code>{{ .Name }}</code></td>
+                <td>{{ .Type }}</td>
+                <td>{{ if .Required }}yes{{ else }}no{{ end }}</td>
+                <td>{{ with .Default }}{{ . }}{{ else }}—{{ end }}</td>
+                <td>{{ with .Limits }}{{ . }}{{ else }}—{{ end }}</td>
+                <td>{{ with .Formats }}{{ . }}{{ else }}—{{ end }}</td>
+                <td>{{ .Description }}</td>
+              </tr>
+              {{ end }}
+            </tbody>
+          </table>
+          {{ else }}
+          <p class="ey-gallery__empty">This template declares no fields.</p>
+          {{ end }}
+
+          <h3>Sections</h3>
+          {{ if .Sections }}
+          <table class="ey-gallery__table">
+            <thead>
+              <tr><th>Section</th><th>Accepts</th><th>Repeats</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              {{ range .Sections }}
+              <tr>
+                <td><code>{{ .Name }}</code></td>
+                <td><code>{{ with .Accepted }}{{ . }}{{ else }}—{{ end }}</code></td>
+                <td>{{ with .Repeats }}{{ . }}{{ else }}any{{ end }}</td>
+                <td>{{ .Description }}</td>
+              </tr>
+              {{ end }}
+            </tbody>
+          </table>
+          {{ else }}
+          <p class="ey-gallery__empty">This template declares no sections.</p>
+          {{ end }}
+
+          <h3>Body</h3>
+          {{ with .Body }}
+          <p>{{ .Summary }}{{ with .Limits }} ({{ . }}){{ end }} — <code>{{ .Mode }}</code>.</p>
+          {{ else }}
+          <p class="ey-gallery__empty">—</p>
+          {{ end }}
+        </div>
+      </li>
+      {{ else }}
+      <li class="ey-gallery__item"><p class="ey-gallery__empty">No templates are registered.</p></li>
+      {{ end }}
+    </ul>
+  </main>
+
+  {{/* Phase-7 live-reload client script is injected here by internal/server. */}}
+  {{ block "live-reload" . }}{{ end }}
+</body>
+</html>

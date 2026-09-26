@@ -1,0 +1,104 @@
+{{/*
+  error — the full-page deck-error shell.
+
+  internal/server serves this page, as the current state of the presentation,
+  whenever the watched deck fails validation: exactly one author-facing error,
+  the string produced by internal/validate.Format ("file:line › path: what —
+  fix"). The terminal prints the identical string, so the author sees one
+  message in both places (requirements.requirement.error-reporting,
+  requirements.requirement.live-reload-error-page).
+
+  It is a standalone page: OFFLINE, referencing only the embedded assets tree
+  served under /assets/ (the EY theme stylesheet, which declares the brand
+  fonts and tokens, and the EY logo), never a CDN or any network location
+  (global.constraint.go-static-embedded-binary).
+
+  Embedding / access:
+    The pages sub-tree is embedded by internal/assets and exposed as
+    assets.Pages() (an fs.FS rooted at pages/), so this file's path is
+    "error.html.tmpl". internal/server does, in effect:
+
+      template.Must(template.New("error").
+          ParseFS(assets.Pages(), "error.html.tmpl"))
+
+    parsing the page in its own template namespace (each page is standalone).
+
+  Execution context (a struct or map[string]any supplying these keys):
+    .Title    string   the document <title>. Empty falls back to "eypres".
+    .Message  string   the single author-facing error, exactly as
+                       validate.Format(verr) rendered it. Shown verbatim and
+                       html/template-escaped. Empty falls back to a generic
+                       sentence; internal/server always sets it.
+
+  Hook slots:
+    "live-reload" is a named block, exactly like the deck page's, so
+    internal/server overrides it with {{ define "live-reload" }} before
+    parsing and injects its SSE client script there. Because the error page
+    carries the same block as deck.html.tmpl, a fixing edit reloads the page
+    back to the deck without a manual refresh (live-reload).
+*/}}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ with .Title }}{{ . }}{{ else }}eypres{{ end }}</title>
+
+  {{/* Embedded EY theme stylesheet: brand @font-face rules and the token
+       block. Served from the root of the embedded assets tree. */}}
+  <link rel="stylesheet" href="/assets/theme.css">
+  <style>
+    /* Page chrome only, consuming the tokens declared in /assets/theme.css;
+       no colour, font or spacing value is restated here
+       (global.constraint.theme-tokens-only). */
+    html, body { margin: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--ey-space-5);
+      background: var(--ey-bg-dark);
+      color: var(--ey-fg-on-dark);
+      font-family: var(--ey-font-body);
+      line-height: var(--ey-line-height);
+    }
+    .ey-error { width: var(--ey-content-width); max-width: 60rem; }
+    .ey-error__logo { height: 2.5rem; }
+    .ey-error__heading {
+      font-family: var(--ey-font-display);
+      font-size: var(--ey-font-size-title);
+      margin: var(--ey-space-4) 0 var(--ey-space-3);
+    }
+    .ey-error__message {
+      margin: 0 0 var(--ey-space-4);
+      padding: var(--ey-space-3);
+      border: var(--ey-border-width) solid var(--ey-highlight);
+      border-radius: var(--ey-radius);
+      background: var(--ey-ink-soft);
+      color: var(--ey-highlight);
+      font-family: var(--ey-font-mono);
+      font-size: var(--ey-font-size-body);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .ey-error__hint {
+      color: var(--ey-grey-light);
+      font-size: var(--ey-font-size-small);
+    }
+  </style>
+</head>
+<body>
+  <main class="ey-error">
+    {{/* -dark logo ink is white, for the dark surface above. */}}
+    <img class="ey-error__logo" src="/assets/logo/logo_full-dark.svg" alt="EY">
+    <h1 class="ey-error__heading">Deck error</h1>
+    <pre class="ey-error__message">{{ with .Message }}{{ . }}{{ else }}The deck could not be loaded.{{ end }}</pre>
+    <p class="ey-error__hint">Fix the file shown above and save; this page reloads automatically.</p>
+  </main>
+
+  {{/* Phase-7 live-reload client script is injected here by internal/server. */}}
+  {{ block "live-reload" . }}{{ end }}
+</body>
+</html>

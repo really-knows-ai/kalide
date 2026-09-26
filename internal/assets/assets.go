@@ -11,7 +11,8 @@
 //	logo/       EY logo SVGs (full/small, light/dark variants)
 //	templates/  built-in template content: one directory per template holding
 //	            its html/template layout and validating example slide source
-//	pages/      full-page html/template shells (the reveal.js deck page)
+//	pages/      full-page html/template shells (the reveal.js deck page, the
+//	            full-page error page and the /templates gallery page)
 //	theme.css   default EY theme tokens and @font-face rules
 //
 // Everything is compiled into the binary: the served deck never reaches the
@@ -77,10 +78,29 @@ func Templates() fs.FS { return templatesFS }
 // executes that file to produce the served presentation, so the page and every
 // asset it references are compiled into the binary and served offline.
 //
-// Later phases add the error and gallery pages to this same sub-tree and
-// expose them alongside (or through a Pages accessor) without changing
-// DeckPage's meaning.
+// DeckPage is a narrow view of the same sub-tree Pages exposes: callers that
+// want one specific page keep using their accessor, while a caller that serves
+// several pages (internal/server) walks Pages.
 func DeckPage() fs.FS { return pagesFS }
+
+// Pages returns the sub-tree holding every full-page html/template shell,
+// rooted so that a page is addressable by its filename:
+//
+//	deck.html.tmpl     the reveal.js deck page (internal/render.RenderDeck)
+//	error.html.tmpl    the full-page deck-error page (internal/server)
+//	gallery.html.tmpl  the /templates gallery page (internal/server)
+//
+// internal/server parses each page in its own html/template namespace, for
+// example:
+//
+//	template.Must(template.New("error").
+//	    ParseFS(assets.Pages(), "error.html.tmpl"))
+//
+// Every page is standalone and offline: it references only files within the
+// embedded tree (theme.css, logo/, fonts/, reveal/), served under /assets/, and
+// never a CDN. Each documents the execution context it expects at the top of
+// the file.
+func Pages() fs.FS { return pagesFS }
 
 // mustSub returns the sub-tree of FS rooted at dir, panicking when dir is not
 // an embedded directory. The embed directive is the source of truth, so a
