@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "project-templates",
+  "body": "Project templates: every eypres project defines its own templates and assets (slide/section templates, themes, fonts, logos and any other media such as video) in a `templates/` directory at the project root, alongside `slides/`, `assets/` and `eypres.yaml`. The binary ships none (no fallback). Parent of the project-templates feature.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
