@@ -10,6 +10,15 @@ import (
 	"github.com/really-knows-ai/ey-present/internal/cli"
 )
 
+// version is the release version stamped in at build time:
+//
+//	go build -ldflags "-X main.version=v1.2.3"
+//
+// `make release` injects $(VERSION) this way; unbuilt/source runs report the
+// default. It is intentionally a plain variable with no user-facing surface —
+// the release workflow is the only setter.
+var version = "dev"
+
 func main() {
 	os.Exit(cli.Run(os.Args, os.Stdout, os.Stderr))
 }
