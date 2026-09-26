@@ -35,6 +35,11 @@
       "kind": "details",
       "source": "solution.note.fix-port-fallback-bound",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.template-library",
+      "properties": {}
     }
   ]
 }
