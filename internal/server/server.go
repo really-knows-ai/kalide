@@ -43,7 +43,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	htmltmpl "html/template"
 	"io"
@@ -52,8 +51,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/really-knows-ai/ey-present/internal/assets"
@@ -207,12 +206,7 @@ func Listen(opts Options) (*Server, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(rootPath, s.handlePage)
-
-	var deckFS fs.FS
-	if d := deckAssetsFS(opts); d != nil {
-		deckFS = d
-	}
-	mux.Handle(AssetsPath, http.StripPrefix(AssetsPath, newAssetHandler(assets.FS, deckFS)))
+	mux.Handle(AssetsPath, http.StripPrefix(AssetsPath, newAssetHandler(assets.FS, deckAssetsFS(opts))))
 
 	s.mux = mux
 	s.httpSrv = &http.Server{
@@ -258,9 +252,22 @@ func listenExplicit(port int) (net.Listener, error) {
 }
 
 // isAddrInUse reports whether err is the socket address-in-use condition, on
-// every supported platform.
+// every supported target. Go's error text is stable, English and
+// platform-specific: Unix reports "address already in use" and Windows reports
+// "Only one usage of each socket address …". The check is deliberately
+// text-based rather than an errno comparison because Windows raises
+// WSAEADDRINUSE, which the Unix syscall.EADDRINUSE does not match, and this
+// file must build for both targets without platform-specific files.
+//
+// It is only consulted after a net.Listen has failed, and its only effect is to
+// choose between the busier-port branches (try the next port, or the
+// explicit-port error) and re-reporting the bind failure. A false positive
+// therefore only re-describes a busy port; it can never hide a real failure or
+// bind anywhere but 127.0.0.1.
 func isAddrInUse(err error) bool {
-	return errors.Is(err, syscall.EADDRINUSE)
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "address already in use") ||
+		strings.Contains(msg, "only one usage of each socket address")
 }
 
 // deckAssetsFS returns the deck's assets/ subdirectory as a filesystem rooted
