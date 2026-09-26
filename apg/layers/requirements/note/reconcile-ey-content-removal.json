@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "global.constraint.go-static-embedded-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.stakeholder.ey-brand-owner",
+      "properties": {}
     }
   ],
   "in": []
