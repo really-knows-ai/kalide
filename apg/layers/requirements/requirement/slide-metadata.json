@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "slide-metadata",
+  "body": "Every slide's layout and sections receive derived, render-time slide metadata under the reserved `slide` context: `{{.slide.number}}` — the 1-based position of the current slide in the deck's presentation order, i.e. the position of its slide file in the deck's flattened slide order (each numbered horizontal slide, then its letter vertical children, in numeric-then-letter order) — and `{{.slide.total}}` — the total number of slide files in the deck. Both are integers. This metadata is computed at render time from the deck model; it is NOT authored frontmatter, is never read from a slide's YAML, and is distinct from the slide's filename position (slide-position) and its fields.\nAC: in a deck of slide files 1-intro.md, 2-agenda.md, 2a-detail.md, 5-close.md (four slides), `.slide.total` is 4 and `.slide.number` is 1, 2, 3 and 4 respectively; a gap in the filename numbering does not change `.slide.number`/`.slide.total`; editing slide frontmatter does not change them.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
