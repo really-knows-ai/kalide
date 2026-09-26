@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "domain.entity.template",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": []
