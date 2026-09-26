@@ -73,6 +73,10 @@ const (
 // embedded page is reported as a 500 by the handler, never a panic, so a
 // mis-embed is visible rather than fatal.
 //
+// It is registered on the server's mux by Listen (server.go), so every running
+// server serves the gallery as soon as it is listening. Tests may build one
+// directly to render a gallery from a custom registry.
+//
 // The handler is stateless and safe for concurrent requests: the embedded page
 // is parsed once here and the per-request documents are derived from the
 // registry, whose templates are immutable.
@@ -83,17 +87,6 @@ func galleryHandler(reg *template.Registry) http.Handler {
 		reg, regErr = template.Builtins()
 	}
 	return &galleryServer{reg: reg, regErr: regErr, page: page, pageErr: pageErr}
-}
-
-// HandleGallery registers the /templates route on the server, populated from
-// reg (nil uses template.Builtins()). It calls (Server).Handle, the same seam
-// the phase-7 reloader uses, so the caller must invoke it before printing the
-// URL or opening a browser. It returns without effect when s is nil.
-func (s *Server) HandleGallery(reg *template.Registry) {
-	if s == nil {
-		return
-	}
-	s.Handle(galleryPath, galleryHandler(reg))
 }
 
 // galleryServer is the /templates handler. page and pageErr are the embedded

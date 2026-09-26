@@ -21,16 +21,15 @@
 // and author image paths written `assets/…` both resolve
 // (global.constraint.go-static-embedded-binary).
 //
-// This unit is deliberately only the listener and the static serving. It does
-// NOT implement live reload, the SSE endpoint, the error-page state machine or
-// the /templates gallery (phase-7 tasks 4 and 5). It exposes the seams those
-// tasks build on:
+// This unit is the listener and the static serving plus the /templates
+// gallery; it does NOT implement live reload or the SSE endpoint (phase-7
+// task 4, reload.go). It exposes the seams those tasks build on:
 //
 //   - Page is the document served at "/"; (Server).SetPage swaps it, so a
 //     reloader can publish a freshly rendered deck or a full-page error
 //     without touching the listener.
-//   - (Server).Handle registers an additional route (the SSE endpoint, the
-//     gallery) on the same mux and listener.
+//   - (Server).Handle registers an additional route (the SSE endpoint) on the
+//     same mux and listener. Listen registers the /templates gallery itself.
 //   - NewErrorPage renders the embedded full-page error shell from the single
 //     formatted validation error — the document a reloader publishes when a
 //     watched edit breaks the deck (requirements.requirement.live-reload-error-page).
@@ -209,6 +208,13 @@ func Listen(opts Options) (*Server, error) {
 	mux.Handle(AssetsPath, http.StripPrefix(AssetsPath, newAssetHandler(assets.FS, deckAssetsFS(opts))))
 
 	s.mux = mux
+	// The /templates gallery (phase-7 task 5) is a fixed route every server
+	// serves, so it is registered here rather than by the caller: `eypres
+	// start` prints the URL only after Listen returns, so the gallery is
+	// reachable as soon as the deck is. It is populated from the compiled-in
+	// template registry (gallery.go).
+	s.Handle(galleryPath, galleryHandler(nil))
+
 	s.httpSrv = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: readHeaderTimeout,
