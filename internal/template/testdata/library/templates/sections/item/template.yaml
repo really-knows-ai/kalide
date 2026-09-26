@@ -1,0 +1,7 @@
+description: a minimal list item section, for gallery/show section coverage
+fields:
+  - name: title
+    type: text
+    required: true
+body:
+  mode: optional
