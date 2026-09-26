@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.scoop-install",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.install-kalide",
+      "properties": {}
     }
   ],
   "in": [

@@ -15,6 +15,11 @@
       "kind": "drives",
       "source": "requirements.requirement.homebrew-install",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.install-docs",
+      "properties": {}
     }
   ]
 }
