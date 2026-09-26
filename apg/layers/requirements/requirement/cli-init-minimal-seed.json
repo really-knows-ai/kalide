@@ -11,6 +11,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.templates-dir-layout",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
     }
   ],
   "in": [
