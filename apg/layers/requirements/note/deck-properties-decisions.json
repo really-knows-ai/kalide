@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.deck-properties",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-context",
+      "properties": {}
     }
   ],
   "in": []
