@@ -249,6 +249,11 @@
       "kind": "details",
       "target": "solution.component.deck-validator",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
     }
   ],
   "in": []
