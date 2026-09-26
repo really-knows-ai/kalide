@@ -159,6 +159,11 @@
       "kind": "details",
       "target": "requirements.requirement.templates-live-reload",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.source-repo-module-path",
+      "properties": {}
     }
   ],
   "in": []
