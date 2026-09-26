@@ -244,6 +244,11 @@
       "kind": "details",
       "target": "solution.component.scoop-manifest",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.deck-validator",
+      "properties": {}
     }
   ],
   "in": []
