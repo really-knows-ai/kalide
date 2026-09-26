@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "requirements.note.fix-media-helper-base",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }
