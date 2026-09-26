@@ -38,6 +38,11 @@
       "kind": "contains",
       "source": "requirements.stakeholder.brand-owner",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }

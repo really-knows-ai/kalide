@@ -99,6 +99,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-templates-list",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.embedded-assets",
+      "properties": {}
     }
   ],
   "in": []
