@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "slide-metadata",
+  "body": "Per-slide metadata derived at render time, never authored: number (the 1-based position of the current slide in the deck's presentation order — its slide file's place in the flattened slide order) and total (the number of slide files in the deck). Exposed to layouts and section templates under the reserved `slide` context (template-context). Distinct from authored slide frontmatter (fields) and from domain.value.slide-position (the filename-derived number/letter/label).",
+  "properties": {},
+  "out": [],
+  "in": []
+}
