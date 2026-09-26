@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "solution.system.kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.note.fix-kalide-template-source",
+      "properties": {}
     }
   ],
   "in": []
