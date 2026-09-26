@@ -189,6 +189,11 @@
       "kind": "details",
       "target": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.load-deck",
+      "properties": {}
     }
   ],
   "in": []
