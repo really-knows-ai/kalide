@@ -21,6 +21,11 @@
       "kind": "drives",
       "target": "domain.value.deck-config",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.deck-properties",
+      "properties": {}
     }
   ],
   "in": [
