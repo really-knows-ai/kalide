@@ -36,6 +36,11 @@
       "kind": "contains",
       "target": "requirements.requirement.templates-live-reload",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
     }
   ],
   "in": [
