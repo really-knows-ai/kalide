@@ -89,6 +89,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-init-refuse-existing",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.install-docs",
+      "properties": {}
     }
   ],
   "in": []
