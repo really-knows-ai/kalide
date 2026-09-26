@@ -69,6 +69,11 @@
       "kind": "details",
       "target": "solution.component.template-library-loader",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": []
