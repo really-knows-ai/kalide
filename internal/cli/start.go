@@ -41,6 +41,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -49,6 +50,7 @@ import (
 
 	"github.com/really-knows-ai/ey-present/internal/server"
 	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 	"github.com/really-knows-ai/ey-present/internal/watch"
 )
@@ -119,7 +121,24 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	registry, err := template.Builtins()
+	// Load the project's templates/ library and its themes registry before
+	// anything else: a missing or invalid templates/ directory is reported
+	// the same way a broken deck is, and never falls back to any compiled-in
+	// content (no-built-in-fallback).
+	deckFS := os.DirFS(root)
+	library, err := template.LoadLibrary(deckFS, template.TemplatesDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		return 1
+	}
+
+	themeReg, err := theme.LoadDir(deckFS, path.Join(template.TemplatesDir, template.ThemesDir))
+	if err != nil {
+		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		return 1
+	}
+
+	registry, err := template.NewRegistryFromLibrary(library)
 	if err != nil {
 		fmt.Fprintf(stderr, "eypres start: %v\n", err)
 		return 1
@@ -128,8 +147,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	// Validate the WHOLE deck before anything is served. A broken deck is an
 	// author error, not a crash: print the single first error, exactly as the
 	// browser error page would render it, and exit without binding a port.
-	deckFS := os.DirFS(root)
-	if verr, invalid := validate.Validate(deckFS, registry, nil); invalid {
+	if verr, invalid := validate.Validate(deckFS, registry, themeReg); invalid {
 		fmt.Fprintln(stderr, validate.Format(verr))
 		return 1
 	}
@@ -140,7 +158,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	srv, err := server.Listen(server.Options{Port: opts.port, Root: root})
+	srv, err := server.Listen(server.Options{Port: opts.port, Root: root, Library: library, Themes: themeReg})
 	if err != nil {
 		_ = stopWatch()
 		fmt.Fprintf(stderr, "eypres start: %v\n", err)
