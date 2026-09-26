@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "requirements.requirement.tap-bucket-location",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.templates-dir-required",
+      "properties": {}
     }
   ],
   "in": []
