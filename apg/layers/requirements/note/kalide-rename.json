@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.stakeholder.kalide-maintainers",
+      "properties": {}
     }
   ],
   "in": []
