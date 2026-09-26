@@ -274,6 +274,11 @@
       "kind": "details",
       "target": "solution.person.maintainer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.person.template-author",
+      "properties": {}
     }
   ],
   "in": []
