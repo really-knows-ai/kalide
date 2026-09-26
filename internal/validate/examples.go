@@ -93,7 +93,7 @@ func ValidateBuiltinExamples(reg *template.Registry) []ExampleError {
 			Template: "",
 			Err: New("", 0, nil,
 				"no template registry given",
-				"pass template.Builtins()' registry"),
+				"pass the loaded library's registry (template.NewRegistryFromLibrary)"),
 		}}
 	}
 
@@ -136,16 +136,17 @@ func validateExample(reg *template.Registry, t *template.Template) (ValidationEr
 	return Validate(exampleFS{slide: []byte(slideSrc)}, vreg, exampleThemeRegistry())
 }
 
-// exampleThemeRegistry returns a minimal theme registry holding just the
-// default theme, so the synthetic deck's config (which never sets a `theme`
-// key) resolves. It is built fresh on each call rather than shared, in
-// keeping with this file's rule that nothing here touches shared mutable
-// state.
+// exampleThemeRegistry returns a minimal theme registry holding just a
+// "default"-named theme (no stylesheet asset backing — the synthetic
+// single-slide validation never renders CSS), so the synthetic deck's config
+// (which never sets a `theme` key) resolves. It is built fresh on each call
+// rather than shared, in keeping with this file's rule that nothing here
+// touches shared mutable state.
 func exampleThemeRegistry() *theme.Registry {
 	reg := theme.NewRegistry()
-	// A programming error only: the default theme's name is a fixed
-	// constant, so registration into a fresh, empty registry cannot fail.
-	_ = reg.Register(theme.Default())
+	// A programming error only: the name is a fixed constant, so
+	// registration into a fresh, empty registry cannot fail.
+	_ = reg.Register(theme.Theme{Name: theme.DefaultName})
 	return reg
 }
 

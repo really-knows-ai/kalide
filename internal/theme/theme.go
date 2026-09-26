@@ -1,16 +1,17 @@
-// Package theme implements the compiled-in theme registry.
+// Package theme implements the project theme registry.
 //
 // A theme is a named set of CSS design tokens (colours, fonts, spacing) plus
-// the brand assets that go with it. Only the EY-look theme named "default"
-// ships today: its stylesheet is the phase-1 embedded internal/assets
-// theme.css, which the registry references rather than reimplements.
+// the asset files that go with it. Themes are loaded from a project's
+// templates/themes/<name> directory (theme.LoadDir); the package has no
+// compiled-in theme of its own.
 //
-// The registry exists so further themes can be added by registration alone,
-// without touching slide templates or the renderer (theme-selection). Deck
-// configuration resolves its optional `theme` key through Lookup, which
-// defaults to "default" when omitted; an unknown name yields a structured
-// error naming the available themes and a closest-match "did you mean …?"
-// suggestion from internal/suggest (closest-match-suggestions).
+// The registry exists so a project's themes can be added by registration
+// alone, without touching slide templates or the renderer (theme-selection).
+// Deck configuration resolves its optional `theme` key through
+// Registry.Lookup, which defaults to "default" when omitted (that name must
+// then be present in the loaded registry); an unknown name yields a
+// structured error naming the available themes and a closest-match "did you
+// mean …?" suggestion from internal/suggest (closest-match-suggestions).
 package theme
 
 import (
@@ -21,16 +22,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/really-knows-ai/ey-present/internal/assets"
 	"github.com/really-knows-ai/ey-present/internal/suggest"
 )
 
-// DefaultName is the name of the single built-in theme, the EY look. It is
-// also the value deck configuration resolves to when no theme is given.
+// DefaultName is the name deck configuration resolves the `theme` key to when
+// it is omitted; the loaded project registry must have a theme with this name
+// for that fallback to succeed.
 const DefaultName = "default"
-
-// defaultStylesheet is the default theme's token sheet, relative to assets.FS.
-const defaultStylesheet = "theme.css"
 
 // Theme is one named presentation theme.
 type Theme struct {
@@ -39,13 +37,12 @@ type Theme struct {
 	Name string
 
 	// Stylesheet is the path, within Assets, of the CSS token sheet defining
-	// the theme's variables. The built-in default uses "theme.css", whose
-	// url(…) references (fonts/, logo/) resolve relative to assets.FS.
+	// the theme's variables.
 	Stylesheet string
 
 	// Assets is the filesystem holding Stylesheet and the theme's other
-	// files. The built-in default uses assets.FS. It may be nil for a theme
-	// that carries no files, such as a registry-only theme in a test.
+	// files. It may be nil for a theme that carries no files, such as a
+	// registry-only theme in a test.
 	Assets fs.FS
 }
 
@@ -62,12 +59,6 @@ func (t Theme) CSS() ([]byte, error) {
 		return nil, fmt.Errorf("theme %q: read stylesheet %q: %w", t.Name, t.Stylesheet, err)
 	}
 	return css, nil
-}
-
-// Default returns the built-in EY theme. Its stylesheet is the embedded
-// internal/assets theme.css; no CSS is reimplemented here.
-func Default() Theme {
-	return Theme{Name: DefaultName, Stylesheet: defaultStylesheet, Assets: assets.FS}
 }
 
 // Position locates a theme name in a source file. The zero value means the
@@ -134,8 +125,7 @@ type Registry struct {
 	themes map[string]Theme
 }
 
-// NewRegistry returns an empty theme registry. Use it for an isolated registry;
-// Builtin returns the shared compiled-in one.
+// NewRegistry returns an empty theme registry.
 func NewRegistry() *Registry {
 	return &Registry{themes: make(map[string]Theme)}
 }
@@ -187,27 +177,3 @@ func (r *Registry) Names() []string {
 	sort.Strings(names)
 	return names
 }
-
-// builtin is the compiled-in registry, preloaded with the built-in themes. It
-// is resolved once; registering the default can only fail on a programming
-// error, so a failure here panics at startup rather than surfacing to authors.
-var builtin = func() *Registry {
-	r := NewRegistry()
-	if err := r.Register(Default()); err != nil {
-		panic("theme: register default theme: " + err.Error())
-	}
-	return r
-}()
-
-// Builtin returns the shared compiled-in registry holding the built-in themes.
-// Callers that need isolation (tests) should use NewRegistry instead.
-func Builtin() *Registry { return builtin }
-
-// Register adds t to the built-in registry.
-func Register(t Theme) error { return builtin.Register(t) }
-
-// Lookup returns the theme registered under name in the built-in registry.
-func Lookup(name string) (Theme, error) { return builtin.Lookup(name) }
-
-// Names returns the built-in registry's theme names, sorted.
-func Names() []string { return builtin.Names() }
