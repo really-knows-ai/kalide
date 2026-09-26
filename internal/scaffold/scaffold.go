@@ -1,4 +1,4 @@
-// Package scaffold creates a new starter deck on disk for `eypres init`
+// Package scaffold creates a new starter deck on disk for `kalide init`
 // (requirements.requirement.cli-init,
 // requirements.requirement.cli-init-refuse-existing and
 // requirements.requirement.cli-init-minimal-seed).
@@ -25,7 +25,7 @@ import (
 // blockPaths are the four entries a scaffolded deck owns. If any of them is
 // already present, Init refuses: the command has no --force and never overwrites
 // deck content. The display form matches how the requirement names them
-// (`slides/`, `templates/`, `assets/`, `eypres.yaml`).
+// (`slides/`, `templates/`, `assets/`, `kalide.yaml`).
 //
 // Other entries in the target directory — a .git directory, a README, an editor
 // lock file — are irrelevant to the deck and do NOT block init.
@@ -36,14 +36,14 @@ var blockPaths = []struct {
 	{path: "slides", display: "slides/"},
 	{path: "templates", display: "templates/"},
 	{path: "assets", display: "assets/"},
-	{path: "eypres.yaml", display: "eypres.yaml"},
+	{path: "kalide.yaml", display: "kalide.yaml"},
 }
 
 // Init writes the minimal hello seed into dir: slides/ holding the starter
 // slide, templates/ holding the hello slide template and the default theme, an
-// empty assets/ directory for the author's images, and eypres.yaml.
+// empty assets/ directory for the author's images, and kalide.yaml.
 //
-// It first checks that none of slides/, templates/, assets/ or eypres.yaml
+// It first checks that none of slides/, templates/, assets/ or kalide.yaml
 // already exists. If any does, Init writes nothing at all and returns an error
 // naming every existing blocking path; there is no --force and no partial
 // overwrite. When the directory is clear, Init copies every file in the
@@ -61,7 +61,7 @@ func Init(dir string) error {
 		return err
 	}
 	if len(conflicts) > 0 {
-		return fmt.Errorf("init: cannot create the starter deck: %s already present; eypres init never overwrites (remove it or run in an empty directory)",
+		return fmt.Errorf("init: cannot create the starter deck: %s already present; kalide init never overwrites (remove it or run in an empty directory)",
 			strings.Join(conflicts, ", "))
 	}
 

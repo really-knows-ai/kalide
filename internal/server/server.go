@@ -54,10 +54,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/assets"
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
-	"github.com/really-knows-ai/ey-present/internal/validate"
+	"github.com/really-knows-ai/kalide/internal/assets"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
 const (

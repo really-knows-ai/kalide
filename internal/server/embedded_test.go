@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
-	"github.com/really-knows-ai/ey-present/internal/validate"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
 // TestEmbeddedAssetsServed is the phase-3 integration proof that a page's

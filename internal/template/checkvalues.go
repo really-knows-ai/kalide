@@ -14,8 +14,8 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 
-	"github.com/really-knows-ai/ey-present/internal/mdcheck"
-	"github.com/really-knows-ai/ey-present/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
+	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
 // This file implements CheckValues, the schema value-checking engine: it

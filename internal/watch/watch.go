@@ -21,8 +21,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // AssetsDir is the fixed name of the deck's asset directory at the root of a

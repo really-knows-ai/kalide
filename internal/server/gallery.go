@@ -40,10 +40,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/really-knows-ai/ey-present/internal/assets"
-	"github.com/really-knows-ai/ey-present/internal/render"
-	"github.com/really-knows-ai/ey-present/internal/slide"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/assets"
+	"github.com/really-knows-ai/kalide/internal/render"
+	"github.com/really-knows-ai/kalide/internal/slide"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 const (

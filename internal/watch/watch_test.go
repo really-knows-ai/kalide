@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/server"
-	"github.com/really-knows-ai/ey-present/internal/watch"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/server"
+	"github.com/really-knows-ai/kalide/internal/watch"
 )
 
 // testDebounce is the debounce window the integration test drives the real

@@ -22,7 +22,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
 // DefaultName is the name deck configuration resolves the `theme` key to when

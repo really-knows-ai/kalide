@@ -27,8 +27,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 func TestStartAndTemplates(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // TestMediaHandler covers mediaHandler (template-media) against a real

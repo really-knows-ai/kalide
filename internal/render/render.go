@@ -46,8 +46,8 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 
-	"github.com/really-knows-ai/ey-present/internal/slide"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/slide"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // RenderError reports one slide that could not be rendered: its file identity

@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // TestValidateIntegration runs real on-disk decks through the whole validator

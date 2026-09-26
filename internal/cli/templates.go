@@ -1,13 +1,13 @@
 package cli
 
-// This file implements `eypres templates` (phase-7 task 7):
+// This file implements `kalide templates` (phase-7 task 7):
 // requirements.requirement.cli-templates-list and
 // requirements.requirement.cli-templates-show.
 //
-//   - `eypres templates` lists every template in the project's templates/
+//   - `kalide templates` lists every template in the project's templates/
 //     library: its name, its usage (slide|section) and its one-line
 //     description.
-//   - `eypres templates <name>` documents one template: its fields (type,
+//   - `kalide templates <name>` documents one template: its fields (type,
 //     required, default, limits, formats, description), its sections (accepted
 //     templates and min/max repeats), its implied body rules and its example
 //     slide, exactly as loaded from the project's templates/ directory.
@@ -16,7 +16,7 @@ package cli
 // (template.LoadLibrary + template.NewRegistryFromLibrary), the same loaded
 // registry the validator and renderer use, so the documentation cannot drift
 // from the behaviour. A missing or invalid templates/ directory is reported
-// the same way `eypres start` reports it, before any listing is attempted
+// the same way `kalide start` reports it, before any listing is attempted
 // (no-built-in-fallback). An unknown name is an author error: it is reported
 // with the closest-match "did you mean …?" suggestion from internal/suggest,
 // matching the parser's and theme registry's error style.
@@ -33,11 +33,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
-// runTemplates implements `eypres templates [name]`.
+// runTemplates implements `kalide templates [name]`.
 //
 // With no arguments it lists every template in the project's templates/
 // library. With exactly one argument it shows that template's full
@@ -49,19 +49,19 @@ import (
 func runTemplates(args []string, stdout, stderr io.Writer) int {
 	root, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres templates: %v\n", err)
+		fmt.Fprintf(stderr, "kalide templates: %v\n", err)
 		return 1
 	}
 
 	library, err := template.LoadLibrary(os.DirFS(root), template.TemplatesDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres templates: %v\n", err)
+		fmt.Fprintf(stderr, "kalide templates: %v\n", err)
 		return 1
 	}
 
 	registry, err := template.NewRegistryFromLibrary(library)
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres templates: %v\n", err)
+		fmt.Fprintf(stderr, "kalide templates: %v\n", err)
 		return 1
 	}
 
@@ -86,7 +86,7 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 // templates. It is a plain string so the caller chooses the writer.
 func templateUnknownMessage(name string, names []string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "eypres templates: unknown template %q", name)
+	fmt.Fprintf(&b, "kalide templates: unknown template %q", name)
 	if s := suggest.Closest(name, names); s != "" {
 		fmt.Fprintf(&b, ": did you mean %q?", s)
 	}
@@ -118,7 +118,7 @@ func printTemplateList(w io.Writer, registry *template.Registry) {
 		fmt.Fprintf(w, "  %-*s  %-7s  %s\n", nameWidth, t.Name, string(t.Usage), t.Description)
 	}
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Run `eypres templates <name>` for a template's fields, sections and example.")
+	fmt.Fprintln(w, "Run `kalide templates <name>` for a template's fields, sections and example.")
 }
 
 // printTemplateDetails writes one template's full documentation: its identity,

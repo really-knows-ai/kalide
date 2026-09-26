@@ -1,4 +1,4 @@
-// Package cli implements the eypres command-line surface.
+// Package cli implements the kalide command-line surface.
 //
 // Run is the single entry point: it dispatches os.Args to a command and
 // returns the process status code. Handlers write user-facing output to the
@@ -11,18 +11,18 @@ import (
 	"io"
 )
 
-// usage is the plain-language help text shown for `eypres help`, for a bare
+// usage is the plain-language help text shown for `kalide help`, for a bare
 // invocation, and after a usage error.
-const usage = `eypres — author and present Markdown slide decks
+const usage = `kalide — author and present Markdown slide decks
 
 Usage:
-  eypres init                Create a starter deck and templates/ library
+  kalide init                Create a starter deck and templates/ library
                              in the current directory
-  eypres start [--port N] [--no-open]
+  kalide start [--port N] [--no-open]
                              Validate and serve the deck, then open a browser
-  eypres templates [name]    List the project's templates/ library, or show
+  kalide templates [name]    List the project's templates/ library, or show
                              one template by name
-  eypres help                Show this help
+  kalide help                Show this help
 `
 
 // Run parses args (the full os.Args, so args[0] is the program name) and
@@ -54,13 +54,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runStart(args[2:], stdout, stderr)
 	case "templates":
 		if len(args) > 3 {
-			fmt.Fprintf(stderr, "eypres templates: expected at most one template name\n\n")
+			fmt.Fprintf(stderr, "kalide templates: expected at most one template name\n\n")
 			fmt.Fprint(stderr, usage)
 			return 2
 		}
 		return runTemplates(args[2:], stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "eypres: unknown command %q\n\n", cmd)
+		fmt.Fprintf(stderr, "kalide: unknown command %q\n\n", cmd)
 		fmt.Fprint(stderr, usage)
 		return 2
 	}

@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/mdcheck"
-	"github.com/really-knows-ai/ey-present/internal/slide"
-	"github.com/really-knows-ai/ey-present/internal/suggest"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
+	"github.com/really-knows-ai/kalide/internal/slide"
+	"github.com/really-knows-ai/kalide/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // This file implements the step-(4) inter-slide link pass (inter-slide-links),

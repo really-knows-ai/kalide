@@ -56,7 +56,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/server"
+	"github.com/really-knows-ai/kalide/internal/server"
 )
 
 // TestNativeRelease is the end-to-end native release init verification

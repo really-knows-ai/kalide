@@ -36,7 +36,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/server"
+	"github.com/really-knows-ai/kalide/internal/server"
 )
 
 // The fixture deck. Since `eypres start` now requires a valid project

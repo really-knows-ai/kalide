@@ -42,8 +42,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/server"
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/server"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // initCreatedPaths are the deck-relative paths `eypres init` reports creating;

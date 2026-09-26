@@ -1,10 +1,10 @@
 package cli
 
-// This file implements `eypres start` (phase-7 task 6):
+// This file implements `kalide start` (phase-7 task 6):
 // requirements.requirement.cli-start.
 //
-// `eypres start [--port N] [--no-open]` validates the whole deck FIRST, in the
-// same fixed deterministic order internal/validate uses (`eypres start` must
+// `kalide start [--port N] [--no-open]` validates the whole deck FIRST, in the
+// same fixed deterministic order internal/validate uses (`kalide start` must
 // never serve a broken deck). A validation failure prints exactly the single
 // first error, formatted by validate.Format — byte for byte the message the
 // browser error page shows — and exits non-zero without binding a port.
@@ -16,7 +16,7 @@ package cli
 //     embedded assets and the /templates gallery; the actual bound port (8080,
 //     a fallback in 8081..8099, or the explicit --port) is what gets printed;
 //   - internal/watch.Watch reports debounced changes to slides/, assets/ and
-//     eypres.yaml;
+//     kalide.yaml;
 //   - internal/server.NewReloader ties the two together: it registers the SSE
 //     endpoint, publishes the first page, and re-validates + re-renders on every
 //     watch event, swapping in the deck or the full-page error.
@@ -48,11 +48,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/server"
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
-	"github.com/really-knows-ai/ey-present/internal/validate"
-	"github.com/really-knows-ai/ey-present/internal/watch"
+	"github.com/really-knows-ai/kalide/internal/server"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
+	"github.com/really-knows-ai/kalide/internal/watch"
 )
 
 const (
@@ -64,12 +64,12 @@ const (
 	startDebounce = 200 * time.Millisecond
 
 	// startShutdownTimeout bounds the graceful server shutdown, so a stuck
-	// client connection cannot keep `eypres start` from releasing the port on
+	// client connection cannot keep `kalide start` from releasing the port on
 	// Ctrl+C forever.
 	startShutdownTimeout = 5 * time.Second
 )
 
-// startOptions are the parsed `eypres start` flags.
+// startOptions are the parsed `kalide start` flags.
 type startOptions struct {
 	// port is the explicit --port value, or 0 when none was given (the server
 	// then tries its default range).
@@ -87,7 +87,7 @@ var openURL = systemOpenURL
 
 // systemOpenURL launches the platform's default-browser opener for url. The
 // command is Run to completion, not merely Started, so the opener process is
-// reaped and `eypres start` leaves no child behind. The supported targets are
+// reaped and `kalide start` leaves no child behind. The supported targets are
 // macOS (`open`) and Windows (`rundll32`); anything else falls back to
 // `xdg-open`.
 func systemOpenURL(url string) error {
@@ -103,21 +103,21 @@ func systemOpenURL(url string) error {
 	return cmd.Run()
 }
 
-// runStart implements `eypres start [--port N] [--no-open]`. It returns the
+// runStart implements `kalide start [--port N] [--no-open]`. It returns the
 // process status code: 0 after a clean, signal-triggered shutdown; 1 when the
 // deck does not validate, the registry cannot be built, a port cannot be bound
 // or the server cannot start; 2 for malformed arguments.
 func runStart(args []string, stdout, stderr io.Writer) int {
 	opts, err := parseStartArgs(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres start: %v\n\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n\n", err)
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
 
 	root, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
@@ -128,19 +128,19 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	deckFS := os.DirFS(root)
 	library, err := template.LoadLibrary(deckFS, template.TemplatesDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
 	themeReg, err := theme.LoadDir(deckFS, path.Join(template.TemplatesDir, template.ThemesDir))
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
 	registry, err := template.NewRegistryFromLibrary(library)
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
@@ -154,14 +154,14 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 
 	events, stopWatch, err := watch.Watch(root, startDebounce)
 	if err != nil {
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
 	srv, err := server.Listen(server.Options{Port: opts.port, Root: root, Library: library, Themes: themeReg})
 	if err != nil {
 		_ = stopWatch()
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
@@ -174,7 +174,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		_ = srv.Shutdown(context.Background())
 		_ = stopWatch()
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
@@ -184,7 +184,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	if err := reloader.Start(); err != nil {
 		_ = srv.Shutdown(context.Background())
 		_ = stopWatch()
-		fmt.Fprintf(stderr, "eypres start: %v\n", err)
+		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
@@ -193,7 +193,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintln(stdout, "Press Ctrl+C to stop.")
 	if !opts.noOpen {
 		if err := openURL(url); err != nil {
-			fmt.Fprintf(stderr, "eypres start: could not open a browser: %v\n", err)
+			fmt.Fprintf(stderr, "kalide start: could not open a browser: %v\n", err)
 		}
 	}
 
@@ -213,7 +213,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	case <-ctx.Done():
 	case err := <-runDone:
 		if err != nil {
-			fmt.Fprintf(stderr, "eypres start: %v\n", err)
+			fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		}
 	}
 
@@ -264,7 +264,7 @@ func parseStartArgs(args []string) (startOptions, error) {
 }
 
 // parsePort validates an explicit --port value. Port 0 is not accepted: the
-// documented way to ask eypres to choose a free port is to omit --port.
+// documented way to ask kalide to choose a free port is to omit --port.
 func parsePort(s string) (int, error) {
 	port, err := strconv.Atoi(s)
 	if err != nil || port < 1 || port > 65535 {

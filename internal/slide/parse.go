@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
 // NotesSection is the reserved name of a slide's speaker-notes section. It is

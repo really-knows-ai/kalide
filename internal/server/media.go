@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // This file implements mediaHandler (template-media): serving a project's

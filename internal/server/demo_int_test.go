@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/assets"
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/render"
-	"github.com/really-knows-ai/ey-present/internal/slide"
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
-	"github.com/really-knows-ai/ey-present/internal/validate"
+	"github.com/really-knows-ai/kalide/internal/assets"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/render"
+	"github.com/really-knows-ai/kalide/internal/slide"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
 // demoProjectDir is the repository's non-EY demo project (examples/demo),

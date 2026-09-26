@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
 // This file implements Registry, the compiled-in template registry, and the

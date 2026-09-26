@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // This file implements ValidateBuiltinExamples, the proof that every

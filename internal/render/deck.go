@@ -7,11 +7,11 @@ import (
 	htmltmpl "html/template"
 	"strings"
 
-	"github.com/really-knows-ai/ey-present/internal/assets"
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/slide"
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/assets"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/slide"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // deckPageName is the deck page template's path within the embedded pages

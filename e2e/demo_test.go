@@ -37,7 +37,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/server"
+	"github.com/really-knows-ai/kalide/internal/server"
 )
 
 // TestDemoProject drives `eypres start --no-open` against a temporary copy of

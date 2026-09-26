@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
 // This file implements LibraryError, the error type LoadLibrary and its

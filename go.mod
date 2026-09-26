@@ -1,4 +1,4 @@
-module github.com/really-knows-ai/ey-present
+module github.com/really-knows-ai/kalide
 
 go 1.27
 

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // fixtureLibraryDir is the phase-3 fixture library's project root, relative

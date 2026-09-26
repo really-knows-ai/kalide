@@ -16,8 +16,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/really-knows-ai/ey-present/internal/suggest"
-	"github.com/really-knows-ai/ey-present/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/suggest"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // ConfigFile is the fixed name of the deck configuration file at the root of a

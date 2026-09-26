@@ -14,13 +14,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/really-knows-ai/ey-present/internal/deck"
-	"github.com/really-knows-ai/ey-present/internal/render"
-	"github.com/really-knows-ai/ey-present/internal/slide"
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
-	"github.com/really-knows-ai/ey-present/internal/validate"
-	"github.com/really-knows-ai/ey-present/internal/watch"
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/render"
+	"github.com/really-knows-ai/kalide/internal/slide"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
+	"github.com/really-knows-ai/kalide/internal/watch"
 )
 
 // This file implements Reloader, the live-reload half of `eypres start`

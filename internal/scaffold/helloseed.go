@@ -1,5 +1,5 @@
 // This file implements writeHelloSeed: the minimal, unbranded starter deck
-// `eypres init` now writes (cli-init-minimal-seed), replacing the EY starter
+// `kalide init` now writes (cli-init-minimal-seed), replacing the EY starter
 // previously copied from internal/assets.Starter.
 //
 // The seed is embedded here, in internal/scaffold, rather than in
@@ -19,11 +19,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // seedFS is the embedded seed tree, rooted so that "templates", "slides" and
-// "eypres.yaml" are its direct entries — the same layout writeHelloSeed
+// "kalide.yaml" are its direct entries — the same layout writeHelloSeed
 // copies to the target deck directory, and the same layout LoadLibrary
 // expects when given "templates" as its root.
 //
@@ -37,7 +37,7 @@ var seedRoot = mustSeedSub(seedEmbed, "seed")
 
 // writeHelloSeed walks the embedded seed tree and copies every file to the
 // same relative path under dir, creating parent directories as needed. The
-// seed tree's layout is exactly the layout of a deck directory (eypres.yaml,
+// seed tree's layout is exactly the layout of a deck directory (kalide.yaml,
 // slides/, templates/), so the relative path of each embedded file is its
 // destination path.
 func writeHelloSeed(dir string) error {
@@ -97,7 +97,7 @@ func validateSeed() error {
 // init runs validateSeed once, at package load: a broken embedded seed is a
 // compiled-in programming error, exactly like a theme registration failure
 // (internal/theme.builtin), so it panics at startup rather than surfacing as
-// a confusing runtime error the first time someone runs `eypres init`.
+// a confusing runtime error the first time someone runs `kalide init`.
 func init() {
 	if err := validateSeed(); err != nil {
 		panic("scaffold: embedded hello seed fails template.LoadLibrary validation: " + err.Error())

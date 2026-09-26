@@ -18,9 +18,9 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/template"
-	"github.com/really-knows-ai/ey-present/internal/theme"
-	"github.com/really-knows-ai/ey-present/internal/validate"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
 // fixtureLibraryDir is the phase-3 fixture library's project root, relative
