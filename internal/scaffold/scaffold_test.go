@@ -11,6 +11,7 @@ import (
 
 	"github.com/really-knows-ai/ey-present/internal/deck"
 	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
 
@@ -207,10 +208,10 @@ func testInitUnrelated(t *testing.T) {
 
 // testInitScaffoldValidates loads the scaffolded deck through internal/deck
 // (LoadConfig + LoadSlides) and runs the whole-deck validator using the
-// registry built from the scaffolded templates/ library itself — via
-// template.LoadLibrary and template.NewRegistryFromLibrary — not
-// template.Builtins, which carries no "hello" template and would validate
-// nothing meaningful about this seed.
+// registry and theme registry built from the scaffolded templates/ library
+// itself — via template.LoadLibrary, template.NewRegistryFromLibrary and
+// theme.LoadDir — not template.Builtins/theme.Builtin, which carry no
+// "hello" template and would validate nothing meaningful about this seed.
 func testInitScaffoldValidates(t *testing.T) {
 	dir := t.TempDir()
 	if err := Init(dir); err != nil {
@@ -218,7 +219,15 @@ func testInitScaffoldValidates(t *testing.T) {
 	}
 	fsys := os.DirFS(dir)
 
-	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile)
+	themes, err := theme.LoadDir(fsys, filepath.ToSlash(filepath.Join(template.TemplatesDir, template.ThemesDir)))
+	if err != nil {
+		t.Fatalf("theme.LoadDir() error = %v", err)
+	}
+	if _, err := themes.Lookup(theme.DefaultName); err != nil {
+		t.Fatalf("seed's default theme does not resolve: %v", err)
+	}
+
+	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themes)
 	if err != nil {
 		t.Fatalf("deck.LoadConfig() error = %v", err)
 	}
@@ -247,7 +256,7 @@ func testInitScaffoldValidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("template.NewRegistryFromLibrary() error = %v", err)
 	}
-	verr, invalid := validate.Validate(fsys, reg, nil)
+	verr, invalid := validate.Validate(fsys, reg, themes)
 	if invalid {
 		t.Fatalf("validate.Validate() invalid = true with %q, want a valid deck", validate.Format(verr))
 	}

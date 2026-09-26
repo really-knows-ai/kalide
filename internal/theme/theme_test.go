@@ -284,3 +284,41 @@ func TestThemeCSS(t *testing.T) {
 		}
 	})
 }
+
+// TestRegistryFromLoadDir proves a project's theme Registry comes from
+// LoadDir over its templates/themes directory, not from the compiled-in
+// theme.Builtin() registry: a project registry holding only project-defined
+// themes resolves them and does not carry the compiled-in "default" theme
+// unless the project itself defines one.
+func TestRegistryFromLoadDir(t *testing.T) {
+	fsys := fstest.MapFS{
+		"templates/themes/plain/theme.css": &fstest.MapFile{Data: []byte("body{margin:0}")},
+	}
+	reg, err := LoadDir(fsys, "templates/themes")
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+
+	if want := []string{"plain"}; !reflect.DeepEqual(reg.Names(), want) {
+		t.Fatalf("Names() = %v, want %v", reg.Names(), want)
+	}
+
+	// The project registry is isolated from the compiled-in one: it has no
+	// "default" theme unless the project's templates/themes/default exists,
+	// and registering into it never touches Builtin().
+	if _, err := reg.Lookup(DefaultName); err == nil {
+		t.Fatalf("project registry resolved %q, which it never defined", DefaultName)
+	}
+	if _, err := Builtin().Lookup("plain"); err == nil {
+		t.Fatal("Builtin().Lookup(plain) succeeded; the project registry leaked into the compiled-in one")
+	}
+
+	plain, err := reg.Lookup("plain")
+	if err != nil {
+		t.Fatalf("Lookup(plain): %v", err)
+	}
+	css, err := plain.CSS()
+	if err != nil || string(css) != "body{margin:0}" {
+		t.Fatalf("plain.CSS() = (%q, %v), want (\"body{margin:0}\", nil)", css, err)
+	}
+}

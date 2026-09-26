@@ -1,10 +1,16 @@
 package validate
 
 import (
+	"os"
 	"testing"
 
 	"github.com/really-knows-ai/ey-present/internal/template"
 )
+
+// fixtureLibraryDir is the phase-3 fixture library's project root, relative
+// to this package, holding templates/slides/hello, templates/sections/item,
+// templates/themes/plain and templates/media/logo.svg.
+const fixtureLibraryDir = "../template/testdata/library"
 
 // TestValidateBuiltinExamples covers ValidateBuiltinExamples, the build-time
 // proof that every compiled-in template's example slide survives the full
@@ -184,4 +190,61 @@ func testExampleNilRegistry(t *testing.T) {
 	if got := Format(errs[0].Err); got != want {
 		t.Errorf("Format(ExampleError.Err) = %q, want %q", got, want)
 	}
+}
+
+// TestValidateFixtureLibraryExamples covers ValidateBuiltinExamples against
+// the phase-3 fixture library's own example.md files
+// (internal/template/testdata/library/templates), loaded through
+// template.LoadLibrary + template.NewRegistryFromLibrary: the hello slide's
+// example, once given the `template:` selector a deck author's slide file
+// would carry (library example.md files omit it, since checkLibraryExamples
+// validates them without slide.Parse), must survive the full pipeline with
+// no error; a deliberately broken example (a missing required field) reports
+// the expected first error.
+func TestValidateFixtureLibraryExamples(t *testing.T) {
+	reg := mustFixtureRegistry(t)
+	hello, ok := reg.Lookup("hello")
+	if !ok {
+		t.Fatal(`registry has no "hello" template`)
+	}
+
+	t.Run("fixture library example is valid", func(t *testing.T) {
+		withHeader := *hello
+		withHeader.Example = template.Example{
+			Markdown: "---\ntemplate: hello\ntitle: Hello, world\n---\nA short greeting shown on the hello slide.\n",
+		}
+		errs := ValidateBuiltinExamples(mustRegistry(t, &withHeader))
+		for _, e := range errs {
+			t.Errorf("template %q example invalid: %s", e.Template, Format(e.Err))
+		}
+	})
+
+	t.Run("broken example reports the missing required field", func(t *testing.T) {
+		broken := *hello
+		broken.Example = template.Example{Markdown: "---\ntemplate: hello\n---\n"}
+		errs := ValidateBuiltinExamples(mustRegistry(t, &broken))
+		if len(errs) != 1 {
+			t.Fatalf("ValidateBuiltinExamples = %d failures, want exactly 1", len(errs))
+		}
+		want := `slides/1-example.md › title: required: field "title" is required but missing — add a title: value`
+		if got := Format(errs[0].Err); got != want {
+			t.Errorf("Format(ExampleError.Err) =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+}
+
+// mustFixtureRegistry loads the phase-3 fixture library and returns the
+// registry it builds.
+func mustFixtureRegistry(t *testing.T) *template.Registry {
+	t.Helper()
+	fsys := os.DirFS(fixtureLibraryDir)
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	return reg
 }

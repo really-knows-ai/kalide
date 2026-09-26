@@ -1,4 +1,5 @@
 ---
+template: hello
 title: Hello, world
 logo: assets/brand/logo.png
 ---

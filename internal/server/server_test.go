@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,6 +20,11 @@ import (
 	"github.com/really-knows-ai/ey-present/internal/template"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
+
+// fixtureLibraryDir is the phase-3 fixture library's project root, relative
+// to this package, holding templates/slides/hello, templates/sections/item,
+// templates/themes/plain and templates/media/logo.svg.
+const fixtureLibraryDir = "../template/testdata/library"
 
 // TestServer covers the phase-7 unit surface of internal/server: port
 // selection and its error messages, the Page seam and recovery through the
@@ -382,6 +389,67 @@ func TestServer(t *testing.T) {
 		}
 	})
 
+	t.Run("gallery serves the project library", func(t *testing.T) {
+		fsys := os.DirFS(fixtureLibraryDir)
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
+			t.Fatalf("template.LoadLibrary: %v", err)
+		}
+		reg, err := template.NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+		}
+		funcMap := template.LayoutFuncMap(lib.Media, MediaPath)
+
+		rec := httptest.NewRecorder()
+		galleryHandler(reg, funcMap).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, galleryPath, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status %d, want 200 (body %q)", galleryPath, rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `class="ey-gallery__name">hello`) {
+			t.Errorf("gallery does not list the fixture %q slide template:\n%s", "hello", body)
+		}
+		if !strings.Contains(body, `class="ey-gallery__name">item`) {
+			t.Errorf("gallery does not list the fixture %q section template:\n%s", "item", body)
+		}
+	})
+
+	t.Run("broken templates library serves the error page", func(t *testing.T) {
+		dir := t.TempDir()
+		// eypres.yaml and slides/ are valid, but templates/ is entirely
+		// missing: NewReloader's built-in pipeline must publish the error
+		// page, never a stale or partially-loaded deck.
+		mustWriteFile(t, filepath.Join(dir, "eypres.yaml"), "title: Broken\n")
+		mustWriteFile(t, filepath.Join(dir, "slides", "1-only.md"), "---\ntemplate: hello\ntitle: Hi\n---\n")
+
+		srv := mustListen(t, Options{Page: testPage("PLACEHOLDER")})
+		rl, err := NewReloader(ReloadOptions{Server: srv, Root: dir, Log: io.Discard})
+		if err != nil {
+			t.Fatalf("NewReloader: %v", err)
+		}
+		if err := rl.Start(); err != nil {
+			t.Fatalf("Reloader.Start: %v, want the missing templates/ directory reported as the error page, not a Start failure", err)
+		}
+		t.Cleanup(rl.Stop)
+
+		body := getBody(t, srv, rootPath)
+		if !strings.Contains(body, "Deck error") {
+			t.Fatalf("missing templates/ directory did not serve the error page: %q", body)
+		}
+	})
+
+	t.Run("binds 127.0.0.1", func(t *testing.T) {
+		s := mustListen(t, Options{Page: testPage("DECK")})
+		addr, ok := s.Addr().(*net.TCPAddr)
+		if !ok {
+			t.Fatalf("Addr() is %T, want *net.TCPAddr", s.Addr())
+		}
+		if addr.IP.String() != Host {
+			t.Fatalf("server bound %s, want exactly %s", addr.IP, Host)
+		}
+	})
+
 	t.Run("assets serve the embedded reveal and theme files", func(t *testing.T) {
 		srv := mustListen(t, Options{Page: testPage("DECK")})
 
@@ -414,6 +482,17 @@ func TestServer(t *testing.T) {
 			t.Errorf("GET a missing asset status %d, want 404", rec.Code)
 		}
 	})
+}
+
+// mustWriteFile writes data to path, creating parent directories as needed.
+func mustWriteFile(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }
 
 // testPage returns a deck Page carrying doc as its served document.

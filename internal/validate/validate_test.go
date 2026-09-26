@@ -107,7 +107,7 @@ func testDeterminism(t *testing.T) {
 
 	first := ""
 	for i := 0; i < 5; i++ {
-		verr, invalid := Validate(mapDeck(files), reg, nil)
+		verr, invalid := Validate(mapDeck(files), reg, exampleThemeRegistry())
 		if !invalid {
 			t.Fatalf("run %d: invalid = false, want true", i)
 		}
@@ -172,7 +172,7 @@ func testLinks(t *testing.T) {
 // including a known inter-slide #label link.
 func testValidDeck(t *testing.T) {
 	reg := mustRegistry(t, plainTemplate())
-	verr, invalid := Validate(mapDeck(deckFiles("eypres.yaml", "title: T\n", "slides/1-overview.md", "---\ntemplate: plain\n---\n", "slides/2-detail.md", "---\ntemplate: plain\n---\n\nBack to [overview](#overview).\n")), reg, nil)
+	verr, invalid := Validate(mapDeck(deckFiles("eypres.yaml", "title: T\n", "slides/1-overview.md", "---\ntemplate: plain\n---\n", "slides/2-detail.md", "---\ntemplate: plain\n---\n\nBack to [overview](#overview).\n")), reg, exampleThemeRegistry())
 	if invalid {
 		t.Fatalf("Validate() invalid = true with %q, want a valid deck", Format(verr))
 	}
@@ -256,7 +256,7 @@ func mustRegistry(t *testing.T, templates ...*template.Template) *template.Regis
 // wantError asserts the deck is invalid and Format renders exactly want.
 func wantError(t *testing.T, reg *template.Registry, files map[string]string, want string) {
 	t.Helper()
-	verr, invalid := Validate(mapDeck(files), reg, nil)
+	verr, invalid := Validate(mapDeck(files), reg, exampleThemeRegistry())
 	if !invalid {
 		t.Fatalf("Validate() invalid = false, want error %q", want)
 	}

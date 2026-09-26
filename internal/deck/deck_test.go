@@ -40,6 +40,21 @@ func configFS(yaml string) fstest.MapFS {
 	return fstest.MapFS{ConfigFile: &fstest.MapFile{Data: []byte(yaml)}}
 }
 
+// testThemes returns a small in-memory theme registry with "default" and one
+// named project theme ("sunset"), the fixture testLoadConfig and
+// TestLoadConfigThemeRegistry resolve the `theme` key against.
+func testThemes(t *testing.T) *theme.Registry {
+	t.Helper()
+	reg := theme.NewRegistry()
+	if err := reg.Register(theme.Theme{Name: theme.DefaultName, Stylesheet: "theme.css"}); err != nil {
+		t.Fatalf("register default theme: %v", err)
+	}
+	if err := reg.Register(theme.Theme{Name: "sunset", Stylesheet: "theme.css"}); err != nil {
+		t.Fatalf("register sunset theme: %v", err)
+	}
+	return reg
+}
+
 // wantErr fails unless err is non-nil and its message contains every want
 // substring.
 func wantErr(t *testing.T, err error, wants ...string) {
@@ -55,13 +70,15 @@ func wantErr(t *testing.T, err error, wants ...string) {
 }
 
 func testLoadConfig(t *testing.T) {
+	themes := testThemes(t)
+
 	t.Run("full config resolves every key", func(t *testing.T) {
 		cfg, err := LoadConfig(configFS(
 			"title: EY Deck\n"+
 				"author: Ada Lovelace\n"+
 				"date: 2026-09-25\n"+
 				"theme: default\n"+
-				"navigation: grid\n"), ConfigFile)
+				"navigation: grid\n"), ConfigFile, themes)
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
@@ -78,7 +95,7 @@ func testLoadConfig(t *testing.T) {
 	})
 
 	t.Run("only title is required", func(t *testing.T) {
-		cfg, err := LoadConfig(configFS("title: Minimal\n"), ConfigFile)
+		cfg, err := LoadConfig(configFS("title: Minimal\n"), ConfigFile, themes)
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
@@ -89,7 +106,7 @@ func testLoadConfig(t *testing.T) {
 	})
 
 	t.Run("author and date are optional", func(t *testing.T) {
-		cfg, err := LoadConfig(configFS("title: Minimal\nauthor: Ada\n"), ConfigFile)
+		cfg, err := LoadConfig(configFS("title: Minimal\nauthor: Ada\n"), ConfigFile, themes)
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
@@ -102,28 +119,28 @@ func testLoadConfig(t *testing.T) {
 	})
 
 	t.Run("title required when file is empty", func(t *testing.T) {
-		_, err := LoadConfig(configFS(""), ConfigFile)
+		_, err := LoadConfig(configFS(""), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:1:", `missing required key "title"`)
 	})
 
 	t.Run("title required when omitted but other keys present", func(t *testing.T) {
-		_, err := LoadConfig(configFS("author: Ada\n"), ConfigFile)
+		_, err := LoadConfig(configFS("author: Ada\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:1:", `missing required key "title"`)
 	})
 
 	t.Run("blank title is missing", func(t *testing.T) {
-		_, err := LoadConfig(configFS("author: Ada\ntitle: \"  \"\n"), ConfigFile)
+		_, err := LoadConfig(configFS("author: Ada\ntitle: \"  \"\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:2:", `missing required key "title"`)
 	})
 
 	t.Run("null title is missing", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title:\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title:\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:1:", `missing required key "title"`)
 	})
 
 	t.Run("valid dates are kept", func(t *testing.T) {
 		for _, date := range []string{"2026-09-25", "2000-01-01", "1999-12-31"} {
-			cfg, err := LoadConfig(configFS("title: D\ndate: "+date+"\n"), ConfigFile)
+			cfg, err := LoadConfig(configFS("title: D\ndate: "+date+"\n"), ConfigFile, themes)
 			if err != nil {
 				t.Fatalf("LoadConfig(date %s): %v", date, err)
 			}
@@ -135,7 +152,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("invalid date reports YYYY-MM-DD", func(t *testing.T) {
 		for _, date := range []string{"25/09/2026", "2026-13-01", "2026-09-25T10:00", "Sep 25 2026"} {
-			_, err := LoadConfig(configFS("title: D\ndate: "+date+"\n"), ConfigFile)
+			_, err := LoadConfig(configFS("title: D\ndate: "+date+"\n"), ConfigFile, themes)
 			wantErr(t, err, `key "date"`, "not a valid date, expected YYYY-MM-DD")
 		}
 	})
@@ -144,18 +161,18 @@ func testLoadConfig(t *testing.T) {
 		_, err := LoadConfig(configFS(
 			"title: Deck\n"+
 				"author: Ada\n"+
-				"date: 25/09/2026\n"), ConfigFile)
+				"date: 25/09/2026\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:3:")
 	})
 
 	t.Run("non-string scalar date is rejected", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\ndate: 2026\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\ndate: 2026\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:2:", `key "date"`, "not a valid date")
 	})
 
 	t.Run("empty or null date is allowed", func(t *testing.T) {
 		for _, yaml := range []string{"title: D\ndate: \"\"\n", "title: D\ndate:\n"} {
-			cfg, err := LoadConfig(configFS(yaml), ConfigFile)
+			cfg, err := LoadConfig(configFS(yaml), ConfigFile, themes)
 			if err != nil {
 				t.Fatalf("LoadConfig(%q): %v", yaml, err)
 			}
@@ -167,7 +184,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("navigation values accepted", func(t *testing.T) {
 		for _, mode := range []string{NavigationDefault, NavigationLinear, NavigationGrid} {
-			cfg, err := LoadConfig(configFS("title: D\nnavigation: "+mode+"\n"), ConfigFile)
+			cfg, err := LoadConfig(configFS("title: D\nnavigation: "+mode+"\n"), ConfigFile, themes)
 			if err != nil {
 				t.Fatalf("LoadConfig(navigation %s): %v", mode, err)
 			}
@@ -179,7 +196,7 @@ func testLoadConfig(t *testing.T) {
 
 	t.Run("navigation omitted or empty defaults", func(t *testing.T) {
 		for _, yaml := range []string{"title: D\n", "title: D\nnavigation:\n", "title: D\nnavigation: \"\"\n"} {
-			cfg, err := LoadConfig(configFS(yaml), ConfigFile)
+			cfg, err := LoadConfig(configFS(yaml), ConfigFile, themes)
 			if err != nil {
 				t.Fatalf("LoadConfig(%q): %v", yaml, err)
 			}
@@ -190,13 +207,13 @@ func testLoadConfig(t *testing.T) {
 	})
 
 	t.Run("unknown navigation mode is rejected", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\nnavigation: diagonal\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\nnavigation: diagonal\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:2:", `unknown navigation mode "diagonal"`, "default, linear, grid")
 	})
 
 	t.Run("navigation wrong type is rejected", func(t *testing.T) {
 		for _, yaml := range []string{"title: D\nnavigation: true\n", "title: D\nnavigation: [grid]\n"} {
-			_, err := LoadConfig(configFS(yaml), ConfigFile)
+			_, err := LoadConfig(configFS(yaml), ConfigFile, themes)
 			wantErr(t, err, `key "navigation"`, "expected a string")
 		}
 	})
@@ -214,19 +231,19 @@ func testLoadConfig(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				_, err := LoadConfig(configFS(tt.yaml), ConfigFile)
+				_, err := LoadConfig(configFS(tt.yaml), ConfigFile, themes)
 				wantErr(t, err, "eypres.yaml:1:", `key "title"`, "expected a string, got "+tt.want)
 			})
 		}
 	})
 
 	t.Run("author wrong type is rejected", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\nauthor: 42\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\nauthor: 42\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:2:", `key "author"`, "expected a string, got a number")
 	})
 
 	t.Run("theme wrong type is rejected", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\ntheme: 42\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\ntheme: 42\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:2:", `key "theme"`, "expected a string, got a number")
 	})
 
@@ -237,7 +254,7 @@ func testLoadConfig(t *testing.T) {
 			"title: D\ntheme: \"\"\n",
 			"title: D\ntheme:\n",
 		} {
-			cfg, err := LoadConfig(configFS(yaml), ConfigFile)
+			cfg, err := LoadConfig(configFS(yaml), ConfigFile, themes)
 			if err != nil {
 				t.Fatalf("LoadConfig(%q): %v", yaml, err)
 			}
@@ -247,10 +264,20 @@ func testLoadConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("named project theme resolves", func(t *testing.T) {
+		cfg, err := LoadConfig(configFS("title: D\ntheme: sunset\n"), ConfigFile, themes)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if cfg.Theme != "sunset" {
+			t.Errorf("Theme = %q, want %q", cfg.Theme, "sunset")
+		}
+	})
+
 	t.Run("unknown theme is positioned and suggests", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\ntheme: defalt\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\ntheme: defalt\n"), ConfigFile, themes)
 		wantErr(t, err,
-			`eypres.yaml:2: unknown theme "defalt": did you mean "default"? (available themes: default)`)
+			`eypres.yaml:2: unknown theme "defalt": did you mean "default"? (available themes: default, sunset)`)
 
 		var unknown *theme.UnknownThemeError
 		if !errors.As(err, &unknown) {
@@ -265,17 +292,17 @@ func testLoadConfig(t *testing.T) {
 	})
 
 	t.Run("misspelled config key suggests closest", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\ntitel: Nope\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\ntitel: Nope\n"), ConfigFile, themes)
 		wantErr(t, err, `eypres.yaml:2: unknown key "titel": did you mean "title"?`)
 	})
 
 	t.Run("misspelled navigation key suggests navigation", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\nnavigaton: grid\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\nnavigaton: grid\n"), ConfigFile, themes)
 		wantErr(t, err, `unknown key "navigaton": did you mean "navigation"?`)
 	})
 
 	t.Run("far-off unknown key has no suggestion", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: D\nzzzzzzzz: x\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: D\nzzzzzzzz: x\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:2:", `unknown key "zzzzzzzz"`)
 		if strings.Contains(err.Error(), "did you mean") {
 			t.Errorf("error = %q, want no suggestion", err.Error())
@@ -283,18 +310,89 @@ func testLoadConfig(t *testing.T) {
 	})
 
 	t.Run("non-mapping root is rejected", func(t *testing.T) {
-		_, err := LoadConfig(configFS("- one\n- two\n"), ConfigFile)
+		_, err := LoadConfig(configFS("- one\n- two\n"), ConfigFile, themes)
 		wantErr(t, err, "eypres.yaml:1:", "expected a mapping of config keys, got a list")
 	})
 
 	t.Run("malformed yaml reports the file", func(t *testing.T) {
-		_, err := LoadConfig(configFS("title: [\n"), ConfigFile)
+		_, err := LoadConfig(configFS("title: [\n"), ConfigFile, themes)
 		wantErr(t, err, ConfigFile)
 	})
 
 	t.Run("missing config file", func(t *testing.T) {
-		_, err := LoadConfig(fstest.MapFS{}, ConfigFile)
+		_, err := LoadConfig(fstest.MapFS{}, ConfigFile, themes)
 		wantErr(t, err, ConfigFile)
+	})
+
+	t.Run("nil theme registry is rejected", func(t *testing.T) {
+		_, err := LoadConfig(configFS("title: D\n"), ConfigFile, nil)
+		wantErr(t, err, ConfigFile, "no theme registry given")
+	})
+}
+
+// TestLoadConfigThemeRegistry covers LoadConfig's theme resolution against an
+// in-memory project theme registry (theme-selection, deck-config): an
+// omitted `theme` key resolves to "default"; a named project theme resolves;
+// an unknown name is a positioned UnknownThemeError with a closest-match
+// suggestion; and a registry lacking "default" with no `theme` key is a
+// positioned error rather than a panic.
+func TestLoadConfigThemeRegistry(t *testing.T) {
+	t.Run("no theme key resolves to default", func(t *testing.T) {
+		themes := testThemes(t)
+		cfg, err := LoadConfig(configFS("title: D\n"), ConfigFile, themes)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if cfg.Theme != theme.DefaultName {
+			t.Errorf("Theme = %q, want %q", cfg.Theme, theme.DefaultName)
+		}
+	})
+
+	t.Run("named project theme resolves", func(t *testing.T) {
+		themes := testThemes(t)
+		cfg, err := LoadConfig(configFS("title: D\ntheme: sunset\n"), ConfigFile, themes)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if cfg.Theme != "sunset" {
+			t.Errorf("Theme = %q, want %q", cfg.Theme, "sunset")
+		}
+	})
+
+	t.Run("unknown theme is positioned with closest-match suggestion", func(t *testing.T) {
+		themes := testThemes(t)
+		_, err := LoadConfig(configFS("title: D\ntheme: sunet\n"), ConfigFile, themes)
+		var unknown *theme.UnknownThemeError
+		if !errors.As(err, &unknown) {
+			t.Fatalf("error type = %T, want *theme.UnknownThemeError", err)
+		}
+		if unknown.Name != "sunet" || unknown.Suggestion != "sunset" {
+			t.Errorf("unknown = %+v, want Name sunet Suggestion sunset", *unknown)
+		}
+		if unknown.Position.File != ConfigFile || unknown.Position.Line != 2 {
+			t.Errorf("Position = %+v, want %s:2", unknown.Position, ConfigFile)
+		}
+	})
+
+	t.Run("registry lacking default and no theme key is a positioned error", func(t *testing.T) {
+		empty := theme.NewRegistry()
+		if err := empty.Register(theme.Theme{Name: "sunset"}); err != nil {
+			t.Fatalf("register sunset theme: %v", err)
+		}
+		_, err := LoadConfig(configFS("title: D\n"), ConfigFile, empty)
+		if err == nil {
+			t.Fatal("LoadConfig: got nil error, want an unknown-default-theme error")
+		}
+		var unknown *theme.UnknownThemeError
+		if !errors.As(err, &unknown) {
+			t.Fatalf("error type = %T, want *theme.UnknownThemeError", err)
+		}
+		if unknown.Name != theme.DefaultName {
+			t.Errorf("unknown.Name = %q, want %q", unknown.Name, theme.DefaultName)
+		}
+		if unknown.Position.File != ConfigFile || unknown.Position.Line != 1 {
+			t.Errorf("Position = %+v, want %s:1", unknown.Position, ConfigFile)
+		}
 	})
 }
 
