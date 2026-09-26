@@ -5,5 +5,11 @@
   "body": "Init seed: the minimal unbranded seed tree (eypres.yaml, slides/1-hello.md, templates/library.yaml, templates/templates/hello/{template.yaml,layout.html.tmpl,example.md}, templates/themes/default/theme.css) embedded in internal/scaffold (moved from internal/assets/starter) and copied verbatim by `eypres init`. Read only by init.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "realised-by",
+      "source": "domain.service.scaffold-deck",
+      "properties": {}
+    }
+  ]
 }
