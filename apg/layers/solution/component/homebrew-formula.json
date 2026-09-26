@@ -4,13 +4,7 @@
   "name": "homebrew-formula",
   "body": "Homebrew formula: the tap's `kalide` formula (`Formula/kalide.rb`, tap `really-knows-ai/kalide`) with a custom download strategy that uses `HOMEBREW_GITHUB_API_TOKEN` to fetch the `kalide-darwin-arm64` asset from the private GitHub Release of really-knows-ai/kalide.",
   "properties": {},
-  "out": [
-    {
-      "kind": "implemented-by",
-      "target": "Formula/eypres.rb",
-      "properties": {}
-    }
-  ],
+  "out": [],
   "in": [
     {
       "kind": "contains",
