@@ -344,11 +344,11 @@ func TestServer(t *testing.T) {
 			if tmpl == nil {
 				continue
 			}
-			if !strings.Contains(body, `class="ey-gallery__name">`+tmpl.Name) {
+			if !strings.Contains(body, `class="gallery-page__name">`+tmpl.Name) {
 				t.Errorf("gallery does not list template %q", tmpl.Name)
 			}
 			usage := string(tmpl.Usage)
-			if !strings.Contains(body, `class="ey-gallery__usage">`+usage) {
+			if !strings.Contains(body, `class="gallery-page__usage">`+usage) {
 				t.Errorf("gallery does not show usage %q for template %q", usage, tmpl.Name)
 			}
 			if tmpl.Description != "" && !strings.Contains(body, tmpl.Description) {
@@ -376,7 +376,7 @@ func TestServer(t *testing.T) {
 
 		// Spot-check the documented names/usage explicitly required by the task.
 		for name, usage := range map[string]string{"title": "slide", "content": "slide", "column": "section"} {
-			if !strings.Contains(body, `class="ey-gallery__name">`+name+`<span class="ey-gallery__usage">`+usage) {
+			if !strings.Contains(body, `class="gallery-page__name">`+name+`<span class="gallery-page__usage">`+usage) {
 				t.Errorf("gallery entry for %q (%s) not found in expected form", name, usage)
 			}
 		}
@@ -406,10 +406,10 @@ func TestServer(t *testing.T) {
 			t.Fatalf("GET %s status %d, want 200 (body %q)", galleryPath, rec.Code, rec.Body.String())
 		}
 		body := rec.Body.String()
-		if !strings.Contains(body, `class="ey-gallery__name">hello`) {
+		if !strings.Contains(body, `class="gallery-page__name">hello`) {
 			t.Errorf("gallery does not list the fixture %q slide template:\n%s", "hello", body)
 		}
-		if !strings.Contains(body, `class="ey-gallery__name">item`) {
+		if !strings.Contains(body, `class="gallery-page__name">item`) {
 			t.Errorf("gallery does not list the fixture %q section template:\n%s", "item", body)
 		}
 		// The item section's Layout.Name is a full manifest path

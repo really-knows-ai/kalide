@@ -116,7 +116,7 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 		t.Errorf("GET %s Content-Type = %q, want text/html", galleryPath, ct)
 	}
 	gallery := string(body)
-	if !strings.Contains(gallery, `class="ey-gallery__name">hello`) {
+	if !strings.Contains(gallery, `class="gallery-page__name">hello`) {
 		t.Errorf("gallery does not list the fixture hello template: %q", truncate(gallery))
 	}
 
