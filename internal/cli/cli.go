@@ -30,8 +30,10 @@ Usage:
 //   - no arguments and `help` print usage and return 0;
 //   - `templates [name]` routes to runTemplates, which lists the built-in
 //     templates or documents one by name;
-//   - `init` and `start` route to their commands, which are not implemented
-//     yet and return a "not implemented" error;
+//   - `start [--port N] [--no-open]` routes to runStart, which validates the
+//     whole deck and then serves it with live reload until a shutdown signal;
+//   - `init` routes to its command, which is not implemented yet and returns a
+//     "not implemented" error;
 //   - an unknown command or malformed arguments print usage and return 2.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
@@ -46,7 +48,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "init":
 		return notImplemented("init", stderr)
 	case "start":
-		return notImplemented("start", stderr)
+		return runStart(args[2:], stdout, stderr)
 	case "templates":
 		if len(args) > 3 {
 			fmt.Fprintf(stderr, "eypres templates: expected at most one template name\n\n")
