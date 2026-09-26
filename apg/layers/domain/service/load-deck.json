@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "load-deck",
-  "body": "Load deck: read eypres.yaml, parse slide filenames into ordered/vertical positions, split frontmatter, sections, section fences and bodies (with line numbers).",
+  "body": "Load deck: read kalide.yaml, parse slide filenames into ordered/vertical positions, split frontmatter, sections, section fences and bodies (with line numbers).",
   "properties": {},
   "out": [
     {
