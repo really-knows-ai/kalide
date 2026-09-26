@@ -19,10 +19,16 @@
 // forced kill is only a timeout fallback, and a forced kill always fails the
 // test.
 //
+// By default build compiles cmd/eypres from source. When EYPRES_BINARY is set
+// the harness skips the build and runs that prebuilt binary instead, which is
+// how native CI feeds the harness an already-built, per-target executable:
+// EYPRES_BINARY=/path/to/eypres.exe go test ./e2e
+//
 // The harness is reused by the phase-8 (init + start) and phase-9 (native
 // release, offline) end-to-end tests, so it lives in non-test files and has no
 // dependency on the testing package: it talks to a tiny T interface that
-// *testing.T satisfies.
+// *testing.T satisfies. Offline enforcement builds on the harness in
+// offline.go: assertOffline plus Harness.EnableOfflineProxy.
 package e2e
 
 import (
@@ -68,6 +74,11 @@ const (
 	// deck is being served, for example
 	// "Serving slides at http://127.0.0.1:8080/". Start parses the URL from it.
 	servingPrefix = "Serving slides at "
+
+	// prebuiltBinaryEnv names the environment variable that, when set, points
+	// the harness at an already-built eypres binary instead of compiling one.
+	// Native CI sets it to the per-target executable it produced.
+	prebuiltBinaryEnv = "EYPRES_BINARY"
 )
 
 // T is the subset of testing.TB the harness uses. *testing.T and *testing.B
@@ -103,6 +114,12 @@ type Harness struct {
 	// client serves the HTTP fetch helpers. It never uses a proxy so a
 	// developer's environment cannot intercept loopback requests.
 	client *http.Client
+
+	// extraEnv holds additional key=value entries Command appends to the
+	// scrubbed process environment, overriding it. It is set by
+	// EnableOfflineProxy and must be configured before Start, because the
+	// environment is fixed when the command is executed.
+	extraEnv []string
 
 	mu      sync.Mutex
 	cmd     *exec.Cmd
@@ -145,8 +162,25 @@ func NewHarness(t T) *Harness {
 
 // build compiles cmd/eypres into the harness's binary directory, CGO-free, so
 // the binary is the same static artifact the release and CI e2e runs exercise.
+//
+// When EYPRES_BINARY is set the build is skipped and that binary is used
+// instead: native CI builds the per-target eypres once and points every test at
+// it. The path must exist; a missing or non-file path fails the test rather than
+// silently building from source.
 func (h *Harness) build() {
 	h.t.Helper()
+
+	if prebuilt := os.Getenv(prebuiltBinaryEnv); prebuilt != "" {
+		info, err := os.Stat(prebuilt)
+		if err != nil {
+			h.t.Fatalf("e2e: %s=%s: %v", prebuiltBinaryEnv, prebuilt, err)
+		}
+		if info.IsDir() {
+			h.t.Fatalf("e2e: %s=%s is a directory, want the eypres binary", prebuiltBinaryEnv, prebuilt)
+		}
+		h.binPath = prebuilt
+		return
+	}
 
 	h.binPath = filepath.Join(h.binDir, binaryName())
 
@@ -164,11 +198,16 @@ func (h *Harness) build() {
 }
 
 // Command returns an exec.Cmd for `eypres args...` with the harness's clean
-// working directory and scrubbed environment. It does not start the command.
+// working directory and scrubbed environment. Entries added by
+// EnableOfflineProxy (if any) are appended, overriding the scrubbed
+// environment. It does not start the command.
 func (h *Harness) Command(args ...string) *exec.Cmd {
 	cmd := exec.Command(h.binPath, args...)
 	cmd.Dir = h.workDir
-	cmd.Env = scrubbedEnv()
+	h.mu.Lock()
+	extra := append([]string(nil), h.extraEnv...)
+	h.mu.Unlock()
+	cmd.Env = append(scrubbedEnv(), extra...)
 	return cmd
 }
 
