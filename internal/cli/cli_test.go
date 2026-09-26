@@ -46,11 +46,11 @@ func chdirFixtureLibrary(t *testing.T) string {
 	return dir
 }
 
-// runCLI invokes Run with a program name prepended, exactly as cmd/eypres does
+// runCLI invokes Run with a program name prepended, exactly as cmd/kalide does
 // with os.Args, and returns the status code plus captured output.
 func runCLI(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := Run(append([]string{"eypres"}, args...), &stdout, &stderr)
+	code := Run(append([]string{"kalide"}, args...), &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -98,7 +98,7 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 func TestRunRoutesCommands(t *testing.T) {
 	t.Run("init scaffolds and refuses a second run", func(t *testing.T) {
 		// runInit resolves the current working directory with os.Getwd and
-		// scaffold.Init writes slides/, assets/ and eypres.yaml there, so the
+		// scaffold.Init writes slides/, assets/ and kalide.yaml there, so the
 		// test must never run in the package directory. t.Chdir gives each
 		// subtest its own temp dir and restores the original afterwards, which
 		// also keeps the suite safe to run repeatedly (no stray deck dirs).
@@ -113,7 +113,7 @@ func TestRunRoutesCommands(t *testing.T) {
 			t.Fatalf("Run(init) stderr = %q, want empty", stderr)
 		}
 		for _, want := range []string{
-			"eypres.yaml",
+			"kalide.yaml",
 			"slides/1-hello.md",
 			"templates/library.yaml",
 			"templates/slides/hello/template.yaml",
@@ -127,7 +127,7 @@ func TestRunRoutesCommands(t *testing.T) {
 
 		// The advertised paths must actually exist in the temp dir.
 		for _, created := range []string{
-			"eypres.yaml",
+			"kalide.yaml",
 			"slides/1-hello.md",
 			"templates/library.yaml",
 			"templates/slides/hello/template.yaml",
@@ -148,7 +148,7 @@ func TestRunRoutesCommands(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(init) second run stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"eypres.yaml", "slides/", "templates/", "assets/", "never overwrites"} {
+		for _, want := range []string{"kalide.yaml", "slides/", "templates/", "assets/", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) second run stderr = %q, want refusal mentioning %q", stderr, want)
 			}

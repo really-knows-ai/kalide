@@ -23,7 +23,7 @@ import (
 // create on an empty directory. "assets/" is the printed form; "assets" is the
 // filesystem form.
 var initCreatedPaths = []string{
-	"eypres.yaml",
+	"kalide.yaml",
 	"slides/1-hello.md",
 	"templates/library.yaml",
 	"templates/slides/hello/template.yaml",
@@ -56,10 +56,10 @@ func TestInit(t *testing.T) {
 		}
 
 		// And each advertised path is really on disk.
-		if fi, err := os.Stat(filepath.Join(dir, "eypres.yaml")); err != nil {
-			t.Errorf("stat eypres.yaml after init: %v, want created", err)
+		if fi, err := os.Stat(filepath.Join(dir, "kalide.yaml")); err != nil {
+			t.Errorf("stat kalide.yaml after init: %v, want created", err)
 		} else if fi.IsDir() {
-			t.Errorf("eypres.yaml is a directory, want a file")
+			t.Errorf("kalide.yaml is a directory, want a file")
 		}
 		for _, created := range initCreatedPaths[1:] {
 			if fi, err := os.Stat(filepath.Join(dir, created)); err != nil {
@@ -88,7 +88,7 @@ func TestInit(t *testing.T) {
 		{name: "slides dir exists", path: "slides", isDir: true, display: "slides/"},
 		{name: "templates dir exists", path: "templates", isDir: true, display: "templates/"},
 		{name: "assets dir exists", path: "assets", isDir: true, display: "assets/"},
-		{name: "eypres.yaml file exists", path: "eypres.yaml", isDir: false, display: "eypres.yaml"},
+		{name: "kalide.yaml file exists", path: "kalide.yaml", isDir: false, display: "kalide.yaml"},
 	}
 	for _, b := range blockers {
 		t.Run(b.name, func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestInit(t *testing.T) {
 				}
 			}
 			// ...and init wrote nothing at all: no other deck path appeared.
-			for _, other := range []string{"eypres.yaml", "slides", "templates", "assets"} {
+			for _, other := range []string{"kalide.yaml", "slides", "templates", "assets"} {
 				if other == b.path {
 					continue
 				}
@@ -152,8 +152,8 @@ func TestInit(t *testing.T) {
 	t.Run("multiple blocking paths are all named", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		for _, p := range []string{"slides", "assets", "eypres.yaml"} {
-			if p == "eypres.yaml" {
+		for _, p := range []string{"slides", "assets", "kalide.yaml"} {
+			if p == "kalide.yaml" {
 				if err := os.WriteFile(filepath.Join(dir, p), []byte("x"), 0o644); err != nil {
 					t.Fatal(err)
 				}
@@ -168,7 +168,7 @@ func TestInit(t *testing.T) {
 		if code == 0 {
 			t.Fatal("Run(init) exit = 0 with all deck paths present, want non-zero")
 		}
-		for _, want := range []string{"slides/", "assets/", "eypres.yaml"} {
+		for _, want := range []string{"slides/", "assets/", "kalide.yaml"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) stderr = %q, want all blocking paths named, missing %q", stderr, want)
 			}
@@ -194,7 +194,7 @@ func TestInit(t *testing.T) {
 		}
 		// No force behaviour: the rejected flag must not have scaffolded
 		// anything into the still-empty directory.
-		for _, p := range []string{"eypres.yaml", "slides", "templates", "assets"} {
+		for _, p := range []string{"kalide.yaml", "slides", "templates", "assets"} {
 			if _, err := os.Lstat(filepath.Join(dir, p)); err == nil {
 				t.Errorf("%s was created by `init --force`, want the argument rejected with no writes", p)
 			}
@@ -215,7 +215,7 @@ func TestInit(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("second Run(init) stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"slides/", "templates/", "assets/", "eypres.yaml", "never overwrites"} {
+		for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("second Run(init) stderr = %q, want refusal mentioning %q", stderr, want)
 			}

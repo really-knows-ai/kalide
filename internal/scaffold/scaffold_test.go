@@ -38,7 +38,7 @@ func TestInit(t *testing.T) {
 // plus the empty assets/ directory Init creates itself.
 var wantSeedTree = []string{
 	"assets",
-	"eypres.yaml",
+	"kalide.yaml",
 	"slides",
 	"slides/1-hello.md",
 	"templates",
@@ -56,7 +56,7 @@ var wantSeedTree = []string{
 // wantSeedFiles are the embedded seed's files, checked byte-for-byte against
 // what Init writes.
 var wantSeedFiles = []string{
-	"eypres.yaml",
+	"kalide.yaml",
 	"slides/1-hello.md",
 	"templates/library.yaml",
 	"templates/slides/hello/template.yaml",
@@ -93,7 +93,7 @@ func testInitClean(t *testing.T) {
 }
 
 // testInitRefuses asserts that each of slides/, templates/, assets/ and
-// eypres.yaml, present as either a file or a directory, makes Init fail
+// kalide.yaml, present as either a file or a directory, makes Init fail
 // naming that path and that the directory is byte-for-byte unchanged (no
 // partial deck, no overwrite).
 func testInitRefuses(t *testing.T) {
@@ -109,8 +109,8 @@ func testInitRefuses(t *testing.T) {
 		{"existing templates file", "templates", false, "templates/"},
 		{"existing assets/ directory", "assets", true, "assets/"},
 		{"existing assets file", "assets", false, "assets/"},
-		{"existing eypres.yaml file", "eypres.yaml", false, "eypres.yaml"},
-		{"existing eypres.yaml directory", "eypres.yaml", true, "eypres.yaml"},
+		{"existing kalide.yaml file", "kalide.yaml", false, "kalide.yaml"},
+		{"existing kalide.yaml directory", "kalide.yaml", true, "kalide.yaml"},
 	}
 
 	for _, tc := range cases {
@@ -142,11 +142,11 @@ func testInitRefuses(t *testing.T) {
 }
 
 // testInitNamesAllConflicts asserts one refusal names every blocking path, in
-// the fixed slides/, templates/, assets/, eypres.yaml order, and still writes
+// the fixed slides/, templates/, assets/, kalide.yaml order, and still writes
 // nothing.
 func testInitNamesAllConflicts(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "eypres.yaml"), "title: mine\n")
+	writeFile(t, filepath.Join(dir, "kalide.yaml"), "title: mine\n")
 	mkdir(t, filepath.Join(dir, "slides"))
 	mkdir(t, filepath.Join(dir, "templates"))
 	mkdir(t, filepath.Join(dir, "assets"))
@@ -158,7 +158,7 @@ func testInitNamesAllConflicts(t *testing.T) {
 		t.Fatal("Init() error = nil, want a refusal naming all four blocking paths")
 	}
 	msg := err.Error()
-	for _, want := range []string{"slides/", "templates/", "assets/", "eypres.yaml"} {
+	for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("Init() error = %q, want it to name %q", msg, want)
 		}
@@ -167,9 +167,9 @@ func testInitNamesAllConflicts(t *testing.T) {
 	si := strings.Index(msg, "slides/")
 	ti := strings.Index(msg, "templates/")
 	ai := strings.Index(msg, "assets/")
-	yi := strings.Index(msg, "eypres.yaml")
+	yi := strings.Index(msg, "kalide.yaml")
 	if si < 0 || ti < 0 || ai < 0 || yi < 0 || !(si < ti && ti < ai && ai < yi) {
-		t.Errorf("Init() error = %q, want all paths in order slides/, templates/, assets/, eypres.yaml", msg)
+		t.Errorf("Init() error = %q, want all paths in order slides/, templates/, assets/, kalide.yaml", msg)
 	}
 
 	if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
@@ -184,7 +184,7 @@ func testInitUnrelated(t *testing.T) {
 	mkdir(t, filepath.Join(dir, ".git"))
 	writeFile(t, filepath.Join(dir, ".git", "config"), "[core]\n")
 	writeFile(t, filepath.Join(dir, "README.md"), "# notes\n")
-	writeFile(t, filepath.Join(dir, ".eypres.lock"), "lock\n")
+	writeFile(t, filepath.Join(dir, ".kalide.lock"), "lock\n")
 
 	if err := Init(dir); err != nil {
 		t.Fatalf("Init() error = %v, want nil (unrelated entries must not block)", err)
