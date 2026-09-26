@@ -144,6 +144,11 @@
       "kind": "details",
       "target": "requirements.requirement.deck-config",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.demo-project",
+      "properties": {}
     }
   ],
   "in": []

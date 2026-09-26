@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "solution.note.demo-fixture-placement",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }
