@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "go-static-embedded-binary",
-  "body": "eypres must be written in Go and ship as a single self-contained static binary per supported target — Apple silicon macOS (darwin/arm64) and Windows x64 (windows/amd64), plus Windows ARM (windows/arm64) only when a GitHub-hosted native runner is available; never Intel macOS or Linux — with no external runtime or network dependency at run time; all assets must be embedded via Go embed.",
+  "body": "eypres must be written in Go and ship as a single self-contained static binary per supported target — Apple silicon macOS (darwin/arm64) and Windows x64 (windows/amd64), plus Windows ARM (windows/arm64) only when a GitHub-hosted native runner is available; never Intel macOS or Linux — with no external runtime or network dependency at run time. Only the presentation engine is embedded via Go embed: the vendored reveal.js runtime, the unbranded engine page shells (deck, error, gallery) and the minimal `eypres init` seed scaffold. Templates, themes, fonts, logos and other media must never be embedded; they are read from the project's `templates/` directory (see global.constraint.no-embedded-template-assets).",
   "properties": {},
   "out": [],
   "in": [
