@@ -11,6 +11,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.deck-properties",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.deck-properties",
+      "properties": {}
     }
   ],
   "in": [
