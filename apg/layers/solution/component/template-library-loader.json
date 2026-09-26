@@ -20,6 +20,11 @@
       "kind": "contains",
       "source": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-schema-in-go",
+      "properties": {}
     }
   ]
 }

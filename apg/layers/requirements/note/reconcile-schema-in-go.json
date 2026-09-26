@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-manifest",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
     }
   ],
   "in": []
