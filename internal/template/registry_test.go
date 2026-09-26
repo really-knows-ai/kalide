@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // This file is the unit-test deliverable for phase-04.task-8: the Registry
@@ -36,6 +37,155 @@ func regSlide(name string, fields ...Field) *Template {
 // regSection returns a section-usage fixture.
 func regSection(name string, fields ...Field) *Template {
 	return &Template{Name: name, Usage: UsageSection, Fields: fields}
+}
+
+// This block (through demoLibraryFS) is the unit-test deliverable for
+// plan.phase-02.task-6 and plan.phase-02.task-7: it proves parseManifest and
+// NewRegistryFromLibrary — the library-driven replacement for the Go-authored
+// Builtins/regSlide/regSection fixtures above — decode the full schema
+// vocabulary (field types, field rules, number/date formats, variants,
+// composition/repeats, section frontmatter, body rules, kind-by-directory)
+// and reject the same build-time problems the registry always has, this time
+// surfaced through a *LibraryError positioned at the offending template.yaml.
+
+// manifestLibraryTemplate builds a minimal *LibraryTemplate carrying just
+// enough for parseManifest: a name, a kind (which decides Usage) and the raw
+// manifest bytes. It carries no layout/example content — callers that need
+// NewRegistryFromLibrary or LoadLibrary build a fuller fixture themselves.
+func manifestLibraryTemplate(name string, kind TemplateKind, manifestYAML string) *LibraryTemplate {
+	return &LibraryTemplate{
+		Name:          name,
+		Kind:          kind,
+		ManifestPath:  string(kind) + "s/" + name + "/" + ManifestFile,
+		ManifestBytes: []byte(manifestYAML),
+	}
+}
+
+// mustParseManifest parses manifestYAML for a template named name of kind
+// kind and fails the test on error.
+func mustParseManifest(t *testing.T, name string, kind TemplateKind, manifestYAML string) *Template {
+	t.Helper()
+	def, err := parseManifest(manifestLibraryTemplate(name, kind, manifestYAML))
+	if err != nil {
+		t.Fatalf("parseManifest(%s) error = %v, want nil", name, err)
+	}
+	return def
+}
+
+// demoLibraryFS returns a full, valid templates/ library (unrooted, so a
+// caller wraps it in rootedFS before LoadLibrary) exercising the whole
+// manifest vocabulary in one slide template (deck) composing a section
+// template (column): every field type, field rules (max_length, min/max,
+// min_items/max_items), number and date formats with a default, an enum
+// variant with a default, a section-template field type, a declared section
+// with min/max repeats (template-composition), and a body rule with
+// max_words — plus a section template (column) with its own fields and a
+// disallowed body, so a section-template field type never targets a
+// required-body template. Its example.md declares two "columns" section
+// instances with their own YAML frontmatter (section frontmatter, slide
+// sections).
+func demoLibraryFS() fstest.MapFS {
+	const deckManifest = `description: Full-featured deck slide
+fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 50
+  - name: count
+    type: number
+    min: 0
+    max: 100
+    formats: [compact, exact]
+    default_format: compact
+  - name: when
+    type: date
+    formats: [long, short]
+    default_format: long
+    min_date: "2020-01-01"
+    max_date: "2030-12-31"
+  - name: active
+    type: boolean
+  - name: mode
+    type: enum
+    variants: [a, b]
+    default: a
+  - name: img
+    type: image
+  - name: link
+    type: link
+  - name: tags
+    type: list
+    min_items: 1
+    max_items: 3
+    item:
+      name: item
+      type: text
+  - name: block
+    type: section-template
+    section_template: column
+sections:
+  - name: columns
+    accepted: [column]
+    min: 1
+    max: 3
+body:
+  mode: optional
+  max_words: 50
+`
+	const columnManifest = `description: A single column section
+fields:
+  - name: label
+    type: text
+    max_length: 20
+  - name: value
+    type: number
+body:
+  mode: disallowed
+`
+	const deckExample = "---\n" +
+		"title: Hello World\n" +
+		"count: 42\n" +
+		"count_format: exact\n" +
+		"when: 2025-06-15\n" +
+		"when_format: short\n" +
+		"active: true\n" +
+		"mode: a\n" +
+		"img: assets/pic.png\n" +
+		"link: https://example.com\n" +
+		"tags:\n" +
+		"  - one\n" +
+		"  - two\n" +
+		"block:\n" +
+		"  label: Nested\n" +
+		"  value: 5\n" +
+		"---\n" +
+		"Some body text here.\n" +
+		"\n" +
+		"# columns\n" +
+		"```\n" +
+		"label: Column A\n" +
+		"value: 1\n" +
+		"```\n" +
+		"\n" +
+		"# columns\n" +
+		"```\n" +
+		"label: Column B\n" +
+		"value: 2\n" +
+		"```\n"
+	const columnExample = "```\n" +
+		"label: Sample\n" +
+		"value: 7\n" +
+		"```\n"
+
+	return fstest.MapFS{
+		"library.yaml":                     {Data: []byte("name: fulldemo\nformat: 1\n")},
+		"slides/deck/template.yaml":        {Data: []byte(deckManifest)},
+		"slides/deck/layout.html.tmpl":     {Data: []byte("<section>{{.title}}</section>")},
+		"slides/deck/example.md":           {Data: []byte(deckExample)},
+		"sections/column/template.yaml":    {Data: []byte(columnManifest)},
+		"sections/column/layout.html.tmpl": {Data: []byte("<div>{{.label}}</div>")},
+		"sections/column/example.md":       {Data: []byte(columnExample)},
+	}
 }
 
 // buildAndValidate mirrors the built-ins loader: register every fixture
@@ -246,6 +396,140 @@ func TestRegistry(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("library-driven registry: parseManifest + NewRegistryFromLibrary", func(t *testing.T) {
+		lib, err := LoadLibrary(rootedFS(demoLibraryFS()), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil", err)
+		}
+
+		// kind-by-directory: slides/deck -> KindSlide/UsageSlide,
+		// sections/column -> KindSection/UsageSection.
+		deckLT, kind, ok := lib.TemplateByName("deck")
+		if !ok || kind != KindSlide {
+			t.Fatalf("TemplateByName(deck) = (%v, %q, %v), want (non-nil, %q, true)", deckLT, kind, ok, KindSlide)
+		}
+		colLT, kind, ok := lib.TemplateByName("column")
+		if !ok || kind != KindSection {
+			t.Fatalf("TemplateByName(column) = (%v, %q, %v), want (non-nil, %q, true)", colLT, kind, ok, KindSection)
+		}
+		deck, col := deckLT.Definition, colLT.Definition
+		if deck == nil || col == nil {
+			t.Fatal("checkLibraryBuild did not attach parsed Definitions")
+		}
+		if deck.Usage != UsageSlide {
+			t.Errorf("deck.Usage = %q, want %q", deck.Usage, UsageSlide)
+		}
+		if col.Usage != UsageSection {
+			t.Errorf("col.Usage = %q, want %q", col.Usage, UsageSection)
+		}
+
+		// fields/types and field rules: every declared field type round-trips
+		// with its rules intact.
+		byName := make(map[string]Field, len(deck.Fields))
+		for _, f := range deck.Fields {
+			byName[f.Name] = f
+		}
+		wantTypes := map[string]FieldType{
+			"title": FieldText, "count": FieldNumber, "when": FieldDate,
+			"active": FieldBoolean, "mode": FieldEnum, "img": FieldImage,
+			"link": FieldLink, "tags": FieldList, "block": FieldSectionTemplate,
+		}
+		for name, wantType := range wantTypes {
+			f, ok := byName[name]
+			if !ok {
+				t.Errorf("field %q not decoded", name)
+				continue
+			}
+			if f.Type != wantType {
+				t.Errorf("field %q Type = %q, want %q", name, f.Type, wantType)
+			}
+		}
+		if !byName["title"].Required || byName["title"].MaxLength != 50 {
+			t.Errorf("title field = %+v, want Required=true MaxLength=50", byName["title"])
+		}
+		if byName["count"].Min == nil || *byName["count"].Min != 0 || byName["count"].Max == nil || *byName["count"].Max != 100 {
+			t.Errorf("count field min/max = %v/%v, want 0/100", byName["count"].Min, byName["count"].Max)
+		}
+		if got, want := byName["tags"].MinItems, 1; got != want {
+			t.Errorf("tags.MinItems = %d, want %d", got, want)
+		}
+		if got, want := byName["tags"].MaxItems, 3; got != want {
+			t.Errorf("tags.MaxItems = %d, want %d", got, want)
+		}
+		if byName["tags"].Item == nil || byName["tags"].Item.Type != FieldText {
+			t.Errorf("tags.Item = %+v, want a text item", byName["tags"].Item)
+		}
+		if byName["block"].SectionTemplate != "column" {
+			t.Errorf("block.SectionTemplate = %q, want %q", byName["block"].SectionTemplate, "column")
+		}
+
+		// number/date formats.
+		if got, want := byName["count"].Formats, []string{"compact", "exact"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("count.Formats = %v, want %v", got, want)
+		}
+		if got, want := byName["count"].DefaultFormat, "compact"; got != want {
+			t.Errorf("count.DefaultFormat = %q, want %q", got, want)
+		}
+		if got, want := byName["when"].Formats, []string{"long", "short"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("when.Formats = %v, want %v", got, want)
+		}
+		if got, want := byName["when"].MinDate, "2020-01-01"; got != want {
+			t.Errorf("when.MinDate = %q, want %q", got, want)
+		}
+		if got, want := byName["when"].MaxDate, "2030-12-31"; got != want {
+			t.Errorf("when.MaxDate = %q, want %q", got, want)
+		}
+
+		// variants (template-variants): an enum field's variants and default.
+		if got, want := byName["mode"].Variants, []string{"a", "b"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("mode.Variants = %v, want %v", got, want)
+		}
+		if got, want := byName["mode"].Default, "a"; got != want {
+			t.Errorf("mode.Default = %v, want %q", got, want)
+		}
+
+		// body rules: deck is optional with a word limit; column disallows a
+		// body entirely (so it is a legal field-type target).
+		if deck.Body.Mode != BodyOptional || deck.Body.MaxWords != 50 {
+			t.Errorf("deck.Body = %+v, want optional/max_words=50", deck.Body)
+		}
+		if col.Body.Mode != BodyDisallowed {
+			t.Errorf("col.Body.Mode = %q, want %q", col.Body.Mode, BodyDisallowed)
+		}
+
+		// template-composition/repeats: deck declares "columns" accepting
+		// column, 1..3 times.
+		if len(deck.Sections) != 1 {
+			t.Fatalf("deck.Sections = %+v, want exactly one declared section", deck.Sections)
+		}
+		sd := deck.Sections[0]
+		if sd.Name != "columns" || !reflect.DeepEqual(sd.Accepted, []string{"column"}) || sd.Min != 1 || sd.Max != 3 {
+			t.Errorf("columns section = %+v, want name=columns accepted=[column] min=1 max=3", sd)
+		}
+
+		// The registry built over this library resolves both templates and
+		// reports the right usage/kind through the slide.Catalogue surface.
+		reg, err := NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("NewRegistryFromLibrary() error = %v, want nil", err)
+		}
+		if err := reg.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want nil", err)
+		}
+		if usage, ok := reg.LookupSlideTemplate("deck"); !ok || usage != string(UsageSlide) {
+			t.Errorf("LookupSlideTemplate(deck) = (%q, %v), want (%q, true)", usage, ok, UsageSlide)
+		}
+		if usage, ok := reg.LookupSlideTemplate("column"); !ok || usage != string(UsageSection) {
+			t.Errorf("LookupSlideTemplate(column) = (%q, %v), want (%q, true)", usage, ok, UsageSection)
+		}
+		assertStringSlice(t, `SectionNames("deck")`, reg.SectionNames("deck"), []string{"columns"})
+
+		// section frontmatter / slide sections: the example.md's two
+		// "columns" instances validated end to end (checkLibraryExamples,
+		// step 7) against the column template's own field schema — proven
+		// by LoadLibrary having already returned no error above.
+	})
 }
 
 // TestRegistryRejections gives one failing fixture registry per build-time
@@ -368,6 +652,233 @@ func TestRegistryRejections(t *testing.T) {
 			}
 		})
 	}
+
+	// The remaining cases exercise the library-driven path: a manifest
+	// decoding problem (parseManifest, local to one template.yaml) or a
+	// library-wide build-check rejection (checkLibraryBuild, over the whole
+	// registry Validate builds from NewRegistryFromLibrary), each surfaced as
+	// a positioned *LibraryError instead of a plain Registry error.
+
+	t.Run("malformed manifest is positioned", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields: [\n"))
+		libErr := asLibraryError(t, err)
+		if libErr.Path == "" {
+			t.Error("Path is empty, want the offending template.yaml")
+		}
+	})
+
+	t.Run("unknown top-level manifest key suggests a valid one", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "descriptoin: x\n"))
+		libErr := asLibraryError(t, err)
+		if libErr.Suggestion != "description" {
+			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "description")
+		}
+	})
+
+	t.Run("unknown field type suggests a valid one", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide,
+			"fields:\n  - name: title\n    type: txet\n"))
+		libErr := asLibraryError(t, err)
+		if libErr.Suggestion != "text" {
+			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "text")
+		}
+		if !strings.Contains(libErr.Message, `unknown type "txet"`) {
+			t.Errorf("Message = %q, want it to name the unknown type", libErr.Message)
+		}
+	})
+
+	t.Run("field missing required name", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - type: text\n"))
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `missing required key "name"`) {
+			t.Errorf("Message = %q, want it to say name is missing", libErr.Message)
+		}
+	})
+
+	t.Run("field missing required type", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - name: title\n"))
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `missing required key "type"`) {
+			t.Errorf("Message = %q, want it to say type is missing", libErr.Message)
+		}
+	})
+
+	t.Run("unknown body mode suggests a valid one", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "body:\n  mode: requird\n"))
+		libErr := asLibraryError(t, err)
+		if libErr.Suggestion != "required" {
+			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "required")
+		}
+	})
+
+	// libraryRejection builds a library over slideBody/sectionBody library
+	// entries under demoLibraryFS() (whose slides/deck + sections/column are
+	// dropped and replaced with the given manifests), returning the
+	// *LibraryError LoadLibrary reports.
+	libraryRejection := func(t *testing.T, slideManifest, sectionManifest string) *LibraryError {
+		t.Helper()
+		fsys := fstest.MapFS{
+			"library.yaml":                     {Data: []byte("name: rej\nformat: 1\n")},
+			"slides/badslide/template.yaml":    {Data: []byte(slideManifest)},
+			"slides/badslide/layout.html.tmpl": {Data: []byte("<section></section>")},
+			"slides/badslide/example.md":       {Data: []byte("---\n---\n")},
+			"sections/badsec/template.yaml":    {Data: []byte(sectionManifest)},
+			"sections/badsec/layout.html.tmpl": {Data: []byte("<div></div>")},
+			"sections/badsec/example.md":       {Data: []byte("```\n```\n")},
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		return asLibraryError(t, err)
+	}
+
+	t.Run("section accepting a templates/slides template", func(t *testing.T) {
+		// "slot" accepts "other", a slide-usage template, which sections may
+		// never accept.
+		fsys := fstest.MapFS{
+			"library.yaml":                  {Data: []byte("name: rej\nformat: 1\n")},
+			"slides/host/template.yaml":     {Data: []byte("sections:\n  - name: slot\n    accepted: [other]\n")},
+			"slides/host/layout.html.tmpl":  {Data: []byte("<section></section>")},
+			"slides/host/example.md":        {Data: []byte("---\n---\n")},
+			"slides/other/template.yaml":    {Data: []byte("")},
+			"slides/other/layout.html.tmpl": {Data: []byte("<section></section>")},
+			"slides/other/example.md":       {Data: []byte("---\n---\n")},
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, "slide-usage template") {
+			t.Errorf("Message = %q, want it to say the accepted template is slide-usage", libErr.Message)
+		}
+	})
+
+	t.Run("slide template used as a section-template field type", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                  {Data: []byte("name: rej\nformat: 1\n")},
+			"slides/host/template.yaml":     {Data: []byte("fields:\n  - name: block\n    type: section-template\n    section_template: other\n")},
+			"slides/host/layout.html.tmpl":  {Data: []byte("<section></section>")},
+			"slides/host/example.md":        {Data: []byte("---\n---\n")},
+			"slides/other/template.yaml":    {Data: []byte("")},
+			"slides/other/layout.html.tmpl": {Data: []byte("<section></section>")},
+			"slides/other/example.md":       {Data: []byte("---\n---\n")},
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, "slide-usage template") {
+			t.Errorf("Message = %q, want it to say the field names a slide-usage template", libErr.Message)
+		}
+	})
+
+	t.Run("required-body template used as a section-template field type", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                        {Data: []byte("name: rej\nformat: 1\n")},
+			"slides/host/template.yaml":           {Data: []byte("fields:\n  - name: block\n    type: section-template\n    section_template: needsbody\n")},
+			"slides/host/layout.html.tmpl":        {Data: []byte("<section></section>")},
+			"slides/host/example.md":              {Data: []byte("---\n---\n")},
+			"sections/needsbody/template.yaml":    {Data: []byte("body:\n  mode: required\n")},
+			"sections/needsbody/layout.html.tmpl": {Data: []byte("<div></div>")},
+			"sections/needsbody/example.md":       {Data: []byte("```\n```\n")},
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, "requires a body") {
+			t.Errorf("Message = %q, want it to say the section template requires a body", libErr.Message)
+		}
+	})
+
+	t.Run("reserved _format suffix field name", func(t *testing.T) {
+		libErr := libraryRejection(t, "fields:\n  - name: date_format\n    type: text\n", "")
+		if !strings.Contains(libErr.Message, "_format suffix") {
+			t.Errorf("Message = %q, want it to mention the reserved _format suffix", libErr.Message)
+		}
+	})
+
+	t.Run("reserved field name notes and body", func(t *testing.T) {
+		for _, name := range []string{"notes", "body"} {
+			libErr := libraryRejection(t, "fields:\n  - name: "+name+"\n    type: text\n", "")
+			if !strings.Contains(libErr.Message, "reserved") {
+				t.Errorf("field %q: Message = %q, want it to say the name is reserved", name, libErr.Message)
+			}
+		}
+	})
+
+	t.Run("reserved section name notes and body", func(t *testing.T) {
+		for _, name := range []string{"notes", "body"} {
+			libErr := libraryRejection(t, "sections:\n  - name: "+name+"\n    accepted: [badsec]\n", "")
+			if !strings.Contains(libErr.Message, "reserved") {
+				t.Errorf("section %q: Message = %q, want it to say the name is reserved", name, libErr.Message)
+			}
+		}
+	})
+
+	t.Run("undefined template reference", func(t *testing.T) {
+		libErr := libraryRejection(t, "sections:\n  - name: slot\n    accepted: [ghost]\n", "")
+		if !strings.Contains(libErr.Message, "not a defined template") {
+			t.Errorf("Message = %q, want it to say ghost is not defined", libErr.Message)
+		}
+	})
+
+	t.Run("section template reference cycle", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                     {Data: []byte("name: rej\nformat: 1\n")},
+			"sections/cyclea/template.yaml":    {Data: []byte("sections:\n  - name: slot\n    accepted: [cycleb]\n")},
+			"sections/cyclea/layout.html.tmpl": {Data: []byte("<div></div>")},
+			"sections/cyclea/example.md":       {Data: []byte("```\n```\n")},
+			"sections/cycleb/template.yaml":    {Data: []byte("sections:\n  - name: slot\n    accepted: [cyclea]\n")},
+			"sections/cycleb/layout.html.tmpl": {Data: []byte("<div></div>")},
+			"sections/cycleb/example.md":       {Data: []byte("```\n```\n")},
+		}
+		// A section reference cycle surfaces as *SectionCycleError, not a
+		// *LibraryError: checkLibraryBuild only re-positions errors whose
+		// text names a template (manifestTemplateErrorName), and a cycle's
+		// message names a chain, not a single template.
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err == nil {
+			t.Fatal("LoadLibrary() error = nil, want a reference-cycle error")
+		}
+		var cycle *SectionCycleError
+		if !errors.As(err, &cycle) {
+			t.Fatalf("LoadLibrary() error = %T, want *SectionCycleError", err)
+		}
+		if !strings.Contains(cycle.Error(), "reference cycle") {
+			t.Errorf("Message = %q, want it to say there is a reference cycle", cycle.Error())
+		}
+	})
+
+	t.Run("bad variant: enum with no variants", func(t *testing.T) {
+		libErr := libraryRejection(t, "fields:\n  - name: mode\n    type: enum\n", "")
+		if !strings.Contains(libErr.Message, "no variants") {
+			t.Errorf("Message = %q, want it to say the enum field has no variants", libErr.Message)
+		}
+	})
+
+	t.Run("bad example: violates the field schema", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                 {Data: []byte("name: rej\nformat: 1\n")},
+			"slides/host/template.yaml":    {Data: []byte("fields:\n  - name: title\n    type: text\n    required: true\n")},
+			"slides/host/layout.html.tmpl": {Data: []byte("<section></section>")},
+			"slides/host/example.md":       {Data: []byte("---\n---\n")}, // missing required title
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, "required") {
+			t.Errorf("Message = %q, want it to say the required field is missing", libErr.Message)
+		}
+	})
+
+	t.Run("cross-kind name collision", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                  {Data: []byte("name: rej\nformat: 1\n")},
+			"slides/dup/template.yaml":      {Data: []byte("")},
+			"slides/dup/layout.html.tmpl":   {Data: []byte("<section></section>")},
+			"slides/dup/example.md":         {Data: []byte("---\n---\n")},
+			"sections/dup/template.yaml":    {Data: []byte("")},
+			"sections/dup/layout.html.tmpl": {Data: []byte("<div></div>")},
+			"sections/dup/example.md":       {Data: []byte("```\n```\n")},
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, "declared in both") {
+			t.Errorf("Message = %q, want it to say dup is declared in both slides and sections", libErr.Message)
+		}
+	})
 }
 
 // TestRegistryRegister checks duplicate-name rejection, that a definition
