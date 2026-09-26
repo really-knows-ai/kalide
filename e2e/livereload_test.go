@@ -232,7 +232,7 @@ func TestStartLiveReload(t *testing.T) {
 	h.WriteFile("templates/slides/hello/template.yaml", []byte("description: [this is not valid yaml\n"))
 	waitFor(t, 10*time.Second, "the templates/ error page to be served", func() bool {
 		b, err := h.GetString("/")
-		return err == nil && strings.Contains(b, "Deck error") && strings.Contains(b, "ey-error__message")
+		return err == nil && strings.Contains(b, "Deck error") && strings.Contains(b, "error-page__message")
 	})
 	brokenTemplatesBody, err := h.GetString("/")
 	if err != nil {
@@ -266,7 +266,7 @@ func TestStartLiveReload(t *testing.T) {
 	if !strings.Contains(unescaped, wantBrokenError) {
 		t.Errorf("error page does not carry the first formatted error %q:\n%s", wantBrokenError, unescaped)
 	}
-	if !strings.Contains(errBody, "Deck error") || !strings.Contains(errBody, "ey-error__message") {
+	if !strings.Contains(errBody, "Deck error") || !strings.Contains(errBody, "error-page__message") {
 		t.Errorf("served page is not the full-page error shell:\n%s", errBody)
 	}
 	waitFor(t, 5*time.Second, "the error to reach the terminal", func() bool {
