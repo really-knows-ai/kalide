@@ -284,6 +284,11 @@
       "kind": "details",
       "target": "solution.person.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.go-static-embedded-binary",
+      "properties": {}
     }
   ],
   "in": []
