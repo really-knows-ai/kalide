@@ -1,6 +1,6 @@
 package cli
 
-// This file unit-tests the `eypres init` command surface (phase-8 task 5):
+// This file unit-tests the `kalide init` command surface (phase-8 task 5):
 // requirements.requirement.cli-init and
 // requirements.requirement.cli-init-refuse-existing.
 //
@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-// initCreatedPaths are the entries `eypres init` advertises and must actually
+// initCreatedPaths are the entries `kalide init` advertises and must actually
 // create on an empty directory. "assets/" is the printed form; "assets" is the
 // filesystem form.
 var initCreatedPaths = []string{
@@ -32,7 +32,7 @@ var initCreatedPaths = []string{
 	"templates/themes/default/theme.css",
 }
 
-// TestInit covers `eypres init` end to end from the command surface: success,
+// TestInit covers `kalide init` end to end from the command surface: success,
 // each blocking path, the rejected extra argument (no --force), and a repeated
 // run.
 func TestInit(t *testing.T) {
