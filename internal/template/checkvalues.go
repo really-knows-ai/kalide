@@ -77,7 +77,9 @@ type ValueError struct {
 
 	// Rule names the violated rule: "type", "required", "date", "enum",
 	// "image", "link", "max_length", "min_items", "max_items", "min", "max",
-	// "unknown-field", "section-template", or a mdcheck kind for inline text
+	// "unknown-field", "section-template", a body rule name ("required",
+	// "disallowed", "max_words", "max_paragraphs", "max_list_items",
+	// "subheadings" from CheckBody), or a mdcheck kind for inline text
 	// errors.
 	Rule string
 
@@ -599,9 +601,7 @@ func (c *checker) unknownKey(path []PathSegment, key string, value any, candidat
 
 	switch key {
 	case "body":
-		c.add(p, "unknown-field", value,
-			`unknown field "body"`,
-			"body content comes from the Markdown after the frontmatter, not a body: key; body rules are declared in the template")
+		c.add(p, "unknown-field", value, bodyKeyWhat, bodyKeyFix)
 		return
 	case "transition", "background", "fragment":
 		c.add(p, "unknown-field", value,
@@ -695,26 +695,60 @@ func issueLine(issueLine, fieldLine int) int {
 
 // stripMarkdown returns src's visible text with all inline Markdown styles
 // removed, using the same CommonMark core mdcheck parses with. It is used only
-// to measure a text field's MaxLength in characters.
+// to measure a text field's MaxLength in characters; block separation is
+// deliberately off, preserving its exact character count.
 func stripMarkdown(src string) string {
+	return markdownText(src, false)
+}
+
+// markdownText returns src's visible text with all inline Markdown styles
+// removed, using the same CommonMark core mdcheck parses with. When
+// separateBlocks is true a newline is written before each block-level
+// construct after the first, so words in adjacent paragraphs, headings and list
+// items never run together; CheckBody uses that to count the words of a body,
+// while stripMarkdown passes false to measure characters.
+func markdownText(src string, separateBlocks bool) string {
 	md := goldmark.New()
 	doc := md.Parser().Parse(text.NewReader([]byte(src)))
 	var b strings.Builder
-	appendStripped(doc, []byte(src), &b)
+	appendStripped(doc, []byte(src), &b, separateBlocks)
 	return b.String()
 }
 
-// appendStripped concatenates the text content of n and its descendants.
-func appendStripped(n ast.Node, src []byte, b *strings.Builder) {
+// appendStripped concatenates the text content of n and its descendants. When
+// separateBlocks is true a newline is written before each block-level construct
+// (paragraph, heading, list item or text block) once some text has been
+// written, so distinct blocks are treated as distinct words.
+func appendStripped(n ast.Node, src []byte, b *strings.Builder, separateBlocks bool) {
+	if separateBlocks && stripBlockKind(n.Kind()) && b.Len() > 0 {
+		b.WriteByte('\n')
+	}
 	switch t := n.(type) {
 	case *ast.Text:
 		b.Write(t.Segment.Value(src))
+		// A soft or hard line break joins two text runs a source newline
+		// apart: write a space so they stay separate words when counting
+		// (character counting leaves the text exactly as parsed).
+		if separateBlocks && (t.SoftLineBreak() || t.HardLineBreak()) {
+			b.WriteByte(' ')
+		}
 	case *ast.String:
 		b.Write(t.Value)
 	}
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
-		appendStripped(child, src, b)
+		appendStripped(child, src, b, separateBlocks)
 	}
+}
+
+// stripBlockKind reports whether kind is a block-level construct whose text
+// should be separated from its neighbours when Markdown is stripped for word
+// counting. Inline constructs and structural containers are not blocks.
+func stripBlockKind(kind ast.NodeKind) bool {
+	switch kind {
+	case ast.KindParagraph, ast.KindHeading, ast.KindListItem, ast.KindTextBlock:
+		return true
+	}
+	return false
 }
 
 // isISODate reports whether s is a strict YYYY-MM-DD calendar date.
