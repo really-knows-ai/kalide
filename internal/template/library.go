@@ -19,7 +19,7 @@ import (
 // rules live.
 
 // TemplatesDir is the fixed name of a project's template library directory,
-// at the root of a project alongside eypres.yaml and slides/
+// at the root of a project alongside kalide.yaml and slides/
 // (templates-dir-required).
 const TemplatesDir = "templates"
 

@@ -1,7 +1,7 @@
-// Package deck loads and models an eypres deck: its deck-wide configuration
-// (eypres.yaml) and, in a later task, its ordered slide files.
+// Package deck loads and models a kalide deck: its deck-wide configuration
+// (kalide.yaml) and, in a later task, its ordered slide files.
 //
-// LoadConfig reads eypres.yaml and validates the deck-wide configuration with
+// LoadConfig reads kalide.yaml and validates the deck-wide configuration with
 // positioned errors. Deck validation is fail-fast (whole-deck-validation), so
 // the configuration is checked first, before slide filenames and slide
 // contents.
@@ -22,7 +22,7 @@ import (
 
 // ConfigFile is the fixed name of the deck configuration file at the root of a
 // deck directory.
-const ConfigFile = "eypres.yaml"
+const ConfigFile = "kalide.yaml"
 
 // Navigation is the deck-wide reveal.js navigationMode (navigation-mode). A
 // missing navigation key resolves to NavigationDefault.
@@ -32,7 +32,7 @@ const (
 	NavigationGrid    = "grid"
 )
 
-// configKeys is the complete set of keys eypres.yaml may contain, in
+// configKeys is the complete set of keys kalide.yaml may contain, in
 // declaration order. It is both the unknown-key whitelist and the candidate
 // list for closest-match suggestions.
 var configKeys = []string{"title", "author", "date", "theme", "navigation"}
@@ -41,7 +41,7 @@ var configKeys = []string{"title", "author", "date", "theme", "navigation"}
 // no zone.
 const dateLayout = "2006-01-02"
 
-// Config is the deck-wide configuration read from eypres.yaml. It is
+// Config is the deck-wide configuration read from kalide.yaml. It is
 // resolved once per deck; `theme` and `navigation` are deck-wide only and are
 // never set per slide.
 type Config struct {

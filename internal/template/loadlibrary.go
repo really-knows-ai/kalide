@@ -36,7 +36,7 @@ import (
 //
 // There is no built-in fallback when templates/ is missing or is not a
 // directory (no-built-in-fallback): LoadLibrary reports a *LibraryError
-// naming the expected path and suggesting `eypres init`, and the caller must
+// naming the expected path and suggesting `kalide init`, and the caller must
 // not substitute compiled-in content.
 
 // LoadLibrary loads and validates the templates/ library at root within
@@ -209,7 +209,7 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	data, err := fs.ReadFile(sub, LibraryFile)
 	if err != nil {
 		return libraryErrorf(metaPath, 0, "%s not found", LibraryFile).
-			withHint("run `eypres init` to create one")
+			withHint("run `kalide init` to create one")
 	}
 
 	var doc yaml.Node

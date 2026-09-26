@@ -40,7 +40,7 @@ type LibraryError struct {
 	Message string
 
 	// Hint is an optional short remediation, rendered in parentheses, e.g.
-	// "run `eypres init` to create one".
+	// "run `kalide init` to create one".
 	Hint string
 
 	// Suggestion is an optional closest-match candidate name, rendered as
@@ -93,9 +93,9 @@ func (e *LibraryError) withSuggestion(name string, candidates []string) *Library
 // missingTemplatesDirError reports that the project has no usable
 // templates/ directory: expectedPath is the path LoadLibrary looked for
 // (typically TemplatesDir, "templates"), and reason names what was wrong
-// (absent, or present but not a directory). It always carries the `eypres
+// (absent, or present but not a directory). It always carries the `kalide
 // init` hint (templates-dir-required).
 func missingTemplatesDirError(expectedPath, reason string) *LibraryError {
 	return libraryErrorf(expectedPath, 0, "%s", reason).
-		withHint("run `eypres init` to create one")
+		withHint("run `kalide init` to create one")
 }

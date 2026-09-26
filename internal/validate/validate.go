@@ -34,7 +34,7 @@ const fixSeparator = " — "
 // Validation is fail-fast, so at most one of these is ever reported for a deck.
 type ValidationError struct {
 	// File is the deck-relative path the error belongs to, for example
-	// "eypres.yaml" or "slides/3-team.md".
+	// "kalide.yaml" or "slides/3-team.md".
 	File string
 
 	// Line is the 1-based line within File. It is 0 when no meaningful line

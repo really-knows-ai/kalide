@@ -80,7 +80,7 @@ type ExampleError struct {
 // real registry is never mutated.
 //
 // The synthetic deck is a minimal read-only fs.FS (exampleFS) holding a valid
-// eypres.yaml and exactly one slide, slides/1-example.md. It touches neither
+// kalide.yaml and exactly one slide, slides/1-example.md. It touches neither
 // the disk nor the network. Because it has one slide, the only known anchor id
 // is `example`; a `#label` link inside an example to any other label is
 // reported by the link pass, exactly as it would be for an author's deck.
@@ -208,10 +208,10 @@ func freeTemplateName(reg *template.Registry, base string) string {
 
 // The synthetic deck's fixed names.
 const (
-	// exampleConfigYAML is the synthetic deck's eypres.yaml. Every valid deck
+	// exampleConfigYAML is the synthetic deck's kalide.yaml. Every valid deck
 	// needs a title; the synthetic deck is never rendered, so the value is
 	// arbitrary.
-	exampleConfigYAML = "title: ey-present template example\n"
+	exampleConfigYAML = "title: kalide template example\n"
 
 	// exampleSlideFile is the filename of the synthetic example slide. Its
 	// label ("example") is the synthetic deck's only anchor id.
@@ -221,12 +221,12 @@ const (
 	// slide template and its single section that wrap a section template's
 	// example fragment. The slide name is made unique against the registry at
 	// run time (freeTemplateName).
-	exampleSlideTemplateName = "__eypres_example_slide"
-	exampleSectionName       = "__eypres_example_section"
+	exampleSlideTemplateName = "__kalide_example_slide"
+	exampleSectionName       = "__kalide_example_section"
 )
 
 // exampleFS is a minimal read-only fs.FS holding one synthetic deck — a valid
-// eypres.yaml and exactly one slide file — so an example slide can be run
+// kalide.yaml and exactly one slide file — so an example slide can be run
 // through Validate without touching the disk or the network. It implements the
 // FS ReadFile/ReadDir/Stat fast paths the deck loaders use.
 type exampleFS struct {

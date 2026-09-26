@@ -1,4 +1,4 @@
-// Package template defines the compiled-in slide and section templates eypres
+// Package template defines the compiled-in slide and section templates kalide
 // renders, together with the schema engine that validates deck content against
 // them.
 //
@@ -169,7 +169,7 @@ type Field struct {
 	MinDate string
 	MaxDate string
 
-	// Description is the one-line help shown by `eypres templates` and the
+	// Description is the one-line help shown by `kalide templates` and the
 	// gallery.
 	Description string
 }
@@ -313,7 +313,7 @@ type Template struct {
 	// `template:` or a section's `template:` key.
 	Name string
 
-	// Description is a one-line summary shown by `eypres templates` and the
+	// Description is a one-line summary shown by `kalide templates` and the
 	// gallery.
 	Description string
 

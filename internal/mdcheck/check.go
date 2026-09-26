@@ -1,4 +1,4 @@
-// Package mdcheck validates the Markdown subset an eypres presentation may use
+// Package mdcheck validates the Markdown subset a kalide presentation may use
 // (markdown-allowed-subset, markdown-disallowed-errors).
 //
 // Content is parsed with goldmark's CommonMark core and no extensions, so

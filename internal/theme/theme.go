@@ -33,7 +33,7 @@ const DefaultName = "default"
 // Theme is one named presentation theme.
 type Theme struct {
 	// Name is the registry key: the value an author writes for `theme` in
-	// eypres.yaml. It is the only field Register requires.
+	// kalide.yaml. It is the only field Register requires.
 	Name string
 
 	// Stylesheet is the path, within Assets, of the CSS token sheet defining

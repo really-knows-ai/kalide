@@ -19,7 +19,7 @@ import (
 // specification requires and turns their first error into the single
 // author-facing ValidationError defined in validate.go.
 //
-// Validate owns no rules of its own: eypres.yaml is checked by internal/deck
+// Validate owns no rules of its own: kalide.yaml is checked by internal/deck
 // (which resolves the theme through internal/theme), slide filenames and
 // ordering by internal/deck, slide structure by internal/slide.Parse, Markdown
 // bodies and inline text by internal/mdcheck, and field values by
@@ -33,12 +33,12 @@ import (
 // signature fails go build (whole-deck-validation).
 var _ slide.Catalogue = (*template.Registry)(nil)
 
-// Validate validates the whole deck rooted at fsys — ConfigFile (eypres.yaml)
+// Validate validates the whole deck rooted at fsys — ConfigFile (kalide.yaml)
 // and the SlidesDir (slides/) directly beneath it — and returns exactly the
 // first failure in the fixed deterministic order defined by
 // whole-deck-validation:
 //
-//  1. eypres.yaml, through deck.LoadConfig, with the config's theme resolved
+//  1. kalide.yaml, through deck.LoadConfig, with the config's theme resolved
 //     through themeReg (internal/deck + internal/theme);
 //  2. slide filenames — numbering, letters and label uniqueness — through
 //     deck.LoadSlides;
@@ -84,7 +84,7 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 		return New(deck.ConfigFile, 0, nil, "no theme registry given", "pass the project's theme registry"), true
 	}
 
-	// Step 1: eypres.yaml, including the deck-wide theme, through internal/deck
+	// Step 1: kalide.yaml, including the deck-wide theme, through internal/deck
 	// and internal/theme.
 	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
 	if err != nil {
