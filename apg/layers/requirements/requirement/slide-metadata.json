@@ -11,6 +11,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.slide-file-ordering",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.slide-metadata",
+      "properties": {}
     }
   ],
   "in": [
