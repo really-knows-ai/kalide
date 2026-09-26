@@ -1,0 +1,10 @@
+{{/*
+  person — section-usage template layout, nested inside `column`'s `people`
+  list. `avatar` is an author image path under the deck's assets/ directory
+  (not a templates/media file); it is optional.
+*/}}
+<div class="demo-person">
+  {{ with .avatar }}<img class="demo-person__avatar" src="{{ . }}" alt="">{{ end }}
+  <span class="demo-person__name">{{ .name }}</span>
+  {{ with .role }}<span class="demo-person__role">{{ . }}</span>{{ end }}
+</div>

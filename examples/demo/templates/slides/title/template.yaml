@@ -1,0 +1,17 @@
+description: a minimal unbranded title slide
+fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 80
+  - name: subtitle
+    type: text
+    max_length: 140
+  - name: date
+    type: date
+    default_format: long
+    formats:
+      - long
+      - short
+body:
+  mode: disallowed

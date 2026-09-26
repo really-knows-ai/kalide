@@ -1,0 +1,10 @@
+{{/*
+  title — slide-usage template layout. Unbranded: no logo, no brand colour,
+  just a badge icon from templates/media.
+*/}}
+<section class="demo-slide demo-slide--title">
+  <h1 class="demo-title">{{ .title }}</h1>
+  {{ with .subtitle }}<p class="demo-subtitle">{{ . }}</p>{{ end }}
+  {{ with .date }}<p class="demo-date">{{ . }}</p>{{ end }}
+  <img class="demo-badge" src="{{media "badge.svg"}}" alt="">
+</section>

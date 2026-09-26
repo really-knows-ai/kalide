@@ -1,5 +1,5 @@
 ---
-description: E2E test implementer for ey-present — owns e2e/** (e2e.Harness + tests that drive the built eypres binary). Source denied.
+description: E2E test implementer for ey-present — owns e2e/** (e2e.Harness + tests that drive the built eypres binary) and examples/** (demo fixture project). Source denied.
 mode: subagent
 hidden: true
 generated: true
@@ -51,6 +51,8 @@ permission:
     "*": deny
     "e2e/**": allow
     "apg/.worktrees/*/e2e/**": allow
+    "examples/**": allow
+    "apg/.worktrees/*/examples/**": allow
     "cmd/**": deny
     "internal/**": deny
     "apg/.worktrees/*/cmd/**": deny
@@ -89,6 +91,7 @@ permission:
     "make": allow
     "make *": allow
     "rm e2e/*": allow
+    "rm examples/*": allow
 ---
 
 # e2e-test-implementer — ey-present
@@ -99,7 +102,9 @@ inside the project worktree (`apg/.worktrees/ey-present/`); main is never a
 mutation place.
 
 ## You own
-`e2e/**` (harness and tests). Source (`cmd/**`, `internal/**`) is denied; other
+`e2e/**` (harness and tests) and `examples/**` — the non-EY demo project
+`examples/demo/` (`templates/`, `slides/`, `eypres.yaml`, media) used as the
+e2e/integration fixture. No other agent owns `examples/**`. Source (`cmd/**`, `internal/**`) is denied; other
 tests belong to test-implementer; `.opencode/**` is denied. The CI wiring for
 e2e (`native-e2e.yml`) belongs to release-implementer. If the binary needs a
 change to be testable, stop and report it.
