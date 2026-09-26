@@ -155,6 +155,9 @@ func TestServer(t *testing.T) {
 		if !strings.Contains(msg, "--port") {
 			t.Errorf("explicit-busy error %q does not suggest --port", msg)
 		}
+		if !strings.Contains(msg, "kalide") {
+			t.Errorf("explicit-busy error %q does not name kalide", msg)
+		}
 	})
 
 	t.Run("binds loopback only", func(t *testing.T) {
@@ -327,6 +330,9 @@ func TestServer(t *testing.T) {
 		raw := rec.Body.String()
 		body := unescapeText(raw)
 
+		if strings.Contains(strings.ToLower(body), "eypres") {
+			t.Errorf("gallery page contains 'eypres':\n%s", body)
+		}
 		if strings.Contains(body, "Example unavailable") {
 			t.Errorf("gallery reports an unavailable example:\n%s", body)
 		}
@@ -434,10 +440,10 @@ func TestServer(t *testing.T) {
 
 	t.Run("broken templates library serves the error page", func(t *testing.T) {
 		dir := t.TempDir()
-		// eypres.yaml and slides/ are valid, but templates/ is entirely
+		// kalide.yaml and slides/ are valid, but templates/ is entirely
 		// missing: NewReloader's built-in pipeline must publish the error
 		// page, never a stale or partially-loaded deck.
-		mustWriteFile(t, filepath.Join(dir, "eypres.yaml"), "title: Broken\n")
+		mustWriteFile(t, filepath.Join(dir, "kalide.yaml"), "title: Broken\n")
 		mustWriteFile(t, filepath.Join(dir, "slides", "1-only.md"), "---\ntemplate: hello\ntitle: Hi\n---\n")
 
 		srv := mustListen(t, Options{Page: testPage("PLACEHOLDER")})

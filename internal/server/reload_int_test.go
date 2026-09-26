@@ -113,14 +113,14 @@ func TestReloaderTemplatesLibraryIntegration(t *testing.T) {
 	}
 }
 
-// writeFixtureDeck writes a minimal real deck to dir: eypres.yaml, one slide
+// writeFixtureDeck writes a minimal real deck to dir: kalide.yaml, one slide
 // using the hello template, and a templates/ library (slides/hello,
 // themes/plain, media/logo.svg, library.yaml) — enough for the built-in
 // pipeline to validate and render without any test override.
 func writeFixtureDeck(t *testing.T, dir string) {
 	t.Helper()
 	files := map[string]string{
-		"eypres.yaml":       "title: Fixture Deck\ntheme: plain\n",
+		"kalide.yaml":       "title: Fixture Deck\ntheme: plain\n",
 		"slides/1-hello.md": "---\ntemplate: hello\ntitle: Hi\n---\n",
 
 		"templates/library.yaml": "name: fixture-library\ndescription: reload integration fixture\nformat: 1\n",

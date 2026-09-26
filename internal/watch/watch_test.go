@@ -27,7 +27,7 @@ const testDebounce = 150 * time.Millisecond
 
 // TestWatchIntegration exercises internal/watch and internal/server against the
 // real operating system: a real temporary directory watched by a real fsnotify
-// watcher (slides/, assets/ and eypres.yaml, with debounce, recursive directory
+// watcher (slides/, assets/ and kalide.yaml, with debounce, recursive directory
 // pickup and clean stop) and real loopback listeners (127.0.0.1 only, fallback
 // through the 8080 range, explicit busy port failure). It touches the
 // filesystem, real ports and a real watcher, so it is an integration test and
@@ -55,7 +55,7 @@ func TestWatchIntegration(t *testing.T) {
 		assertQuiet(t, events)
 	})
 
-	t.Run("eypres.yaml edit yields one debounced event", func(t *testing.T) {
+	t.Run("kalide.yaml edit yields one debounced event", func(t *testing.T) {
 		root, events := newWatchDeck(t)
 		mustWrite(t, filepath.Join(root, deck.ConfigFile), "title: Edited\n")
 
@@ -341,10 +341,13 @@ func TestWatchIntegration(t *testing.T) {
 		if !strings.Contains(msg, "--port") {
 			t.Errorf("explicit-busy error %q does not suggest --port", msg)
 		}
+		if !strings.Contains(msg, "kalide") {
+			t.Errorf("explicit-busy error %q does not name kalide", msg)
+		}
 	})
 }
 
-// newWatchDeck builds a real temporary deck (slides/, assets/ and eypres.yaml)
+// newWatchDeck builds a real temporary deck (slides/, assets/ and kalide.yaml)
 // and starts a real Watch on it at testDebounce. It stops the watch when the
 // subtest ends and returns the deck root and the event channel.
 func newWatchDeck(t *testing.T) (root string, events <-chan watch.Event) {

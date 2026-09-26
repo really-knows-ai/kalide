@@ -26,7 +26,7 @@ import (
 //
 // It asserts the full page HTML the pipeline produces: the .reveal >
 // .slides shell, the anchor ids taken from the slide labels, the
-// navigationMode from eypres.yaml, the registry-resolved theme stylesheet
+// navigationMode from kalide.yaml, the registry-resolved theme stylesheet
 // served from templates/themes/<name>, the served templates/media URL a
 // layout's `media` call resolves to, and that every /assets/ path the page
 // references — reveal.js's offline asset set — actually resolves in the
@@ -53,7 +53,7 @@ func TestRenderDeckPipeline(t *testing.T) {
 	}
 	funcMap := template.LayoutFuncMap(lib.Media, "/assets/templates/media")
 
-	// Deck loader: eypres.yaml then slides/, in the validator's fail-fast order.
+	// Deck loader: kalide.yaml then slides/, in the validator's fail-fast order.
 	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
 	if err != nil {
 		t.Fatalf("deck.LoadConfig: %v", err)
@@ -119,9 +119,28 @@ func TestRenderDeckPipeline(t *testing.T) {
 		t.Errorf("page does not reference the served templates/media logo URL:\n%s", page)
 	}
 
-	// navigationMode is passed straight through from eypres.yaml.
+	// navigationMode is passed straight through from kalide.yaml.
 	if !strings.Contains(page, `navigationMode: "grid"`) {
 		t.Errorf("page does not carry navigation grid:\n%s", page)
+	}
+
+	if strings.Contains(strings.ToLower(page), "eypres") {
+		t.Errorf("RenderDeck output contains 'eypres':\n%s", page)
+	}
+
+	// Assert RenderDeck empty-title fallback is kalide and output has no 'eypres'.
+	cfgEmpty := *cfg
+	cfgEmpty.Title = ""
+	emptyHTML, err := RenderDeck(&cfgEmpty, d, parsed, reg, themeReg, funcMap)
+	if err != nil {
+		t.Fatalf("RenderDeck with empty title: %v", err)
+	}
+	emptyPage := string(emptyHTML)
+	if !strings.Contains(emptyPage, "<title>kalide</title>") {
+		t.Errorf("RenderDeck empty-title fallback is not <title>kalide</title>:\n%s", emptyPage)
+	}
+	if strings.Contains(strings.ToLower(emptyPage), "eypres") {
+		t.Errorf("RenderDeck empty-title output contains 'eypres':\n%s", emptyPage)
 	}
 
 	// The project theme resolves through the theme registry to its served
@@ -137,11 +156,11 @@ func TestRenderDeckPipeline(t *testing.T) {
 	assertServedTemplatesRefsResolve(t, dir, page)
 }
 
-// pipelineDeckFiles is the real deck written to a t.TempDir(): eypres.yaml,
+// pipelineDeckFiles is the real deck written to a t.TempDir(): kalide.yaml,
 // one slide using the fixture library's hello template, and the fixture
 // templates/ library itself copied alongside it.
 var pipelineDeckFiles = map[string]string{
-	"eypres.yaml": "title: Integration Deck\n" +
+	"kalide.yaml": "title: Integration Deck\n" +
 		"author: Ada Lovelace\n" +
 		"date: 2026-09-25\n" +
 		"theme: plain\n" +

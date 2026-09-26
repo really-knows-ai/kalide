@@ -97,6 +97,9 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 	if !strings.Contains(deckPage, "<h1>Integration Deck</h1>") {
 		t.Errorf("deck page does not carry the rendered fixture title:\n%s", truncate(deckPage))
 	}
+	if strings.Contains(strings.ToLower(deckPage), "eypres") {
+		t.Errorf("served deck page contains 'eypres':\n%s", truncate(deckPage))
+	}
 	assertPageAssetsResolve(t, client, base, deckPage, []string{
 		"/assets/reveal/dist/reset.css",
 		"/assets/reveal/dist/reveal.css",
@@ -119,12 +122,32 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 	if !strings.Contains(gallery, `class="gallery-page__name">hello`) {
 		t.Errorf("gallery does not list the fixture hello template: %q", truncate(gallery))
 	}
+	if strings.Contains(strings.ToLower(gallery), "eypres") {
+		t.Errorf("served gallery page contains 'eypres':\n%s", truncate(gallery))
+	}
+
+	// Default deck <title> is kalide when title is empty.
+	if err := os.WriteFile(filepath.Join(dir, "kalide.yaml"), []byte("title: \"\"\ntheme: plain\n"), 0o644); err != nil {
+		t.Fatalf("write kalide.yaml with empty title: %v", err)
+	}
+	rl.Reload()
+	status, _, body = httpGetAsset(t, client, base+rootPath)
+	if status != http.StatusOK {
+		t.Fatalf("GET %s (default title) status %d, want 200", rootPath, status)
+	}
+	emptyTitleDeck := string(body)
+	if !strings.Contains(emptyTitleDeck, "<title>kalide</title>") {
+		t.Errorf("default deck page <title> is not kalide:\n%s", truncate(emptyTitleDeck))
+	}
+	if strings.Contains(strings.ToLower(emptyTitleDeck), "eypres") {
+		t.Errorf("default deck page contains 'eypres':\n%s", truncate(emptyTitleDeck))
+	}
 
 	// The full-page error document, published through the Page seam exactly
 	// as the reloader publishes a broken deck, still resolves over the real
 	// port (it references only the embedded assets, no theme/media).
 	verr := validate.New("slides/1-hello.md", 3, []string{"title"}, "required", "add a title: value")
-	errPage, err := NewErrorPage("My presentation", verr)
+	errPage, err := NewErrorPage("", verr)
 	if err != nil {
 		t.Fatalf("NewErrorPage: %v", err)
 	}
@@ -138,12 +161,18 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 		t.Errorf("GET %s (error page) Content-Type = %q, want text/html", rootPath, ct)
 	}
 	errDoc := string(body)
+	if !strings.Contains(errDoc, "<title>kalide</title>") {
+		t.Errorf("default error page <title> is not kalide:\n%s", truncate(errDoc))
+	}
+	if strings.Contains(strings.ToLower(errDoc), "eypres") {
+		t.Errorf("served error page contains 'eypres':\n%s", truncate(errDoc))
+	}
 	if want := validate.Format(verr); !strings.Contains(errDoc, want) {
 		t.Errorf("error page does not carry the formatted error %q: %q", want, truncate(errDoc))
 	}
 }
 
-// fixtureDeckDir writes a real deck directory: eypres.yaml, one slide using
+// fixtureDeckDir writes a real deck directory: kalide.yaml, one slide using
 // the phase-3 fixture library's hello template, and a copy of the fixture
 // templates/ library itself, so RenderDeck's media and theme URLs resolve
 // from the project's own templates/ tree on disk.
@@ -152,7 +181,7 @@ func fixtureDeckDir(t *testing.T) string {
 	dir := t.TempDir()
 
 	files := map[string]string{
-		"eypres.yaml": "title: Integration Deck\n" +
+		"kalide.yaml": "title: Integration Deck\n" +
 			"theme: plain\n",
 		"slides/1-hello.md": "---\ntemplate: hello\ntitle: Integration Deck\n---\n",
 	}
