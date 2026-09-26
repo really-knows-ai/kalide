@@ -264,6 +264,11 @@
       "kind": "details",
       "target": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.container.package-channels",
+      "properties": {}
     }
   ],
   "in": []
