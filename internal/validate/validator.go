@@ -160,13 +160,27 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 		return verr, true
 	}
 
-	// Slide body Markdown.
+	// Slide body Markdown, then the slide template's implied body rule. The
+	// Markdown-subset check runs first because it is the body's well-formedness
+	// check; template.CheckBody then enforces the rule the template declares
+	// for the same body (body-rules).
 	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine); invalid {
+		return verr, true
+	}
+	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine); invalid {
 		return verr, true
 	}
 
 	// Sections in source order, each one's frontmatter fields then its body, so
 	// the walk stays top-to-bottom by line.
+	//
+	// The slide parser yields exactly one section level: a section instance's
+	// body is Markdown after its `# name` heading, and composition nests inside
+	// templates, never in author Markdown (template-composition). A nested
+	// section instance is therefore a section-template-as-type YAML value with
+	// no Markdown body — its BodyDisallowed rule is enforced by CheckValues'
+	// `body:`-key rejection — so only the slide body and each top-level
+	// section body carry a body rule here.
 	for _, sec := range ps.Sections {
 		if sec.Template == "" {
 			continue
@@ -179,6 +193,9 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 			return verr, true
 		}
 		if verr, invalid := checkBody(s.Path, sec.Body, sec.BodyLine); invalid {
+			return verr, true
+		}
+		if verr, invalid := checkBodyRule(s.Path, secTmpl.Body, sec.Body, sec.BodyLine); invalid {
 			return verr, true
 		}
 	}
@@ -229,6 +246,25 @@ func checkBody(file, body string, startLine int) (ValidationError, bool) {
 		return ValidationError{}, false
 	}
 	return adaptIssue(issues[0]), true
+}
+
+// checkBodyRule checks one Markdown body against its template's implied `body`
+// rule through template.CheckBody (body-rules): Mode required/optional/
+// disallowed, the max_words/max_paragraphs/max_list_items limits and the
+// subheadings allowance. startLine is the body's 1-based line in the file, passed
+// through as WithBodyLine so a violation carries an absolute position (and a
+// forbidden subheading is placed on its own line). It returns the first
+// violation and whether one was found.
+//
+// CheckBody reports the same positioned template.ValueError shape CheckValues
+// does, with the implied `body` path, so the violation adapts through
+// adaptValueError unchanged.
+func checkBodyRule(file string, rule template.BodyRule, body string, startLine int) (ValidationError, bool) {
+	ve, invalid := template.CheckBody(rule, body, template.WithBodyLine(startLine))
+	if !invalid {
+		return ValidationError{}, false
+	}
+	return adaptValueError(file, ve), true
 }
 
 // themeResolves reports whether name resolves in the caller's theme registry
