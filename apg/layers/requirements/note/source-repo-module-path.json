@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "source-repo-module-path",
-  "body": "Source repo and module path [with user]: private GitHub repo `github.com/really-knows-ai/ey-present` (git@github.com:really-knows-ai/ey-present.git); Go module path `github.com/really-knows-ai/ey-present`. This supersedes the earlier `github.com/ey/eypres` path, which appeared only in plan/feedback text, not in spec nodes (checked: no layer node body mentioned a module path). The plan's planned FQNs (go.github.com/ey/eypres/...) must be re-pointed by the plan-writer.",
+  "body": "Source repo and module path [with user]: SUPERSEDED by the kalide rename (requirements.requirement.kalide-rename): the private repo is now `github.com/really-knows-ai/kalide` (git@github.com:really-knows-ai/kalide.git) and the Go module path is `github.com/really-knows-ai/kalide`. History: an earlier decision set repo/module `github.com/really-knows-ai/ey-present`, which itself superseded `github.com/ey/eypres` (plan/feedback text only). Planned/code FQNs under go.github.com/really-knows-ai/ey-present/... must be re-pointed to go.github.com/really-knows-ai/kalide/... by the plan-writer.",
   "properties": {},
   "out": [
     {
