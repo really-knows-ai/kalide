@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "template-registry",
-  "body": "Template registry / schema engine: schema model (fields, types, formats, body rules, sections) populated from project `template.yaml` manifests by the template-library-loader, with each template's kind taken from its directory (slides/ or sections/). Load-time checks (cycles, directory-kind check for section acceptance and field types, cross-kind name uniqueness, reserved names, references, examples), lookup and description. Owns the central, documented layout function map (v1: exactly `media \"path\"` → served URL of a file in templates/media/ or the theme dir) used when parsing layouts. Holds no compiled-in templates.",
+  "body": "Template registry / schema engine: schema model (fields, types, formats, body rules, sections) populated from project `template.yaml` manifests by the template-library-loader, with each template's kind taken from its directory (slides/ or sections/). Load-time checks (cycles, directory-kind check for section acceptance and field types, cross-kind name uniqueness, reserved names, references, examples), lookup and description. Owns the central, documented layout function map (v1: exactly `media \"path\"` → served URL of the file at `templates/media/<path>`; path relative to templates/media/ only, no absolute paths, no `..`; never resolves into themes/) used when parsing layouts. Holds no compiled-in templates.",
   "properties": {},
   "out": [
     {
