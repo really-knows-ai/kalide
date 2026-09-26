@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "renderer",
-  "body": "Renderer: executes Go html/template layouts with validated data, applies formats, theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors, notes.",
+  "body": "Renderer: executes standard Go html/template layouts (no third-party engine) with pre-rendered content — body, `text` fields and each named section (rendered through its section template) passed as safe HTML; other fields as typed values (number/date formatted per `_format`, boolean, enum, list, image/link URLs) — and the registry's minimal function map (v1: `media`). Layout execute errors become file:line-qualified templates errors. Applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors, notes.",
   "properties": {},
   "out": [],
   "in": [
