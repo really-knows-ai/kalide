@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "person",
   "name": "deck-author",
-  "body": "Deck author (C4 person): runs eypres init/start/templates, edits slides, presents in browser.",
+  "body": "Deck author (C4 person): runs kalide init/start/templates, edits slides, presents in browser.",
   "properties": {},
   "out": [
     {
