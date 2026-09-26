@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "template",
-  "body": "A project template: name (directory name), description, usage (slide|section), fields, sections (accepted section templates + min/max), body rule — declared in `template.yaml` — plus html/template layout and example slide. Aggregate root of templating; belongs to the template library.",
+  "body": "A project template: name (directory name, unique across slide and section templates), kind (slide|section — determined by its directory `templates/slides/` or `templates/sections/`, never declared), description, fields, sections (accepted section templates + min/max), body rule — declared in `template.yaml` — plus a standard Go html/template layout (receives pre-rendered safe HTML and typed values; only the centrally defined helper set, v1 = `media`) and example slide. Aggregate root of templating; belongs to the template library.",
   "properties": {
     "kind": "entity"
   },
