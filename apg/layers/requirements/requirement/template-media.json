@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-media",
-  "body": "Project media: fonts, logos, images, video and any other file type under `templates/themes/<name>/` or `templates/media/` are served by `eypres start` from the project directory (offline, 127.0.0.1 only) with a content type derived from the file extension; there is no allow-list of media types. Theme stylesheets and template layouts reference them by relative path within `templates/` only. AC: a `.woff2`, an `.svg` and an `.mp4` placed under `templates/media/` and referenced from a theme/layout are served and resolve in the rendered deck.",
+  "body": "Project media: fonts, logos, images, video and any other file type under `templates/themes/<name>/` or `templates/media/` are served by `eypres start` from the project directory (offline, 127.0.0.1 only) with a content type derived from the file extension; there is no allow-list of media types. Reference rules: layouts reference shared media via `{{media \"path\"}}`, the path being relative to `templates/media/` only (no absolute paths, no `..`); theme-owned files (fonts, logos in `themes/<name>/`) are referenced only from that theme's `theme.css` via relative `url()` and are served from the theme directory — `media` never resolves into a theme. AC: a `.woff2`, an `.svg` and an `.mp4` placed under `templates/media/` and referenced from a layout via `media` are served and resolve in the rendered deck; a `.woff2` in `templates/themes/<name>/fonts/` referenced by relative `url()` from its `theme.css` is served and resolves.",
   "properties": {
     "feature": "project-templates"
   },
