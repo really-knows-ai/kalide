@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.slide-file-ordering",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
