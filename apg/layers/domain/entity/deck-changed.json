@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "deck-changed",
-  "body": "Event: a file under slides/, assets/ or eypres.yaml changed while serving.",
+  "body": "Event: a file changed while serving — under slides/, assets/, eypres.yaml, or anywhere under templates/ (library.yaml, slides/, sections/, themes/, media/). Published (debounced) by watch-deck; triggers templates reload → validate → render.",
   "properties": {
     "kind": "event"
   },
