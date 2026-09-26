@@ -4,7 +4,13 @@
   "name": "install-kalide",
   "body": "Install kalide: a user adds the tap `really-knows-ai/kalide` (macOS) or the bucket `kalide` (Windows), supplies a GitHub token, and the package manager fetches the matching `kalide-<os>-<arch>` binary from the private release and installs it.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.install-docs",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "drives",

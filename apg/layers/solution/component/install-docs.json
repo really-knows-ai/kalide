@@ -26,6 +26,11 @@
       "kind": "details",
       "source": "solution.note.fix-component-implemented-by",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.install-kalide",
+      "properties": {}
     }
   ]
 }
