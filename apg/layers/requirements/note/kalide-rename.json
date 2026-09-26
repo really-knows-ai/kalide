@@ -294,6 +294,11 @@
       "kind": "details",
       "target": "global.constraint.markdown-yaml-content-only",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.no-embedded-template-assets",
+      "properties": {}
     }
   ],
   "in": []
