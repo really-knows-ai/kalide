@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "reconcile-kind-directories",
+  "body": "source: templates-dir-layout had `templates/templates/<name>/` with a `usage: slide|section` key in template.yaml; inconsistency: user-approved reconciliation splits templates by kind directory; resolution: layout is library.yaml, slides/<name>/, sections/<name>/, themes/<name>/, media/; kind by directory; `usage:` key removed (presence = error); names unique across slides and sections (field-types uses section names as types); unknown top-level entries remain an error. Knock-ons: template-definition, template-manifest, template-build-checks (directory-kind check + cross-kind uniqueness), cli-templates-list, templates-dir-validation (paths/order), slide-template-required, template-composition, cli-init-minimal-seed, domain.entity.template, domain.service.template-registry, solution template-registry / template-library-loader / init-seed. [with user]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
