@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-templates-show",
-  "body": "`eypres templates <name>` shows the template's fields (type, required, default, limits, formats, description), sections (accepted section templates, min/max repeats), body rules, and its example slide. Unknown name = error with closest-match suggestion.",
+  "body": "`kalide templates <name>` shows the template's fields (type, required, default, limits, formats, description), sections (accepted section templates, min/max repeats), body rules, and its example slide. Unknown name = error with closest-match suggestion.",
   "properties": {
     "feature": "cli"
   },
