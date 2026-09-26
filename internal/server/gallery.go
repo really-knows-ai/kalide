@@ -221,7 +221,7 @@ func galleryEntries(reg *template.Registry, funcMap htmltmpl.FuncMap) []galleryE
 		example, err := galleryExample(t, reg, funcMap)
 		if err != nil {
 			entry.Example = htmltmpl.HTML(
-				`<p class="ey-gallery__empty">Example unavailable: ` +
+				`<p class="gallery-page__empty">Example unavailable: ` +
 					htmltmpl.HTMLEscapeString(err.Error()) + `</p>`)
 		} else {
 			entry.Example = example

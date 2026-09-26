@@ -7,13 +7,13 @@
   internal/render, and its field/section/body documentation
   (requirements.requirement.templates-gallery).
 
-  It is a standalone page: OFFLINE, referencing only the embedded reveal.js
-  runtime and the project's own theme stylesheet (served under /assets/,
-  resolved through the theme registry — theme-selection), never a CDN or any
-  network location (global.constraint.go-static-embedded-binary). The page
-  carries no brand asset of its own: every colour, font and spacing value it
-  uses is a token the project's theme stylesheet defines
-  (global.constraint.theme-tokens-only).
+  It is a standalone page: OFFLINE, and — like the error page — it is a
+  built-in embedded shell, not project-theme-styled: it never references the
+  project's theme stylesheet, never a CDN or any network location
+  (global.constraint.go-static-embedded-binary). Every colour, font and
+  spacing value it uses is a neutral custom property defined inline in this
+  file's own <style> block, so the page renders correctly with zero external
+  CSS dependencies.
 
   Embedding / access:
     The pages sub-tree is embedded by internal/assets and exposed as
@@ -90,97 +90,121 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ with .Title }}{{ . }}{{ else }}Templates{{ end }}</title>
 
-  {{/* The project's theme stylesheet: its @font-face rules (if any) and the
-       token block every rule below consumes. Served from the project's
-       theme directory, resolved by internal/server's media handler. */}}
-  <link rel="stylesheet" href="/assets/theme.css">
+  {{/* This page is a built-in embedded shell (not project-theme-styled),
+       so it never links the project's theme stylesheet. */}}
   <style>
-    /* Page chrome only, consuming the tokens the theme stylesheet declares;
-       no colour, font or spacing value is restated here
-       (global.constraint.theme-tokens-only). */
+    /* Self-contained: neutral custom properties defined and consumed only
+       within this file, so the page renders with zero external CSS
+       dependencies. */
+    :root {
+      --gallery-space-1: 0.25rem;
+      --gallery-space-2: 0.5rem;
+      --gallery-space-3: 1rem;
+      --gallery-space-4: 1.5rem;
+      --gallery-space-5: 2rem;
+      --gallery-content-width: 90%;
+      --gallery-bg: #1a1a1a;
+      --gallery-fg: #f0f0f0;
+      --gallery-fg-muted: #a0a0a0;
+      --gallery-highlight: #ff6b6b;
+      --gallery-ink: #1a1a1a;
+      --gallery-border: #3a3a3a;
+      --gallery-border-width: 1px;
+      --gallery-radius: 0.375rem;
+      --gallery-off-white: #2a2a2a;
+      --gallery-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --gallery-font-display: var(--gallery-font-body);
+      --gallery-font-heading: var(--gallery-font-body);
+      --gallery-font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      --gallery-font-size-title: 1.75rem;
+      --gallery-font-size-heading: 1.125rem;
+      --gallery-font-size-body: 1rem;
+      --gallery-font-size-small: 0.875rem;
+      --gallery-line-height: 1.5;
+    }
     * { box-sizing: border-box; }
     html, body { margin: 0; }
     body {
-      padding: var(--ey-space-5);
-      background: var(--ey-bg);
-      color: var(--ey-fg);
-      font-family: var(--ey-font-body);
-      line-height: var(--ey-line-height);
+      padding: var(--gallery-space-5);
+      background: var(--gallery-bg);
+      color: var(--gallery-fg);
+      font-family: var(--gallery-font-body);
+      line-height: var(--gallery-line-height);
     }
-    .ey-gallery { width: var(--ey-content-width); max-width: 72rem; margin: 0 auto; }
-    .ey-gallery__header { border-bottom: var(--ey-border-width) solid var(--ey-highlight); padding-bottom: var(--ey-space-3); }
-    .ey-gallery__title {
-      font-family: var(--ey-font-display);
-      font-size: var(--ey-font-size-title);
-      margin: var(--ey-space-4) 0 var(--ey-space-2);
+    .gallery-page { width: var(--gallery-content-width); max-width: 72rem; margin: 0 auto; }
+    .gallery-page__header { border-bottom: var(--gallery-border-width) solid var(--gallery-highlight); padding-bottom: var(--gallery-space-3); }
+    .gallery-page__title {
+      font-family: var(--gallery-font-display);
+      font-size: var(--gallery-font-size-title);
+      margin: var(--gallery-space-4) 0 var(--gallery-space-2);
     }
-    .ey-gallery__subtitle { margin: 0; color: var(--ey-fg-muted); }
-    .ey-gallery__list { list-style: none; margin: 0; padding: 0; }
-    .ey-gallery__item {
-      margin: var(--ey-space-5) 0;
-      padding: var(--ey-space-4);
-      border: var(--ey-border-width) solid var(--ey-border);
-      border-radius: var(--ey-radius);
+    .gallery-page__subtitle { margin: 0; color: var(--gallery-fg-muted); }
+    .gallery-page__list { list-style: none; margin: 0; padding: 0; }
+    .gallery-page__item {
+      margin: var(--gallery-space-5) 0;
+      padding: var(--gallery-space-4);
+      border: var(--gallery-border-width) solid var(--gallery-border);
+      border-radius: var(--gallery-radius);
     }
-    .ey-gallery__name { font-family: var(--ey-font-heading); font-size: var(--ey-font-size-heading); margin: 0; }
-    .ey-gallery__usage {
+    .gallery-page__name { font-family: var(--gallery-font-heading); font-size: var(--gallery-font-size-heading); margin: 0; }
+    .gallery-page__usage {
       display: inline-block;
-      margin-left: var(--ey-space-2);
-      padding: 0 var(--ey-space-1);
-      border-radius: var(--ey-radius);
-      background: var(--ey-highlight);
-      color: var(--ey-ink);
-      font-family: var(--ey-font-mono);
-      font-size: var(--ey-font-size-small);
+      margin-left: var(--gallery-space-2);
+      padding: 0 var(--gallery-space-1);
+      border-radius: var(--gallery-radius);
+      background: var(--gallery-highlight);
+      color: var(--gallery-ink);
+      font-family: var(--gallery-font-mono);
+      font-size: var(--gallery-font-size-small);
       vertical-align: middle;
     }
-    .ey-gallery__description { margin: var(--ey-space-2) 0 var(--ey-space-3); color: var(--ey-fg-muted); }
-    .ey-gallery__preview {
-      margin: 0 0 var(--ey-space-4);
-      padding: var(--ey-space-3);
-      border: var(--ey-border-width) dashed var(--ey-border);
-      border-radius: var(--ey-radius);
-      background: var(--ey-off-white);
+    .gallery-page__description { margin: var(--gallery-space-2) 0 var(--gallery-space-3); color: var(--gallery-fg-muted); }
+    .gallery-page__preview {
+      margin: 0 0 var(--gallery-space-4);
+      padding: var(--gallery-space-3);
+      border: var(--gallery-border-width) dashed var(--gallery-border);
+      border-radius: var(--gallery-radius);
+      background: var(--gallery-off-white);
       overflow-x: auto;
     }
-    .ey-gallery__preview > section, .ey-gallery__preview > div { margin: 0; }
-    .ey-gallery__docs h3 {
-      font-family: var(--ey-font-heading);
-      font-size: var(--ey-font-size-body);
-      margin: var(--ey-space-3) 0 var(--ey-space-2);
+    .gallery-page__preview > section, .gallery-page__preview > div { margin: 0; }
+    .gallery-page__docs h3 {
+      font-family: var(--gallery-font-heading);
+      font-size: var(--gallery-font-size-body);
+      margin: var(--gallery-space-3) 0 var(--gallery-space-2);
     }
-    .ey-gallery__table { width: 100%; border-collapse: collapse; font-size: var(--ey-font-size-small); }
-    .ey-gallery__table th, .ey-gallery__table td {
+    .gallery-page__table { width: 100%; border-collapse: collapse; font-size: var(--gallery-font-size-small); }
+    .gallery-page__table th, .gallery-page__table td {
       text-align: left;
-      padding: var(--ey-space-1) var(--ey-space-2);
-      border-bottom: 1px solid var(--ey-border);
+      padding: var(--gallery-space-1) var(--gallery-space-2);
+      border-bottom: 1px solid var(--gallery-border);
       vertical-align: top;
     }
-    .ey-gallery__table th { font-family: var(--ey-font-heading); }
-    .ey-gallery__table code { font-family: var(--ey-font-mono); }
-    .ey-gallery__empty { color: var(--ey-fg-muted); font-style: italic; }
+    .gallery-page__table th { font-family: var(--gallery-font-heading); }
+    .gallery-page__table code { font-family: var(--gallery-font-mono); }
+    .gallery-page__empty { color: var(--gallery-fg-muted); font-style: italic; }
   </style>
 </head>
 <body>
-  <main class="ey-gallery">
-    <header class="ey-gallery__header">
-      <h1 class="ey-gallery__title">{{ with .Title }}{{ . }}{{ else }}Templates{{ end }}</h1>
-      {{ with .Subtitle }}<p class="ey-gallery__subtitle">{{ . }}</p>{{ end }}
+  <main class="gallery-page">
+    <header class="gallery-page__header">
+      <h1 class="gallery-page__title">{{ with .Title }}{{ . }}{{ else }}Templates{{ end }}</h1>
+      {{ with .Subtitle }}<p class="gallery-page__subtitle">{{ . }}</p>{{ end }}
     </header>
 
-    <ul class="ey-gallery__list">
+    <ul class="gallery-page__list">
       {{ range .Templates }}
-      <li class="ey-gallery__item">
-        <h2 class="ey-gallery__name">{{ .Name }}<span class="ey-gallery__usage">{{ .Usage }}</span></h2>
-        {{ with .Description }}<p class="ey-gallery__description">{{ . }}</p>{{ end }}
+      <li class="gallery-page__item">
+        <h2 class="gallery-page__name">{{ .Name }}<span class="gallery-page__usage">{{ .Usage }}</span></h2>
+        {{ with .Description }}<p class="gallery-page__description">{{ . }}</p>{{ end }}
 
         {{/* The example slide, rendered through internal/render. */}}
-        {{ with .Example }}<div class="ey-gallery__preview">{{ . }}</div>{{ end }}
+        {{ with .Example }}<div class="gallery-page__preview">{{ . }}</div>{{ end }}
 
-        <div class="ey-gallery__docs">
+        <div class="gallery-page__docs">
           <h3>Fields</h3>
           {{ if .Fields }}
-          <table class="ey-gallery__table">
+          <table class="gallery-page__table">
             <thead>
               <tr><th>Field</th><th>Type</th><th>Required</th><th>Default</th><th>Rules</th><th>Formats</th><th>Description</th></tr>
             </thead>
@@ -199,12 +223,12 @@
             </tbody>
           </table>
           {{ else }}
-          <p class="ey-gallery__empty">This template declares no fields.</p>
+          <p class="gallery-page__empty">This template declares no fields.</p>
           {{ end }}
 
           <h3>Sections</h3>
           {{ if .Sections }}
-          <table class="ey-gallery__table">
+          <table class="gallery-page__table">
             <thead>
               <tr><th>Section</th><th>Accepts</th><th>Repeats</th><th>Description</th></tr>
             </thead>
@@ -220,19 +244,19 @@
             </tbody>
           </table>
           {{ else }}
-          <p class="ey-gallery__empty">This template declares no sections.</p>
+          <p class="gallery-page__empty">This template declares no sections.</p>
           {{ end }}
 
           <h3>Body</h3>
           {{ with .Body }}
           <p>{{ .Summary }}{{ with .Limits }} ({{ . }}){{ end }} — <code>{{ .Mode }}</code>.</p>
           {{ else }}
-          <p class="ey-gallery__empty">—</p>
+          <p class="gallery-page__empty">—</p>
           {{ end }}
         </div>
       </li>
       {{ else }}
-      <li class="ey-gallery__item"><p class="ey-gallery__empty">No templates are registered.</p></li>
+      <li class="gallery-page__item"><p class="gallery-page__empty">No templates are registered.</p></li>
       {{ end }}
     </ul>
   </main>
