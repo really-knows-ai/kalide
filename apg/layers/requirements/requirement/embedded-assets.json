@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "embedded-assets",
-  "body": "All assets — reveal.js (pinned to release 6.0.2, MIT), templates, the `default` theme CSS (EY look), EY fonts and logos, starter files, gallery/error pages — are embedded via Go `embed` and served from the binary. reveal.js is vendored from the release package's `dist/` directory into `internal/assets/reveal/` and committed there together with its `LICENSE` (it ships because we redistribute it); there is no `npm install` and no build step to consume it — Node is only needed to develop reveal.js itself.",
+  "body": "Only the presentation engine is embedded via Go `embed` and served from the binary: reveal.js (pinned to release 6.0.2, MIT) and the unbranded engine page shells (deck page, full-page error page, /templates gallery page), plus the minimal `eypres init` seed (see cli-init-minimal-seed). reveal.js is vendored from the release package's `dist/` directory into `internal/assets/reveal/` and committed there together with its `LICENSE`; no `npm install`, no build step. Templates, themes (incl. the former EY `default`), EY fonts and logos, the EY starter deck and any other media are NOT embedded — they move to project `templates/` directories (see project-templates). AC: `internal/assets` embeds no templates/, fonts/, logo/, starter/ or theme.css; the engine page shells reference no EY brand asset and style only via the project theme's stylesheet.",
   "properties": {
     "feature": "cross-platform"
   },
