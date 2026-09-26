@@ -1,0 +1,80 @@
+{{/*
+  deck — the reveal.js deck page shell.
+
+  This is the single page internal/render.RenderDeck parses and executes to
+  produce the served presentation. It is OFFLINE: every URL below points into
+  the embedded assets.FS (served under /assets/…), never at a CDN or any
+  network location.
+
+  Embedding / access:
+    The pages sub-tree is embedded by internal/assets and exposed as
+    assets.DeckPage() (an fs.FS rooted here), so the file's path is
+    "deck.html.tmpl". internal/render does, in effect:
+
+      template.Must(template.ParseFS(assets.DeckPage(), "deck.html.tmpl"))
+
+  Execution context (a struct or map[string]any supplying these keys):
+    .Title       string        deck title for the document <title>.
+                               Empty falls back to "eypres".
+    .ThemeCSS    string        URL of the resolved theme stylesheet
+                               (theme-registry Stylesheet, e.g.
+                               "/assets/theme.css"). Empty falls back to
+                               "/assets/theme.css".
+    .Navigation  string        navigationMode passed straight through from
+                               eypres.yaml `navigation`: "default", "linear"
+                               or "grid". Empty falls back to "default".
+    .Slides      template.HTML rendered slides: the outer <section> elements
+                               internal/render built (letter slides already
+                               nested as vertical stacks). Injected verbatim
+                               into the .reveal > .slides container.
+
+  Hook slots (phase 7):
+    Both "theme-css" and "live-reload" are named blocks, so a caller may
+    override them with {{ define }} before parsing and without editing this
+    file. "live-reload" is empty in phase 6; the phase-7 server injects its
+    SSE client script there.
+
+  Print / PDF:
+    reveal.js 6.x handles ?print-pdf in core — the print styles are bundled in
+    the embedded dist/reveal.css, there is no separate print plugin or
+    stylesheet. Loading this page with ?print-pdf is the whole of print
+    support.
+*/}}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ with .Title }}{{ . }}{{ else }}eypres{{ end }}</title>
+
+  {{/* Embedded reveal.js base styles, then the resolved theme tokens. */}}
+  <link rel="stylesheet" href="/assets/reveal/dist/reset.css">
+  <link rel="stylesheet" href="/assets/reveal/dist/reveal.css">
+  {{ block "theme-css" . }}{{ with .ThemeCSS }}<link rel="stylesheet" href="{{ . }}">{{ else }}<link rel="stylesheet" href="/assets/theme.css">{{ end }}{{ end }}
+
+  {{/* Reveal.js applies the .reveal-viewport metrics to <html> once initialised. */}}
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      {{/* internal/render fills this container with the rendered slides. */}}
+      {{ .Slides }}
+    </div>
+  </div>
+
+  {{/* Embedded reveal.js core and the speaker-notes plugin (dist/plugin/notes.js). */}}
+  <script src="/assets/reveal/dist/reveal.js"></script>
+  <script src="/assets/reveal/dist/plugin/notes.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      navigationMode: "{{ if .Navigation }}{{ .Navigation }}{{ else }}default{{ end }}",
+      plugins: [ RevealNotes ],
+    });
+  </script>
+
+  {{/* Phase-7 live-reload client script is injected here; empty in phase 6. */}}
+  {{ block "live-reload" . }}{{ end }}
+</body>
+</html>

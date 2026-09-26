@@ -11,6 +11,7 @@
 //	logo/       EY logo SVGs (full/small, light/dark variants)
 //	templates/  built-in template content: one directory per template holding
 //	            its html/template layout and validating example slide source
+//	pages/      full-page html/template shells (the reveal.js deck page)
 //	theme.css   default EY theme tokens and @font-face rules
 //
 // Everything is compiled into the binary: the served deck never reaches the
@@ -35,7 +36,7 @@ import (
 // fonts/ and logo/ directories: embed cannot include parent directories, so
 // the brand assets were moved under internal/assets/ when they were vendored.
 //
-//go:embed reveal fonts logo templates theme.css
+//go:embed reveal fonts logo templates pages theme.css
 var FS embed.FS
 
 // revealFS, fontsFS, logoFS and templatesFS are resolved once: fs.Sub can only
@@ -47,6 +48,7 @@ var (
 	fontsFS     = mustSub("fonts")
 	logoFS      = mustSub("logo")
 	templatesFS = mustSub("templates")
+	pagesFS     = mustSub("pages")
 )
 
 // Reveal returns the vendored reveal.js sub-tree, rooted so that paths such as
@@ -69,6 +71,16 @@ func Logo() fs.FS { return logoFS }
 // (never the reverse). The layout/example conventions and every field name are
 // documented in the tree's README.md.
 func Templates() fs.FS { return templatesFS }
+
+// DeckPage returns the sub-tree holding the full-page html/template shells; the
+// reveal.js deck page is "deck.html.tmpl" within it. internal/render parses and
+// executes that file to produce the served presentation, so the page and every
+// asset it references are compiled into the binary and served offline.
+//
+// Later phases add the error and gallery pages to this same sub-tree and
+// expose them alongside (or through a Pages accessor) without changing
+// DeckPage's meaning.
+func DeckPage() fs.FS { return pagesFS }
 
 // mustSub returns the sub-tree of FS rooted at dir, panicking when dir is not
 // an embedded directory. The embed directive is the source of truth, so a
