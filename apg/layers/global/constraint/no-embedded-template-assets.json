@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "no-embedded-template-assets",
-  "body": "The eypres binary must contain no templates, themes, fonts, logos or other presentation media (images, video, …), and no EY branding of any kind; the repository holds no EY template library. Every template, theme and media file used to validate, render, list or serve a deck must be read from the project's `templates/` directory at run time. There is no built-in fallback: if the project lacks something, it is an error. The core of the tool — the vendored reveal.js runtime and the unbranded deck/error/gallery page shells — is not a template asset and is embedded, but must remain unbranded. The only other embedded content is the minimal, unbranded `eypres init` seed scaffold, which is written to disk once by init and is never read by validate/render/serve/list code paths.",
+  "body": "The kalide binary must contain no templates, themes, fonts, logos or other presentation media (images, video, …), and no EY branding of any kind; the repository holds no EY template library. Every template, theme and media file used to validate, render, list or serve a deck must be read from the project's `templates/` directory at run time. There is no built-in fallback: if the project lacks something, it is an error. The core of the tool — the vendored reveal.js runtime and the unbranded deck/error/gallery page shells — is not a template asset and is embedded, but must remain unbranded. The only other embedded content is the minimal, unbranded `kalide init` seed scaffold, which is written to disk once by init and is never read by validate/render/serve/list code paths.",
   "properties": {},
   "out": [],
   "in": [
