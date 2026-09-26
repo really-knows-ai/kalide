@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-kind-directories",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.deck-properties-decisions",
+      "properties": {}
     }
   ]
 }
