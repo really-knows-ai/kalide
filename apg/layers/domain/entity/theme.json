@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "theme",
-  "body": "A theme: named set of CSS variable tokens (colours, fonts, spacing) plus fonts/logos. Only `default` (the EY look) exists now; deck-wide; more may be added later.",
+  "body": "A theme: a project-defined (`templates/themes/<name>/`) named set of CSS variable tokens (colours, fonts, spacing) plus the fonts/logos/media it references. No built-in themes; deck-wide; omitted selection resolves to the project's `default`.",
   "properties": {
     "kind": "entity"
   },
