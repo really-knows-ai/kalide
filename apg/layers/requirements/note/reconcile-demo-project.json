@@ -4,6 +4,12 @@
   "name": "reconcile-demo-project",
   "body": "source: no integration fixture beyond the minimal `hello` seed; inconsistency: with EY content deleted there is no multi-template fixture for tests; resolution: new requirement demo-project (unbranded `examples/demo/` with title/content/columns slide templates, column/person section templates, one theme, one media file; integration/e2e fixture; distinct from `hello` seed; not embedded). Contained by project-templates; drives domain.entity.template-library (→ realised via templating components); depends-on templates-dir-layout and template-media. [with user]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.demo-project",
+      "properties": {}
+    }
+  ],
   "in": []
 }
