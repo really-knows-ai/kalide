@@ -229,6 +229,11 @@
       "kind": "details",
       "target": "solution.component.init-seed",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.demo-fixture",
+      "properties": {}
     }
   ],
   "in": []
