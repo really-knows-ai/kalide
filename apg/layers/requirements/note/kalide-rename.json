@@ -279,6 +279,11 @@
       "kind": "details",
       "target": "solution.person.template-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.person.deck-author",
+      "properties": {}
     }
   ],
   "in": []
