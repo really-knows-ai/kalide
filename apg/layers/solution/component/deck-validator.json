@@ -4,7 +4,13 @@
   "name": "deck-validator",
   "body": "Deck validator: walks deck → slides → sections/fields recursively applying schema rules; fail-fast — stops at the first error and returns it path-qualified with hint and closest-match suggestion; formats it for terminal and browser. Walk order is fixed and deterministic: (1) eypres.yaml, (2) slide filenames (numbering, letters, label uniqueness), (3) slides in number/letter order, each top-to-bottom by line (frontmatter, body, sections, fields), (4) a final pass resolving inter-slide #label links against the full label set.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/validate.Validate",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
