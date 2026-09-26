@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "reconcile-ey-content-removal",
-  "body": "source: parked-template-catalogue said the EY templates/theme/fonts/logos migrate to an in-repo example library; embedded-assets and the global constraints called reveal.js + page shells \"engine\"; inconsistency: user decided EY content is deleted entirely and the shells are core; resolution: parked-template-catalogue marked RESOLVED (removed); embedded-assets (requirement + component), global.constraint.no-embedded-template-assets and global.constraint.go-static-embedded-binary reworded to \"core\", unbranded, and no in-repo EY library; ey-brand-owner stakeholder, template-author user and person no longer say templates are compiled into the binary. [with user]",
+  "body": "source: parked-template-catalogue said the EY templates/theme/fonts/logos migrate to an in-repo example library; embedded-assets and the global constraints called reveal.js + page shells \"engine\"; inconsistency: user decided EY content is deleted entirely and the shells are core; resolution: parked-template-catalogue marked RESOLVED (removed); embedded-assets (requirement + component), global.constraint.no-embedded-template-assets and global.constraint.go-static-embedded-binary reworded to \"core\", unbranded, and no in-repo EY library; brand-owner stakeholder (formerly ey-brand-owner), template-author user and person no longer say templates are compiled into the binary. [with user]",
   "properties": {},
   "out": [
     {
