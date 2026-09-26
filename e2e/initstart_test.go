@@ -122,6 +122,19 @@ func TestInitStart(t *testing.T) {
 		t.Errorf("served deck page does not carry the hello slide's title:\n%s", body)
 	}
 
+	// This is the single-binary acceptance check: init and start both ran
+	// against the static eypres binary with no embedded EY templates, fonts
+	// or logo, and the served deck carries no reference to any of the old
+	// embedded EY asset routes (they no longer exist: phase 7 stripped them
+	// from internal/assets and the /assets/ handler). Note /assets/templates/
+	// is not one of these: it is the current, legitimate mediaHandler route
+	// (ThemesPath/MediaPath) the seed's own theme.css is served from above.
+	for _, want := range []string{"/assets/fonts/", "/assets/logo/"} {
+		if strings.Contains(body, want) {
+			t.Errorf("served deck page references %q, want no EY asset URLs (embedded EY content is gone)", want)
+		}
+	}
+
 	themeResp, err := h.Get(server.ThemesPath + "default/theme.css")
 	if err != nil {
 		t.Fatalf("GET %sdefault/theme.css: %v", server.ThemesPath, err)
