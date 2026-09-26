@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "note",
+  "name": "fix-deck-changed-templates-scope",
+  "body": "source: deck-changed 'a file under slides/, assets/ or eypres.yaml changed'; inconsistency: omitted templates/, contradicting templates-live-reload ('changes anywhere under templates/'); resolution: deck-changed, watch-deck and file-watcher now all name slides/, assets/, eypres.yaml and anywhere under templates/ (library.yaml, slides/, sections/, themes/, media/) [feedback-2]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
