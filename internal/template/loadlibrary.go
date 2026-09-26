@@ -171,18 +171,33 @@ func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
 
 // checkLibraryBuild is templates-dir-validation step 4: parsing manifests
 // (parseManifest) into definitions and running the template-build-checks
-// (Registry.Validate) over them. Phase 1 leaves it a no-op hook point wired
-// into LoadLibrary between steps 3 and 5; phase-2 task-11 fills in the body.
+// (Registry.Validate) over them. It builds a *Registry over lib
+// (NewRegistryFromLibrary), runs Validate, and — on success — attaches each
+// resulting *Template definition to its LibraryTemplate so later steps
+// (checkLibraryExamples, step 7) can validate against it without
+// re-registering. A failure is reported as a *LibraryError positioned at the
+// offending template's template.yaml.
 func checkLibraryBuild(lib *Library) error {
-	return nil
-}
-
-// checkLibraryExamples is templates-dir-validation step 7: validating each
-// template's example.md against its parsed definition and executing its
-// layout, reporting execute failures positioned at their example/layout
-// file:line. Phase 1 leaves it a no-op hook point wired into LoadLibrary as
-// the last step; phase-2 task-12 fills in the body.
-func checkLibraryExamples(lib *Library) error {
+	reg, err := NewRegistryFromLibrary(lib)
+	if err != nil {
+		return err
+	}
+	if err := reg.Validate(); err != nil {
+		if name, ok := manifestTemplateErrorName(err); ok {
+			if lt, _, found := lib.TemplateByName(name); found {
+				return libraryErrorf(lt.ManifestPath, 0, "%s", err.Error())
+			}
+		}
+		return err
+	}
+	for _, lt := range lib.Slides {
+		def, _ := reg.Lookup(lt.Name)
+		lt.Definition = def
+	}
+	for _, lt := range lib.Sections {
+		def, _ := reg.Lookup(lt.Name)
+		lt.Definition = def
+	}
 	return nil
 }
 

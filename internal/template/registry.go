@@ -83,7 +83,13 @@ func (r *Registry) Register(t *Template) error {
 	if r.templates == nil {
 		r.templates = make(map[string]*Template)
 	}
-	if _, exists := r.templates[t.Name]; exists {
+	if existing, exists := r.templates[t.Name]; exists {
+		// Cross-kind name uniqueness: a slide template and a section may not
+		// share a name (template-build-checks, templates-dir-layout).
+		if existing.Usage != "" && t.Usage != "" && existing.Usage != t.Usage {
+			return fmt.Errorf("template %q is declared as both a %s template and a %s template; a slide template and a section may not share a name",
+				t.Name, existing.Usage, t.Usage)
+		}
 		return fmt.Errorf("template %q is already registered", t.Name)
 	}
 	r.templates[t.Name] = t
@@ -301,6 +307,31 @@ func checkDefinition(t *Template) error {
 		}
 		sections[name] = struct{}{}
 	}
+
+	for i := range t.Fields {
+		if err := checkFieldVariants(t.Name, &t.Fields[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkFieldVariants rejects an enum field with no declared variants, and a
+// Default that is not one of them (template-variants), recursing into a
+// list's single item type.
+func checkFieldVariants(tmpl string, f *Field) error {
+	if f.Type == FieldEnum {
+		if len(f.Variants) == 0 {
+			return fmt.Errorf("template %q: field %q is an enum field with no variants", tmpl, f.Name)
+		}
+		if def, ok := f.Default.(string); ok && def != "" && !containsString(f.Variants, def) {
+			return fmt.Errorf("template %q: field %q has default %q, which is not one of its variants (%s)",
+				tmpl, f.Name, def, strings.Join(f.Variants, ", "))
+		}
+	}
+	if f.Type == FieldList && f.Item != nil {
+		return checkFieldVariants(tmpl, f.Item)
+	}
 	return nil
 }
 
@@ -396,6 +427,12 @@ func (r *Registry) checkFieldType(tmpl string, f *Field) error {
 // more than one template, and that the named template is one of the accepted
 // ones.
 func (r *Registry) checkExample(t *Template) error {
+	// A template whose example is validated end to end elsewhere
+	// (checkLibraryExamples, template-manifest) has nothing for this
+	// schema-only check to do.
+	if t.Example.Deferred {
+		return nil
+	}
 	if res := CheckValues(t.Example.Frontmatter, t, r.Lookup); len(res.Errors) > 0 {
 		return fmt.Errorf("template %q: example frontmatter: %s", t.Name, res.Errors[0].Error())
 	}

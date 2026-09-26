@@ -126,6 +126,12 @@ type LibraryTemplate struct {
 	// template's parsed definition and executing the layout against it is
 	// checkLibraryExamples (phase 2).
 	ExampleBytes []byte
+
+	// Definition is the *Template built from ManifestBytes by parseManifest
+	// and checked by Registry.Validate. It is nil until checkLibraryBuild
+	// (templates-dir-validation step 4) fills it in; checkLibraryExamples
+	// (step 7) is the first consumer.
+	Definition *Template
 }
 
 // LibraryTheme is one theme directory, templates/themes/<name>/, holding its
