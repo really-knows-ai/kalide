@@ -1,0 +1,343 @@
+package validate
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"regexp"
+	"strconv"
+
+	"github.com/really-knows-ai/ey-present/internal/deck"
+	"github.com/really-knows-ai/ey-present/internal/mdcheck"
+	"github.com/really-knows-ai/ey-present/internal/slide"
+	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
+)
+
+// This file implements Validate, the fail-fast whole-deck validator. It drives
+// the phase-2/3/4 loaders and checkers in the fixed deterministic order the
+// specification requires and turns their first error into the single
+// author-facing ValidationError defined in validate.go.
+//
+// Validate owns no rules of its own: eypres.yaml is checked by internal/deck
+// (which resolves the theme through internal/theme), slide filenames and
+// ordering by internal/deck, slide structure by internal/slide.Parse, Markdown
+// bodies and inline text by internal/mdcheck, and field values by
+// internal/template.CheckValues. Validate's whole job is the order, the
+// recursion boundaries and the error adaptation.
+//
+// The compile-time assertion below pins the structural conformance between the
+// phase-4 template registry and the phase-2 slide catalogue: internal/template
+// never imports internal/slide, so *template.Registry must keep satisfying
+// slide.Catalogue by its method set alone, and any drift in a method name or
+// signature fails go build (whole-deck-validation).
+var _ slide.Catalogue = (*template.Registry)(nil)
+
+// Validate validates the whole deck rooted at fsys — ConfigFile (eypres.yaml)
+// and the SlidesDir (slides/) directly beneath it — and returns exactly the
+// first failure in the fixed deterministic order defined by
+// whole-deck-validation:
+//
+//  1. eypres.yaml, through deck.LoadConfig, with the config's theme resolved
+//     through themeReg (internal/deck + internal/theme);
+//  2. slide filenames — numbering, letters and label uniqueness — through
+//     deck.LoadSlides;
+//  3. each slide in number/letter order (a horizontal slide before the vertical
+//     slides beneath it), and within a slide top-to-bottom by source line: the
+//     slide frontmatter's fields (template.CheckValues), then the slide body
+//     (mdcheck.Check), then each section in source order with its frontmatter
+//     fields and body, then the reserved notes body;
+//  4. inter-slide #label links last, once every label in the deck is known.
+//
+// Step 4 is phase-5 task-3 (checkLinks) and is deliberately NOT implemented
+// here: the loop over slides falls through to the return, which is the seam the
+// link pass slots into.
+//
+// The rules are uniform and recursive at every nesting level: CheckValues
+// follows section-template-as-type fields and list items to any depth against
+// reg's lookup, and every field error carries its full path (for example
+// `column[1] › people[0] › name`). Field errors carry no line because the
+// phase-2 parser does not retain per-value YAML positions; the ValidationError
+// formatter omits `:line` then (see ValidationError.Line). Structural,
+// filename, body and Markdown errors do carry their line.
+//
+// reg must be a populated template registry — the caller passes
+// template.Builtins()' registry. themeReg may be nil, in which case the
+// compiled-in theme registry is used. The second result reports whether an
+// error was found: when it is false the deck is valid and the returned
+// ValidationError is the zero value, so a caller reports the first error like:
+//
+//	if verr, invalid := validate.Validate(fsys, reg, nil); invalid {
+//		fmt.Fprintln(os.Stderr, validate.Format(verr))
+//	}
+//
+// Validate is deterministic: the same deck always yields the same single
+// error.
+func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (ValidationError, bool) {
+	if fsys == nil {
+		return New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS"), true
+	}
+	if reg == nil {
+		return New(deck.ConfigFile, 0, nil, "no template registry given", "pass a populated template registry"), true
+	}
+	if themeReg == nil {
+		themeReg = theme.Builtin()
+	}
+
+	// Step 1: eypres.yaml, including the deck-wide theme, through internal/deck
+	// and internal/theme.
+	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile)
+	if err != nil {
+		return adaptDeckError(err), true
+	}
+	// The theme is resolved in the registry the caller supplied, falling back
+	// to the compiled-in one: deck.LoadConfig has already resolved it against
+	// the built-ins, so a valid compiled-in theme can never be turned into an
+	// error by a caller's narrower registry, while a caller registry is still
+	// the first place it is looked up.
+	if !themeResolves(themeReg, cfg.Theme) {
+		return New(deck.ConfigFile, 0, nil,
+			fmt.Sprintf("unknown theme %q", cfg.Theme),
+			"use one of the built-in themes"), true
+	}
+
+	// Step 2: slide filenames, numbering, letters and label uniqueness.
+	d, err := deck.LoadSlides(fsys, deck.SlidesDir)
+	if err != nil {
+		return adaptDeckError(err), true
+	}
+
+	// Step 3: each slide in number/letter order, a horizontal slide before the
+	// vertical slides beneath it.
+	for _, stack := range d.Stacks {
+		ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
+		ordered = append(ordered, stack.Slide)
+		ordered = append(ordered, stack.Vertical...)
+		for _, s := range ordered {
+			if verr, invalid := validateSlide(fsys, s, reg); invalid {
+				return verr, true
+			}
+		}
+	}
+
+	// Step 4 seam: phase-5 task-3 (checkLinks) runs here, after every slide in
+	// the deck has been parsed and every slide label is therefore known. It is
+	// not implemented in this task.
+	return ValidationError{}, false
+}
+
+// validateSlide validates one slide file in top-to-bottom order: parse the
+// frontmatter and section structure, then the slide frontmatter's fields, then
+// the slide body, then each section's frontmatter fields followed by its body,
+// then the notes body. It returns the first error and whether one was found.
+func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (ValidationError, bool) {
+	src, err := fs.ReadFile(fsys, s.Path)
+	if err != nil {
+		return New(s.Path, 0, nil,
+			fmt.Sprintf("cannot read slide: %v", err),
+			"check that the slide file exists and is readable"), true
+	}
+
+	// The parser validates the frontmatter structure, the slide template, the
+	// section names/fences and the section repeat limits; it is the
+	// prerequisite for every later check.
+	ps, err := slide.Parse(s.Path, src, reg)
+	if err != nil {
+		return adaptParseError(err), true
+	}
+	tmpl, ok := reg.Lookup(ps.Template)
+	if !ok || tmpl == nil {
+		// slide.Parse already reported an unknown slide template, so this is
+		// unreachable; kept as a guard rather than a nil dereference.
+		return New(s.Path, ps.TemplateLine, nil,
+			fmt.Sprintf("unknown slide template %q", ps.Template),
+			"use one of the built-in templates"), true
+	}
+
+	// Slide frontmatter fields, top of the file. The reserved `template:`
+	// selector is not a field value and is removed before schema checking.
+	if verr, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, reg); invalid {
+		return verr, true
+	}
+
+	// Slide body Markdown.
+	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine); invalid {
+		return verr, true
+	}
+
+	// Sections in source order, each one's frontmatter fields then its body, so
+	// the walk stays top-to-bottom by line.
+	for _, sec := range ps.Sections {
+		if sec.Template == "" {
+			continue
+		}
+		secTmpl, ok := reg.Lookup(sec.Template)
+		if !ok || secTmpl == nil {
+			continue
+		}
+		if verr, invalid := checkFields(fsys, s.Path, sec.Frontmatter, secTmpl, reg); invalid {
+			return verr, true
+		}
+		if verr, invalid := checkBody(s.Path, sec.Body, sec.BodyLine); invalid {
+			return verr, true
+		}
+	}
+
+	// The reserved notes section is a body too and, being last, is checked last.
+	if ps.Notes != nil {
+		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine); invalid {
+			return verr, true
+		}
+	}
+
+	return ValidationError{}, false
+}
+
+// checkFields checks one frontmatter/section data map against tmpl's field
+// schema through template.CheckValues, which recurses through
+// section-template-as-type values and list items at every depth with full path
+// tracking. It returns the first error and whether one was found.
+//
+// Image fields are checked against fsys: template.CheckValues enforces the
+// assets/ prefix itself and the WithImageExists callback verifies the file
+// exists in the deck.
+func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, reg *template.Registry) (ValidationError, bool) {
+	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
+		template.WithImageExists(func(p string) bool {
+			_, err := fs.Stat(fsys, p)
+			return err == nil
+		}))
+	if len(res.Errors) == 0 {
+		return ValidationError{}, false
+	}
+	return adaptValueError(file, res.Errors[0]), true
+}
+
+// checkBody checks one Markdown body (a slide body, a section body or the notes
+// body) against the accepted Markdown subset through internal/mdcheck. startLine
+// is the body's 1-based line in the file, so issues are positioned absolutely.
+// It returns the first issue and whether one was found.
+func checkBody(file, body string, startLine int) (ValidationError, bool) {
+	if body == "" {
+		return ValidationError{}, false
+	}
+	issues := mdcheck.Check(file, []byte(body), mdcheck.Options{
+		Mode:      mdcheck.BodyMode,
+		StartLine: startLine,
+	})
+	if len(issues) == 0 {
+		return ValidationError{}, false
+	}
+	return adaptIssue(issues[0]), true
+}
+
+// themeResolves reports whether name resolves in the caller's theme registry
+// or, failing that, in the compiled-in one. deck.LoadConfig has already
+// resolved the name against the built-ins by the time this is called, so the
+// fallback only keeps a narrower caller registry from rejecting a theme that
+// the config loader itself accepted.
+func themeResolves(reg *theme.Registry, name string) bool {
+	if reg != nil {
+		if _, err := reg.Lookup(name); err == nil {
+			return true
+		}
+	}
+	_, err := theme.Builtin().Lookup(name)
+	return err == nil
+}
+
+// selectorKey is the reserved slide/section key that selects a template. It is
+// not a field value and is stripped before schema checking, matching how
+// template.Example carries its structured data.
+const selectorKey = "template"
+
+// withoutSelector returns a copy of data with the reserved `template:` selector
+// removed. It never mutates the caller's map, and returns data unchanged when
+// it is empty or carries no selector.
+func withoutSelector(data map[string]any) map[string]any {
+	if len(data) == 0 {
+		return data
+	}
+	if _, ok := data[selectorKey]; !ok {
+		return data
+	}
+	out := make(map[string]any, len(data)-1)
+	for k, v := range data {
+		if k == selectorKey {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// positionedErrorRE matches an error string of the form `file:line: message`,
+// the convention internal/deck and internal/theme position their errors with.
+// The file part never contains ':' for a deck-relative path.
+var positionedErrorRE = regexp.MustCompile(`^([^:\n]+):([0-9]+): ([\s\S]*)$`)
+
+// fileErrorRE matches an error string of the form `file: message` — a
+// filename-only error with no line.
+var fileErrorRE = regexp.MustCompile(`^([^:\n]+): ([\s\S]*)$`)
+
+// adaptDeckError adapts a plain positioned error from internal/deck or
+// internal/theme into a ValidationError. Those packages report `file:line:
+// message` (or `file: message`) rather than a structured type, so the position
+// is recovered from the message. An unrecognised error keeps its whole message
+// as What, with no file.
+func adaptDeckError(err error) ValidationError {
+	if err == nil {
+		return ValidationError{}
+	}
+	msg := err.Error()
+	if m := positionedErrorRE.FindStringSubmatch(msg); m != nil {
+		line, _ := strconv.Atoi(m[2])
+		return New(m[1], line, nil, m[3], "")
+	}
+	if m := fileErrorRE.FindStringSubmatch(msg); m != nil {
+		return New(m[1], 0, nil, m[2], "")
+	}
+	return New("", 0, nil, msg, "")
+}
+
+// adaptParseError adapts a *slide.ParseError, carrying its file, line and
+// message across. Any other error falls back to adaptDeckError.
+func adaptParseError(err error) ValidationError {
+	var pe *slide.ParseError
+	if errors.As(err, &pe) {
+		return New(pe.File, pe.Line, nil, pe.Msg, "")
+	}
+	return adaptDeckError(err)
+}
+
+// adaptIssue adapts a positioned mdcheck.Issue: its message is the "what" and
+// its guidance the "fix". mdcheck has no path concept, so the path is empty.
+func adaptIssue(iss mdcheck.Issue) ValidationError {
+	return New(iss.File, iss.Line, nil, iss.Message, iss.Guidance)
+}
+
+// adaptValueError adapts a template.ValueError into a ValidationError: the
+// caller supplies the file (ValueError carries only a path within it), the path
+// segments are rendered, and What and Fix carry across.
+func adaptValueError(file string, ve template.ValueError) ValidationError {
+	return New(file, ve.Line, valuePath(ve.Path), ve.What, ve.Fix)
+}
+
+// valuePath renders template.PathSegment values into the display strings
+// ValidationError.Path expects, one per segment, exactly as
+// template.PathString joins them: an indexed segment becomes `name[i]`. An
+// index segment with no name (a list element) renders as `[i]`.
+func valuePath(p []template.PathSegment) []string {
+	if len(p) == 0 {
+		return nil
+	}
+	out := make([]string, len(p))
+	for i, seg := range p {
+		if seg.HasIndex {
+			out[i] = seg.Name + "[" + strconv.Itoa(seg.Index) + "]"
+			continue
+		}
+		out[i] = seg.Name
+	}
+	return out
+}
