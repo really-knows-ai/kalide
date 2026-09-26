@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "live-reload",
-  "body": "While `eypres start` runs, changes to `slides/`, `assets/`, `templates/` or `eypres.yaml` are detected, the templates dir and deck are re-validated and re-rendered, and the open browser reloads automatically (see templates-live-reload).",
+  "body": "While `kalide start` runs, changes to `slides/`, `assets/`, `templates/` or `kalide.yaml` are detected, the templates dir and deck are re-validated and re-rendered, and the open browser reloads automatically (see templates-live-reload).",
   "properties": {
     "feature": "presenting"
   },
