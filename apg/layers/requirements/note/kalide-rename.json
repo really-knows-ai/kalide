@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "domain.service.install-kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.system.kalide",
+      "properties": {}
     }
   ],
   "in": []
