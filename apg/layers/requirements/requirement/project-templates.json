@@ -41,6 +41,11 @@
       "kind": "drives",
       "target": "domain.entity.template-library",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
     }
   ],
   "in": [
