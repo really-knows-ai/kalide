@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/really-knows-ai/ey-present/internal/suggest"
 )
 
 // This file implements Registry, the compiled-in template registry, and the
@@ -370,7 +372,11 @@ func (r *Registry) checkSections(t *Template) error {
 		for _, name := range d.Accepted {
 			st, ok := r.Lookup(name)
 			if !ok || st == nil {
-				return fmt.Errorf("template %q: section %q accepts %q, which is not a defined template", t.Name, d.Name, name)
+				msg := fmt.Sprintf("template %q: section %q accepts %q, which is not a defined template", t.Name, d.Name, name)
+				if closest := suggest.Closest(name, r.TemplateNames()); closest != "" {
+					msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+				}
+				return errors.New(msg)
 			}
 			if st.Usage == UsageSlide {
 				return fmt.Errorf("template %q: section %q accepts %q, which is a slide-usage template; sections accept only section-usage templates", t.Name, d.Name, name)
@@ -402,7 +408,11 @@ func (r *Registry) checkFieldType(tmpl string, f *Field) error {
 		}
 		st, ok := r.Lookup(f.SectionTemplate)
 		if !ok || st == nil {
-			return fmt.Errorf("template %q: field %q names section template %q, which is not defined", tmpl, f.Name, f.SectionTemplate)
+			msg := fmt.Sprintf("template %q: field %q names section template %q, which is not defined", tmpl, f.Name, f.SectionTemplate)
+			if closest := suggest.Closest(f.SectionTemplate, r.TemplateNames()); closest != "" {
+				msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+			}
+			return errors.New(msg)
 		}
 		if st.Body.Mode == BodyRequired {
 			return fmt.Errorf("template %q: field %q uses section template %q as a field type, but that template requires a body", tmpl, f.Name, f.SectionTemplate)
