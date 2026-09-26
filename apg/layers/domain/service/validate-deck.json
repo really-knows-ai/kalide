@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "requirements.note.fix-validation-order",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }

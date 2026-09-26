@@ -184,6 +184,11 @@
       "kind": "details",
       "target": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.validate-deck",
+      "properties": {}
     }
   ],
   "in": []
