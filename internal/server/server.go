@@ -176,8 +176,8 @@ type Options struct {
 	// (template.LoadLibrary). When non-nil, Listen mounts mediaHandler's
 	// MediaPath route over its Media filesystem and builds the /templates
 	// gallery (galleryHandler) from it (template-media, templates-gallery).
-	// A nil Library disables template-media serving and falls the gallery
-	// back to template.Builtins().
+	// A nil Library disables template-media serving and the /templates
+	// gallery answers 500, since the gallery has no registry to document.
 	Library *template.Library
 
 	// Themes is the project's loaded theme registry (theme.LoadDir). When
@@ -235,8 +235,8 @@ func Listen(opts Options) (*Server, error) {
 	// registered here rather than by the caller: `eypres start` prints the
 	// URL only after Listen returns, so the gallery is reachable as soon as
 	// the deck is. It documents the project's loaded templates/ library
-	// (templates-gallery) when one was given, falling back to
-	// template.Builtins() otherwise (gallery.go).
+	// (templates-gallery) when one was given; a nil Library leaves the
+	// gallery with no registry, so it answers 500 (gallery.go).
 	var galleryReg *template.Registry
 	if opts.Library != nil {
 		if reg, err := template.NewRegistryFromLibrary(opts.Library); err == nil {

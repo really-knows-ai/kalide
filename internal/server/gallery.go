@@ -3,7 +3,8 @@ package server
 // This file implements the /templates gallery (phase-7 task 5):
 // requirements.requirement.templates-gallery. It serves the embedded
 // gallery page (assets.Pages(), "gallery.html.tmpl"; phase-7 task 3) populated
-// from the compiled-in template registry (template.Builtins()).
+// from the project's template registry, built from its loaded templates/
+// library.
 //
 // For every registered template it shows the template's name, usage
 // (slide|section), one-line description, the example slide RENDERED through
@@ -32,6 +33,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	htmltmpl "html/template"
 	"net/http"
@@ -68,15 +70,15 @@ const (
 )
 
 // galleryHandler returns the HTTP handler serving the /templates gallery for
-// reg, the project's template registry (typically
-// template.NewRegistryFromLibrary over the loaded Library; template.Builtins()
-// when reg is nil). funcMap is the library's layout func map
-// (template.LayoutFuncMap: `media` bound to the served templates/media URL
-// base, plus the format functions), threaded into every example's render so a
-// slide or section preview using `media` renders the served URL
-// (templates-gallery, template-media). A failure to build a fallback registry
-// or the embedded page is reported as a 500 by the handler, never a panic, so
-// a mis-embed is visible rather than fatal.
+// reg, the project's template registry (template.NewRegistryFromLibrary over
+// the loaded Library). reg must be non-nil: a nil registry is a caller error,
+// reported by the handler as a 500 rather than silently substituted. funcMap is
+// the library's layout func map (template.LayoutFuncMap: `media` bound to the
+// served templates/media URL base, plus the format functions), threaded into
+// every example's render so a slide or section preview using `media` renders
+// the served URL (templates-gallery, template-media). A nil reg or a failure
+// to parse the embedded page is reported as a 500 by the handler, never a
+// panic, so a mis-embed is visible rather than fatal.
 //
 // It is registered on the server's mux by Listen (server.go), so every running
 // server serves the gallery as soon as it is listening. Tests may build one
@@ -87,9 +89,9 @@ const (
 // registry, whose templates are immutable.
 func galleryHandler(reg *template.Registry, funcMap htmltmpl.FuncMap) http.Handler {
 	page, pageErr := htmltmpl.New(galleryPageName).ParseFS(assets.Pages(), galleryPageName)
-	regErr := error(nil)
+	var regErr error
 	if reg == nil {
-		reg, regErr = template.Builtins()
+		regErr = errors.New("nil template registry")
 	}
 	return &galleryServer{reg: reg, regErr: regErr, page: page, pageErr: pageErr, funcMap: funcMap}
 }
@@ -99,9 +101,8 @@ func galleryHandler(reg *template.Registry, funcMap htmltmpl.FuncMap) http.Handl
 // parse failed, which for the embedded gallery page is a programming error.
 // reg is the registry to document (built when the handler was built, so the
 // handler holds only immutable values); regErr is non-nil only when a nil
-// registry was given and template.Builtins() failed. funcMap is the library's
-// layout func map every example preview renders with (nil for a
-// template.Builtins() fallback registry, which has no `media`).
+// registry was given. funcMap is the library's layout func map every example
+// preview renders with.
 type galleryServer struct {
 	reg     *template.Registry
 	regErr  error

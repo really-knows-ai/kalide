@@ -8,10 +8,13 @@
   message in both places (requirements.requirement.error-reporting,
   requirements.requirement.live-reload-error-page).
 
-  It is a standalone page: OFFLINE, referencing only the embedded assets tree
-  served under /assets/ (the EY theme stylesheet, which declares the brand
-  fonts and tokens, and the EY logo), never a CDN or any network location
-  (global.constraint.go-static-embedded-binary).
+  It is a standalone page: OFFLINE, referencing only the embedded reveal.js
+  runtime and the project's own theme stylesheet (served under /assets/,
+  resolved through the theme registry — theme-selection), never a CDN or any
+  network location (global.constraint.go-static-embedded-binary). The page
+  carries no brand asset of its own: every colour, font and spacing value it
+  uses is a token the project's theme stylesheet defines
+  (global.constraint.theme-tokens-only).
 
   Embedding / access:
     The pages sub-tree is embedded by internal/assets and exposed as
@@ -45,11 +48,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ with .Title }}{{ . }}{{ else }}eypres{{ end }}</title>
 
-  {{/* Embedded EY theme stylesheet: brand @font-face rules and the token
-       block. Served from the root of the embedded assets tree. */}}
+  {{/* The project's theme stylesheet: its @font-face rules (if any) and the
+       token block every rule below consumes. Served from the project's
+       theme directory, resolved by internal/server's media handler. */}}
   <link rel="stylesheet" href="/assets/theme.css">
   <style>
-    /* Page chrome only, consuming the tokens declared in /assets/theme.css;
+    /* Page chrome only, consuming the tokens the theme stylesheet declares;
        no colour, font or spacing value is restated here
        (global.constraint.theme-tokens-only). */
     html, body { margin: 0; }
@@ -65,7 +69,6 @@
       line-height: var(--ey-line-height);
     }
     .ey-error { width: var(--ey-content-width); max-width: 60rem; }
-    .ey-error__logo { height: 2.5rem; }
     .ey-error__heading {
       font-family: var(--ey-font-display);
       font-size: var(--ey-font-size-title);
@@ -91,8 +94,6 @@
 </head>
 <body>
   <main class="ey-error">
-    {{/* -dark logo ink is white, for the dark surface above. */}}
-    <img class="ey-error__logo" src="/assets/logo/logo_full-dark.svg" alt="EY">
     <h1 class="ey-error__heading">Deck error</h1>
     <pre class="ey-error__message">{{ with .Message }}{{ . }}{{ else }}The deck could not be loaded.{{ end }}</pre>
     <p class="ey-error__hint">Fix the file shown above and save; this page reloads automatically.</p>

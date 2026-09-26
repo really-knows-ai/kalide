@@ -51,7 +51,9 @@ const themesURLPrefix = "/assets/templates/themes/"
 // reg is the populated template registry the deck was validated against —
 // typically built from the project's templates/ library
 // (template.NewRegistryFromLibrary); themeReg is the project theme registry
-// (theme.LoadDir); a nil themeReg falls back to theme.Builtin(). funcMap is
+// (theme.LoadDir) and must be non-nil — callers always construct one from the
+// project's on-disk theme library, so a nil themeReg is a caller error and
+// RenderDeck reports it rather than silently substituting a default. funcMap is
 // the library's layout func map (template.LayoutFuncMap: `media` bound to the
 // served templates/media URL base, plus the format functions), threaded into
 // every slide's RenderSlide call so a library layout using `media` renders
@@ -83,7 +85,7 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 		return "", &RenderError{Err: errors.New("nil template registry")}
 	}
 	if themeReg == nil {
-		themeReg = theme.Builtin()
+		return "", &RenderError{Err: errors.New("nil theme registry")}
 	}
 
 	themeCSS, err := themeStylesheet(cfg.Theme, themeReg)
