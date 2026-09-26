@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "deck-config",
-  "body": "`kalide.yaml` holds deck-wide config: `title` (required), optional `author` (presenter), optional `date` written as `YYYY-MM-DD`, optional `theme` (default `default`), and optional `navigation` (default|linear|grid, default `default`). Missing `title` = error; `date` not in `YYYY-MM-DD` form = error; unknown keys = error with closest-match suggestion (consistent with field rules); wrong types = error. The legacy file name `eypres.yaml` is not recognised (hard cut; see kalide-rename).",
+  "body": "`kalide.yaml` holds deck-wide config: `title` (required), optional `author` (presenter), optional `date` written as `YYYY-MM-DD`, optional `theme` (default `default`), optional `navigation` (default|linear|grid, default `default`), and optional `properties` (arbitrary author-declared deck-wide key/value pairs — see deck-properties), which is the one additional allowed top-level key. Missing `title` = error; `date` not in `YYYY-MM-DD` form = error; every other unknown top-level key = error with a closest-match suggestion (consistent with field rules); wrong types = error. The legacy file name `eypres.yaml` is not recognised (hard cut; see kalide-rename).",
   "properties": {
     "feature": "deck-structure"
   },
