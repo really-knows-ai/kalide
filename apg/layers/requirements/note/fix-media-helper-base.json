@@ -4,6 +4,12 @@
   "name": "fix-media-helper-base",
   "body": "source: template-language 'media \"path\" resolving a file in templates/media/ or the theme directory'; inconsistency: ambiguous base (media vs theme dir, unspecified precedence/escape rules), and step 6 / template-media allowed any path inside templates/; resolution: `media` argument is relative to templates/media/ only, no `..`, no absolute paths, missing/invalid = templates error at the layout's file:line (step 6); theme-owned files are referenced only from theme.css via relative url() and served from the theme dir. Updated template-language, templates-dir-validation, template-media, templates-dir-layout, solution template-registry, template-library-loader, http-server (renderer only references the registry's function map — unchanged) [with user, feedback-3]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
+    }
+  ],
   "in": []
 }
