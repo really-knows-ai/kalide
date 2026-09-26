@@ -154,6 +154,11 @@
       "kind": "details",
       "target": "requirements.requirement.project-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.templates-live-reload",
+      "properties": {}
     }
   ],
   "in": []
