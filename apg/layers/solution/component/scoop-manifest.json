@@ -20,6 +20,11 @@
       "kind": "realised-by",
       "source": "domain.service.install-kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }
