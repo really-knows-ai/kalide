@@ -13,13 +13,15 @@ import (
 // TestValidateIntegration runs real on-disk decks through the whole validator
 // end to end: a temp deck directory (os.DirFS) read by the deck loaders, the
 // slide parser, internal/mdcheck, internal/template.CheckValues/CheckBody and
-// the link pass, all against template.Builtins()' compiled-in registry. It
-// reads and writes the real filesystem, so it is skipped under -short.
+// the link pass, all against mustBuiltins' fixture library-loaded registry
+// (title/content/column). It reads and writes the real filesystem, so it is
+// skipped under -short.
 //
 // It pins the exact formatted first error (validate.Format) for one
 // representative deck per failure class — config, filename, frontmatter field,
 // body rule and inter-slide link — in the fixed fail-fast order, plus the zero
-// ValidationError for a valid deck that mirrors a built-in template's example.
+// ValidationError for a valid deck that mirrors the fixture registry's
+// example content.
 func TestValidateIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test reads and writes real deck directories on disk")
@@ -103,8 +105,8 @@ func TestValidateIntegration(t *testing.T) {
 	}
 }
 
-// builtinTitleExample mirrors internal/assets/templates/title/example.md: a
-// built-in title slide that must validate end to end.
+// builtinTitleExample mirrors mustBuiltins' fixture title example.md: a
+// fixture title slide that must validate end to end.
 const builtinTitleExample = `---
 template: title
 title: Quarterly Business Review
@@ -116,8 +118,8 @@ date_format: long
 Greet the audience, then hand over to the presenters.
 `
 
-// builtinContentExample mirrors internal/assets/templates/content/example.md: a
-// built-in content slide with two composed columns sections.
+// builtinContentExample mirrors mustBuiltins' fixture content example.md: a
+// fixture content slide with two composed columns sections.
 const builtinContentExample = `---
 template: content
 heading: Where the growth is coming from

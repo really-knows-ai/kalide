@@ -2,7 +2,6 @@ package assets
 
 import (
 	"io/fs"
-	"path"
 	"regexp"
 	"strings"
 	"testing"
@@ -25,11 +24,12 @@ func readAsset(t *testing.T, fsys fs.FS, name string) []byte {
 
 // TestEmbeddedComplete states the whole embedded-binary completeness contract in
 // one place: the vendored reveal.js runtime (core, print-pdf styles bundled in
-// dist/reveal.css, the notes plugin, LICENSE), the default theme CSS, the EY
-// fonts and logos, every built-in template's layout and example, the starter
-// deck (eypres.yaml + slides), and the three full-page shells. It also proves the
-// served pages and stylesheets are OFFLINE: no page, layout or theme references
-// an off-host URL (global.constraint.go-static-embedded-binary).
+// dist/reveal.css, the notes plugin, LICENSE) and the three full-page shells.
+// Templates, themes, fonts, logos and the starter deck are no longer embedded —
+// they live on disk under a project's own templates/ (phase 7). It also proves
+// the served pages are OFFLINE: no page references an off-host URL
+// (global.constraint.go-static-embedded-binary), and carry no brand asset
+// reference (logo/font URL) of their own.
 //
 // It complements the finer per-accessor tests in assets_test.go.
 func TestEmbeddedComplete(t *testing.T) {
@@ -49,96 +49,6 @@ func TestEmbeddedComplete(t *testing.T) {
 		}
 	})
 
-	t.Run("default theme CSS", func(t *testing.T) {
-		mustRead(t, FS, "theme.css")
-	})
-
-	t.Run("EY fonts", func(t *testing.T) {
-		fonts := Fonts()
-		var (
-			files              []string
-			interstate, gothic bool
-		)
-		err := fs.WalkDir(fonts, ".", func(name string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() || !strings.HasSuffix(name, ".woff2") {
-				return nil
-			}
-			files = append(files, name)
-			mustRead(t, fonts, name)
-			switch base := path.Base(name); {
-			case strings.HasPrefix(base, "EYInterstate"):
-				interstate = true
-			case strings.HasPrefix(base, "EYGothic"):
-				gothic = true
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("walk embedded fonts: %v", err)
-		}
-		if len(files) == 0 {
-			t.Fatal("no .woff2 fonts embedded")
-		}
-		if !interstate {
-			t.Errorf("no EYInterstate .woff2 font embedded; found %v", files)
-		}
-		if !gothic {
-			t.Errorf("no EYGothic .woff2 font embedded; found %v", files)
-		}
-	})
-
-	t.Run("EY logos", func(t *testing.T) {
-		for _, name := range []string{
-			"logo_full-light.svg",
-			"logo_full-dark.svg",
-			"logo_small-light.svg",
-			"logo_small-dark.svg",
-		} {
-			t.Run(name, func(t *testing.T) {
-				mustRead(t, Logo(), name)
-			})
-		}
-	})
-
-	t.Run("built-in templates", func(t *testing.T) {
-		for _, name := range []string{"title", "content", "column"} {
-			for _, file := range []string{"layout.html.tmpl", "example.md"} {
-				t.Run(name+"/"+file, func(t *testing.T) {
-					mustRead(t, Templates(), name+"/"+file)
-				})
-			}
-		}
-	})
-
-	t.Run("starter deck", func(t *testing.T) {
-		mustRead(t, Starter(), "eypres.yaml")
-		for _, name := range []string{"slides/1-title.md", "slides/2-content.md"} {
-			mustRead(t, Starter(), name)
-		}
-
-		// The starter tree is the source of truth `eypres init` copies; walking
-		// it proves the shipped slide sources are all present and non-empty.
-		var slides []string
-		err := fs.WalkDir(Starter(), ".", func(name string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !d.IsDir() && strings.HasPrefix(name, "slides/") && strings.HasSuffix(name, ".md") {
-				slides = append(slides, name)
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("walk starter deck: %v", err)
-		}
-		if len(slides) < 2 {
-			t.Errorf("starter deck embeds %d slides, want at least 2: %v", len(slides), slides)
-		}
-	})
-
 	t.Run("full-page templates", func(t *testing.T) {
 		for _, name := range []string{"deck.html.tmpl", "error.html.tmpl", "gallery.html.tmpl"} {
 			t.Run(name, func(t *testing.T) {
@@ -149,17 +59,37 @@ func TestEmbeddedComplete(t *testing.T) {
 		mustRead(t, DeckPage(), "deck.html.tmpl")
 	})
 
+	t.Run("no templates, themes, fonts, logo or starter embedded", func(t *testing.T) {
+		for _, name := range []string{
+			"templates", "fonts", "logo", "starter", "theme.css",
+		} {
+			if _, err := fs.Stat(FS, name); err == nil {
+				t.Errorf("embedded FS unexpectedly contains %q; that content now lives in a project's templates/ on disk", name)
+			}
+		}
+
+		// Only reveal/, pages/ and LICENSE (reveal's, nested under reveal/) may
+		// appear at the embedded FS root.
+		entries, err := fs.ReadDir(FS, ".")
+		if err != nil {
+			t.Fatalf("read embedded FS root: %v", err)
+		}
+		allowed := map[string]bool{"reveal": true, "pages": true}
+		for _, e := range entries {
+			if !allowed[e.Name()] {
+				t.Errorf("embedded FS root has unexpected entry %q; want only reveal/ and pages/", e.Name())
+			}
+		}
+	})
+
 	t.Run("offline: no external references", func(t *testing.T) {
 		type asset struct {
 			fsys fs.FS
 			path string
 		}
-		assets := []asset{{FS, "theme.css"}}
+		var assets []asset
 		for _, p := range []string{"deck.html.tmpl", "error.html.tmpl", "gallery.html.tmpl"} {
 			assets = append(assets, asset{Pages(), p})
-		}
-		for _, l := range []string{"title", "content", "column"} {
-			assets = append(assets, asset{Templates(), l + "/layout.html.tmpl"})
 		}
 
 		for _, a := range assets {
@@ -178,6 +108,18 @@ func TestEmbeddedComplete(t *testing.T) {
 				if isOffHost(ref) {
 					t.Errorf("%s: reference %q points off-host; embedded assets must be offline", a.path, ref)
 				}
+			}
+		}
+	})
+
+	t.Run("page shells carry no brand asset reference", func(t *testing.T) {
+		// No page may reference a font or logo asset URL directly: brand
+		// styling comes entirely from the project's own theme stylesheet.
+		brandRef := regexp.MustCompile(`(?i)(/assets/(fonts|logo)/|logo_(full|small)-(light|dark)\.svg|\.woff2)`)
+		for _, p := range []string{"deck.html.tmpl", "error.html.tmpl", "gallery.html.tmpl"} {
+			src := string(readAsset(t, Pages(), p))
+			if loc := brandRef.FindString(src); loc != "" {
+				t.Errorf("%s: unexpected brand asset reference %q", p, loc)
 			}
 		}
 	})

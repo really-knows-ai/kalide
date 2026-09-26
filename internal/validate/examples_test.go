@@ -26,8 +26,8 @@ const fixtureLibraryDir = "../template/testdata/library"
 //
 // Every fixture registry is built in code with template.NewRegistry(nil), so an
 // example's Markdown is carried on the Template itself and the suite touches
-// neither the disk nor the network; the built-in check reads the compiled-in
-// assets through template.Builtins.
+// neither the disk nor the network; the "built-in" check (testBuiltinExamplesValid)
+// reads mustBuiltins' fixture library-loaded registry.
 func TestValidateBuiltinExamples(t *testing.T) {
 	t.Run("built-in examples are valid", testBuiltinExamplesValid)
 	for _, tc := range brokenExampleCases() {
@@ -186,7 +186,7 @@ func testExampleNilRegistry(t *testing.T) {
 	if errs[0].Template != "" {
 		t.Errorf("ExampleError.Template = %q, want the empty string", errs[0].Template)
 	}
-	const want = ": no template registry given — pass template.Builtins()' registry"
+	const want = ": no template registry given — pass the loaded library's registry (template.NewRegistryFromLibrary)"
 	if got := Format(errs[0].Err); got != want {
 		t.Errorf("Format(ExampleError.Err) = %q, want %q", got, want)
 	}

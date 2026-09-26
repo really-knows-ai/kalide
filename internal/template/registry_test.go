@@ -211,46 +211,103 @@ func assertStringSlice(t *testing.T, what string, got, want []string) {
 	}
 }
 
-// TestRegistry proves the built-in templates load and validate, their
-// structured example data passes the schema-only checks, and the four
-// Catalogue methods behave.
+// fixtureLibraryFS returns a small library (title, content, column) that
+// stands in for the deleted Go-authored builtins: it exercises the same
+// shapes TestRegistry asserted against Builtins() — a plain slide with no
+// sections (title), a slide composing a repeated section (content, 2..4
+// "columns" of "column"), and the section template itself (column) — so this
+// test proves the same registry behaviour now sourced from a loaded library.
+func fixtureLibraryFS() fstest.MapFS {
+	const contentManifest = `description: Slide with column sections
+fields:
+  - name: title
+    type: text
+    required: true
+sections:
+  - name: columns
+    accepted: [column]
+    min: 2
+    max: 4
+`
+	const columnManifest = `description: A single column section
+fields:
+  - name: label
+    type: text
+`
+	const contentExample = "---\n" +
+		"template: content\n" +
+		"title: Quarterly Results\n" +
+		"---\n" +
+		"\n" +
+		"# columns\n" +
+		"```\n" +
+		"label: Column A\n" +
+		"```\n" +
+		"\n" +
+		"# columns\n" +
+		"```\n" +
+		"label: Column B\n" +
+		"```\n"
+
+	return fstest.MapFS{
+		"library.yaml":                     {Data: []byte("name: fixture\nformat: 1\n")},
+		"slides/title/template.yaml":       {Data: []byte("description: Title slide\nfields:\n  - name: title\n    type: text\n    required: true\n")},
+		"slides/title/layout.html.tmpl":    {Data: []byte("<section>{{.title}}</section>")},
+		"slides/title/example.md":          {Data: []byte("---\ntemplate: title\ntitle: Quarterly Business Review\n---\n")},
+		"slides/content/template.yaml":     {Data: []byte(contentManifest)},
+		"slides/content/layout.html.tmpl":  {Data: []byte("<section>{{.title}}</section>")},
+		"slides/content/example.md":        {Data: []byte(contentExample)},
+		"sections/column/template.yaml":    {Data: []byte(columnManifest)},
+		"sections/column/layout.html.tmpl": {Data: []byte("<div>{{.label}}</div>")},
+		"sections/column/example.md":       {Data: []byte("```\nlabel: Sample\n```\n")},
+	}
+}
+
+// mustFixtureRegistry loads fixtureLibraryFS through the same LoadLibrary +
+// NewRegistryFromLibrary path a project's templates/ takes.
+func mustFixtureRegistry(t *testing.T) *Registry {
+	t.Helper()
+	lib, err := LoadLibrary(rootedFS(fixtureLibraryFS()), TemplatesDir)
+	if err != nil {
+		t.Fatalf("LoadLibrary() error = %v, want nil", err)
+	}
+	reg, err := NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("NewRegistryFromLibrary() error = %v, want nil", err)
+	}
+	if err := reg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+	return reg
+}
+
+// TestRegistry proves a library-loaded registry's templates load and
+// validate (structured example data is checked separately, end to end,
+// through checkLibraryExamples during LoadLibrary — reg.Templates() carries
+// only Example.Markdown from a library, not the Frontmatter/Sections a
+// Go-authored builtin populated), and the four Catalogue methods behave.
 func TestRegistry(t *testing.T) {
-	t.Run("builtins load, validate and carry content", func(t *testing.T) {
-		r, err := Builtins()
-		if err != nil {
-			t.Fatalf("Builtins() error = %v, want nil", err)
-		}
+	t.Run("fixture library loads, validates and carries content", func(t *testing.T) {
+		r := mustFixtureRegistry(t)
 
 		want := []string{"column", "content", "title"}
 		assertStringSlice(t, "TemplateNames()", r.TemplateNames(), want)
 
 		for _, tmpl := range r.Templates() {
-			if tmpl.Layout.Name != tmpl.Name {
-				t.Errorf("template %q: Layout.Name = %q, want the template name", tmpl.Name, tmpl.Layout.Name)
+			if strings.TrimSpace(tmpl.Layout.Name) == "" {
+				t.Errorf("template %q: Layout.Name is empty, want the manifest layout path", tmpl.Name)
 			}
 			if strings.TrimSpace(tmpl.Layout.Text) == "" {
-				t.Errorf("template %q: Layout.Text is empty, want the embedded layout", tmpl.Name)
+				t.Errorf("template %q: Layout.Text is empty, want the parsed layout", tmpl.Name)
 			}
 			if strings.TrimSpace(tmpl.Example.Markdown) == "" {
-				t.Errorf("template %q: Example.Markdown is empty, want the embedded example slide", tmpl.Name)
-			}
-			// The structured example must satisfy the schema-only checks
-			// (frontmatter/field values and declared section instances).
-			if err := r.checkExample(tmpl); err != nil {
-				t.Errorf("template %q: checkExample() error = %v, want nil", tmpl.Name, err)
-			}
-			if res := CheckValues(tmpl.Example.Frontmatter, tmpl, r.Lookup); len(res.Errors) != 0 {
-				t.Errorf("template %q: example frontmatter errors = %s, want none",
-					tmpl.Name, renderErrors(res.Errors))
+				t.Errorf("template %q: Example.Markdown is empty, want the library's example slide", tmpl.Name)
 			}
 		}
 	})
 
-	t.Run("builtin usages and example shapes", func(t *testing.T) {
-		r, err := Builtins()
-		if err != nil {
-			t.Fatalf("Builtins() error = %v, want nil", err)
-		}
+	t.Run("fixture usages and example shapes", func(t *testing.T) {
+		r := mustFixtureRegistry(t)
 
 		title, ok := r.Lookup("title")
 		if !ok {
@@ -259,11 +316,8 @@ func TestRegistry(t *testing.T) {
 		if title.Usage != UsageSlide {
 			t.Errorf("title.Usage = %q, want %q", title.Usage, UsageSlide)
 		}
-		if got := title.Example.Frontmatter["title"]; got != "Quarterly Business Review" {
-			t.Errorf("title example title = %v, want the structured example value", got)
-		}
-		if len(title.Example.Sections) != 0 {
-			t.Errorf("title example sections = %d, want 0", len(title.Example.Sections))
+		if !strings.Contains(title.Example.Markdown, "Quarterly Business Review") {
+			t.Errorf("title example markdown = %q, want it to contain the structured example value", title.Example.Markdown)
 		}
 
 		content, ok := r.Lookup("content")
@@ -273,13 +327,8 @@ func TestRegistry(t *testing.T) {
 		if content.Usage != UsageSlide {
 			t.Errorf("content.Usage = %q, want %q", content.Usage, UsageSlide)
 		}
-		if len(content.Example.Sections) != 2 {
-			t.Fatalf("content example sections = %d, want the two declared column instances", len(content.Example.Sections))
-		}
-		for i, sec := range content.Example.Sections {
-			if sec.Name != "columns" || sec.Template != "column" {
-				t.Errorf("content example section[%d] = %q/%q, want columns/column", i, sec.Name, sec.Template)
-			}
+		if got := strings.Count(content.Example.Markdown, "# columns"); got != 2 {
+			t.Errorf("content example markdown has %d columns sections, want 2", got)
 		}
 
 		column, ok := r.Lookup("column")
@@ -292,10 +341,7 @@ func TestRegistry(t *testing.T) {
 	})
 
 	t.Run("LookupSlideTemplate reports usage", func(t *testing.T) {
-		r, err := Builtins()
-		if err != nil {
-			t.Fatalf("Builtins() error = %v, want nil", err)
-		}
+		r := mustFixtureRegistry(t)
 		tests := []struct {
 			name      string
 			wantUsage string
@@ -332,10 +378,7 @@ func TestRegistry(t *testing.T) {
 	})
 
 	t.Run("SectionNames is declaration order, notes excluded", func(t *testing.T) {
-		r, err := Builtins()
-		if err != nil {
-			t.Fatalf("Builtins() error = %v, want nil", err)
-		}
+		r := mustFixtureRegistry(t)
 		assertStringSlice(t, `SectionNames("content")`, r.SectionNames("content"), []string{"columns"})
 
 		// "column" declares no sections: no names, whether nil or empty.
@@ -365,10 +408,7 @@ func TestRegistry(t *testing.T) {
 	})
 
 	t.Run("SectionDecl returns accepted, min, max and a fresh copy", func(t *testing.T) {
-		r, err := Builtins()
-		if err != nil {
-			t.Fatalf("Builtins() error = %v, want nil", err)
-		}
+		r := mustFixtureRegistry(t)
 
 		accepted, min, max, ok := r.SectionDecl("content", "columns")
 		if !ok {

@@ -229,15 +229,135 @@ func mapDeck(files map[string]string) fstest.MapFS {
 	return mfs
 }
 
-// mustBuiltins returns the compiled-in template registry, failing the test on a
-// build-time error.
+// mustBuiltins returns a fixture template registry standing in for the
+// deleted Go-authored builtins: it loads a small in-memory templates/
+// library (title, content, column) through template.LoadLibrary +
+// template.NewRegistryFromLibrary, mirroring the shapes
+// internal/validate/integration_test.go's builtinTitleExample and
+// builtinContentExample exercise (title/subtitle/date; heading/layout/
+// metric/show_metric/as_of composing "columns" of "column"; a 2-paragraph
+// body limit on content), so existing test expectations (heading required,
+// max_paragraphs 2) still hold.
 func mustBuiltins(t *testing.T) *template.Registry {
 	t.Helper()
-	reg, err := template.Builtins()
+	fsys := builtinsFixtureFS()
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
 	if err != nil {
-		t.Fatalf("template.Builtins(): %v", err)
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
 	}
 	return reg
+}
+
+// builtinsFixtureFS is the in-memory templates/ library mustBuiltins loads:
+// title, content (composing "columns" of "column") and column, with example
+// content matching the shapes internal/validate/integration_test.go's
+// builtinTitleExample/builtinContentExample constants exercise end to end.
+func builtinsFixtureFS() fstest.MapFS {
+	const titleManifest = `description: Title slide
+fields:
+  - name: title
+    type: text
+    required: true
+  - name: subtitle
+    type: text
+  - name: date
+    type: date
+    formats: [long, short]
+    default_format: long
+body:
+  mode: disallowed
+`
+	const contentManifest = `description: Content slide with composed columns
+fields:
+  - name: heading
+    type: text
+    required: true
+  - name: layout
+    type: text
+  - name: metric
+    type: number
+    formats: [compact]
+    default_format: compact
+  - name: show_metric
+    type: boolean
+  - name: as_of
+    type: date
+    formats: [long]
+    default_format: long
+sections:
+  - name: columns
+    accepted: [column]
+body:
+  mode: optional
+  max_paragraphs: 2
+`
+	const columnManifest = `description: A single column section
+fields:
+  - name: title
+    type: text
+body:
+  mode: optional
+`
+	const titleExample = `---
+template: title
+title: Quarterly Business Review
+subtitle: Performance, outlook and priorities
+date: 2026-09-25
+date_format: long
+---
+# notes
+Greet the audience, then hand over to the presenters.
+`
+	const contentExample = `---
+template: content
+heading: Where the growth is coming from
+layout: columns
+metric: 1250000
+metric_format: compact
+show_metric: true
+as_of: 2026-09-25
+as_of_format: long
+---
+
+Revenue is up across every region, led by services.
+
+# columns
+` + "```" + `
+template: column
+title: Revenue
+` + "```" + `
+
+Recurring revenue grew 18% year over year.
+
+# columns
+` + "```" + `
+template: column
+title: New customers
+` + "```" + `
+
+We added 1,250 new logos in the quarter.
+
+# notes
+Pause on the metric so the number lands.
+`
+	const columnExample = "```\ntitle: Sample\n```\n"
+
+	return fstest.MapFS{
+		"templates/library.yaml":                     {Data: []byte("name: builtins-fixture\nformat: 1\n")},
+		"templates/slides/title/template.yaml":       {Data: []byte(titleManifest)},
+		"templates/slides/title/layout.html.tmpl":    {Data: []byte("<section>{{.title}}</section>")},
+		"templates/slides/title/example.md":          {Data: []byte(titleExample)},
+		"templates/slides/content/template.yaml":     {Data: []byte(contentManifest)},
+		"templates/slides/content/layout.html.tmpl":  {Data: []byte("<section>{{.heading}}</section>")},
+		"templates/slides/content/example.md":        {Data: []byte(contentExample)},
+		"templates/sections/column/template.yaml":    {Data: []byte(columnManifest)},
+		"templates/sections/column/layout.html.tmpl": {Data: []byte("<div>{{.title}}</div>")},
+		"templates/sections/column/example.md":       {Data: []byte(columnExample)},
+	}
 }
 
 // mustRegistry registers a purpose-built registry for tests that need templates

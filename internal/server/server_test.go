@@ -15,9 +15,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
 
@@ -311,8 +313,9 @@ func TestServer(t *testing.T) {
 		waitSSELine(t, lines, "data: reload", 3*time.Second)
 	})
 
-	t.Run("templates gallery lists every built-in with docs", func(t *testing.T) {
-		srv := mustListen(t, Options{Page: testPage("DECK")})
+	t.Run("templates gallery lists every fixture template with docs", func(t *testing.T) {
+		lib, reg, themes := mustGalleryFixtureLibrary(t)
+		srv := mustListen(t, Options{Page: testPage("DECK"), Library: lib, Themes: themes})
 
 		rec := serve(srv, http.MethodGet, galleryPath)
 		if rec.Code != http.StatusOK {
@@ -333,13 +336,9 @@ func TestServer(t *testing.T) {
 			}
 		}
 
-		reg, err := template.Builtins()
-		if err != nil {
-			t.Fatalf("template.Builtins: %v", err)
-		}
 		names := reg.TemplateNames()
 		if len(names) == 0 {
-			t.Fatal("built-in registry has no templates")
+			t.Fatal("fixture registry has no templates")
 		}
 		for _, tmpl := range reg.Templates() {
 			if tmpl == nil {
@@ -468,19 +467,15 @@ func TestServer(t *testing.T) {
 		}
 	})
 
-	t.Run("assets serve the embedded reveal and theme files", func(t *testing.T) {
+	t.Run("assets serve the embedded reveal.js runtime", func(t *testing.T) {
 		srv := mustListen(t, Options{Page: testPage("DECK")})
 
 		for _, name := range []string{
-			"theme.css",
 			"reveal/dist/reveal.js",
 			"reveal/dist/reveal.css",
 			"reveal/dist/reset.css",
 			"reveal/dist/plugin/notes.js",
 			"reveal/LICENSE",
-			"logo/logo_full-light.svg",
-			"logo/logo_full-dark.svg",
-			"fonts/EYInterstate-Regular.woff2",
 		} {
 			rec := serve(srv, http.MethodGet, AssetsPath+name)
 			if rec.Code != http.StatusOK {
@@ -492,6 +487,20 @@ func TestServer(t *testing.T) {
 			}
 			if ct := rec.Header().Get("Content-Type"); ct == "" {
 				t.Errorf("GET %s%s has no Content-Type", AssetsPath, name)
+			}
+		}
+
+		// theme.css, fonts and logos are no longer embedded: they are served
+		// from a project's own templates/themes via mediaHandler, not the
+		// embedded /assets/ tree.
+		for _, name := range []string{
+			"theme.css",
+			"logo/logo_full-light.svg",
+			"fonts/EYInterstate-Regular.woff2",
+		} {
+			rec := serve(srv, http.MethodGet, AssetsPath+name)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("GET %s%s status %d, want 404 (no longer embedded)", AssetsPath, name, rec.Code)
 			}
 		}
 
@@ -511,6 +520,61 @@ func mustWriteFile(t *testing.T, path, data string) {
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+// mustGalleryFixtureLibrary loads a small in-memory templates/ library
+// (title, content, column) standing in for the deleted Go-authored builtins:
+// content composes 2..4 "columns" of "column" and carries a 2-paragraph body
+// limit, matching the gallery documentation the "templates gallery lists
+// every fixture template with docs" subtest asserts.
+func mustGalleryFixtureLibrary(t *testing.T) (*template.Library, *template.Registry, *theme.Registry) {
+	t.Helper()
+	const contentManifest = `description: Content slide with composed columns
+fields:
+  - name: heading
+    type: text
+    required: true
+sections:
+  - name: columns
+    accepted: [column]
+    min: 2
+    max: 4
+body:
+  mode: optional
+  max_paragraphs: 2
+`
+	const columnManifest = `description: A single column section
+fields:
+  - name: title
+    type: text
+`
+	fsys := fstest.MapFS{
+		"templates/library.yaml":                     {Data: []byte("name: gallery-fixture\nformat: 1\n")},
+		"templates/slides/title/template.yaml":       {Data: []byte("description: Title slide\nfields:\n  - name: title\n    type: text\n    required: true\n")},
+		"templates/slides/title/layout.html.tmpl":    {Data: []byte("<section>{{.title}}</section>")},
+		"templates/slides/title/example.md":          {Data: []byte("---\ntemplate: title\ntitle: Quarterly Business Review\n---\n")},
+		"templates/slides/content/template.yaml":     {Data: []byte(contentManifest)},
+		"templates/slides/content/layout.html.tmpl":  {Data: []byte("<section>{{.heading}}</section>")},
+		"templates/slides/content/example.md":        {Data: []byte("---\ntemplate: content\nheading: H\n---\n\n# columns\n```\ntitle: A\n```\n\n# columns\n```\ntitle: B\n```\n")},
+		"templates/sections/column/template.yaml":    {Data: []byte(columnManifest)},
+		"templates/sections/column/layout.html.tmpl": {Data: []byte("<div>{{.title}}</div>")},
+		"templates/sections/column/example.md":       {Data: []byte("```\ntitle: Sample\n```\n")},
+		"templates/themes/default/theme.css":         {Data: []byte("body{}")},
+	}
+
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	themes, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
+	return lib, reg, themes
 }
 
 // testPage returns a deck Page carrying doc as its served document.
