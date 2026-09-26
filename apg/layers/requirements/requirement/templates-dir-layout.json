@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.library-manifest",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
     }
   ],
   "in": [
