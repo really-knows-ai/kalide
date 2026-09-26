@@ -59,6 +59,11 @@
       "kind": "details",
       "target": "solution.component.release-workflow",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.scoop-manifest",
+      "properties": {}
     }
   ],
   "in": []
