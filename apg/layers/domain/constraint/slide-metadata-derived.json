@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "constraint",
+  "name": "slide-metadata-derived",
+  "body": "Slide `number` and `total` must be derived at render time from the deck's ordered slides; they must never be read from author frontmatter, and `number` must be the 1-based position in the deck's flattened presentation order (independent of gaps in the filename numbering).",
+  "properties": {
+    "attaches-to": "domain.value.slide-metadata"
+  },
+  "out": [],
+  "in": []
+}
