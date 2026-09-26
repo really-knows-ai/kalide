@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-templates-list",
-  "body": "`eypres templates` lists every template in the project's `templates/` directory with its name, kind (slide|section — derived from whether it lives under `templates/slides/` or `templates/sections/`) and one-line description. Run outside a project (no `templates/`) it errors per templates-dir-required.",
+  "body": "`kalide templates` lists every template in the project's `templates/` directory with its name, kind (slide|section — derived from whether it lives under `templates/slides/` or `templates/sections/`) and one-line description. Run outside a project (no `templates/`) it errors per templates-dir-required.",
   "properties": {
     "feature": "cli"
   },
