@@ -15,6 +15,11 @@
       "kind": "drives",
       "source": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
     }
   ]
 }
