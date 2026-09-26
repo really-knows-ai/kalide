@@ -289,6 +289,11 @@
       "kind": "details",
       "target": "global.constraint.go-static-embedded-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.markdown-yaml-content-only",
+      "properties": {}
     }
   ],
   "in": []
