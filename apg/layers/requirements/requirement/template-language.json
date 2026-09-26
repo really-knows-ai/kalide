@@ -16,6 +16,11 @@
       "kind": "drives",
       "target": "domain.service.render-deck",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-media",
+      "properties": {}
     }
   ],
   "in": [
