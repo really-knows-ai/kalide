@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "whole-deck-validation",
-  "body": "The whole deck (config, filenames, frontmatter, sections, fields, bodies, links, images) is validated with uniform rules at every nesting level. Validation is fail-fast: it stops at the first error and reports exactly that one error. \"First\" is defined by a fixed, deterministic order: (1) eypres.yaml; (2) slide filenames (numbering, letters, label uniqueness); (3) each slide in number/letter order, and within a slide top-to-bottom by line (frontmatter, body, sections, fields); (4) inter-slide #label links last, since they need all labels known. Acceptance: the same invalid deck always yields the same single reported error, namely the earliest failure in this order.",
+  "body": "The whole deck (config, filenames, frontmatter, sections, fields, bodies, links, images) is validated with uniform rules at every nesting level. Validation is fail-fast: it stops at the first error and reports exactly that one error. \"First\" is defined by a fixed, deterministic order: (1) kalide.yaml; (2) slide filenames (numbering, letters, label uniqueness); (3) each slide in number/letter order, and within a slide top-to-bottom by line (frontmatter, body, sections, fields); (4) inter-slide #label links last, since they need all labels known. Acceptance: the same invalid deck always yields the same single reported error, namely the earliest failure in this order.",
   "properties": {
     "feature": "validation-errors"
   },
