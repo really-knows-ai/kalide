@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "user",
   "name": "template-author",
-  "body": "EY brand/template owner acting as a user: authors templates (schema, Go html/template layout, example) compiled into the binary.",
+  "body": "Brand/template owner acting as a user: authors a project `templates/` library (slide/section templates with schema, standard Go html/template layout and example; themes; media) — never compiled into the binary.",
   "properties": {},
   "out": [
     {
