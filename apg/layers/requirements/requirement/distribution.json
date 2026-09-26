@@ -56,6 +56,11 @@
       "kind": "drives",
       "target": "domain.group.distribution",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.kalide-rename",
+      "properties": {}
     }
   ],
   "in": [
