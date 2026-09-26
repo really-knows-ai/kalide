@@ -26,9 +26,25 @@ package e2e
 // library. reveal.js and the rest of the embedded assets are crawled by
 // TestEmbeddedAssets in internal/server; here the native-release check is
 // that the served page carries the reveal.js script tag and the seed's
-// stylesheet, both fetched 200. Asserting the eypres process makes no
-// outbound connection is phase-06 task-5's offline-enforcement pass and stays
-// out of scope here.
+// stylesheet, both fetched 200.
+//
+// Phase-06 task-5 finalizes the assertions this file makes about the served
+// deck:
+//
+//   - a single <section> element is served — the seed writes exactly one
+//     slide, and its layout already emits its own root <section> so no second
+//     wrapper is added (internal/render's addAnchor);
+//   - the theme stylesheet fetched from templates/themes/default/theme.css is
+//     byte-for-byte the project's own file on disk, never the internal/assets
+//     embedded theme.css — mediaHandler's ThemesPath route only ever reads
+//     from the project's templates/themes/<name>/ directory;
+//   - reveal.js is still fetched from the embedded core
+//     (server.AssetsPath+"reveal/dist/reveal.js"), unaffected by the project
+//     templates/ library.
+//
+// Asserting the eypres process makes no outbound connection is offline
+// enforcement (offline.go, exercised by TestDemoProject in demo_test.go) and
+// stays out of scope here.
 //
 // It builds (or runs) a real binary, so it is skipped under -short.
 
@@ -110,6 +126,14 @@ func TestNativeRelease(t *testing.T) {
 	if !strings.Contains(body, "Hello, world") {
 		t.Errorf("served deck page does not carry the hello slide's title:\n%s", body)
 	}
+	// The seed writes exactly one slide (slides/1-hello.md); its layout
+	// already emits its own root <section>, so addAnchor (internal/render)
+	// attaches the slide's anchor id to that same element instead of wrapping
+	// a second one around it. A single <section> in the served page is
+	// therefore the single-slide assertion.
+	if n := strings.Count(body, "<section"); n != 1 {
+		t.Errorf("served deck page has %d <section> element(s), want exactly 1 (the single hello slide):\n%s", n, body)
+	}
 	if !strings.Contains(body, "reveal.js") {
 		t.Errorf("served deck page does not reference reveal.js:\n%s", body)
 	}
@@ -145,6 +169,21 @@ func TestNativeRelease(t *testing.T) {
 	}
 	if ct := themeResp.Header.Get("Content-Type"); !strings.Contains(ct, "css") {
 		t.Errorf("GET %sdefault/theme.css Content-Type = %q, want it to mention css", server.ThemesPath, ct)
+	}
+
+	// The served stylesheet is byte-for-byte the project's own
+	// templates/themes/default/theme.css on disk (the file init wrote), not
+	// the internal/assets embedded theme.css: mediaHandler's ThemesPath route
+	// (internal/server/media.go) only ever reads from the project's
+	// templates/themes/<name>/ directory, so a match here pins that the
+	// stylesheet came from the project, never from the embedded core.
+	onDiskTheme, err := os.ReadFile(h.Path("templates/themes/default/theme.css"))
+	if err != nil {
+		t.Fatalf("read %s: %v", h.Path("templates/themes/default/theme.css"), err)
+	}
+	if string(themeBody) != string(onDiskTheme) {
+		t.Errorf("served %sdefault/theme.css does not match the project's templates/themes/default/theme.css on disk",
+			server.ThemesPath)
 	}
 
 	h.Stop()
