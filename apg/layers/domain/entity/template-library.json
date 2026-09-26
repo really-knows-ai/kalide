@@ -6,7 +6,13 @@
   "properties": {
     "kind": "entity"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "drives",
