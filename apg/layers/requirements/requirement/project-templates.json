@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.templates-dir-layout",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-manifest",
+      "properties": {}
     }
   ],
   "in": [
