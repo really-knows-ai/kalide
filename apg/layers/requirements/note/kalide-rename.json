@@ -124,6 +124,11 @@
       "kind": "details",
       "target": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.templates-dir-validation",
+      "properties": {}
     }
   ],
   "in": []
