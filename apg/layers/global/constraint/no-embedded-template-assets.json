@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "no-embedded-template-assets",
+  "body": "The eypres binary must contain no templates, themes, fonts, logos or other presentation media (images, video, …), and no EY branding of any kind. Every template, theme and media file used to validate, render, list or serve a deck must be read from the project's `templates/` directory at run time. There is no built-in fallback: if the project lacks something, it is an error. The only exception is the minimal, unbranded `eypres init` seed scaffold, which is written to disk once by init and is never read by validate/render/serve/list code paths.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
