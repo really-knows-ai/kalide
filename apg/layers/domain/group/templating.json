@@ -72,6 +72,11 @@
       "kind": "contains",
       "target": "domain.value.slide-metadata",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": [
