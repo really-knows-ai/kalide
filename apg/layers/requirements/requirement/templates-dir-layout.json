@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "templates-dir-layout",
+  "body": "`templates/` layout (fixed): `templates/library.yaml` (library manifest: `name` identifier `[a-z0-9][a-z0-9-]*`, optional `description`, `format: 1` layout/manifest format version — required); `templates/templates/<name>/` one directory per slide/section template holding `template.yaml` (schema manifest), `layout.html.tmpl` (Go html/template layout) and `example.md` (example slide source); `templates/themes/<name>/` one directory per theme holding `theme.css` (token stylesheet) and optional theme-owned files (fonts, logos); `templates/media/` optional shared media of any type (fonts, logos, images, video, …). A template's name is its directory name; a theme's name is its directory name. Unknown top-level entries in `templates/` are an error (keeps the layout extensible by the format version). AC: a directory following this layout loads; each deviation yields a templates error naming the offending path.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
