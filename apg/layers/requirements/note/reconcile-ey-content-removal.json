@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.note.parked-template-catalogue",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.embedded-assets",
+      "properties": {}
     }
   ],
   "in": []

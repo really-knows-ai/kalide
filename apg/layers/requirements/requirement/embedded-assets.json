@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-reveal-pin",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-ey-content-removal",
+      "properties": {}
     }
   ]
 }
