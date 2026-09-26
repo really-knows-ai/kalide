@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.no-embedded-template-assets",
+      "properties": {}
     }
   ],
   "in": []
