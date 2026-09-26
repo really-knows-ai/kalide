@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-init",
-  "body": "`eypres init` in the current directory creates `slides/` with one valid starter slide, an empty `assets/` directory for images, a valid `eypres.yaml`, and the project's minimal `templates/` directory (see cli-init-minimal-seed). AC: immediately after init, `eypres start` validates cleanly and serves the starter slide.",
+  "body": "`kalide init` in the current directory creates `slides/` with one valid starter slide, an empty `assets/` directory for images, a valid `kalide.yaml`, and the project's minimal `templates/` directory (see cli-init-minimal-seed). AC: immediately after init, `kalide start` validates cleanly and serves the starter slide.",
   "properties": {
     "feature": "cli"
   },
