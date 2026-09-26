@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "constraint",
+  "name": "deck-properties-typed-scalars",
+  "body": "Deck `properties` values must be simple typed YAML scalars (string, number, boolean or date); a mapping or sequence value must be rejected as a config error naming the key, and a string property value must be passed to templates as escaped text — never rendered as Markdown and never as pre-rendered safe HTML.",
+  "properties": {
+    "attaches-to": "domain.value.deck-properties"
+  },
+  "out": [],
+  "in": []
+}
