@@ -1,0 +1,109 @@
+# Reusable native end-to-end verification.
+#
+# Called by ci.yml (push/PR) and by release.yml (a human-pushed vX.Y.Z tag). One
+# GitHub-hosted native runner per supported target; there is no self-hosted or
+# manual fallback.
+#
+#   - darwin/arm64   -> macos-14
+#   - windows/amd64  -> windows-latest
+#   - windows/arm64  -> windows-11-arm, only while that runner is available to
+#                       this private repo
+#
+# The matrix is composed inline from the repository variable WINDOWS_ARM_RUNNER:
+# the windows/arm64 entry is present only when it is the string "true". While it
+# is unset or not "true", that job simply does not exist (and windows/arm64 is
+# consequently never built, verified or released). There is deliberately no
+# self-hosted runner and no manual verification path.
+#
+# In both modes the binary under test lives at the same target-specific path
+# under dist/ (the Makefile's layout):
+#
+#   - build mode (default; ci.yml): `make release` builds the CGO_ENABLED=0
+#     release binary for exactly darwin/arm64, windows/amd64 and windows/arm64
+#     — never darwin/amd64 or Linux;
+#   - release mode (release.yml): the caller's build job has already produced
+#     the binaries and uploaded them as an artifact, so this workflow downloads
+#     that artifact into dist/ instead of rebuilding.
+#
+# Either way the job runs `go test ./e2e -run TestNativeRelease` with
+# EYPRES_BINARY pointing at the target binary, so the e2e test drives the exact
+# artifact for the runner's own target.
+#
+# The offline enforcement, URL parsing, process-group graceful stop and clean
+# exit assertions live in the e2e package (TestNativeRelease / the Harness).
+
+name: Native e2e
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        description: Download prebuilt release binaries instead of building them
+        type: boolean
+        default: false
+      artifact-name:
+        description: Name of the artifact holding the release binaries (release mode)
+        type: string
+        default: eypres-binaries
+      version:
+        description: Version stamped into the built binaries (build mode)
+        type: string
+        default: dev
+    secrets:
+      token:
+        description: Token used to download the release artifact from the private repo
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: e2e ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Required targets always; windows/arm64 only when its GitHub-hosted
+        # runner is available to the private repo. A static entry cannot be made
+        # conditional (a job-level `if` cannot read the matrix context), so the
+        # list is assembled here from vars.WINDOWS_ARM_RUNNER.
+        include: ${{ fromJSON(vars.WINDOWS_ARM_RUNNER == 'true' && '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/eypres-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/eypres-windows-amd64.exe"},{"target":"windows/arm64","os":"windows-11-arm","binary":"dist/eypres-windows-arm64.exe"}]' || '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/eypres-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/eypres-windows-amd64.exe"}]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Build mode (default): the Makefile is the single build entry point and
+      # produces the CGO_ENABLED=0 release binary for this runner's target. It
+      # must run under bash because the release recipe uses POSIX `mkdir -p` and
+      # env-prefixed commands, which the default PowerShell shell on Windows
+      # runners would not execute.
+      - name: Build release binary
+        if: ${{ !inputs.release }}
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: make release
+
+      # Release mode: the caller's build job already produced the binaries; pull
+      # them in at the same dist/ paths the build mode would use.
+      - name: Download release binary
+        if: ${{ inputs.release }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: dist
+          github-token: ${{ secrets.token || github.token }}
+
+      # TestNativeRelease drives the target binary through init, a clean
+      # start --no-open, URL/asset checks, offline enforcement and a graceful
+      # stop with clean-exit assertions.
+      - name: Run native e2e
+        env:
+          EYPRES_BINARY: ${{ github.workspace }}/${{ matrix.binary }}
+        run: go test ./e2e -run TestNativeRelease -v

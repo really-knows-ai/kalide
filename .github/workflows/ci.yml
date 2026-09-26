@@ -1,0 +1,100 @@
+# CI for push and pull request.
+#
+# One host job runs the fast checks (gofmt, go vet, build) plus the whole test
+# suite `go test ./...` — unit, integration and e2e. The e2e tests build the
+# eypres binary themselves with CGO_ENABLED=0 for the host target (the runner's
+# OS/arch is the target), so the job needs no prebuilt/release binary. The host
+# is macos-14 (darwin/arm64), a supported target: running the host suite on
+# Linux would compile a Linux binary, which the project never builds.
+#
+# The job also carries the module-path guard: the source repo's module path must
+# be exactly github.com/really-knows-ai/ey-present, and no package living in the
+# repository may be imported under a different module path.
+#
+# Native end-to-end verification is delegated to the reusable native-e2e.yml
+# workflow, which runs TestNativeRelease on one GitHub-hosted native runner per
+# supported target.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint, build and test
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # gofmt is the gate (`gofmt -l .` must print nothing); `make fmt` would
+      # rewrite files, which is not what CI should do.
+      - name: Lint (gofmt)
+        shell: bash
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt found unformatted files:"
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+
+      - name: Lint (go vet)
+        run: go vet ./...
+
+      - name: Build
+        run: make build
+
+      # The module path is the private repo's path exactly, and every package
+      # that lives inside this repository belongs to it. A package whose
+      # directory is under the module root yet whose import path is not under
+      # the module path (a stray nested module or a stale, e.g. github.com/ey/
+      # eypres, path) is a project-internal package outside the path.
+      - name: Module-path guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          want='github.com/really-knows-ai/ey-present'
+
+          got="$(go list -m)"
+          if [ "$got" != "$want" ]; then
+            echo "::error::go list -m reports '$got', want '$want'"
+            exit 1
+          fi
+
+          mod_root="$(go list -m -f '{{.Dir}}')"
+          stray="$(
+            go list -deps -f '{{.ImportPath}}|{{.Dir}}' ./... |
+              awk -F'|' -v want="$want" -v root="$mod_root" '
+                $2 == root || index($2, root "/") == 1 {
+                  if ($1 != want && index($1, want "/") != 1) print $1
+                }'
+          )"
+          if [ -n "$stray" ]; then
+            echo "::error::project-internal package(s) outside $want:"
+            printf '%s\n' "$stray"
+            exit 1
+          fi
+
+          echo "module-path guard OK: $got"
+
+      # All tiers, including e2e. The e2e harness builds its own CGO_ENABLED=0
+      # binary for the host target; no EYPRES_BINARY (release artifact) is set.
+      - name: Test
+        run: go test ./...
+
+  native-e2e:
+    name: Native e2e
+    needs: test
+    uses: ./.github/workflows/native-e2e.yml
