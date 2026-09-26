@@ -813,6 +813,19 @@ func TestRegistryRejections(t *testing.T) {
 		if !strings.Contains(libErr.Message, "not a defined template") {
 			t.Errorf("Message = %q, want it to say ghost is not defined", libErr.Message)
 		}
+		if strings.Contains(libErr.Message, "did you mean") {
+			t.Errorf("Message = %q, want no suggestion since %q is not close to any defined template", libErr.Message, "ghost")
+		}
+	})
+
+	t.Run("undefined template reference close to a defined name suggests it", func(t *testing.T) {
+		libErr := libraryRejection(t, "sections:\n  - name: slot\n    accepted: [badsecc]\n", "")
+		if !strings.Contains(libErr.Message, "not a defined template") {
+			t.Errorf("Message = %q, want it to say badsecc is not defined", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `did you mean "badsec"?`) {
+			t.Errorf("Message = %q, want it to suggest %q", libErr.Message, `did you mean "badsec"?`)
+		}
 	})
 
 	t.Run("section template reference cycle", func(t *testing.T) {
