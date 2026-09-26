@@ -32,8 +32,8 @@ Usage:
 //     templates or documents one by name;
 //   - `start [--port N] [--no-open]` routes to runStart, which validates the
 //     whole deck and then serves it with live reload until a shutdown signal;
-//   - `init` routes to its command, which is not implemented yet and returns a
-//     "not implemented" error;
+//   - `init` routes to runInit, which scaffolds a starter deck into the current
+//     directory, or refuses non-zero when one of the deck paths already exists;
 //   - an unknown command or malformed arguments print usage and return 2.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
@@ -46,7 +46,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	case "init":
-		return notImplemented("init", stderr)
+		return runInit(args[2:], stdout, stderr)
 	case "start":
 		return runStart(args[2:], stdout, stderr)
 	case "templates":
@@ -61,11 +61,4 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
-}
-
-// notImplemented reports that a recognised command has no implementation yet.
-// Later phases replace these stubs with real handlers.
-func notImplemented(name string, stderr io.Writer) int {
-	fmt.Fprintf(stderr, "eypres: the %q command is not implemented yet\n", name)
-	return 1
 }
