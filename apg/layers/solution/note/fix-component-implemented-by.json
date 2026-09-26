@@ -34,6 +34,11 @@
       "kind": "details",
       "target": "solution.component.slide-parser",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.markdown-validator",
+      "properties": {}
     }
   ],
   "in": []

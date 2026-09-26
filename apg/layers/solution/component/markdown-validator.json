@@ -26,6 +26,11 @@
       "kind": "realised-by",
       "source": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }
