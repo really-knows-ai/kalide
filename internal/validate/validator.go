@@ -47,11 +47,8 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 //     slide frontmatter's fields (template.CheckValues), then the slide body
 //     (mdcheck.Check), then each section in source order with its frontmatter
 //     fields and body, then the reserved notes body;
-//  4. inter-slide #label links last, once every label in the deck is known.
-//
-// Step 4 is phase-5 task-3 (checkLinks) and is deliberately NOT implemented
-// here: the loop over slides falls through to the return, which is the seam the
-// link pass slots into.
+//  4. inter-slide #label links last, once every label in the deck is known,
+//     through checkLinks (links.go).
 //
 // The rules are uniform and recursive at every nesting level: CheckValues
 // follows section-template-as-type fields and list items to any depth against
@@ -120,9 +117,11 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 		}
 	}
 
-	// Step 4 seam: phase-5 task-3 (checkLinks) runs here, after every slide in
-	// the deck has been parsed and every slide label is therefore known. It is
-	// not implemented in this task.
+	// Step 4: inter-slide #label links, last, now that every slide in the deck
+	// has passed steps 1–3 and every slide label is therefore known.
+	if verr, invalid := checkLinks(fsys, d, reg); invalid {
+		return verr, true
+	}
 	return ValidationError{}, false
 }
 
