@@ -119,6 +119,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-init-minimal-seed",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ],
   "in": []

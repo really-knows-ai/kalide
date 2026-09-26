@@ -58,6 +58,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.live-reload",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.kalide-rename",
+      "properties": {}
     }
   ]
 }
