@@ -4,7 +4,13 @@
   "name": "homebrew-formula",
   "body": "Homebrew formula: the tap's `eypres` formula with a custom download strategy that uses `HOMEBREW_GITHUB_API_TOKEN` to fetch the darwin asset from the private GitHub Release.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "Formula/eypres.rb",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -14,6 +20,11 @@
     {
       "kind": "realised-by",
       "source": "domain.service.install-eypres",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     }
   ]

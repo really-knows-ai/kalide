@@ -79,6 +79,104 @@ func TestWatchIntegration(t *testing.T) {
 		assertQuiet(t, events)
 	})
 
+	t.Run("templates slides edit yields one debounced event", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir, "slides", "hello"))
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "slides", "hello", "template.yaml"), "description: x\n")
+		// The directory created above already surfaced an event; drain it
+		// before exercising the edit this subtest is actually about.
+		waitEvent(t, events)
+
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "slides", "hello", "template.yaml"), "description: y\n")
+		ev := waitEvent(t, events)
+		expectPath(t, ev, "templates/slides/hello/template.yaml")
+		assertQuiet(t, events)
+	})
+
+	t.Run("templates sections edit yields one debounced event", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir, "sections", "item"))
+		waitEvent(t, events)
+
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "sections", "item", "template.yaml"), "description: x\n")
+		ev := waitEvent(t, events)
+		expectPath(t, ev, "templates/sections/item/template.yaml")
+		assertQuiet(t, events)
+	})
+
+	t.Run("templates theme edit yields one debounced event", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir, "themes", "plain"))
+		waitEvent(t, events)
+
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "themes", "plain", "theme.css"), "body { margin: 0; }\n")
+		ev := waitEvent(t, events)
+		expectPath(t, ev, "templates/themes/plain/theme.css")
+		assertQuiet(t, events)
+	})
+
+	t.Run("templates media edit yields one debounced event", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir, "media"))
+		waitEvent(t, events)
+
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "media", "logo.svg"), "<svg/>\n")
+		ev := waitEvent(t, events)
+		expectPath(t, ev, "templates/media/logo.svg")
+		assertQuiet(t, events)
+	})
+
+	t.Run("templates library.yaml edit yields one debounced event", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir))
+		waitEvent(t, events)
+
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "library.yaml"), "name: x\n")
+		ev := waitEvent(t, events)
+		expectPath(t, ev, "templates/library.yaml")
+		assertQuiet(t, events)
+	})
+
+	t.Run("templates directory created after startup is watched", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		// templates/ does not exist at startup (newWatchDeck only creates
+		// slides/ and assets/); creating it must be picked up through the
+		// root watch, and a file written inside it right after must be
+		// reported without a restart.
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir))
+		ev := waitEvent(t, events)
+		expectPathPrefix(t, ev, "templates")
+
+		mustWrite(t, filepath.Join(root, watch.TemplatesDir, "library.yaml"), "name: x\n")
+		ev = waitEvent(t, events)
+		expectPath(t, ev, "templates/library.yaml")
+		assertQuiet(t, events)
+	})
+
+	t.Run("new subdirectory under templates created after startup is watched", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustMkdir(t, filepath.Join(root, watch.TemplatesDir, "slides"))
+		waitEvent(t, events)
+
+		sub := filepath.Join(root, watch.TemplatesDir, "slides", "newslide")
+		mustMkdir(t, sub)
+		ev := waitEvent(t, events)
+		expectPathPrefix(t, ev, "templates/slides/newslide")
+
+		mustWrite(t, filepath.Join(sub, "template.yaml"), "description: x\n")
+		ev = waitEvent(t, events)
+		expectPathPrefix(t, ev, "templates/slides/newslide/template.yaml")
+		assertQuiet(t, events)
+	})
+
+	t.Run("unrelated root paths stay quiet", func(t *testing.T) {
+		root, events := newWatchDeck(t)
+		mustWrite(t, filepath.Join(root, "README.md"), "# notes\n")
+		mustMkdir(t, filepath.Join(root, "unrelated"))
+		mustWrite(t, filepath.Join(root, "unrelated", "file.txt"), "x\n")
+		assertQuiet(t, events)
+	})
+
 	t.Run("created and removed subdirectory yields events", func(t *testing.T) {
 		root, events := newWatchDeck(t)
 		sub := filepath.Join(root, deck.SlidesDir, "sub")

@@ -340,6 +340,70 @@ func TestCheckBody(t *testing.T) {
 		},
 	}
 
+	// This is the unit-test deliverable for plan.phase-02.task-9:
+	// manifest-declared body rules (parsed by parseManifest from a
+	// template.yaml `body:` block) drive CheckBody identically to a
+	// Go-authored BodyRule literal — modes and the heading/size limits.
+	t.Run("manifest-declared body rules", func(t *testing.T) {
+		manifestCases := []struct {
+			name     string
+			manifest string
+			body     string
+			want     *wantErr
+		}{
+			{
+				name:     "mode required rejects an empty body",
+				manifest: "body:\n  mode: required\n",
+				body:     "",
+				want:     weBody("required", nil, requiredWhat, requiredFix),
+			},
+			{
+				name:     "mode disallowed rejects any body",
+				manifest: "body:\n  mode: disallowed\n",
+				body:     "hello world",
+				want: weBody("disallowed", "hello world",
+					"disallowed: the body is not allowed, but the body has 2 word(s)", disallowedFix),
+			},
+			{
+				name:     "max_words over the limit errors",
+				manifest: "body:\n  mode: optional\n  max_words: 2\n",
+				body:     "one two three",
+				want: weBody("max_words", "one two three",
+					"max_words: the body is 3 words, maximum is 2", "shorten the body to at most 2 words"),
+			},
+			{
+				name:     "subheadings false rejects a heading",
+				manifest: "body:\n  mode: optional\n",
+				body:     "## Details",
+				want: weBody("subheadings", "## Details",
+					`subheadings: "## Details" is a subheading, but subheadings are not allowed`, subheadFix),
+			},
+			{
+				name:     "subheadings true allows a heading",
+				manifest: "body:\n  mode: optional\n  subheadings: true\n",
+				body:     "## Details",
+			},
+		}
+		for _, tc := range manifestCases {
+			t.Run(tc.name, func(t *testing.T) {
+				def := mustParseManifest(t, "mbody", KindSlide, tc.manifest)
+				got, invalid := CheckBody(def.Body, tc.body)
+				if tc.want == nil {
+					if invalid {
+						t.Fatalf("CheckBody() = (%s, true), want a valid body", renderErrors([]ValueError{got}))
+					}
+					return
+				}
+				if !invalid {
+					t.Fatalf("CheckBody() invalid = false, want rule %q", tc.want.Rule)
+				}
+				if got.Rule != tc.want.Rule || got.What != tc.want.What || got.Fix != tc.want.Fix {
+					t.Errorf("CheckBody() = %+v, want rule %q what %q fix %q", got, tc.want.Rule, tc.want.What, tc.want.Fix)
+				}
+			})
+		}
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, invalid := CheckBody(tt.rule, tt.body, tt.opts...)

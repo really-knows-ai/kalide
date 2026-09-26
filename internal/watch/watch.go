@@ -22,6 +22,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/really-knows-ai/ey-present/internal/deck"
+	"github.com/really-knows-ai/ey-present/internal/template"
 )
 
 // AssetsDir is the fixed name of the deck's asset directory at the root of a
@@ -30,6 +31,15 @@ import (
 // triggers a reload. Unlike slides/, it is optional in a deck, so a missing
 // assets/ directory is not an error.
 const AssetsDir = "assets"
+
+// TemplatesDir is the fixed name of the project's templates library directory
+// at the root of a deck, alongside deck.SlidesDir and AssetsDir. It aliases
+// template.TemplatesDir. It is watched recursively so an edit anywhere in the
+// templates/ library (slides/, sections/, themes/<name>/, media/ or the
+// top-level library.yaml) triggers a reload. Like assets/, a missing
+// templates/ directory is not an error at startup: the root watch picks it up
+// if it is created later.
+const TemplatesDir = template.TemplatesDir
 
 // mutate is the set of fsnotify operations that count as a change to the deck.
 // A pure Chmod (the only remaining operation) does not change served content
@@ -61,15 +71,17 @@ type Event struct {
 // Watched paths:
 //
 //   - the slides/ subtree (deck.SlidesDir) recursively;
-//   - the assets/ subtree (AssetsDir) recursively; and
+//   - the assets/ subtree (AssetsDir) recursively;
+//   - the templates/ subtree (TemplatesDir) recursively — slides/, sections/,
+//     themes/<name>/, media/ and the top-level library.yaml; and
 //   - the eypres.yaml file (deck.ConfigFile) at the root.
 //
-// fsnotify is not recursive, so Watch walks slides/ and assets/ at startup and
-// registers every directory it finds. A directory created later is picked up
-// from the create event that the parent's watch reports and has its subtree
-// added; a directory removed or renamed has its watch (and its descendants')
-// dropped. A missing slides/ or assets/ directory is not an error: the root
-// watch sees it if it is created later.
+// fsnotify is not recursive, so Watch walks slides/, assets/ and templates/ at
+// startup and registers every directory it finds. A directory created later is
+// picked up from the create event that the parent's watch reports and has its
+// subtree added; a directory removed or renamed has its watch (and its
+// descendants') dropped. A missing slides/, assets/ or templates/ directory is
+// not an error: the root watch sees it if it is created later.
 //
 // Debounce: each relevant event resets a timer, and a single Event is sent only
 // after no relevant event has arrived for debounce (one event per burst). No
@@ -125,6 +137,7 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 	}
 	w.addTree(filepath.Join(root, deck.SlidesDir))
 	w.addTree(filepath.Join(root, AssetsDir))
+	w.addTree(filepath.Join(root, TemplatesDir))
 
 	go w.loop()
 
@@ -201,7 +214,8 @@ func (w *watcher) dropTree(dir string) {
 
 // rel reports whether ev is relevant to the deck and, if so, its path relative
 // to the root as a slash-separated string. Relevant paths are eypres.yaml at
-// the root and anything at or beneath slides/ or assets/.
+// the root and anything at or beneath slides/, assets/ or templates/
+// (including templates/library.yaml).
 func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	r, err := filepath.Rel(w.root, ev.Name)
 	if err != nil {
@@ -217,6 +231,8 @@ func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	case r == deck.SlidesDir, strings.HasPrefix(r, deck.SlidesDir+"/"):
 		return r, true
 	case r == AssetsDir, strings.HasPrefix(r, AssetsDir+"/"):
+		return r, true
+	case r == TemplatesDir, strings.HasPrefix(r, TemplatesDir+"/"):
 		return r, true
 	default:
 		return "", false

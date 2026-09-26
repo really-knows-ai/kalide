@@ -4,15 +4,16 @@ package cli
 // requirements.requirement.cli-init and
 // requirements.requirement.cli-init-refuse-existing.
 //
-// `eypres init` scaffolds a starter deck into the current working directory.
-// The filesystem work lives in internal/scaffold.Init; this handler resolves
-// the current directory, rejects any extra argument (there is no --force), and
-// turns Init's outcome into the process exit code and user-facing text:
+// `eypres init` scaffolds a minimal starter deck into the current working
+// directory. The filesystem work lives in internal/scaffold.Init; this
+// handler resolves the current directory, rejects any extra argument (there
+// is no --force), and turns Init's outcome into the process exit code and
+// user-facing text:
 //
 //   - success prints the paths that were created and exits 0;
-//   - a refusal — one of slides/, assets/ or eypres.yaml already present —
-//     prints scaffold's message to stderr and exits non-zero, having written
-//     nothing;
+//   - a refusal — one of slides/, templates/, assets/ or eypres.yaml already
+//     present — prints scaffold's message to stderr and exits non-zero, having
+//     written nothing;
 //   - an extra argument is a usage error: usage to stderr and exit 2.
 //
 // All output goes to the supplied writers, so the command is testable without
@@ -27,13 +28,18 @@ import (
 )
 
 // initCreatedMessage is the success text for `eypres init`. It lists the
-// top-level entries scaffold.Init creates from the embedded assets.Starter
-// tree, spelled as deck-relative, slash-separated paths: the deck config, the
-// two starter slides and the empty assets/ directory for the author's images.
+// top-level entries scaffold.Init creates from the embedded hello seed,
+// spelled as deck-relative, slash-separated paths: the deck config, the
+// starter slide, the hello slide template and default theme, and the empty
+// assets/ directory for the author's images.
 const initCreatedMessage = `Created a starter deck:
   eypres.yaml
-  slides/1-title.md
-  slides/2-content.md
+  slides/1-hello.md
+  templates/library.yaml
+  templates/slides/hello/template.yaml
+  templates/slides/hello/layout.html.tmpl
+  templates/slides/hello/example.md
+  templates/themes/default/theme.css
   assets/
 `
 

@@ -3,7 +3,8 @@ package server
 // This file implements the /templates gallery (phase-7 task 5):
 // requirements.requirement.templates-gallery. It serves the embedded
 // gallery page (assets.Pages(), "gallery.html.tmpl"; phase-7 task 3) populated
-// from the compiled-in template registry (template.Builtins()).
+// from the project's template registry, built from its loaded templates/
+// library.
 //
 // For every registered template it shows the template's name, usage
 // (slide|section), one-line description, the example slide RENDERED through
@@ -32,6 +33,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	htmltmpl "html/template"
 	"net/http"
@@ -68,10 +70,15 @@ const (
 )
 
 // galleryHandler returns the HTTP handler serving the /templates gallery for
-// reg, the compiled-in template registry (template.Builtins()). A nil registry
-// falls back to template.Builtins(); a failure to build that registry or the
-// embedded page is reported as a 500 by the handler, never a panic, so a
-// mis-embed is visible rather than fatal.
+// reg, the project's template registry (template.NewRegistryFromLibrary over
+// the loaded Library). reg must be non-nil: a nil registry is a caller error,
+// reported by the handler as a 500 rather than silently substituted. funcMap is
+// the library's layout func map (template.LayoutFuncMap: `media` bound to the
+// served templates/media URL base, plus the format functions), threaded into
+// every example's render so a slide or section preview using `media` renders
+// the served URL (templates-gallery, template-media). A nil reg or a failure
+// to parse the embedded page is reported as a 500 by the handler, never a
+// panic, so a mis-embed is visible rather than fatal.
 //
 // It is registered on the server's mux by Listen (server.go), so every running
 // server serves the gallery as soon as it is listening. Tests may build one
@@ -80,13 +87,13 @@ const (
 // The handler is stateless and safe for concurrent requests: the embedded page
 // is parsed once here and the per-request documents are derived from the
 // registry, whose templates are immutable.
-func galleryHandler(reg *template.Registry) http.Handler {
+func galleryHandler(reg *template.Registry, funcMap htmltmpl.FuncMap) http.Handler {
 	page, pageErr := htmltmpl.New(galleryPageName).ParseFS(assets.Pages(), galleryPageName)
-	regErr := error(nil)
+	var regErr error
 	if reg == nil {
-		reg, regErr = template.Builtins()
+		regErr = errors.New("nil template registry")
 	}
-	return &galleryServer{reg: reg, regErr: regErr, page: page, pageErr: pageErr}
+	return &galleryServer{reg: reg, regErr: regErr, page: page, pageErr: pageErr, funcMap: funcMap}
 }
 
 // galleryServer is the /templates handler. page and pageErr are the embedded
@@ -94,12 +101,14 @@ func galleryHandler(reg *template.Registry) http.Handler {
 // parse failed, which for the embedded gallery page is a programming error.
 // reg is the registry to document (built when the handler was built, so the
 // handler holds only immutable values); regErr is non-nil only when a nil
-// registry was given and template.Builtins() failed.
+// registry was given. funcMap is the library's layout func map every example
+// preview renders with.
 type galleryServer struct {
 	reg     *template.Registry
 	regErr  error
 	page    *htmltmpl.Template
 	pageErr error
+	funcMap htmltmpl.FuncMap
 }
 
 // ServeHTTP renders the gallery. It accepts GET and HEAD (as every page does),
@@ -120,7 +129,7 @@ func (g *galleryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries := galleryEntries(g.reg)
+	entries := galleryEntries(g.reg, g.funcMap)
 
 	var buf bytes.Buffer
 	data := map[string]any{
@@ -190,7 +199,7 @@ type galleryBody struct {
 // omitted and the reason shown as escaped text, so one bad example never hides
 // the rest of the gallery. Built-in examples are validated at build time
 // (validate.ValidateBuiltinExamples), so such a failure is a programming error.
-func galleryEntries(reg *template.Registry) []galleryEntry {
+func galleryEntries(reg *template.Registry, funcMap htmltmpl.FuncMap) []galleryEntry {
 	templates := reg.Templates()
 	entries := make([]galleryEntry, 0, len(templates))
 	for _, t := range templates {
@@ -209,10 +218,10 @@ func galleryEntries(reg *template.Registry) []galleryEntry {
 				Summary: bodySummary(t.Body),
 			},
 		}
-		example, err := galleryExample(t, reg)
+		example, err := galleryExample(t, reg, funcMap)
 		if err != nil {
 			entry.Example = htmltmpl.HTML(
-				`<p class="ey-gallery__empty">Example unavailable: ` +
+				`<p class="gallery-page__empty">Example unavailable: ` +
 					htmltmpl.HTMLEscapeString(err.Error()) + `</p>`)
 		} else {
 			entry.Example = example
@@ -225,36 +234,51 @@ func galleryEntries(reg *template.Registry) []galleryEntry {
 // galleryExample renders one template's example slide through internal/render.
 // A slide-usage template's example is a whole slide; a section-usage template's
 // is a fragment and is rendered in a synthetic single-section slide context.
-func galleryExample(t *template.Template, reg *template.Registry) (htmltmpl.HTML, error) {
+func galleryExample(t *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	if strings.TrimSpace(t.Example.Markdown) == "" {
 		return "", nil
 	}
 	if t.Usage == template.UsageSection {
-		return gallerySectionExample(t, reg)
+		return gallerySectionExample(t, reg, funcMap)
 	}
-	return gallerySlideExample(t, reg)
+	return gallerySlideExample(t, reg, funcMap)
 }
 
 // gallerySlideExample parses a slide-usage template's example source and
 // renders it. The example's own `template:` names the slide template, so no
 // synthetic context is needed. The slide's label is the template name, giving
-// the preview a stable anchor id.
-func gallerySlideExample(t *template.Template, reg *template.Registry) (htmltmpl.HTML, error) {
+// the preview a stable anchor id. funcMap is the library's layout func map
+// (template.LayoutFuncMap), threaded to RenderSlide so a layout using `media`
+// renders the served templates/media URL.
+func gallerySlideExample(t *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	parsed, err := slide.Parse(galleryExampleFile(t), []byte(t.Example.Markdown), reg)
 	if err != nil {
 		return "", err
 	}
-	return render.RenderSlide(parsed, t.Name, reg)
+	return render.RenderSlide(parsed, t.Name, reg, funcMap)
 }
 
 // gallerySectionExample renders a section-usage template's example fragment in
 // a synthetic context: it registers a wrapper slide template (declaring one
 // section accepting exactly t) into a copy of reg, wraps the fragment as that
-// section's source, parses it and renders it through render.RenderSlide. The
-// real registry is never mutated, mirroring
+// section's source, parses it and renders it through render.RenderSlide.
+// funcMap is the library's layout func map, threaded through so a section
+// layout using `media` renders the served templates/media URL. The real
+// registry is never mutated, mirroring
 // internal/validate.ValidateBuiltinExamples' treatment of a section example.
-func gallerySectionExample(t *template.Template, reg *template.Registry) (htmltmpl.HTML, error) {
+func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	name := galleryFreeName(reg)
+	// The section's layout is parsed and executed under its Layout.Name when
+	// set (a library-sourced section's Layout.Name is its full manifest path,
+	// e.g. "templates/sections/item/layout.html.tmpl"), falling back to its
+	// template name otherwise — the same rule internal/render's layoutName
+	// applies. The wrapper's synthetic layout must invoke that same handle,
+	// not the bare template name, or `{{ template }}` looks up a name that
+	// was never registered under.
+	sectionLayoutName := t.Name
+	if t.Layout.Name != "" {
+		sectionLayoutName = t.Layout.Name
+	}
 	wrapper := &template.Template{
 		Name:        name,
 		Description: "Synthetic slide wrapping one section template's example.",
@@ -268,12 +292,12 @@ func gallerySectionExample(t *template.Template, reg *template.Registry) (htmltm
 		Body: template.BodyRule{Mode: template.BodyOptional},
 		// The wrapper exists only to give the section example a slide to live
 		// in; its layout renders the one section instance through the section
-		// template's own layout. The name interpolation is safe because
-		// template names are compiled-in identifiers.
+		// template's own layout, invoked by its actual registered handle
+		// (sectionLayoutName) rather than a hardcoded bare name.
 		Layout: template.Layout{
 			Name: name,
 			Text: `<section class="ey-slide">{{ range .` + gallerySectionName +
-				` }}{{ template "` + t.Name + `" . }}{{ end }}</section>`,
+				` }}{{ template "` + sectionLayoutName + `" . }}{{ end }}</section>`,
 		},
 	}
 
@@ -287,7 +311,7 @@ func gallerySectionExample(t *template.Template, reg *template.Registry) (htmltm
 	if err != nil {
 		return "", err
 	}
-	return render.RenderSlide(parsed, t.Name, rebuilt)
+	return render.RenderSlide(parsed, t.Name, rebuilt, funcMap)
 }
 
 // registryWithTemplate returns a copy of reg with extra registered, so the

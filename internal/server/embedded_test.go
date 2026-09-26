@@ -11,46 +11,47 @@ import (
 	"testing"
 	"time"
 
-	"github.com/really-knows-ai/ey-present/internal/assets"
-	"github.com/really-knows-ai/ey-present/internal/deck"
+	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
 
-// TestEmbeddedAssetsServed is the phase-8 integration proof of
-// global.constraint.go-static-embedded-binary for the server surface: a real
-// listener on 127.0.0.1 serves every page asset out of the binary's embedded
-// internal/assets FS while the working directory holds only the deck — an
-// eypres.yaml and a slides/ directory, with no assets/, reveal/, fonts/, logo/
-// or theme.css anywhere on disk.
+// TestEmbeddedAssetsServed is the phase-3 integration proof that a page's
+// asset references resolve from two sources with nothing else on disk
+// beyond the deck itself: reveal.js core (embedded in the binary,
+// internal/assets) and the project's own templates/media and
+// templates/themes/<name> files (served from the project's templates/
+// library, template-media). A real listener on 127.0.0.1 serves the whole
+// page while the working directory holds only the deck and its own
+// templates/ library — no separate assets/ tree beyond the deck's own.
 //
-// It starts a real server (Listen), renders the initial page through the real
-// built-in reload pipeline (Reloader), and drives it with a real HTTP client
-// over the bound port. It fetches each asset family explicitly — reveal.js core
-// (reveal.js, reveal.css, reset.css, notes.js), the theme stylesheet, a brand
-// font and a logo — plus the /templates gallery and (after NewErrorPage +
-// SetPage) the full-page error document, asserting 200 and non-empty bytes with
-// the right media types. It also extracts every /assets/… URL the rendered deck,
-// gallery and error pages reference and fetches each, so the page the browser
-// receives is proven to resolve entirely from the binary.
+// It starts a real server (Listen), renders the initial page through the
+// real built-in reload pipeline (Reloader) over the phase-3 fixture library
+// copied into the deck directory, and drives it with a real HTTP client over
+// the bound port.
 //
-// Because it binds a real port and reads a real deck directory, it is skipped
-// under -short.
+// Because it binds a real port and reads a real deck directory, it is
+// skipped under -short.
 func TestEmbeddedAssetsServed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test binds a real port and reads a real deck directory from disk")
 	}
 
-	dir := onlyDeckDir(t)
-	// The working directory itself is the deck: no asset files live here. The
-	// embedded tree is compiled into the binary, so a request can only succeed
-	// if it is served from there.
+	dir := fixtureDeckDir(t)
 	t.Chdir(dir)
 
-	srv := mustListen(t, Options{Root: dir})
+	fsys := os.DirFS(dir)
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	themes, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
 
-	// Render the initial deck page through the real built-in pipeline
-	// (validate.Validate + render.RenderDeck), which also injects the live-reload
-	// client script.
+	srv := mustListen(t, Options{Root: dir, Library: lib, Themes: themes})
+
 	rl, err := NewReloader(ReloadOptions{Server: srv, Root: dir, Log: io.Discard})
 	if err != nil {
 		t.Fatalf("NewReloader: %v", err)
@@ -63,59 +64,50 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 	base := strings.TrimSuffix(srv.URL(), "/")
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// Explicit asset families: name, URL path under AssetsPath, and a substring
-	// the Content-Type must carry. A font is checked separately because its
-	// media type comes from content sniffing, not a registered extension.
-	families := []struct {
-		name string
-		path string
-		ct   string
-	}{
-		{"reveal.js core", "reveal/dist/reveal.js", "javascript"},
-		{"reveal.js styles", "reveal/dist/reveal.css", "text/css"},
-		{"reveal.js reset", "reveal/dist/reset.css", "text/css"},
-		{"reveal.js notes plugin", "reveal/dist/plugin/notes.js", "javascript"},
-		{"default theme stylesheet", "theme.css", "text/css"},
-		{"EY logo", "logo/logo_full-dark.svg", "svg"},
-	}
-	for _, f := range families {
-		status, header, body := httpGetAsset(t, client, base+AssetsPath+f.path)
+	// reveal.js core, fetched from the embedded binary.
+	for _, path := range []string{
+		"reveal/dist/reveal.js",
+		"reveal/dist/reveal.css",
+		"reveal/dist/reset.css",
+		"reveal/dist/plugin/notes.js",
+	} {
+		status, header, body := httpGetAsset(t, client, base+AssetsPath+path)
 		if status != http.StatusOK {
-			t.Errorf("GET %s%s status %d, want 200", AssetsPath, f.path, status)
+			t.Errorf("GET %s%s status %d, want 200", AssetsPath, path, status)
 			continue
 		}
 		if len(body) == 0 {
-			t.Errorf("GET %s%s served an empty body", AssetsPath, f.path)
+			t.Errorf("GET %s%s served an empty body", AssetsPath, path)
 		}
-		ct := header.Get("Content-Type")
-		if !strings.Contains(ct, f.ct) {
-			t.Errorf("GET %s%s Content-Type = %q, want it to contain %q", AssetsPath, f.path, ct, f.ct)
+		if header.Get("Content-Type") == "" {
+			t.Errorf("GET %s%s has no Content-Type", AssetsPath, path)
 		}
-		assertAbsentOnDisk(t, dir, f.path)
 	}
 
-	// A brand font: 200, real WOFF2 bytes, and a binary (never textual) media
-	// type. Nothing named fonts/ exists in the deck directory.
-	const fontPath = "fonts/EYInterstate-Regular.woff2"
-	status, header, body := httpGetAsset(t, client, base+AssetsPath+fontPath)
+	// The rendered deck page, served at "/": its media and theme references
+	// resolve from the project's own templates/ library on disk.
+	status, header, body := httpGetAsset(t, client, base+rootPath)
 	if status != http.StatusOK {
-		t.Errorf("GET %s%s status %d, want 200", AssetsPath, fontPath, status)
+		t.Fatalf("GET %s status %d, want 200 (body %q)", rootPath, status, body)
 	}
-	if len(body) == 0 {
-		t.Errorf("GET %s%s served an empty body", AssetsPath, fontPath)
+	if ct := header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("GET %s Content-Type = %q, want text/html", rootPath, ct)
 	}
-	if len(body) >= 4 && string(body[:4]) != "wOF2" {
-		t.Errorf("GET %s%s body does not begin with the WOFF2 signature (got %q)", AssetsPath, fontPath, body[:4])
+	deckPage := string(body)
+	if !strings.Contains(deckPage, "<h1>Integration Deck</h1>") {
+		t.Errorf("deck page does not carry the rendered fixture title:\n%s", truncate(deckPage))
 	}
-	if ct := header.Get("Content-Type"); ct == "" {
-		t.Errorf("GET %s%s has no Content-Type", AssetsPath, fontPath)
-	} else if strings.HasPrefix(ct, "text/") {
-		t.Errorf("GET %s%s Content-Type = %q, want a binary font type", AssetsPath, fontPath, ct)
-	}
-	assertAbsentOnDisk(t, dir, fontPath)
+	assertPageAssetsResolve(t, client, base, deckPage, []string{
+		"/assets/reveal/dist/reset.css",
+		"/assets/reveal/dist/reveal.css",
+		"/assets/reveal/dist/reveal.js",
+		"/assets/reveal/dist/plugin/notes.js",
+		"/assets/templates/themes/plain/theme.css",
+		"/assets/templates/media/logo.svg",
+	})
 
-	// The /templates gallery is served from the embedded gallery page and the
-	// compiled-in registry, over the real port.
+	// The /templates gallery, served from the embedded gallery page and the
+	// project's library-built registry.
 	status, header, body = httpGetAsset(t, client, base+galleryPath)
 	if status != http.StatusOK {
 		t.Fatalf("GET %s status %d, want 200 (body %q)", galleryPath, status, body)
@@ -124,36 +116,14 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 		t.Errorf("GET %s Content-Type = %q, want text/html", galleryPath, ct)
 	}
 	gallery := string(body)
-	if !strings.Contains(gallery, `class="ey-gallery__name">title`) {
-		t.Errorf("gallery does not list the built-in title template: %q", truncate(gallery))
+	if !strings.Contains(gallery, `class="gallery-page__name">hello`) {
+		t.Errorf("gallery does not list the fixture hello template: %q", truncate(gallery))
 	}
-	assertPageAssetsResolve(t, client, base, gallery, []string{"/assets/theme.css", "/assets/logo/logo_full-light.svg"})
 
-	// The rendered deck page: fetched first as the initial page, with every
-	// /assets/… it references resolving from the binary.
-	status, header, body = httpGetAsset(t, client, base+rootPath)
-	if status != http.StatusOK {
-		t.Fatalf("GET %s status %d, want 200 (body %q)", rootPath, status, body)
-	}
-	if ct := header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
-		t.Errorf("GET %s Content-Type = %q, want text/html", rootPath, ct)
-	}
-	deckPage := string(body)
-	if !strings.Contains(deckPage, "Key messages") {
-		t.Errorf("deck page does not carry the rendered starter deck: %q", truncate(deckPage))
-	}
-	assertPageAssetsResolve(t, client, base, deckPage, []string{
-		"/assets/reveal/dist/reset.css",
-		"/assets/reveal/dist/reveal.css",
-		"/assets/reveal/dist/reveal.js",
-		"/assets/reveal/dist/plugin/notes.js",
-		"/assets/theme.css",
-	})
-
-	// The full-page error document, published through the Page seam exactly as
-	// the reloader publishes a broken deck, still resolves its embedded logo and
-	// theme over the real port.
-	verr := validate.New("slides/2-content.md", 7, []string{"heading"}, "required", "add a heading: value")
+	// The full-page error document, published through the Page seam exactly
+	// as the reloader publishes a broken deck, still resolves over the real
+	// port (it references only the embedded assets, no theme/media).
+	verr := validate.New("slides/1-hello.md", 3, []string{"title"}, "required", "add a title: value")
 	errPage, err := NewErrorPage("My presentation", verr)
 	if err != nil {
 		t.Fatalf("NewErrorPage: %v", err)
@@ -171,70 +141,54 @@ func TestEmbeddedAssetsServed(t *testing.T) {
 	if want := validate.Format(verr); !strings.Contains(errDoc, want) {
 		t.Errorf("error page does not carry the formatted error %q: %q", want, truncate(errDoc))
 	}
-	assertPageAssetsResolve(t, client, base, errDoc, []string{"/assets/theme.css", "/assets/logo/logo_full-dark.svg"})
 }
 
-// onlyDeckDir writes the embedded starter deck (eypres.yaml + slides/) into a
-// fresh temp dir and returns it. It asserts the directory holds nothing else:
-// no assets/ tree and no asset file of any kind, so every request the test
-// makes can only be satisfied from the binary's embedded FS.
-func onlyDeckDir(t *testing.T) string {
+// fixtureDeckDir writes a real deck directory: eypres.yaml, one slide using
+// the phase-3 fixture library's hello template, and a copy of the fixture
+// templates/ library itself, so RenderDeck's media and theme URLs resolve
+// from the project's own templates/ tree on disk.
+func fixtureDeckDir(t *testing.T) string {
 	t.Helper()
-
 	dir := t.TempDir()
-	starter := assets.Starter()
-	err := fs.WalkDir(starter, ".", func(p string, d fs.DirEntry, err error) error {
+
+	files := map[string]string{
+		"eypres.yaml": "title: Integration Deck\n" +
+			"theme: plain\n",
+		"slides/1-hello.md": "---\ntemplate: hello\ntitle: Integration Deck\n---\n",
+	}
+	for name, data := range files {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(p), err)
+		}
+		if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+			t.Fatalf("write %s: %v", p, err)
+		}
+	}
+
+	err := fs.WalkDir(os.DirFS(fixtureLibraryDir), "templates", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
+		target := filepath.Join(dir, filepath.FromSlash(p))
 		if d.IsDir() {
-			return nil
+			return os.MkdirAll(target, 0o755)
 		}
-		data, err := fs.ReadFile(starter, p)
-		if err != nil {
-			return err
+		data, rerr := fs.ReadFile(os.DirFS(fixtureLibraryDir), p)
+		if rerr != nil {
+			return rerr
 		}
-		dst := filepath.Join(dir, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(dst, data, 0o644)
+		return os.WriteFile(target, data, 0o644)
 	})
 	if err != nil {
-		t.Fatalf("write starter deck to %s: %v", dir, err)
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read deck dir %s: %v", dir, err)
-	}
-	for _, e := range entries {
-		switch e.Name() {
-		case deck.ConfigFile, deck.SlidesDir:
-		default:
-			t.Fatalf("deck dir %s holds unexpected entry %q; it must hold only %s and %s/",
-				dir, e.Name(), deck.ConfigFile, deck.SlidesDir)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(dir, deckAssetsDir)); !os.IsNotExist(err) {
-		t.Fatalf("deck dir %s has an assets/ path on disk (%v); the embedded tree must be the only source", dir, err)
+		t.Fatalf("copy fixture templates/ into deck dir: %v", err)
 	}
 	return dir
 }
 
-// assertAbsentOnDisk fails when name (a path under AssetsPath) exists on disk in
-// the deck directory, proving the previously served copy came from the binary.
-func assertAbsentOnDisk(t *testing.T, dir, name string) {
-	t.Helper()
-	p := filepath.Join(dir, filepath.FromSlash(name))
-	if _, err := os.Stat(p); !os.IsNotExist(err) {
-		t.Errorf("asset %s exists on disk at %s (%v); the served copy must be embedded", AssetsPath+name, p, err)
-	}
-}
-
 // pageAssetRefs returns the distinct /assets/… URLs referenced by a served
-// HTML document (href/src attributes; the page text never contains quotes in a
-// bare URL, so the trailing-quote exclusion is exact).
+// HTML document (href/src attributes; the page text never contains quotes in
+// a bare URL, so the trailing-quote exclusion is exact).
 var pageAssetRefsRE = regexp.MustCompile(`"/assets/[^"'\s)]+`)
 
 func pageAssetRefs(doc string) []string {

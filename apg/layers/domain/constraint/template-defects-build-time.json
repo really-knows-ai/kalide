@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "constraint",
   "name": "template-defects-build-time",
-  "body": "Template-definition defects (cycles, slide template in a section, required-body template as a field type, reserved names) must be caught at template build/load time and must never surface as deck-author errors.",
+  "body": "Template-definition defects (cycles, slide template in a section, required-body template as a field type, reserved names, undefined references, invalid examples) must be caught when the project's templates are loaded — before any deck validation — and reported as templates errors (addressed to the template author, path-qualified to the template file), never as slide errors.",
   "properties": {
     "attaches-to": "domain.entity.template"
   },

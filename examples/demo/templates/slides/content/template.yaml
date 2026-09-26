@@ -1,0 +1,14 @@
+description: a content slide with an optional body and a columns section
+fields:
+  - name: heading
+    type: text
+    required: true
+    max_length: 80
+sections:
+  - name: columns
+    accepted:
+      - column
+    max: 4
+body:
+  mode: optional
+  max_paragraphs: 3

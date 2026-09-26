@@ -1,0 +1,10 @@
+{{/*
+  hello — slide-usage template layout.
+
+  Context: map[string]any keyed by field name. `title` is required; `body`
+  is the slide's Markdown body, rendered as HTML, when the author gave one.
+*/}}
+<section class="hello-slide">
+  <h1 class="hello-title">{{ .title }}</h1>
+  {{ with .body }}<div class="hello-body">{{ . }}</div>{{ end }}
+</section>

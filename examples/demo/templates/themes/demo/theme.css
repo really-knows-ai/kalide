@@ -1,0 +1,73 @@
+/* demo — an unbranded theme: neutral palette, system fonts, no logo or
+   brand colours. */
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #1f2933;
+  background: #f7fafc;
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  color: #102a43;
+}
+
+.demo-title {
+  font-size: 2.4em;
+}
+
+.demo-subtitle {
+  color: #486581;
+  font-size: 1.1em;
+}
+
+.demo-badge {
+  width: 48px;
+  height: 48px;
+  margin-top: 1em;
+}
+
+.demo-heading {
+  font-size: 1.8em;
+  border-bottom: 2px solid #d9e2ec;
+  padding-bottom: 0.2em;
+}
+
+.demo-columns {
+  display: flex;
+  gap: 1.5em;
+  margin-top: 1em;
+}
+
+.demo-column {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 6px;
+  padding: 0.8em;
+}
+
+.demo-column__title {
+  margin: 0 0 0.4em;
+  font-size: 1.1em;
+}
+
+.demo-person {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.5em;
+}
+
+.demo-person__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.demo-person__role {
+  color: #627d98;
+  font-size: 0.85em;
+}

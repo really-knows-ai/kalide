@@ -16,6 +16,11 @@
       "kind": "contains",
       "target": "solution.component.release-workflow",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.demo-fixture",
+      "properties": {}
     }
   ],
   "in": [

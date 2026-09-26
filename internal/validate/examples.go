@@ -10,29 +10,37 @@ import (
 
 	"github.com/really-knows-ai/ey-present/internal/deck"
 	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 )
 
-// This file implements ValidateBuiltinExamples, the build-time proof that every
-// compiled-in template's example slide is valid end to end
-// (whole-deck-validation, template-build-checks).
+// This file implements ValidateBuiltinExamples, the proof that every
+// registered template's example slide is valid end to end
+// (whole-deck-validation, template-build-checks). Templates now come from a
+// project's loaded template.Library (template.NewRegistryFromLibrary), not
+// from embedded compiled-in builtins; ValidateBuiltinExamples validates
+// whichever registry its caller passes, so it equally proves a project's
+// templates/slides and templates/sections example.md files, wherever the
+// registry that reg's templates were registered from came from.
 //
 // Phase 4 checks each example as STRUCTURED data only (frontmatter/field values
 // and declared section instances, via CheckValues and the section repeat
 // limits) and never parses Markdown. This unit closes the other half: it takes
-// the example slide SOURCE that Register loaded from internal/assets and runs
-// it through the same pipeline a deck author's slide would take — slide.Parse,
-// mdcheck on every body and inline text field, template.CheckValues and
-// CheckBody, and the inter-slide link pass — so the two representations of the
-// example cannot drift.
+// the example slide SOURCE that Register loaded (from a project's
+// templates/<kind>/<name>/example.md) and runs it through the same pipeline a
+// deck author's slide would take — slide.Parse, mdcheck on every body and
+// inline text field, template.CheckValues and CheckBody, and the inter-slide
+// link pass — so the two representations of the example cannot drift.
 //
 // The pipeline is the real deck validator (Validate), not a re-implementation:
 // each example is placed in a synthetic single-slide deck and handed to
-// Validate unchanged. A failure here is a compiled-in programming error that
-// must fail the build or the test suite; it is never shown to a deck author,
-// who can neither see nor fix a built-in template.
+// Validate unchanged. A failure here is a template-authoring error in the
+// project's templates/ library that must fail the load or the build/test
+// suite; it is never shown to a deck author, who can neither see nor fix a
+// template definition.
 //
-// The function is called at startup/registry-build and from tests. Any invalid
-// example fails that call; an author-facing deck never reaches it.
+// The function is called at library-load time (checkLibraryExamples) and from
+// tests. Any invalid example fails that call; an author-facing deck never
+// reaches it.
 
 // ExampleError is one registered template whose example slide did not survive
 // the full validation pipeline: the template's name and the first
@@ -85,7 +93,7 @@ func ValidateBuiltinExamples(reg *template.Registry) []ExampleError {
 			Template: "",
 			Err: New("", 0, nil,
 				"no template registry given",
-				"pass template.Builtins()' registry"),
+				"pass the loaded library's registry (template.NewRegistryFromLibrary)"),
 		}}
 	}
 
@@ -125,7 +133,21 @@ func validateExample(reg *template.Registry, t *template.Template) (ValidationEr
 		slideSrc = wrapped
 	}
 
-	return Validate(exampleFS{slide: []byte(slideSrc)}, vreg, nil)
+	return Validate(exampleFS{slide: []byte(slideSrc)}, vreg, exampleThemeRegistry())
+}
+
+// exampleThemeRegistry returns a minimal theme registry holding just a
+// "default"-named theme (no stylesheet asset backing — the synthetic
+// single-slide validation never renders CSS), so the synthetic deck's config
+// (which never sets a `theme` key) resolves. It is built fresh on each call
+// rather than shared, in keeping with this file's rule that nothing here
+// touches shared mutable state.
+func exampleThemeRegistry() *theme.Registry {
+	reg := theme.NewRegistry()
+	// A programming error only: the name is a fixed constant, so
+	// registration into a fresh, empty registry cannot fail.
+	_ = reg.Register(theme.Theme{Name: theme.DefaultName})
+	return reg
 }
 
 // wrapSectionExample turns a section-usage template's example fragment into a

@@ -2,11 +2,49 @@ package cli
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// fixtureLibraryDir is the phase-3 fixture library's project root, relative
+// to this package, holding templates/slides/hello, templates/sections/item,
+// templates/themes/plain and templates/media/logo.svg.
+const fixtureLibraryDir = "../template/testdata/library"
+
+// chdirFixtureLibrary copies the phase-3 fixture templates/ library into a
+// fresh temp directory and chdirs the test into it (t.Chdir, restored when
+// the test ends), so `eypres templates` has a project library to read.
+func chdirFixtureLibrary(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	src := filepath.Join(fixtureLibraryDir, "templates")
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, rerr := filepath.Rel(src, p)
+		if rerr != nil {
+			return rerr
+		}
+		target := filepath.Join(dir, "templates", rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return rerr
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		t.Fatalf("copy fixture templates/ into %s: %v", dir, err)
+	}
+	t.Chdir(dir)
+	return dir
+}
 
 // runCLI invokes Run with a program name prepended, exactly as cmd/eypres does
 // with os.Args, and returns the status code plus captured output.
@@ -76,8 +114,10 @@ func TestRunRoutesCommands(t *testing.T) {
 		}
 		for _, want := range []string{
 			"eypres.yaml",
-			"slides/1-title.md",
-			"slides/2-content.md",
+			"slides/1-hello.md",
+			"templates/library.yaml",
+			"templates/slides/hello/template.yaml",
+			"templates/themes/default/theme.css",
 			"assets/",
 		} {
 			if !strings.Contains(stdout, want) {
@@ -88,8 +128,10 @@ func TestRunRoutesCommands(t *testing.T) {
 		// The advertised paths must actually exist in the temp dir.
 		for _, created := range []string{
 			"eypres.yaml",
-			"slides/1-title.md",
-			"slides/2-content.md",
+			"slides/1-hello.md",
+			"templates/library.yaml",
+			"templates/slides/hello/template.yaml",
+			"templates/themes/default/theme.css",
 			"assets",
 		} {
 			if _, err := os.Stat(filepath.Join(dir, created)); err != nil {
@@ -106,7 +148,7 @@ func TestRunRoutesCommands(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(init) second run stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"eypres.yaml", "slides/", "assets/", "never overwrites"} {
+		for _, want := range []string{"eypres.yaml", "slides/", "templates/", "assets/", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) second run stderr = %q, want refusal mentioning %q", stderr, want)
 			}
@@ -114,11 +156,12 @@ func TestRunRoutesCommands(t *testing.T) {
 	})
 
 	t.Run("start validates before serving", func(t *testing.T) {
-		// An empty temp dir has no eypres.yaml, so runStart's whole-deck
-		// validation fails deterministically before any port is bound. This
-		// pins the route (not the stub) and the phase-5 single-error format;
-		// the full start behaviour is phase-7 task 9.
-		t.Chdir(t.TempDir())
+		// A project with the fixture templates/ library but no eypres.yaml:
+		// the library loads, then whole-deck validation fails
+		// deterministically before any port is bound. This pins the route
+		// (not the stub) and the phase-5 single-error format; the full start
+		// behaviour is phase-7 task 9.
+		chdirFixtureLibrary(t)
 
 		code, stdout, stderr := runCLI("start")
 		if code == 0 {
@@ -135,13 +178,34 @@ func TestRunRoutesCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("start fails cleanly without templates/", func(t *testing.T) {
+		// No templates/ directory at all (no-built-in-fallback): the project
+		// library fails to load before any deck validation is attempted.
+		t.Chdir(t.TempDir())
+
+		code, stdout, stderr := runCLI("start")
+		if code == 0 {
+			t.Fatal("Run(start) exit = 0, want non-zero with no templates/ directory")
+		}
+		if !strings.Contains(stderr, "templates") {
+			t.Fatalf("Run(start) stderr = %q, want it to name the missing templates/ directory", stderr)
+		}
+		if stdout != "" {
+			t.Fatalf("Run(start) stdout = %q, want empty", stdout)
+		}
+	})
+
 	t.Run("templates list", func(t *testing.T) {
+		chdirFixtureLibrary(t)
 		code, stdout, stderr := runCLI("templates")
 		if code != 0 {
 			t.Fatalf("Run(templates) exit = %d, want 0 (stderr = %q)", code, stderr)
 		}
 		if stdout == "" {
-			t.Fatal("Run(templates) stdout = \"\", want the built-in template list")
+			t.Fatal("Run(templates) stdout = \"\", want the project template list")
+		}
+		if !strings.Contains(stdout, "hello") {
+			t.Errorf("Run(templates) stdout = %q, want the fixture %q template", stdout, "hello")
 		}
 		if stderr != "" {
 			t.Fatalf("Run(templates) stderr = %q, want empty", stderr)
@@ -149,19 +213,21 @@ func TestRunRoutesCommands(t *testing.T) {
 	})
 
 	t.Run("templates show", func(t *testing.T) {
-		code, stdout, stderr := runCLI("templates", "title")
+		chdirFixtureLibrary(t)
+		code, stdout, stderr := runCLI("templates", "hello")
 		if code != 0 {
-			t.Fatalf("Run(templates title) exit = %d, want 0 (stderr = %q)", code, stderr)
+			t.Fatalf("Run(templates hello) exit = %d, want 0 (stderr = %q)", code, stderr)
 		}
 		if stdout == "" {
-			t.Fatal("Run(templates title) stdout = \"\", want the title template documented")
+			t.Fatal("Run(templates hello) stdout = \"\", want the hello template documented")
 		}
 		if stderr != "" {
-			t.Fatalf("Run(templates title) stderr = %q, want empty", stderr)
+			t.Fatalf("Run(templates hello) stderr = %q, want empty", stderr)
 		}
 	})
 
 	t.Run("templates unknown", func(t *testing.T) {
+		chdirFixtureLibrary(t)
 		code, stdout, stderr := runCLI("templates", "no-such-template")
 		if code == 0 {
 			t.Fatal("Run(templates no-such-template) exit = 0, want non-zero")

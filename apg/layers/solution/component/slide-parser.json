@@ -35,6 +35,11 @@
       "kind": "details",
       "source": "requirements.note.fix-speaker-notes-placement",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }

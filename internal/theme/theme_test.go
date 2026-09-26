@@ -14,21 +14,38 @@ func mapFS(name, css string) fstest.MapFS {
 	return fstest.MapFS{name: &fstest.MapFile{Data: []byte(css)}}
 }
 
+// loadDirRegistry is a small helper building a *Registry from an in-memory
+// templates/themes directory via LoadDir, the only way a project registry is
+// built now that there is no compiled-in theme.Builtin()/Default().
+func loadDirRegistry(t *testing.T, files map[string]string) *Registry {
+	t.Helper()
+	fsys := fstest.MapFS{}
+	for name, data := range files {
+		fsys[name] = &fstest.MapFile{Data: []byte(data)}
+	}
+	reg, err := LoadDir(fsys, "templates/themes")
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	return reg
+}
+
 func TestRegistry(t *testing.T) {
-	t.Run("default resolves", func(t *testing.T) {
-		got, err := Builtin().Lookup(DefaultName)
+	t.Run("default resolves via LoadDir", func(t *testing.T) {
+		reg := loadDirRegistry(t, map[string]string{
+			"templates/themes/default/theme.css": "body{}",
+		})
+		got, err := reg.Lookup(DefaultName)
 		if err != nil {
 			t.Fatalf("Lookup(%q): %v", DefaultName, err)
 		}
 		if got.Name != DefaultName {
 			t.Fatalf("Lookup(%q).Name = %q, want %q", DefaultName, got.Name, DefaultName)
 		}
-		if got.Stylesheet != defaultStylesheet {
-			t.Fatalf("built-in theme Stylesheet = %q, want %q", got.Stylesheet, defaultStylesheet)
+		if got.Stylesheet != Stylesheet {
+			t.Fatalf("theme Stylesheet = %q, want %q", got.Stylesheet, Stylesheet)
 		}
 
-		// The built-in default is the phase-1 embedded stylesheet, so its CSS
-		// must be readable and non-empty.
 		css, err := got.CSS()
 		if err != nil {
 			t.Fatalf("default theme CSS(): %v", err)
@@ -36,33 +53,21 @@ func TestRegistry(t *testing.T) {
 		if len(css) == 0 {
 			t.Fatalf("default theme CSS is empty")
 		}
-
-		if def := Default(); def.Name != DefaultName || def.Stylesheet != defaultStylesheet {
-			t.Fatalf("Default() = %+v, want Name %q Stylesheet %q", def, DefaultName, defaultStylesheet)
-		}
 	})
 
-	t.Run("built-in registry lists only default", func(t *testing.T) {
-		if got, want := Names(), []string{DefaultName}; !reflect.DeepEqual(got, want) {
+	t.Run("registry from LoadDir lists exactly the loaded themes", func(t *testing.T) {
+		reg := loadDirRegistry(t, map[string]string{
+			"templates/themes/default/theme.css": "body{}",
+		})
+		if got, want := reg.Names(), []string{DefaultName}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("Names() = %v, want %v", got, want)
 		}
 	})
 
-	t.Run("package-level Lookup resolves default", func(t *testing.T) {
-		got, err := Lookup(DefaultName)
-		if err != nil {
-			t.Fatalf("Lookup(%q): %v", DefaultName, err)
-		}
-		if got.Name != DefaultName {
-			t.Fatalf("Lookup(%q).Name = %q", DefaultName, got.Name)
-		}
-	})
-
 	t.Run("test-registered theme resolves without template changes", func(t *testing.T) {
-		reg := NewRegistry()
-		if err := reg.Register(Default()); err != nil {
-			t.Fatalf("Register(default): %v", err)
-		}
+		reg := loadDirRegistry(t, map[string]string{
+			"templates/themes/default/theme.css": "body{}",
+		})
 		// Registration alone is the extension point: no template or renderer
 		// change is involved.
 		custom := Theme{
@@ -93,9 +98,10 @@ func TestRegistry(t *testing.T) {
 			t.Fatalf("Names() = %v, want %v", reg.Names(), want)
 		}
 
-		// The isolated registry must not leak into the built-in one.
-		if _, err := Builtin().Lookup("solarized"); err == nil {
-			t.Fatalf("Builtin().Lookup(solarized) succeeded; isolated registry leaked")
+		// Another registry built independently must not see it.
+		other := NewRegistry()
+		if _, err := other.Lookup("solarized"); err == nil {
+			t.Fatalf("independent registry resolved solarized; registries must be isolated")
 		}
 	})
 
@@ -114,7 +120,7 @@ func TestRegistry(t *testing.T) {
 
 func TestLookupUnknownTheme(t *testing.T) {
 	reg := NewRegistry()
-	if err := reg.Register(Default()); err != nil {
+	if err := reg.Register(Theme{Name: DefaultName}); err != nil {
 		t.Fatalf("Register(default): %v", err)
 	}
 
@@ -195,7 +201,12 @@ func TestLookupUnknownTheme(t *testing.T) {
 }
 
 func TestUnknownThemeErrorWithPosition(t *testing.T) {
-	_, err := Builtin().Lookup("defalt")
+	reg := NewRegistry()
+	if err := reg.Register(Theme{Name: DefaultName}); err != nil {
+		t.Fatalf("Register(default): %v", err)
+	}
+
+	_, err := reg.Lookup("defalt")
 	var unknown *UnknownThemeError
 	if !errors.As(err, &unknown) {
 		t.Fatalf("error type = %T, want *UnknownThemeError", err)
@@ -244,12 +255,6 @@ func TestRegister(t *testing.T) {
 			t.Fatalf("error = %q, want mention of already registered", err)
 		}
 	})
-
-	t.Run("default is already registered in the builtin registry", func(t *testing.T) {
-		if err := Register(Default()); err == nil {
-			t.Fatalf("Register(default) succeeded, want duplicate error")
-		}
-	})
 }
 
 func TestThemeCSS(t *testing.T) {
@@ -283,4 +288,37 @@ func TestThemeCSS(t *testing.T) {
 			t.Fatalf("error = %q, want theme and stylesheet named", err)
 		}
 	})
+}
+
+// TestRegistryFromLoadDir proves a project's theme Registry comes from
+// LoadDir over its templates/themes directory: a project registry holding
+// only project-defined themes resolves them and does not carry any
+// compiled-in theme unless the project itself defines one with that name.
+func TestRegistryFromLoadDir(t *testing.T) {
+	fsys := fstest.MapFS{
+		"templates/themes/plain/theme.css": &fstest.MapFile{Data: []byte("body{margin:0}")},
+	}
+	reg, err := LoadDir(fsys, "templates/themes")
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+
+	if want := []string{"plain"}; !reflect.DeepEqual(reg.Names(), want) {
+		t.Fatalf("Names() = %v, want %v", reg.Names(), want)
+	}
+
+	// The project registry only has what its templates/themes directory
+	// defines: no "default" unless the project defines one.
+	if _, err := reg.Lookup(DefaultName); err == nil {
+		t.Fatalf("project registry resolved %q, which it never defined", DefaultName)
+	}
+
+	plain, err := reg.Lookup("plain")
+	if err != nil {
+		t.Fatalf("Lookup(plain): %v", err)
+	}
+	css, err := plain.CSS()
+	if err != nil || string(css) != "body{margin:0}" {
+		t.Fatalf("plain.CSS() = (%q, %v), want (\"body{margin:0}\", nil)", css, err)
+	}
 }

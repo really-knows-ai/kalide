@@ -16,10 +16,12 @@ import (
 const usage = `eypres — author and present Markdown slide decks
 
 Usage:
-  eypres init                Create a starter deck in the current directory
+  eypres init                Create a starter deck and templates/ library
+                             in the current directory
   eypres start [--port N] [--no-open]
                              Validate and serve the deck, then open a browser
-  eypres templates [name]    List built-in templates, or show one by name
+  eypres templates [name]    List the project's templates/ library, or show
+                             one template by name
   eypres help                Show this help
 `
 
@@ -28,12 +30,13 @@ Usage:
 // non-zero on error.
 //
 //   - no arguments and `help` print usage and return 0;
-//   - `templates [name]` routes to runTemplates, which lists the built-in
-//     templates or documents one by name;
+//   - `templates [name]` routes to runTemplates, which lists the project's
+//     templates/ library or documents one template by name;
 //   - `start [--port N] [--no-open]` routes to runStart, which validates the
 //     whole deck and then serves it with live reload until a shutdown signal;
-//   - `init` routes to runInit, which scaffolds a starter deck into the current
-//     directory, or refuses non-zero when one of the deck paths already exists;
+//   - `init` routes to runInit, which seeds a minimal templates/ library and a
+//     starter deck into the current directory, or refuses non-zero when one of
+//     the deck paths already exists;
 //   - an unknown command or malformed arguments print usage and return 2.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {

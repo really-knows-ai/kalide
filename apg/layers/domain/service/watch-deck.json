@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "watch-deck",
-  "body": "Watch deck: watch deck files, debounce, publish deck-changed; on change reload→validate→render and publish deck-rebuilt.",
+  "body": "Watch deck: watch deck files (slides/, assets/, eypres.yaml) and everything under the project's templates/ dir (library.yaml, slides/, sections/, themes/, media/), debounce, publish deck-changed; on change reload templates→validate→render and publish deck-rebuilt.",
   "properties": {},
   "out": [
     {
@@ -40,6 +40,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.live-reload",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-live-reload",
       "properties": {}
     }
   ]

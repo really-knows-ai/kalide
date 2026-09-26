@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "parked-template-catalogue",
-  "body": "PARKED: the concrete initial template catalogue (which slide/section templates ship first — e.g. title, agenda, columns, team/person, image+text) is not yet decided. To be specified before/with the templates phase; each will need name, description, usage, schema, layout, example.",
+  "body": "RESOLVED (removed) [with user]: the concrete EY template catalogue is no longer part of eypres in any form. All current EY templates (title/content/column), the EY theme.css, EY fonts and logos are deleted from the codebase entirely — there is no in-repo EY library and no migration into an example/testdata project. EY (or anyone) authors its own `templates/` library outside this repo. The in-repo template content is limited to the unbranded `hello` init seed (cli-init-minimal-seed) and the unbranded demo project `examples/demo/` (demo-project).",
   "properties": {},
   "out": [
     {
@@ -11,5 +11,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-ey-content-removal",
+      "properties": {}
+    }
+  ]
 }

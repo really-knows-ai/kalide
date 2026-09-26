@@ -1,0 +1,9 @@
+description: a minimal hello slide with a title and a logo image
+fields:
+  - name: title
+    type: text
+    required: true
+  - name: logo
+    type: image
+body:
+  mode: optional

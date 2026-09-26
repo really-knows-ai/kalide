@@ -1,0 +1,23 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "templates-dir-required",
+  "body": "Missing templates dir is an error: `eypres start` and `eypres templates [name]` (and the gallery) fail with a clear message — naming the expected `templates/` path and suggesting `eypres init` for new projects — and a non-zero exit when the project has no `templates/` directory (or it is not a directory). There is no built-in fallback.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    }
+  ]
+}

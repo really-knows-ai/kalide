@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "template-registry",
-  "body": "Template registry: load built-in templates, run build-time checks (cycles, usage, reserved names, examples), look up templates, describe them for CLI/gallery.",
+  "body": "Template registry: hold the project's loaded templates (kind by directory: slides/ or sections/), run the load-time checks (cycles, directory-kind checks, cross-kind name uniqueness, reserved names, references, examples), own the central layout function set (v1: `media`), look up templates, describe them for CLI/gallery.",
   "properties": {},
   "out": [
     {
@@ -45,6 +45,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.template-build-checks",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
       "properties": {}
     }
   ]

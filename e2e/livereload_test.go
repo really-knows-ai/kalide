@@ -12,9 +12,10 @@ package e2e
 //   - a breaking edit swaps the page for the full-page error carrying the
 //     single first formatted validation error, prints the identical error to the
 //     terminal, and a fixing edit recovers the deck;
-//   - /templates serves the gallery of every built-in template;
+//   - /templates serves the gallery of the project's templates/ library;
 //   - `eypres templates` and `eypres templates <name>` print the list and one
-//     template's documentation;
+//     template's documentation, both read from the project's templates/
+//     library;
 //   - a graceful stop exits 0, releases the port and leaves no child behind
 //     (the harness asserts the last two in Stop).
 //
@@ -38,9 +39,12 @@ import (
 	"github.com/really-knows-ai/ey-present/internal/server"
 )
 
-// The fixture deck. It uses only the built-in `title` template, whose body is
-// disallowed and whose `title` field is required: two minimal, always-valid
-// slides, one of which can be edited and broken deterministically.
+// The fixture deck. Since `eypres start` now requires a valid project
+// templates/ library (theme.LoadDir, deck.LoadConfig against it), the test
+// provisions one with `eypres init` (the embedded hello seed) before Start
+// and drives the seed's own `hello` template: a required `title` field and an
+// optional Markdown body, both always-valid, so two minimal slides can be
+// edited and one broken deterministically.
 const (
 	deckConfig = `title: Integration Deck
 author: Ada Lovelace
@@ -50,12 +54,10 @@ navigation: grid
 `
 
 	introSlide = `---
-template: title
+template: hello
 title: Integration Deck
-subtitle: A real on-disk deck
-date: 2026-09-25
-date_format: long
 ---
+A real on-disk deck.
 
 # notes
 Greet the audience.
@@ -63,27 +65,25 @@ Greet the audience.
 `
 )
 
-// agendaSlide renders the second (editable) slide with the given subtitle.
-// Every value is valid: the title template takes data only and requires the
-// title field.
+// agendaSlide renders the second (editable) slide with the given subtitle in
+// its body. Every value is valid: the hello template requires only the title
+// field and takes an optional body.
 func agendaSlide(subtitle string) string {
 	return fmt.Sprintf(`---
-template: title
+template: hello
 title: Agenda
-subtitle: %s
-date: 2026-09-25
-date_format: long
 ---
+%s
 
 `, subtitle)
 }
 
 // brokenAgendaSlide drops the required `title` field, so whole-deck validation
-// reports exactly one error: the required-field violation of the title slide.
+// reports exactly one error: the required-field violation of the hello slide.
 const brokenAgendaSlide = `---
-template: title
-subtitle: now broken
+template: hello
 ---
+now broken
 
 `
 
@@ -92,6 +92,39 @@ subtitle: now broken
 // error page and the terminal print this identical string.
 const wantBrokenError = `slides/2-agenda.md › title: required: field "title" is required but missing — add a title: value`
 
+// helloTemplateYAML and helloLayoutTmpl are the seed's own
+// templates/slides/hello manifest and layout (internal/scaffold/seed), kept
+// here so a broken/edited templates/ tree can be restored to the exact seed
+// state the rest of the test (gallery, `eypres templates`) depends on.
+const helloTemplateYAML = `description: "Hello slide: a required title and an optional body."
+fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 80
+    description: Slide title.
+body:
+  mode: optional
+`
+
+// helloLayoutTmpl renders the hello layout with a marker paragraph appended,
+// so a templates/ edit produces a distinctive, greppable change in the served
+// page without altering the fields the rest of the test depends on.
+func helloLayoutTmpl(marker string) string {
+	return fmt.Sprintf(`{{/*
+  hello — slide-usage template layout.
+
+  Context: map[string]any keyed by field name. %s is required; %s
+  is the slide's Markdown body, rendered as HTML, when the author gave one.
+*/}}
+<section class="hello-slide">
+  <h1 class="hello-title">{{ .title }}</h1>
+  <p class="hello-marker">%s</p>
+  {{ with .body }}<div class="hello-body">{{ . }}</div>{{ end }}
+</section>
+`, "`title`", "`body`", marker)
+}
+
 // TestStartLiveReload is the end-to-end live-reload test described above.
 func TestStartLiveReload(t *testing.T) {
 	if testing.Short() {
@@ -99,8 +132,15 @@ func TestStartLiveReload(t *testing.T) {
 	}
 
 	h := NewHarness(t)
+
+	// `eypres start` now requires a valid project templates/ library
+	// (theme.LoadDir, deck.LoadConfig resolving `theme` against it): seed one
+	// with the embedded hello seed before writing the fixture deck over it.
+	if _, stderr, code := h.Run("init"); code != 0 {
+		t.Fatalf("eypres init exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
 	h.WriteFile("eypres.yaml", []byte(deckConfig))
-	h.WriteFile("slides/1-intro.md", []byte(introSlide))
+	h.WriteFile("slides/1-hello.md", []byte(introSlide))
 	h.WriteFile("slides/2-agenda.md", []byte(agendaSlide("What we will cover")))
 
 	h.Start()
@@ -158,6 +198,58 @@ func TestStartLiveReload(t *testing.T) {
 	})
 	s.Close()
 
+	// Editing a templates/ slide template also live-reloads: internal/watch
+	// now watches the templates/ tree (task-1/task-8) and the built-in
+	// pipeline reloads the project's templates/ Library fresh on every
+	// reload (task-2/task-3) rather than serving one cached at construction,
+	// so a layout edit is picked up exactly like a slide edit.
+	ts := openSSE(t, h)
+	defer ts.Close()
+	waitLine(t, ts, ": connected", 5*time.Second)
+
+	var layoutMarker string
+	layoutDeadline := time.Now().Add(10 * time.Second)
+	for i := 1; ; i++ {
+		layoutMarker = fmt.Sprintf("layout-edit-%d", i)
+		h.WriteFile("templates/slides/hello/layout.html.tmpl", []byte(helloLayoutTmpl(layoutMarker)))
+		if drainFor(ts, "data: reload", 500*time.Millisecond) {
+			break
+		}
+		if time.Now().After(layoutDeadline) {
+			t.Fatalf("no SSE reload after editing a templates/ layout\nstdout:\n%s\nstderr:\n%s",
+				h.Stdout(), h.Stderr())
+		}
+	}
+	waitFor(t, 5*time.Second, "the edited template layout to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, layoutMarker)
+	})
+	ts.Close()
+
+	// Breaking templates/ (invalid YAML in a template.yaml) shows the error
+	// page — a broken library publishes the error page, never a stale or
+	// broken deck (never-serve-broken-deck).
+	h.WriteFile("templates/slides/hello/template.yaml", []byte("description: [this is not valid yaml\n"))
+	waitFor(t, 10*time.Second, "the templates/ error page to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, "Deck error") && strings.Contains(b, "error-page__message")
+	})
+	brokenTemplatesBody, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET / (broken templates/ error page): %v", err)
+	}
+	if strings.Contains(brokenTemplatesBody, layoutMarker) {
+		t.Errorf("error page still serves the stale deck page after breaking templates/:\n%s", brokenTemplatesBody)
+	}
+
+	// Restoring templates/ (fixing the template.yaml back to the seed's own
+	// manifest) recovers the deck.
+	h.WriteFile("templates/slides/hello/template.yaml", []byte(helloTemplateYAML))
+	waitFor(t, 10*time.Second, "the deck to recover after fixing templates/", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, "Integration Deck") && !strings.Contains(b, "Deck error")
+	})
+
 	// A breaking edit: GET / becomes the full-page error carrying the single
 	// first formatted error, and the same error is printed to the terminal.
 	h.WriteFile("slides/2-agenda.md", []byte(brokenAgendaSlide))
@@ -174,7 +266,7 @@ func TestStartLiveReload(t *testing.T) {
 	if !strings.Contains(unescaped, wantBrokenError) {
 		t.Errorf("error page does not carry the first formatted error %q:\n%s", wantBrokenError, unescaped)
 	}
-	if !strings.Contains(errBody, "Deck error") || !strings.Contains(errBody, "ey-error__message") {
+	if !strings.Contains(errBody, "Deck error") || !strings.Contains(errBody, "error-page__message") {
 		t.Errorf("served page is not the full-page error shell:\n%s", errBody)
 	}
 	waitFor(t, 5*time.Second, "the error to reach the terminal", func() bool {
@@ -189,19 +281,19 @@ func TestStartLiveReload(t *testing.T) {
 		return err == nil && strings.Contains(b, "Recovered") && strings.Contains(b, "Agenda")
 	})
 
-	// GET /templates serves the gallery of every built-in template.
+	// GET /templates serves the gallery of the project's templates/ library —
+	// just the hello seed's one template now that the gallery documents the
+	// project library instead of the compiled-in built-ins.
 	gallery, err := h.GetString("/templates")
 	if err != nil {
 		t.Fatalf("GET /templates: %v", err)
 	}
-	for _, name := range []string{"title", "content", "column"} {
-		if !strings.Contains(gallery, `class="ey-gallery__name">`+name) {
-			t.Errorf("gallery does not list built-in template %q", name)
-		}
+	if !strings.Contains(gallery, `class="gallery-page__name">hello`) {
+		t.Errorf("gallery does not list the project template %q:\n%s", "hello", gallery)
 	}
 
-	// `eypres templates` lists every built-in; `eypres templates <name>` shows
-	// one template's documentation sections.
+	// `eypres templates` lists the project's templates/ library; `eypres
+	// templates <name>` shows one template's documentation sections.
 	stdout, stderr, code := h.Run("templates")
 	if code != 0 {
 		t.Fatalf("eypres templates exit = %d, want 0 (stderr = %q)", code, stderr)
@@ -209,28 +301,26 @@ func TestStartLiveReload(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("eypres templates stderr = %q, want empty", stderr)
 	}
-	if !strings.Contains(stdout, "Built-in templates:") {
+	if !strings.Contains(stdout, "Templates:") {
 		t.Errorf("eypres templates output is missing the list header:\n%s", stdout)
 	}
-	for _, name := range []string{"title", "content", "column"} {
-		if !strings.Contains(stdout, name) {
-			t.Errorf("eypres templates output does not name %q:\n%s", name, stdout)
-		}
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("eypres templates output does not name %q:\n%s", "hello", stdout)
 	}
 
-	stdout, stderr, code = h.Run("templates", "content")
+	stdout, stderr, code = h.Run("templates", "hello")
 	if code != 0 {
-		t.Fatalf("eypres templates content exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("eypres templates hello exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
 	if stderr != "" {
-		t.Errorf("eypres templates content stderr = %q, want empty", stderr)
+		t.Errorf("eypres templates hello stderr = %q, want empty", stderr)
 	}
-	if !strings.Contains(stdout, "content (slide)") {
-		t.Errorf("eypres templates content output is missing the identity line:\n%s", stdout)
+	if !strings.Contains(stdout, "hello (slide)") {
+		t.Errorf("eypres templates hello output is missing the identity line:\n%s", stdout)
 	}
 	for _, section := range []string{"Fields:", "Sections:", "Body:", "Example:"} {
 		if !strings.Contains(stdout, section) {
-			t.Errorf("eypres templates content output is missing section %q:\n%s", section, stdout)
+			t.Errorf("eypres templates hello output is missing section %q:\n%s", section, stdout)
 		}
 	}
 

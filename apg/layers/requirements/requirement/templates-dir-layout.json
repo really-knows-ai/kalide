@@ -1,0 +1,48 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "templates-dir-layout",
+  "body": "`templates/` layout (fixed):\n```\ntemplates/\n  library.yaml                  # name, description, format: 1\n  slides/<name>/   template.yaml, layout.html.tmpl, example.md\n  sections/<name>/ template.yaml, layout.html.tmpl, example.md\n  themes/<name>/   theme.css (+ fonts/, logos)\n  media/…          any type (images, video, fonts)\n```\n- `library.yaml`: `name` identifier `[a-z0-9][a-z0-9-]*`, optional `description`, `format: 1` (layout/manifest format version, required).\n- `slides/<name>/` holds one slide template; `sections/<name>/` holds one section template. Each holds `template.yaml` (schema manifest), `layout.html.tmpl` (Go html/template layout, see template-language) and `example.md` (example slide source).\n- A template's kind (slide|section) is determined solely by the directory it lives in; `template.yaml` has no `usage:` key (its presence = templates error).\n- A template's name is its directory name and must be unique across `slides/` and `sections/` together (section template names are used as field types, see field-types); a duplicate name = templates error naming both paths.\n- `themes/<name>/` one directory per theme holding `theme.css` (token stylesheet) and optional theme-owned files (fonts, logos); a theme's name is its directory name. Theme-owned files are referenced only from that `theme.css` via relative `url()` and served from the theme directory; they are not reachable via `media`.\n- `media/` optional shared media of any type (fonts, logos, images, video, …); the sole base for the layout `media \"path\"` helper (path relative to `templates/media/`, no `..`, no absolute paths).\n- Unknown top-level entries in `templates/` are an error (keeps the layout extensible by the format version).\nAC: a directory following this layout loads; each deviation (unknown entry, `usage:` key, cross-kind duplicate name, missing file) yields a templates error naming the offending path.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.library-manifest",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.templates-dir-validation",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.cli-init-minimal-seed",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.demo-project",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
+      "properties": {}
+    }
+  ]
+}

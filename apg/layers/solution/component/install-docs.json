@@ -4,7 +4,13 @@
   "name": "install-docs",
   "body": "Install docs: plain-language install guide (repo access, token creation and setup per OS, add tap/bucket, install, upgrade).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "README.md",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -14,6 +20,11 @@
     {
       "kind": "realised-by",
       "source": "domain.service.install-eypres",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     }
   ]

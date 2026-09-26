@@ -1,0 +1,31 @@
+{
+  "layer": "domain",
+  "type": "service",
+  "name": "load-template-library",
+  "body": "Load template library: locate the project's `templates/`, validate it fail-fast (templates-dir-validation), and build the template and theme registries from its files; the first failure is a templates error.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-dir-required",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-dir-validation",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    }
+  ]
+}

@@ -58,13 +58,16 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 // formatter omits `:line` then (see ValidationError.Line). Structural,
 // filename, body and Markdown errors do carry their line.
 //
-// reg must be a populated template registry — the caller passes
-// template.Builtins()' registry. themeReg may be nil, in which case the
-// compiled-in theme registry is used. The second result reports whether an
-// error was found: when it is false the deck is valid and the returned
-// ValidationError is the zero value, so a caller reports the first error like:
+// reg must be a populated template registry — the caller passes the registry
+// built from the project's loaded template.Library
+// (template.NewRegistryFromLibrary). themeReg must be the project's theme
+// registry — typically the one theme.LoadDir built from the project's
+// templates/themes directory; it is required, never defaulted to any
+// compiled-in registry. The second result reports whether an error was found:
+// when it is false the deck is valid and the returned ValidationError is the
+// zero value, so a caller reports the first error like:
 //
-//	if verr, invalid := validate.Validate(fsys, reg, nil); invalid {
+//	if verr, invalid := validate.Validate(fsys, reg, themeReg); invalid {
 //		fmt.Fprintln(os.Stderr, validate.Format(verr))
 //	}
 //
@@ -78,24 +81,21 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 		return New(deck.ConfigFile, 0, nil, "no template registry given", "pass a populated template registry"), true
 	}
 	if themeReg == nil {
-		themeReg = theme.Builtin()
+		return New(deck.ConfigFile, 0, nil, "no theme registry given", "pass the project's theme registry"), true
 	}
 
 	// Step 1: eypres.yaml, including the deck-wide theme, through internal/deck
 	// and internal/theme.
-	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile)
+	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
 	if err != nil {
 		return adaptDeckError(err), true
 	}
-	// The theme is resolved in the registry the caller supplied, falling back
-	// to the compiled-in one: deck.LoadConfig has already resolved it against
-	// the built-ins, so a valid compiled-in theme can never be turned into an
-	// error by a caller's narrower registry, while a caller registry is still
-	// the first place it is looked up.
+	// deck.LoadConfig has already resolved cfg.Theme against themeReg, so this
+	// is a defensive re-check rather than the primary enforcement point.
 	if !themeResolves(themeReg, cfg.Theme) {
 		return New(deck.ConfigFile, 0, nil,
 			fmt.Sprintf("unknown theme %q", cfg.Theme),
-			"use one of the built-in themes"), true
+			"use one of the registered themes"), true
 	}
 
 	// Step 2: slide filenames, numbering, letters and label uniqueness.
@@ -266,18 +266,15 @@ func checkBodyRule(file string, rule template.BodyRule, body string, startLine i
 	return adaptValueError(file, ve), true
 }
 
-// themeResolves reports whether name resolves in the caller's theme registry
-// or, failing that, in the compiled-in one. deck.LoadConfig has already
-// resolved the name against the built-ins by the time this is called, so the
-// fallback only keeps a narrower caller registry from rejecting a theme that
-// the config loader itself accepted.
+// themeResolves reports whether name resolves in the caller's theme registry.
+// deck.LoadConfig has already resolved the name against themeReg by the time
+// this is called, so this is a defensive re-check rather than the primary
+// enforcement point.
 func themeResolves(reg *theme.Registry, name string) bool {
-	if reg != nil {
-		if _, err := reg.Lookup(name); err == nil {
-			return true
-		}
+	if reg == nil {
+		return false
 	}
-	_, err := theme.Builtin().Lookup(name)
+	_, err := reg.Lookup(name)
 	return err == nil
 }
 

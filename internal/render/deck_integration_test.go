@@ -12,33 +12,49 @@ import (
 	"github.com/really-knows-ai/ey-present/internal/deck"
 	"github.com/really-knows-ai/ey-present/internal/slide"
 	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
 
 // TestRenderDeckPipeline is the whole-deck integration test: a real deck
-// directory on disk is loaded by internal/deck (LoadConfig, LoadSlides), checked
-// by internal/validate.Validate against template.Builtins(), and rendered by
-// RenderDeck into the complete offline page. It reads the real filesystem, so it
-// is skipped under -short.
+// directory on disk (with its own copy of the phase-3 fixture templates/
+// library) is loaded by internal/deck (LoadConfig, LoadSlides), a project
+// theme registry is built by theme.LoadDir over templates/themes, checked by
+// internal/validate.Validate against the library-built registry, and
+// rendered by RenderDeck into the complete offline page. It reads the real
+// filesystem, so it is skipped under -short.
 //
-// It asserts the full page HTML the phase-6 pipeline produces: the .reveal >
-// .slides shell, the title slide's title/notes, the vertical slide nested as a
-// stack inside its numbered slide, anchor ids taken from the slide labels,
-// the navigationMode from eypres.yaml, the registry-resolved theme link, and
-// that every /assets/ path the page references — and every url(…) the default
-// theme stylesheet references — actually resolves in the embedded
-// internal/assets FS.
+// It asserts the full page HTML the pipeline produces: the .reveal >
+// .slides shell, the anchor ids taken from the slide labels, the
+// navigationMode from eypres.yaml, the registry-resolved theme stylesheet
+// served from templates/themes/<name>, the served templates/media URL a
+// layout's `media` call resolves to, and that every /assets/ path the page
+// references — reveal.js's offline asset set — actually resolves in the
+// embedded internal/assets FS.
 func TestRenderDeckPipeline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test reads a real deck directory from disk")
 	}
 
-	reg := mustBuiltinRegistry(t)
 	dir := writePipelineDeck(t)
 	fsys := os.DirFS(dir)
 
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	themeReg, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
+	funcMap := template.LayoutFuncMap(lib.Media, "/assets/templates/media")
+
 	// Deck loader: eypres.yaml then slides/, in the validator's fail-fast order.
-	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile)
+	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
 	if err != nil {
 		t.Fatalf("deck.LoadConfig: %v", err)
 	}
@@ -53,32 +69,26 @@ func TestRenderDeckPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("deck.LoadSlides: %v", err)
 	}
-	if len(d.Stacks) != 2 {
-		t.Fatalf("deck has %d horizontal stacks, want 2", len(d.Stacks))
+	if len(d.Stacks) != 1 {
+		t.Fatalf("deck has %d horizontal stacks, want 1", len(d.Stacks))
 	}
-	if got := d.Stacks[0].Slide.Label; got != "title" {
-		t.Errorf("first stack label = %q, want %q", got, "title")
-	}
-	if len(d.Stacks[0].Vertical) != 1 || d.Stacks[0].Vertical[0].Label != "agenda" {
-		t.Fatalf("first stack vertical = %+v, want the single agenda slide", d.Stacks[0].Vertical)
+	if got := d.Stacks[0].Slide.Label; got != "hello" {
+		t.Errorf("first stack label = %q, want %q", got, "hello")
 	}
 
-	// Validator: the same real directory, through the built-in registry.
-	if verr, invalid := validate.Validate(fsys, reg, nil); invalid {
+	// Validator: the same real directory, through the library-built registry.
+	if verr, invalid := validate.Validate(fsys, reg, themeReg); invalid {
 		t.Fatalf("validate.Validate rejected the deck: %s", validate.Format(verr))
 	}
 
-	// Parse each slide in model order, keyed by its deck path, exactly as
-	// RenderDeck expects (the convention internal/validate uses).
 	parsed := parsePipelineSlides(t, fsys, d, reg)
 
-	pageHTML, err := RenderDeck(cfg, d, parsed, reg, nil)
+	pageHTML, err := RenderDeck(cfg, d, parsed, reg, themeReg, funcMap)
 	if err != nil {
 		t.Fatalf("RenderDeck: %v", err)
 	}
 	page := string(pageHTML)
 
-	// Document shell and title.
 	if !strings.Contains(page, "<!DOCTYPE html>") {
 		t.Errorf("page does not carry the HTML5 doctype:\n%s", page)
 	}
@@ -94,58 +104,19 @@ func TestRenderDeckPipeline(t *testing.T) {
 	if !strings.Contains(page, "hash: true") {
 		t.Errorf("Reveal.initialize does not enable hash anchors:\n%s", page)
 	}
-
-	// Anchors come from the slide labels.
-	for _, label := range []string{"title", "agenda", "content"} {
-		if !strings.Contains(page, `id="`+label+`"`) {
-			t.Errorf("page is missing anchor id %q:\n%s", label, page)
-		}
+	if !strings.Contains(page, `id="hello"`) {
+		t.Errorf("page is missing anchor id %q:\n%s", "hello", page)
 	}
 
-	// The letter slide nests as a vertical stack inside its numbered slide: the
-	// two horizontals are at depth 1, the agenda at depth 2, and the page has
-	// exactly three <section> elements.
-	titleAt := deckHTMLIndex(t, page, `id="title"`)
-	agendaAt := deckHTMLIndex(t, page, `id="agenda"`)
-	contentAt := deckHTMLIndex(t, page, `id="content"`)
-	if !(titleAt < agendaAt && agendaAt < contentAt) {
-		t.Errorf("slides out of model order: title=%d agenda=%d content=%d", titleAt, agendaAt, contentAt)
-	}
-	wantDepths := map[string]int{"title": 1, "agenda": 2, "content": 1}
-	gotDepths := map[string]int{
-		"title":   sectionDepth(page, titleAt),
-		"agenda":  sectionDepth(page, agendaAt),
-		"content": sectionDepth(page, contentAt),
-	}
-	for label, want := range wantDepths {
-		if got := gotDepths[label]; got != want {
-			t.Errorf("slide %q has section depth %d, want %d", label, got, want)
-		}
-	}
-	if got := strings.Count(page, "<section"); got != 3 {
-		t.Errorf("page has %d <section> elements, want 3 (2 horizontal + 1 vertical)", got)
-	}
-
-	// Rendered slide content from the built-in layouts.
-	if !strings.Contains(page, `<h1 class="ey-title">Integration Deck</h1>`) {
+	// Rendered slide content from the fixture hello layout.
+	if !strings.Contains(page, `<h1>Integration Deck</h1>`) {
 		t.Errorf("page is missing the rendered title heading:\n%s", page)
 	}
-	if !strings.Contains(page, `<h2 class="ey-heading">Where the growth is coming from</h2>`) {
-		t.Errorf("page is missing the rendered content heading:\n%s", page)
-	}
 
-	// Speaker notes: a # notes section on the title and content slides becomes a
-	// reveal.js <aside class="notes"> inside the slide.
-	if got := strings.Count(page, `<aside class="notes">`); got != 2 {
-		t.Errorf("page has %d notes asides, want 2:\n%s", got, page)
-	}
-	for _, want := range []string{
-		"Greet the audience, then hand over to the presenters.",
-		"Pause on the metric so the number lands.",
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("page is missing rendered notes %q:\n%s", want, page)
-		}
+	// The layout's `media "logo.svg"` call resolves to the served
+	// templates/media URL.
+	if !strings.Contains(page, `src="/assets/templates/media/logo.svg"`) {
+		t.Errorf("page does not reference the served templates/media logo URL:\n%s", page)
 	}
 
 	// navigationMode is passed straight through from eypres.yaml.
@@ -153,85 +124,37 @@ func TestRenderDeckPipeline(t *testing.T) {
 		t.Errorf("page does not carry navigation grid:\n%s", page)
 	}
 
-	// The default theme resolves through the theme registry to the embedded
+	// The project theme resolves through the theme registry to its served
 	// stylesheet URL.
-	if !strings.Contains(page, `<link rel="stylesheet" href="/assets/theme.css">`) {
+	if !strings.Contains(page, `<link rel="stylesheet" href="/assets/templates/themes/plain/theme.css">`) {
 		t.Errorf("page does not link the resolved theme stylesheet:\n%s", page)
 	}
 
-	// Every /assets/ URL the page references resolves in the embedded FS, and the
-	// offline asset set the page is expected to reference is present.
+	// Every /assets/reveal/... URL the page references resolves in the
+	// embedded FS, and the page asset + theme stylesheet refs resolve via
+	// the served templates/ paths on disk.
 	assertPageAssetRefsResolve(t, page)
-	assertThemeStylesheetRefsResolve(t)
+	assertServedTemplatesRefsResolve(t, dir, page)
 }
 
-// pipelineDeckFiles is the real deck written to a t.TempDir(): a title slide with
-// speaker notes, a letter (vertical) slide beneath it, and a content slide with
-// two composed columns and notes. It uses only the built-in templates.
+// pipelineDeckFiles is the real deck written to a t.TempDir(): eypres.yaml,
+// one slide using the fixture library's hello template, and the fixture
+// templates/ library itself copied alongside it.
 var pipelineDeckFiles = map[string]string{
 	"eypres.yaml": "title: Integration Deck\n" +
 		"author: Ada Lovelace\n" +
 		"date: 2026-09-25\n" +
-		"theme: default\n" +
+		"theme: plain\n" +
 		"navigation: grid\n",
-	"slides/1-title.md": `---
-template: title
+	"slides/1-hello.md": `---
+template: hello
 title: Integration Deck
-subtitle: End to end
-date: 2026-09-25
-date_format: long
----
-# notes
-Greet the audience, then hand over to the presenters.
-`,
-	"slides/1a-agenda.md": `---
-template: title
-title: Agenda
-subtitle: What we will cover
 ---
 `,
-	"slides/2-content.md": contentSlideSource,
 }
 
-// contentSlideSource is the content slide with two composed columns sections and
-// a speaker-notes section. The ``` fences are plain fences opening each section
-// instance's frontmatter (section-frontmatter), so they are built by
-// concatenation rather than embedded in a raw string.
-const contentSlideSource = `---
-template: content
-heading: Where the growth is coming from
-layout: columns
-metric: 1250000
-metric_format: compact
-show_metric: true
-as_of: 2026-09-25
-as_of_format: long
----
-
-Revenue is up across every region, led by services.
-
-# columns
-` + "```" + `
-template: column
-title: Revenue
-` + "```" + `
-
-Recurring revenue grew 18% year over year.
-
-# columns
-` + "```" + `
-template: column
-title: New customers
-` + "```" + `
-
-We added 1,250 new logos in the quarter.
-
-# notes
-Pause on the metric so the number lands.
-`
-
-// writePipelineDeck writes pipelineDeckFiles to a fresh t.TempDir() and returns
-// the directory, creating parent directories as needed.
+// writePipelineDeck writes pipelineDeckFiles to a fresh t.TempDir(), plus a
+// copy of the phase-3 fixture templates/ library, and returns the directory.
 func writePipelineDeck(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -244,7 +167,34 @@ func writePipelineDeck(t *testing.T) string {
 			t.Fatalf("write %s: %v", p, err)
 		}
 	}
+	copyTemplatesDir(t, filepath.Join(fixtureLibraryDir, "templates"), filepath.Join(dir, "templates"))
 	return dir
+}
+
+// copyTemplatesDir recursively copies src to dst, both real directories.
+func copyTemplatesDir(t *testing.T, src, dst string) {
+	t.Helper()
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, rerr := filepath.Rel(src, p)
+		if rerr != nil {
+			return rerr
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return rerr
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		t.Fatalf("copy templates dir %s -> %s: %v", src, dst, err)
+	}
 }
 
 // parsePipelineSlides parses every slide of d in model order (a horizontal slide
@@ -271,40 +221,23 @@ func parsePipelineSlides(t *testing.T, fsys fs.FS, d *deck.Deck, reg *template.R
 }
 
 // assetRefRE captures the embedded path of every href/src the page points at
-// under the /assets/ mount.
-var assetRefRE = regexp.MustCompile(`(?:href|src)="/assets/([^"]+)"`)
+// under the /assets/reveal/ mount.
+var assetRefRE = regexp.MustCompile(`(?:href|src)="/assets/reveal/([^"]+)"`)
 
-// pageAssetFS resolves an /assets/-relative path against the embedded sub-tree
-// that serves it (assets.Reveal/Fonts/Logo, or the root for theme.css), returning
-// the accessor and the path within it. The phase-7 server mounts assets.FS at
-// /assets/, so these are exactly the files the page will fetch.
-func pageAssetFS(name string) (fsys fs.FS, rel string) {
-	switch {
-	case strings.HasPrefix(name, "reveal/"):
-		return assets.Reveal(), strings.TrimPrefix(name, "reveal/")
-	case strings.HasPrefix(name, "fonts/"):
-		return assets.Fonts(), strings.TrimPrefix(name, "fonts/")
-	case strings.HasPrefix(name, "logo/"):
-		return assets.Logo(), strings.TrimPrefix(name, "logo/")
-	default:
-		return assets.FS, name
-	}
-}
-
-// assertPageAssetRefsResolve checks that every /assets/ path referenced by the
-// page exists in the embedded assets FS (the tree served under /assets/), and
-// that the offline assets the deck page is expected to load are all referenced.
+// assertPageAssetRefsResolve checks that every /assets/reveal/ path
+// referenced by the page exists in the embedded reveal.js asset FS, and that
+// the offline reveal.js assets the deck page is expected to load are all
+// referenced.
 func assertPageAssetRefsResolve(t *testing.T, page string) {
 	t.Helper()
 
-	// The deck page template itself must resolve through its accessor.
 	if _, err := fs.Stat(assets.DeckPage(), "deck.html.tmpl"); err != nil {
 		t.Errorf("embedded deck page does not resolve: %v", err)
 	}
 
 	matches := assetRefRE.FindAllStringSubmatch(page, -1)
 	if len(matches) == 0 {
-		t.Fatalf("page references no /assets/ paths:\n%s", page)
+		t.Fatalf("page references no /assets/reveal/ paths:\n%s", page)
 	}
 
 	seen := make(map[string]bool, len(matches))
@@ -314,18 +247,16 @@ func assertPageAssetRefsResolve(t *testing.T, page string) {
 			continue
 		}
 		seen[name] = true
-		fsys, rel := pageAssetFS(name)
-		if _, err := fs.Stat(fsys, rel); err != nil {
-			t.Errorf("page references %q, which does not resolve in the embedded assets FS: %v", name, err)
+		if _, err := fs.Stat(assets.Reveal(), name); err != nil {
+			t.Errorf("page references %q, which does not resolve in the embedded reveal FS: %v", name, err)
 		}
 	}
 
 	for _, name := range []string{
-		"reveal/dist/reset.css",
-		"reveal/dist/reveal.css",
-		"reveal/dist/reveal.js",
-		"reveal/dist/plugin/notes.js",
-		"theme.css",
+		"dist/reset.css",
+		"dist/reveal.css",
+		"dist/reveal.js",
+		"dist/plugin/notes.js",
 	} {
 		if !seen[name] {
 			t.Errorf("page does not reference expected embedded asset %q", name)
@@ -333,31 +264,25 @@ func assertPageAssetRefsResolve(t *testing.T, page string) {
 	}
 }
 
-// themeURLRE captures a single-quoted url(…) reference in a stylesheet.
-var themeURLRE = regexp.MustCompile(`url\('([^']+)'\)`)
+// servedTemplatesRefRE captures a /assets/templates/... URL the page
+// references (media or theme paths served from the project templates/ tree).
+var servedTemplatesRefRE = regexp.MustCompile(`(?:href|src)="/assets/templates/([^"]+)"`)
 
-// assertThemeStylesheetRefsResolve checks that every locally referenced url(…)
-// in the embedded default theme stylesheet resolves in assets.FS. The stylesheet
-// lives at the root of the embedded tree, so its references are relative to it.
-func assertThemeStylesheetRefsResolve(t *testing.T) {
+// assertServedTemplatesRefsResolve checks that every /assets/templates/...
+// URL the page references (a page asset or the theme stylesheet) resolves to
+// a real file under dir/templates on disk — the tree internal/server's
+// mediaHandler serves.
+func assertServedTemplatesRefsResolve(t *testing.T, dir, page string) {
 	t.Helper()
 
-	css, err := fs.ReadFile(assets.FS, "theme.css")
-	if err != nil {
-		t.Fatalf("read embedded theme.css: %v", err)
-	}
-
-	matches := themeURLRE.FindAllStringSubmatch(string(css), -1)
+	matches := servedTemplatesRefRE.FindAllStringSubmatch(page, -1)
 	if len(matches) == 0 {
-		t.Fatal("embedded theme.css references no url(…) assets")
+		t.Fatal("page references no /assets/templates/ paths")
 	}
 	for _, m := range matches {
-		ref := m[1]
-		if strings.HasPrefix(ref, "http") || strings.HasPrefix(ref, "data:") || strings.HasPrefix(ref, "#") {
-			continue
-		}
-		if _, err := fs.Stat(assets.FS, ref); err != nil {
-			t.Errorf("theme.css references %q, which does not resolve in the embedded assets FS: %v", ref, err)
+		p := filepath.Join(dir, "templates", filepath.FromSlash(m[1]))
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("page references %q, which does not resolve on disk at %s: %v", m[1], p, err)
 		}
 	}
 }

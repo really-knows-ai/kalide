@@ -2,9 +2,20 @@
   "layer": "solution",
   "type": "component",
   "name": "template-registry",
-  "body": "Template registry / schema engine: embedded template definitions, schema model (fields, types, formats, body rules, sections), build-time checks, lookup and description.",
+  "body": "Template registry / schema engine: schema model (fields, types, formats, body rules, sections) populated from project `template.yaml` manifests by the template-library-loader, with each template's kind taken from its directory (slides/ or sections/). Load-time checks (cycles, directory-kind check for section acceptance and field types, cross-kind name uniqueness, reserved names, references, examples), lookup and description. Owns the central, documented layout function map (v1: exactly `media \"path\"` → served URL of the file at `templates/media/<path>`; path relative to templates/media/ only, no absolute paths, no `..`; never resolves into themes/) used when parsing layouts. Holds no compiled-in templates.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/template.NewRegistry",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/template.NewRegistryFromLibrary",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -24,6 +35,21 @@
     {
       "kind": "realised-by",
       "source": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-template-language",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.reconcile-implemented-by-reusable-templates",
       "properties": {}
     }
   ]

@@ -939,6 +939,91 @@ func TestCheckValuesCompositionRepeats(t *testing.T) {
 			}
 		})
 	}
+
+	// This is the unit-test deliverable for plan.phase-02.task-8: parity
+	// between a Go-authored *Template (like composed above) and the same
+	// definition decoded from a template.yaml manifest by parseManifest —
+	// CheckValues and Section.CheckRepeats behave identically either way,
+	// because both feed the same *Template shape.
+	t.Run("manifest-derived definitions: parity with Go-authored fixtures", func(t *testing.T) {
+		t.Run("field rules and number/date formats", func(t *testing.T) {
+			manifestTmpl := mustParseManifest(t, "mfield", KindSlide, `fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 10
+  - name: count
+    type: number
+    min: 0
+    max: 100
+    formats: [compact, exact]
+    default_format: compact
+  - name: when
+    type: date
+    min_date: "2020-01-01"
+    max_date: "2025-12-31"
+    formats: [long, short]
+    default_format: long
+`)
+			goTmpl := newSlide("mfield",
+				Field{Name: "title", Type: FieldText, Required: true, MaxLength: 10},
+				Field{Name: "count", Type: FieldNumber, Min: float64Ptr(0), Max: float64Ptr(100),
+					Formats: []string{"compact", "exact"}, DefaultFormat: "compact"},
+				Field{Name: "when", Type: FieldDate, MinDate: "2020-01-01", MaxDate: "2025-12-31",
+					Formats: []string{"long", "short"}, DefaultFormat: "long"},
+			)
+
+			cases := []map[string]any{
+				{"title": "hello", "count": 42, "when": "2023-01-01"},
+				{"title": "", "count": -1, "when": "2019-01-01"},
+				{"count": 42, "when": "2023-01-01"}, // missing required title
+			}
+			for i, data := range cases {
+				gotManifest := CheckValues(data, manifestTmpl, nil)
+				gotGo := CheckValues(data, goTmpl, nil)
+				if len(gotManifest.Errors) != len(gotGo.Errors) {
+					t.Fatalf("case %d: manifest errors = %s, go errors = %s, want the same count",
+						i, renderErrors(gotManifest.Errors), renderErrors(gotGo.Errors))
+				}
+				for j := range gotGo.Errors {
+					gm, gg := gotManifest.Errors[j], gotGo.Errors[j]
+					if gm.Rule != gg.Rule || gm.PathString() != gg.PathString() || gm.What != gg.What || gm.Fix != gg.Fix {
+						t.Errorf("case %d error[%d]: manifest = %+v, go = %+v, want the same", i, j, gm, gg)
+					}
+				}
+			}
+		})
+
+		t.Run("section composition min/max repeats", func(t *testing.T) {
+			manifestTmpl := mustParseManifest(t, "mcomposed", KindSlide, `sections:
+  - name: columns
+    accepted: [column]
+    min: 2
+    max: 4
+  - name: footer
+    accepted: [column]
+    min: 0
+    max: 1
+`)
+			sec := NewSection(nil)
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					got := sec.CheckRepeats(manifestTmpl, tt.names, tt.opts...)
+					want := sec.CheckRepeats(composed, tt.names, tt.opts...)
+					if len(got) != len(want) {
+						t.Fatalf("manifest CheckRepeats() = %s, want the same shape as the Go-authored fixture's %s",
+							renderErrors(got), renderErrors(want))
+					}
+					for i := range want {
+						if got[i].Rule != want[i].Rule || got[i].PathString() != want[i].PathString() ||
+							got[i].What != want[i].What || got[i].Fix != want[i].Fix {
+							t.Errorf("error[%d] = %+v, want %+v", i, got[i], want[i])
+						}
+					}
+				})
+			}
+		})
+	})
 }
 
 // TestCheckValuesFormats coordinates with format.go: the checker resolves a

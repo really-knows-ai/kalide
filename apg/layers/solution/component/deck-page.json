@@ -4,7 +4,13 @@
   "name": "deck-page",
   "body": "Browser deck page: reveal.js runtime with rendered slides, live-reload client, full-page error view, print-to-PDF.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "internal/assets/pages/deck.html.tmpl",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -19,6 +25,11 @@
     {
       "kind": "realised-by",
       "source": "domain.service.render-deck",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     }
   ]

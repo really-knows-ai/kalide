@@ -1,0 +1,41 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "demo-fixture",
+  "body": "Demo fixture: the non-EY-branded demo project at `examples/demo/` (library.yaml, a few slide templates e.g. title/content/columns, section templates e.g. column/person, one theme, one media file, sample slides/eypres.yaml), used as the fixture by the integration tests and the e2e harness; distinct from the init seed.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "examples/demo/templates/library.yaml",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "examples/demo/eypres.yaml",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.release-pipeline",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.template-library",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.demo-fixture-placement",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.reconcile-implemented-by-reusable-templates",
+      "properties": {}
+    }
+  ]
+}

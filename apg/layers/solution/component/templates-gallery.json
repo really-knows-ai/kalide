@@ -4,7 +4,18 @@
   "name": "templates-gallery",
   "body": "Templates gallery page (/templates): renders each template's example and documentation.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/server.galleryHandler",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/assets/pages/gallery.html.tmpl",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -14,6 +25,11 @@
     {
       "kind": "realised-by",
       "source": "domain.service.serve-deck",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     }
   ]

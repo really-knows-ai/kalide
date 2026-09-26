@@ -61,6 +61,16 @@
       "kind": "contains",
       "target": "solution.component.theme-registry",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": [

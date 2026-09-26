@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "embedded-assets",
-  "body": "All assets — reveal.js (pinned to release 6.0.2, MIT), templates, the `default` theme CSS (EY look), EY fonts and logos, starter files, gallery/error pages — are embedded via Go `embed` and served from the binary. reveal.js is vendored from the release package's `dist/` directory into `internal/assets/reveal/` and committed there together with its `LICENSE` (it ships because we redistribute it); there is no `npm install` and no build step to consume it — Node is only needed to develop reveal.js itself.",
+  "body": "Only the core of the tool is embedded via Go `embed` and served from the binary: reveal.js (pinned to release 6.0.2, MIT) and the unbranded core page shells (deck page, full-page error page, /templates gallery page), plus the minimal `eypres init` seed (see cli-init-minimal-seed). These are core to the tool, not templates or assets. reveal.js is vendored from the release package's `dist/` directory into `internal/assets/reveal/` and committed there together with its `LICENSE`; no `npm install`, no build step. No templates, themes, fonts, logos, starter decks or other media are embedded; the former EY templates, theme, fonts and logos are deleted from the codebase entirely (no in-repo EY library) — every project supplies its own `templates/` (see project-templates). AC: `internal/assets` embeds no templates/, fonts/, logo/, starter/ or theme.css; the repo contains no EY template, theme, font or logo; the core page shells reference no brand asset and style only via the project theme's stylesheet.",
   "properties": {
     "feature": "cross-platform"
   },
@@ -14,16 +14,6 @@
     }
   ],
   "in": [
-    {
-      "kind": "contains",
-      "source": "requirements.stakeholder.ey-brand-owner",
-      "properties": {}
-    },
-    {
-      "kind": "depends-on",
-      "source": "requirements.requirement.cli-init",
-      "properties": {}
-    },
     {
       "kind": "details",
       "source": "requirements.note.open-font-logo-licensing",
@@ -37,6 +27,16 @@
     {
       "kind": "details",
       "source": "requirements.note.reconcile-reveal-pin",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-ey-content-removal",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.brand-owner",
       "properties": {}
     }
   ]

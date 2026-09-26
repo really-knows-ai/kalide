@@ -2,9 +2,15 @@
   "layer": "solution",
   "type": "component",
   "name": "embedded-assets",
-  "body": "Embedded assets: `go:embed` bundle of reveal.js, templates, the `default` theme (EY look, CSS tokens), fonts, logos, starter deck, page shells. reveal.js is vendored at `internal/assets/reveal/`, copied from the 6.0.2 release package's `dist/` and committed there with its `LICENSE`; the minimal vendored set is `dist/reveal.js`, `dist/reveal.css`, `dist/reset.css`, `dist/plugin/notes.js` and `LICENSE`.",
+  "body": "Embedded core: `go:embed` bundle of the vendored reveal.js runtime and the unbranded core page shells (deck, error, gallery) only — core to the tool, not templates/assets; no templates, theme, fonts, logos or starter deck, and no branding. reveal.js is vendored at `internal/assets/reveal/`, copied from the 6.0.2 release package's `dist/` and committed with its `LICENSE`; minimal set `dist/reveal.js`, `dist/reveal.css`, `dist/reset.css`, `dist/plugin/notes.js`, `LICENSE`. The former EY theme, fonts, logos and templates are deleted from the repo.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "internal/assets/assets.go",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -19,6 +25,16 @@
     {
       "kind": "details",
       "source": "requirements.note.reconcile-reveal-pin",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-ey-content-removal",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     }
   ]

@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "template-manifest",
+  "body": "Template schema as data: a template's schema — one-line `description`, `fields` (name, type, required, default, limits, variants, formats/default format, description), `sections` (name, accepted section templates, min/max) and `body` rule — is declared in its `template.yaml`, not in Go code. There is no `usage:` key: the template's kind (slide|section) comes from its directory (`templates/slides/` or `templates/sections/`); a `usage:` key = templates error. The schema vocabulary is exactly the existing one (field-types, body-rules, template-composition, template-variants, number-date-formats). The template's example is `example.md`, parsed and validated like a deck slide (no hand-written structured example). AC: no template schema remains in Go source; a `template.yaml` containing `usage:` is rejected with a path-qualified templates error.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-schema-in-go",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-kind-directories",
+      "properties": {}
+    }
+  ]
+}

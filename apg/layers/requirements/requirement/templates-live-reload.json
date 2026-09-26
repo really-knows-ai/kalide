@@ -1,0 +1,23 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "templates-live-reload",
+  "body": "Templates live reload: while `eypres start` runs, changes anywhere under `templates/` are detected like deck changes; the templates dir is re-validated, templates/themes reloaded, the deck re-validated and re-rendered, and the browser reloads (or shows the full-page templates error).",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.watch-deck",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    }
+  ]
+}

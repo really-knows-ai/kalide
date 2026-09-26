@@ -1,0 +1,13 @@
+description: a person entry with a name, role and optional avatar image
+fields:
+  - name: name
+    type: text
+    required: true
+    max_length: 60
+  - name: role
+    type: text
+    max_length: 60
+  - name: avatar
+    type: image
+body:
+  mode: disallowed

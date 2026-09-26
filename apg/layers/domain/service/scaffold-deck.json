@@ -2,12 +2,17 @@
   "layer": "domain",
   "type": "service",
   "name": "scaffold-deck",
-  "body": "Scaffold deck: `init` — check for existing slides/, assets/, eypres.yaml; write starter deck from embedded files.",
+  "body": "Scaffold deck: `init` — check for existing slides/, assets/, templates/, eypres.yaml; write the minimal unbranded seed (deck + templates/) from the scaffold's embedded seed.",
   "properties": {},
   "out": [
     {
       "kind": "realised-by",
       "target": "solution.component.cli-commands",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.init-seed",
       "properties": {}
     }
   ],
@@ -25,6 +30,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.cli-init-refuse-existing",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.cli-init-minimal-seed",
       "properties": {}
     }
   ]

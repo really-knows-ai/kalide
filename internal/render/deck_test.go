@@ -1,7 +1,9 @@
 package render
 
 import (
+	htmltmpl "html/template"
 	"io/fs"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,12 +14,14 @@ import (
 	"github.com/really-knows-ai/ey-present/internal/theme"
 )
 
-// TestRenderDeck covers RenderDeck end to end on the built-in templates: the
-// .reveal > .slides structure with letter slides nested as vertical stacks, the
-// navigationMode passthrough, the registry-resolved theme stylesheet, the
-// embedded offline asset URLs, print-to-PDF wiring, and determinism.
+// TestRenderDeck covers RenderDeck end to end on the phase-3 fixture library
+// (internal/template/testdata/library): the .reveal > .slides structure with
+// letter slides nested as vertical stacks, the navigationMode passthrough,
+// the registry-resolved theme stylesheet served from templates/themes/<name>,
+// the embedded offline asset URLs, print-to-PDF wiring, speaker notes and
+// determinism.
 func TestRenderDeck(t *testing.T) {
-	reg := mustBuiltinRegistry(t)
+	reg, funcMap := mustFixtureRegistry(t)
 
 	t.Run("vertical stack nesting and order", func(t *testing.T) {
 		d := &deck.Deck{Stacks: []deck.Stack{
@@ -31,14 +35,14 @@ func TestRenderDeck(t *testing.T) {
 			{Slide: deck.Slide{Path: "slides/2-second.md", Number: 2, Label: "second"}},
 		}}
 		parsed := []*slide.Slide{
-			titleSlideModel("slides/1-first.md", "First"),
-			titleSlideModel("slides/1a-alpha.md", "Alpha"),
-			titleSlideModel("slides/1b-beta.md", "Beta"),
-			titleSlideModel("slides/2-second.md", "Second"),
+			helloSlideModel("slides/1-first.md", "First"),
+			helloSlideModel("slides/1a-alpha.md", "Alpha"),
+			helloSlideModel("slides/1b-beta.md", "Beta"),
+			helloSlideModel("slides/2-second.md", "Second"),
 		}
-		cfg := &deck.Config{Title: "Deck", Theme: theme.DefaultName, Navigation: deck.NavigationDefault}
+		cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: deck.NavigationDefault}
 
-		page := renderDeckHTML(t, cfg, d, parsed, reg, nil)
+		page := renderDeckHTML(t, cfg, d, parsed, reg, fixtureThemes(t), funcMap)
 
 		if !strings.Contains(page, `<div class="reveal">`) || !strings.Contains(page, `<div class="slides">`) {
 			t.Fatalf("page is missing the .reveal > .slides container:\n%s", page)
@@ -53,9 +57,6 @@ func TestRenderDeck(t *testing.T) {
 			t.Fatalf("slides are out of model order: first=%d alpha=%d beta=%d second=%d", first, alpha, beta, second)
 		}
 
-		// A slide's nesting depth is the number of still-open <section>
-		// elements before its anchor id. The two horizontals are top-level
-		// (depth 1); the letter slides are nested inside the first (depth 2).
 		depths := map[string]int{
 			"first":  sectionDepth(page, first),
 			"alpha":  sectionDepth(page, alpha),
@@ -87,8 +88,8 @@ func TestRenderDeck(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				cfg := &deck.Config{Title: "Deck", Theme: theme.DefaultName, Navigation: tc.nav}
-				page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, nil)
+				cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: tc.nav}
+				page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, fixtureThemes(t), funcMap)
 				if !strings.Contains(page, tc.want) {
 					t.Fatalf("navigation %q: page does not contain %q:\n%s", tc.nav, tc.want, page)
 				}
@@ -100,49 +101,22 @@ func TestRenderDeck(t *testing.T) {
 	})
 
 	t.Run("theme css link from registry", func(t *testing.T) {
-		// The built-in default resolves through theme.Builtin() when no registry
-		// is passed, and through an explicit built-in registry when one is.
-		cfg := &deck.Config{Title: "Deck", Theme: theme.DefaultName, Navigation: deck.NavigationDefault}
-		for _, themeReg := range []*theme.Registry{nil, theme.Builtin()} {
-			page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, themeReg)
-			want := `<link rel="stylesheet" href="/assets/theme.css">`
-			if !strings.Contains(page, want) {
-				t.Fatalf("default theme: page does not contain %q:\n%s", want, page)
-			}
-		}
-
-		// An empty theme name resolves to the default theme's stylesheet.
-		cfg.Theme = ""
-		page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, nil)
-		if !strings.Contains(page, `<link rel="stylesheet" href="/assets/theme.css">`) {
-			t.Fatalf("empty theme: page does not resolve the default stylesheet:\n%s", page)
-		}
-
-		// A registry-registered theme drives the link: the URL is the registry's
-		// Stylesheet under /assets/, not a hard-coded path.
-		custom := theme.NewRegistry()
-		if err := custom.Register(theme.Theme{Name: "sunset", Stylesheet: "themes/sunset.css"}); err != nil {
-			t.Fatalf("register custom theme: %v", err)
-		}
-		cfg.Theme = "sunset"
-		page = renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, custom)
-		want := `<link rel="stylesheet" href="/assets/themes/sunset.css">`
+		themes := fixtureThemes(t)
+		cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: deck.NavigationDefault}
+		page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, themes, funcMap)
+		want := `<link rel="stylesheet" href="/assets/templates/themes/plain/theme.css">`
 		if !strings.Contains(page, want) {
-			t.Fatalf("custom theme: page does not contain %q:\n%s", want, page)
-		}
-		if strings.Contains(page, `href="/assets/theme.css"`) {
-			t.Errorf("custom theme: page still links the default stylesheet:\n%s", page)
+			t.Fatalf("plain theme: page does not contain %q:\n%s", want, page)
 		}
 	})
 
 	t.Run("embedded asset urls", func(t *testing.T) {
-		cfg := &deck.Config{Title: "Deck", Theme: theme.DefaultName, Navigation: deck.NavigationDefault}
-		page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, nil)
+		cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: deck.NavigationDefault}
+		page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, fixtureThemes(t), funcMap)
 
 		want := []string{
 			`href="/assets/reveal/dist/reset.css"`,
 			`href="/assets/reveal/dist/reveal.css"`,
-			`href="/assets/theme.css"`,
 			`src="/assets/reveal/dist/reveal.js"`,
 			`src="/assets/reveal/dist/plugin/notes.js"`,
 		}
@@ -154,12 +128,9 @@ func TestRenderDeck(t *testing.T) {
 	})
 
 	t.Run("print pdf support bundled", func(t *testing.T) {
-		cfg := &deck.Config{Title: "Deck", Theme: theme.DefaultName, Navigation: deck.NavigationDefault}
-		page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, nil)
+		cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: deck.NavigationDefault}
+		page := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, fixtureThemes(t), funcMap)
 
-		// Print-to-PDF is reveal.js core (?print-pdf) using the print styles
-		// bundled in dist/reveal.css: the page must not link a separate print
-		// plugin or print stylesheet.
 		lower := strings.ToLower(page)
 		for _, forbidden := range []string{"print-pdf", "print.css", "print.js", "print/"} {
 			if strings.Contains(lower, forbidden) {
@@ -167,8 +138,6 @@ func TestRenderDeck(t *testing.T) {
 			}
 		}
 
-		// The wiring is the embedded reveal.css (print styles) and reveal.js
-		// (core ?print-pdf handling).
 		css, err := fs.ReadFile(assets.Reveal(), "dist/reveal.css")
 		if err != nil {
 			t.Fatalf("read embedded dist/reveal.css: %v", err)
@@ -189,34 +158,45 @@ func TestRenderDeck(t *testing.T) {
 		}
 	})
 
+	t.Run("speaker notes", func(t *testing.T) {
+		cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: deck.NavigationDefault}
+		parsed := helloSlideModel("slides/1-only.md", "Only")
+		parsed.Notes = &slide.Notes{Body: "Say hello warmly.\n"}
+		page := renderDeckHTML(t, cfg, simpleDeck(), []*slide.Slide{parsed}, reg, fixtureThemes(t), funcMap)
+		if !strings.Contains(page, `<aside class="notes">`) {
+			t.Errorf("page is missing the rendered notes aside:\n%s", page)
+		}
+	})
+
 	t.Run("deterministic output", func(t *testing.T) {
-		cfg := &deck.Config{Title: "Deck", Theme: theme.DefaultName, Navigation: deck.NavigationLinear}
-		first := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, nil)
-		second := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, nil)
+		cfg := &deck.Config{Title: "Deck", Theme: "plain", Navigation: deck.NavigationLinear}
+		first := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, fixtureThemes(t), funcMap)
+		second := renderDeckHTML(t, cfg, simpleDeck(), simpleDeckSlides(), reg, fixtureThemes(t), funcMap)
 		if first != second {
 			t.Fatalf("RenderDeck is not deterministic:\nfirst:\n%s\nsecond:\n%s", first, second)
 		}
 	})
 }
 
-// mustBuiltinRegistry returns the compiled-in template registry or fails the
-// test. RenderDeck needs a populated registry to resolve each slide's layout.
-func mustBuiltinRegistry(t *testing.T) *template.Registry {
+// fixtureThemes loads the phase-3 fixture library's templates/themes
+// directory (theme.LoadDir), which registers the "plain" theme.
+func fixtureThemes(t *testing.T) *theme.Registry {
 	t.Helper()
-	reg, err := template.Builtins()
+	fsys := os.DirFS(fixtureLibraryDir)
+	reg, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
 	if err != nil {
-		t.Fatalf("template.Builtins: %v", err)
+		t.Fatalf("theme.LoadDir: %v", err)
 	}
 	return reg
 }
 
-// titleSlideModel builds the parsed model of a title-template slide carrying
-// the given text. RenderDeck consumes parsed slides directly, so no Markdown
-// parsing is needed here.
-func titleSlideModel(path, title string) *slide.Slide {
+// helloSlideModel builds the parsed model of a hello-template slide carrying
+// the given title. RenderDeck consumes parsed slides directly, so no
+// Markdown parsing is needed here.
+func helloSlideModel(path, title string) *slide.Slide {
 	return &slide.Slide{
 		File:        path,
-		Template:    "title",
+		Template:    "hello",
 		Frontmatter: map[string]any{"title": title},
 	}
 }
@@ -231,13 +211,13 @@ func simpleDeck() *deck.Deck {
 
 // simpleDeckSlides is the parsed model matching simpleDeck.
 func simpleDeckSlides() []*slide.Slide {
-	return []*slide.Slide{titleSlideModel("slides/1-only.md", "Only")}
+	return []*slide.Slide{helloSlideModel("slides/1-only.md", "Only")}
 }
 
 // renderDeckHTML renders the deck and returns the page HTML as a string.
-func renderDeckHTML(t *testing.T, cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *template.Registry, themeReg *theme.Registry) string {
+func renderDeckHTML(t *testing.T, cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *template.Registry, themeReg *theme.Registry, funcMap htmltmpl.FuncMap) string {
 	t.Helper()
-	out, err := RenderDeck(cfg, d, parsed, reg, themeReg)
+	out, err := RenderDeck(cfg, d, parsed, reg, themeReg, funcMap)
 	if err != nil {
 		t.Fatalf("RenderDeck: %v", err)
 	}

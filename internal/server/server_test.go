@@ -10,14 +10,23 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/really-knows-ai/ey-present/internal/template"
+	"github.com/really-knows-ai/ey-present/internal/theme"
 	"github.com/really-knows-ai/ey-present/internal/validate"
 )
+
+// fixtureLibraryDir is the phase-3 fixture library's project root, relative
+// to this package, holding templates/slides/hello, templates/sections/item,
+// templates/themes/plain and templates/media/logo.svg.
+const fixtureLibraryDir = "../template/testdata/library"
 
 // TestServer covers the phase-7 unit surface of internal/server: port
 // selection and its error messages, the Page seam and recovery through the
@@ -304,8 +313,9 @@ func TestServer(t *testing.T) {
 		waitSSELine(t, lines, "data: reload", 3*time.Second)
 	})
 
-	t.Run("templates gallery lists every built-in with docs", func(t *testing.T) {
-		srv := mustListen(t, Options{Page: testPage("DECK")})
+	t.Run("templates gallery lists every fixture template with docs", func(t *testing.T) {
+		lib, reg, themes := mustGalleryFixtureLibrary(t)
+		srv := mustListen(t, Options{Page: testPage("DECK"), Library: lib, Themes: themes})
 
 		rec := serve(srv, http.MethodGet, galleryPath)
 		if rec.Code != http.StatusOK {
@@ -326,23 +336,19 @@ func TestServer(t *testing.T) {
 			}
 		}
 
-		reg, err := template.Builtins()
-		if err != nil {
-			t.Fatalf("template.Builtins: %v", err)
-		}
 		names := reg.TemplateNames()
 		if len(names) == 0 {
-			t.Fatal("built-in registry has no templates")
+			t.Fatal("fixture registry has no templates")
 		}
 		for _, tmpl := range reg.Templates() {
 			if tmpl == nil {
 				continue
 			}
-			if !strings.Contains(body, `class="ey-gallery__name">`+tmpl.Name) {
+			if !strings.Contains(body, `class="gallery-page__name">`+tmpl.Name) {
 				t.Errorf("gallery does not list template %q", tmpl.Name)
 			}
 			usage := string(tmpl.Usage)
-			if !strings.Contains(body, `class="ey-gallery__usage">`+usage) {
+			if !strings.Contains(body, `class="gallery-page__usage">`+usage) {
 				t.Errorf("gallery does not show usage %q for template %q", usage, tmpl.Name)
 			}
 			if tmpl.Description != "" && !strings.Contains(body, tmpl.Description) {
@@ -370,7 +376,7 @@ func TestServer(t *testing.T) {
 
 		// Spot-check the documented names/usage explicitly required by the task.
 		for name, usage := range map[string]string{"title": "slide", "content": "slide", "column": "section"} {
-			if !strings.Contains(body, `class="ey-gallery__name">`+name+`<span class="ey-gallery__usage">`+usage) {
+			if !strings.Contains(body, `class="gallery-page__name">`+name+`<span class="gallery-page__usage">`+usage) {
 				t.Errorf("gallery entry for %q (%s) not found in expected form", name, usage)
 			}
 		}
@@ -382,19 +388,94 @@ func TestServer(t *testing.T) {
 		}
 	})
 
-	t.Run("assets serve the embedded reveal and theme files", func(t *testing.T) {
+	t.Run("gallery serves the project library", func(t *testing.T) {
+		fsys := os.DirFS(fixtureLibraryDir)
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
+			t.Fatalf("template.LoadLibrary: %v", err)
+		}
+		reg, err := template.NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+		}
+		funcMap := template.LayoutFuncMap(lib.Media, MediaPath)
+
+		rec := httptest.NewRecorder()
+		galleryHandler(reg, funcMap).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, galleryPath, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status %d, want 200 (body %q)", galleryPath, rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `class="gallery-page__name">hello`) {
+			t.Errorf("gallery does not list the fixture %q slide template:\n%s", "hello", body)
+		}
+		if !strings.Contains(body, `class="gallery-page__name">item`) {
+			t.Errorf("gallery does not list the fixture %q section template:\n%s", "item", body)
+		}
+		// The item section's Layout.Name is a full manifest path
+		// (templates/sections/item/layout.html.tmpl), not the bare template
+		// name "item". Its preview must actually render the example's
+		// content through that layout, not fall back to the
+		// "Example unavailable" placeholder (regression coverage for the
+		// gallerySectionExample fix in commit 02fcf3a).
+		if strings.Contains(body, "Example unavailable") {
+			t.Errorf("gallery reports an unavailable example for the fixture library:\n%s", body)
+		}
+		if !strings.Contains(body, `class="item"`) {
+			t.Errorf("gallery does not render the item section's <li class=\"item\"> layout output:\n%s", body)
+		}
+		if !strings.Contains(body, "First item") {
+			t.Errorf("gallery does not render the item section example's title %q:\n%s", "First item", body)
+		}
+		if !strings.Contains(body, "Details about the first item.") {
+			t.Errorf("gallery does not render the item section example's body:\n%s", body)
+		}
+	})
+
+	t.Run("broken templates library serves the error page", func(t *testing.T) {
+		dir := t.TempDir()
+		// eypres.yaml and slides/ are valid, but templates/ is entirely
+		// missing: NewReloader's built-in pipeline must publish the error
+		// page, never a stale or partially-loaded deck.
+		mustWriteFile(t, filepath.Join(dir, "eypres.yaml"), "title: Broken\n")
+		mustWriteFile(t, filepath.Join(dir, "slides", "1-only.md"), "---\ntemplate: hello\ntitle: Hi\n---\n")
+
+		srv := mustListen(t, Options{Page: testPage("PLACEHOLDER")})
+		rl, err := NewReloader(ReloadOptions{Server: srv, Root: dir, Log: io.Discard})
+		if err != nil {
+			t.Fatalf("NewReloader: %v", err)
+		}
+		if err := rl.Start(); err != nil {
+			t.Fatalf("Reloader.Start: %v, want the missing templates/ directory reported as the error page, not a Start failure", err)
+		}
+		t.Cleanup(rl.Stop)
+
+		body := getBody(t, srv, rootPath)
+		if !strings.Contains(body, "Deck error") {
+			t.Fatalf("missing templates/ directory did not serve the error page: %q", body)
+		}
+	})
+
+	t.Run("binds 127.0.0.1", func(t *testing.T) {
+		s := mustListen(t, Options{Page: testPage("DECK")})
+		addr, ok := s.Addr().(*net.TCPAddr)
+		if !ok {
+			t.Fatalf("Addr() is %T, want *net.TCPAddr", s.Addr())
+		}
+		if addr.IP.String() != Host {
+			t.Fatalf("server bound %s, want exactly %s", addr.IP, Host)
+		}
+	})
+
+	t.Run("assets serve the embedded reveal.js runtime", func(t *testing.T) {
 		srv := mustListen(t, Options{Page: testPage("DECK")})
 
 		for _, name := range []string{
-			"theme.css",
 			"reveal/dist/reveal.js",
 			"reveal/dist/reveal.css",
 			"reveal/dist/reset.css",
 			"reveal/dist/plugin/notes.js",
 			"reveal/LICENSE",
-			"logo/logo_full-light.svg",
-			"logo/logo_full-dark.svg",
-			"fonts/EYInterstate-Regular.woff2",
 		} {
 			rec := serve(srv, http.MethodGet, AssetsPath+name)
 			if rec.Code != http.StatusOK {
@@ -409,11 +490,91 @@ func TestServer(t *testing.T) {
 			}
 		}
 
+		// theme.css, fonts and logos are no longer embedded: they are served
+		// from a project's own templates/themes via mediaHandler, not the
+		// embedded /assets/ tree.
+		for _, name := range []string{
+			"theme.css",
+			"logo/logo_full-light.svg",
+			"fonts/EYInterstate-Regular.woff2",
+		} {
+			rec := serve(srv, http.MethodGet, AssetsPath+name)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("GET %s%s status %d, want 404 (no longer embedded)", AssetsPath, name, rec.Code)
+			}
+		}
+
 		rec := serve(srv, http.MethodGet, AssetsPath+"does/not/exist.txt")
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("GET a missing asset status %d, want 404", rec.Code)
 		}
 	})
+}
+
+// mustWriteFile writes data to path, creating parent directories as needed.
+func mustWriteFile(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// mustGalleryFixtureLibrary loads a small in-memory templates/ library
+// (title, content, column) standing in for the deleted Go-authored builtins:
+// content composes 2..4 "columns" of "column" and carries a 2-paragraph body
+// limit, matching the gallery documentation the "templates gallery lists
+// every fixture template with docs" subtest asserts.
+func mustGalleryFixtureLibrary(t *testing.T) (*template.Library, *template.Registry, *theme.Registry) {
+	t.Helper()
+	const contentManifest = `description: Content slide with composed columns
+fields:
+  - name: heading
+    type: text
+    required: true
+sections:
+  - name: columns
+    accepted: [column]
+    min: 2
+    max: 4
+body:
+  mode: optional
+  max_paragraphs: 2
+`
+	const columnManifest = `description: A single column section
+fields:
+  - name: title
+    type: text
+`
+	fsys := fstest.MapFS{
+		"templates/library.yaml":                     {Data: []byte("name: gallery-fixture\nformat: 1\n")},
+		"templates/slides/title/template.yaml":       {Data: []byte("description: Title slide\nfields:\n  - name: title\n    type: text\n    required: true\n")},
+		"templates/slides/title/layout.html.tmpl":    {Data: []byte("<section>{{.title}}</section>")},
+		"templates/slides/title/example.md":          {Data: []byte("---\ntemplate: title\ntitle: Quarterly Business Review\n---\n")},
+		"templates/slides/content/template.yaml":     {Data: []byte(contentManifest)},
+		"templates/slides/content/layout.html.tmpl":  {Data: []byte("<section>{{.heading}}</section>")},
+		"templates/slides/content/example.md":        {Data: []byte("---\ntemplate: content\nheading: H\n---\n\n# columns\n```\ntitle: A\n```\n\n# columns\n```\ntitle: B\n```\n")},
+		"templates/sections/column/template.yaml":    {Data: []byte(columnManifest)},
+		"templates/sections/column/layout.html.tmpl": {Data: []byte("<div>{{.title}}</div>")},
+		"templates/sections/column/example.md":       {Data: []byte("```\ntitle: Sample\n```\n")},
+		"templates/themes/default/theme.css":         {Data: []byte("body{}")},
+	}
+
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	themes, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
+	return lib, reg, themes
 }
 
 // testPage returns a deck Page carrying doc as its served document.

@@ -12,6 +12,7 @@ offline, and there is no separate tool to install or run alongside it.
 - [Getting started](#getting-started)
 - [Commands](#commands)
 - [How a deck is laid out](#how-a-deck-is-laid-out)
+- [The templates/ library](#the-templates-library)
 - [What `eypres init` refuses to do](#what-eypres-init-refuses-to-do)
 - [Working offline](#working-offline)
 - [Making a PDF](#making-a-pdf)
@@ -29,8 +30,13 @@ package manager requirement, and no setup step.
   `eypres-windows-arm64.exe`) to a folder on your `PATH` and run it in a
   terminal (PowerShell or Command Prompt).
 
-The file is self-contained: all of the reveal.js code, the EY theme, fonts,
-logos and built-in templates are inside it.
+The file is self-contained: the reveal.js runtime and everything needed to
+serve a deck are inside it. Slide and section templates, themes, fonts, logos
+and any other media are **not** built into the binary at all — there is no
+built-in fallback of any kind. Every one of those comes from the project's
+own `templates/` library (see [The templates/ library](#the-templates-library)
+below); `eypres init` seeds a small unbranded starter library to get you
+going.
 
 ## Supported computers
 
@@ -74,12 +80,20 @@ Creates a starter deck in the **current folder**:
 
 ```
 eypres.yaml
-slides/1-title.md
-slides/2-content.md
+slides/1-hello.md
+templates/library.yaml
+templates/slides/hello/template.yaml
+templates/slides/hello/layout.html.tmpl
+templates/slides/hello/example.md
+templates/themes/default/theme.css
 assets/
 ```
 
-Run it once in an empty folder and then edit the slides. `eypres init` takes no
+The `templates/` folder it creates is a minimal, unbranded starter
+library — one `hello` slide template and one `default` theme — not a
+finished design system. Run it once in an empty folder and then edit the
+slides, or add templates and themes of your own (see
+[The templates/ library](#the-templates-library)). `eypres init` takes no
 options. See [what it refuses to do](#what-eypres-init-refuses-to-do) below.
 
 ### `eypres start [--port N] [--no-open]`
@@ -100,14 +114,18 @@ Validates the whole deck and then serves it with live reload.
 
 ### `eypres templates`
 
-Lists every built-in template with its name, whether it is a `slide` or a
-`section`, and a one-line description.
+Lists every template in the project's **own `templates/` library** — its
+name, whether it is a `slide` or a `section`, and a one-line description.
+There is no built-in fallback of any kind: if the current folder has no
+valid `templates/` directory, `eypres templates` (and `eypres start`)
+reports the problem instead of listing anything.
 
 ### `eypres templates <name>`
 
 Shows one template's full documentation: its fields (type, whether required,
 default, limits, formats), its sections, the rules for its body text, and a
-copyable example. For example:
+copyable example, exactly as loaded from the project's `templates/`
+directory. For example:
 
 ```
 eypres templates content
@@ -124,9 +142,10 @@ Prints a short reminder of the commands above.
 A deck is a folder containing:
 
 ```
-eypres.yaml          deck settings
-slides/              your slides, one Markdown file each
-assets/              your images and other files
+eypres.yaml    deck settings
+templates/     the project's template & theme library
+slides/        your slides, one Markdown file each
+assets/        your images and other files
 ```
 
 Slides are named with a number and a short label, for example
@@ -140,14 +159,77 @@ that appears *under* slide `2`.
 title: My presentation   # required
 author: A. Presenter     # optional
 date: 2026-09-25         # optional, YYYY-MM-DD
-theme: default           # optional
+theme: default           # optional, a theme name from templates/themes
 navigation: default      # optional: default, linear or grid
 ```
 
 Each slide starts with a short header between `---` lines that names its
 template and fills in the fields, followed by the slide body in Markdown. The
-starter deck created by `eypres init` shows working examples you can copy. Use
-`eypres templates` to see what each built-in template needs.
+starter deck created by `eypres init` shows a working example you can copy.
+Use `eypres templates` to see what each template in the project's
+`templates/` library needs.
+
+## The templates/ library
+
+Every deck owns its own `templates/` library: the set of slide templates,
+section templates, themes, fonts, logos and media files it renders against.
+There is no built-in, embedded design system of any kind — `eypres init`
+seeds a minimal unbranded starter library, and you extend or replace it as
+the deck needs. Everything visual — every template, theme, font, logo and
+piece of media — comes from this library; the binary supplies none of it.
+
+```
+templates/
+  library.yaml               library metadata (name, description, format)
+  slides/
+    <name>/
+      template.yaml           the template's manifest (fields, sections, body rule)
+      layout.html.tmpl        the html/template layout that renders it
+      example.md              a copyable example slide body
+  sections/
+    <name>/
+      template.yaml
+      layout.html.tmpl
+      example.md
+  themes/
+    <name>/
+      theme.css               the theme's stylesheet
+  media/
+    ...                       images and other files layouts can reference
+```
+
+- **`library.yaml`** is required at the root of `templates/` and carries the
+  library's `name`, a short `description`, and a `format` version number.
+- **`slides/<name>/`** and **`sections/<name>/`** each hold exactly three
+  files: `template.yaml`, `layout.html.tmpl` and `example.md`. A template's
+  name is always its directory name.
+- **`template.yaml`** is the manifest: a `description`, a list of `fields`
+  (each with a `type` — `text`, `number`, `date`, `boolean`, `enum`, `image`,
+  `link`, `list` or `section-template` — plus rules like `required`,
+  `max_length`, `min`/`max`, `variants`, `formats`), a list of `sections`
+  (each naming which section templates it `accepted`s and a `min`/`max`
+  count), and a `body` rule (`mode: required|optional|disallowed`, plus
+  limits like `max_words`, `max_paragraphs` and `max_list_items`).
+- **`layout.html.tmpl`** is the `html/template` layout that turns a filled-in
+  slide (its fields and any nested sections) into the slide's HTML.
+- **`themes/<name>/theme.css`** is a theme's stylesheet, selected in
+  `eypres.yaml` by name.
+- **`media/`** holds images and other files a layout can reference with the
+  `media` template helper, for example `{{ media "logo.svg" }}`. `media`
+  resolves its argument only inside `templates/media` (an absolute path or a
+  path that escapes with `..` is rejected), checks the file exists, and
+  returns the URL the running server serves it under.
+
+`eypres templates` and `eypres templates <name>` read straight from this
+library, so its documentation output can never drift from what actually
+renders.
+
+`examples/demo` in this repository is a small, deliberately non-EY reference
+project that exercises the format end to end: a `demo` library with a
+`title`/`content` slide, a `column`/`person` section pairing (including a
+list of nested section-template instances), a vertical slide, a custom theme
+and a media file. Read it alongside this section to see a complete
+`templates/` library in context.
 
 ## What `eypres init` refuses to do
 
@@ -155,6 +237,7 @@ starter deck created by `eypres init` shows working examples you can copy. Use
 whether any of these already exist in the current folder:
 
 - `slides/`
+- `templates/`
 - `assets/`
 - `eypres.yaml`
 
@@ -163,16 +246,17 @@ nothing. It keeps your existing deck intact.
 
 There is **no `--force` option** and no way to make it overwrite. To start a new
 deck, either run the command in a different (empty) folder, or move the existing
-`slides/`, `assets/` and `eypres.yaml` out of the way first. Unrelated files
-such as a `.git` folder or a `README` do not get in the way.
+`slides/`, `templates/`, `assets/` and `eypres.yaml` out of the way first.
+Unrelated files such as a `.git` folder or a `README` do not get in the way.
 
 ## Working offline
 
-`eypres` needs no internet connection. The reveal.js runtime, the EY theme,
-fonts, logos, built-in templates and starter files are all embedded inside the
-`eypres` file itself. The page it serves contains no links to external websites
-and loads nothing from a CDN. You can author and present on a machine with no
-network.
+`eypres` needs no internet connection. The reveal.js runtime is embedded
+inside the `eypres` file itself, and the deck's own `templates/` library
+(including its templates, themes, fonts, logos and media) and slide files
+live on disk next to it. The page it serves contains no links to external
+websites and loads nothing from a CDN. You can author and present on a
+machine with no network.
 
 ## Making a PDF
 

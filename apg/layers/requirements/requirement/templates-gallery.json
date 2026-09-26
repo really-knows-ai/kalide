@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "templates-gallery",
-  "body": "The server serves a `/templates` gallery page showing every built-in template rendered from its example slide, with its description and field/section/body documentation.",
+  "body": "The server serves a `/templates` gallery page showing every template in the project's `templates/` directory rendered from its example slide (with the project theme), with its description and field/section/body documentation.",
   "properties": {
     "feature": "presenting"
   },

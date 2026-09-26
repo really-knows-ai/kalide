@@ -4,7 +4,13 @@
   "name": "deck-loader",
   "body": "Deck loader: reads eypres.yaml, lists slides/, parses filenames (number, letter, label), orders and groups vertical stacks.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/ey-present/internal/deck.LoadConfig",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
@@ -19,6 +25,11 @@
     {
       "kind": "realised-by",
       "source": "domain.service.load-deck",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     }
   ]

@@ -271,6 +271,14 @@ type Example struct {
 	// Sections holds the slide's declared section instances in source order,
 	// excluding the reserved notes section.
 	Sections []ExampleSection
+
+	// Deferred marks a template whose example is validated end to end
+	// elsewhere (checkLibraryExamples, against example.md through the full
+	// render context) rather than through Registry.Validate's schema-only
+	// structured-data check. A library-loaded template's manifest never
+	// carries hand-authored Frontmatter/Sections, so Registry.checkExample
+	// has nothing to check and skips it when Deferred is set.
+	Deferred bool
 }
 
 // ExampleSection is one declared section instance of an Example: the section

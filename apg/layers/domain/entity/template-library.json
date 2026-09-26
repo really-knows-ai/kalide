@@ -1,0 +1,53 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "template-library",
+  "body": "Template library: a project's `templates/` directory as one self-contained, relocatable unit, identified by its library manifest; contains templates, themes and media. Exactly one per project; its absence is an error.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.http-server",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.demo-fixture",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-media",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-dir-layout",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.demo-project",
+      "properties": {}
+    }
+  ]
+}

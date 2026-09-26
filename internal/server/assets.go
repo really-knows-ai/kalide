@@ -12,13 +12,13 @@ import (
 // assetHandler serves the URL space under AssetsPath for a request whose
 // leading AssetsPath has already been stripped (the mux registers it with
 // http.StripPrefix). A name is resolved against the embedded asset tree first
-// — reveal.js, fonts, logo, theme.css, pages — and then against the deck's
-// own assets/ directory.
+// — the reveal.js dist and the page shells under pages/ — and then against
+// the deck's own assets/ directory.
 //
 // Embedded-first means a deck cannot shadow a file the rendered page depends
-// on: the deck page's `/assets/reveal/…` and `/assets/theme.css` URLs always
-// resolve to the vendored copy. A deck's own images live under their own names
-// and no embedded file shares one.
+// on: the deck page's `/assets/reveal/…` URLs always resolve to the vendored
+// copy. A deck's own images live under their own names and no embedded file
+// shares one.
 //
 // Only files are served. A path whose cleaned form escapes its root (an
 // encoded "..") and a request for a directory are rejected, so the handler

@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-init",
-  "body": "`eypres init` in the current directory creates `slides/` with two valid starter slides, an empty `assets/` directory for images, and a valid `eypres.yaml`. AC: immediately after init, `eypres start` validates cleanly and serves the two starter slides.",
+  "body": "`eypres init` in the current directory creates `slides/` with one valid starter slide, an empty `assets/` directory for images, a valid `eypres.yaml`, and the project's minimal `templates/` directory (see cli-init-minimal-seed). AC: immediately after init, `eypres start` validates cleanly and serves the starter slide.",
   "properties": {
     "feature": "cli"
   },
@@ -18,8 +18,8 @@
       "properties": {}
     },
     {
-      "kind": "depends-on",
-      "target": "requirements.requirement.embedded-assets",
+      "kind": "contains",
+      "target": "requirements.requirement.cli-init-minimal-seed",
       "properties": {}
     }
   ],
@@ -32,6 +32,11 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.native-ci-verification",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-cli-init-seed-depends",
       "properties": {}
     }
   ]

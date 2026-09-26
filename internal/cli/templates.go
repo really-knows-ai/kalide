@@ -4,18 +4,22 @@ package cli
 // requirements.requirement.cli-templates-list and
 // requirements.requirement.cli-templates-show.
 //
-//   - `eypres templates` lists every built-in template: its name, its usage
-//     (slide|section) and its one-line description.
+//   - `eypres templates` lists every template in the project's templates/
+//     library: its name, its usage (slide|section) and its one-line
+//     description.
 //   - `eypres templates <name>` documents one template: its fields (type,
 //     required, default, limits, formats, description), its sections (accepted
 //     templates and min/max repeats), its implied body rules and its example
-//     slide, exactly as compiled into the binary.
+//     slide, exactly as loaded from the project's templates/ directory.
 //
-// The catalogue is template.Builtins(), the same compiled-in registry the
-// validator and renderer use, so the documentation cannot drift from the
-// behaviour. An unknown name is an author error: it is reported with the
-// closest-match "did you mean …?" suggestion from internal/suggest, matching
-// the parser's and theme registry's error style.
+// The catalogue is the project's templates/ library
+// (template.LoadLibrary + template.NewRegistryFromLibrary), the same loaded
+// registry the validator and renderer use, so the documentation cannot drift
+// from the behaviour. A missing or invalid templates/ directory is reported
+// the same way `eypres start` reports it, before any listing is attempted
+// (no-built-in-fallback). An unknown name is an author error: it is reported
+// with the closest-match "did you mean …?" suggestion from internal/suggest,
+// matching the parser's and theme registry's error style.
 //
 // runTemplates is called from Run with the arguments after the `templates`
 // command word (Run rejects more than one name before dispatching here). All
@@ -25,6 +29,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -34,13 +39,27 @@ import (
 
 // runTemplates implements `eypres templates [name]`.
 //
-// With no arguments it lists every built-in template. With exactly one argument
-// it shows that template's full documentation. It returns the process status
-// code: 0 on success; 1 when the name is unknown (the error names the available
-// templates and suggests the closest) or when the compiled-in registry cannot
-// be built, which is a programming error rather than an author error.
+// With no arguments it lists every template in the project's templates/
+// library. With exactly one argument it shows that template's full
+// documentation. It returns the process status code: 0 on success; 1 when
+// the project's templates/ directory is missing or invalid, when the name is
+// unknown (the error names the available templates and suggests the
+// closest), or when the loaded library cannot be built into a registry,
+// which is a programming error rather than an author error.
 func runTemplates(args []string, stdout, stderr io.Writer) int {
-	registry, err := template.Builtins()
+	root, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(stderr, "eypres templates: %v\n", err)
+		return 1
+	}
+
+	library, err := template.LoadLibrary(os.DirFS(root), template.TemplatesDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "eypres templates: %v\n", err)
+		return 1
+	}
+
+	registry, err := template.NewRegistryFromLibrary(library)
 	if err != nil {
 		fmt.Fprintf(stderr, "eypres templates: %v\n", err)
 		return 1
@@ -90,7 +109,7 @@ func printTemplateList(w io.Writer, registry *template.Registry) {
 		}
 	}
 
-	fmt.Fprintln(w, "Built-in templates:")
+	fmt.Fprintln(w, "Templates:")
 	fmt.Fprintln(w)
 	for _, t := range templates {
 		if t == nil {

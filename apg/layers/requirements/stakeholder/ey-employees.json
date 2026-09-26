@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "stakeholder",
   "name": "ey-employees",
-  "body": "EY employees who need to build beautiful, consistent slide decks quickly from built-in templates.",
+  "body": "EY employees who need to build beautiful, consistent slide decks quickly from their project's template library.",
   "properties": {},
   "out": [
     {
@@ -11,5 +11,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-e2e-seed-expectations",
+      "properties": {}
+    }
+  ]
 }

@@ -82,6 +82,21 @@ func integrationCatalogFor() integrationCatalog {
 	}
 }
 
+// deckDirThemes returns the project theme registry for a real on-disk deck
+// directory: theme.LoadDir(fsys, "templates/themes") when the deck has a
+// templates/themes directory, otherwise an in-memory registry with just
+// "default", since none of the testdata deck fixtures ship a templates/ tree.
+func deckDirThemes(fsys fs.FS) (*theme.Registry, error) {
+	if _, err := fs.Stat(fsys, "templates/themes"); err == nil {
+		return theme.LoadDir(fsys, "templates/themes")
+	}
+	reg := theme.NewRegistry()
+	if err := reg.Register(theme.Theme{Name: theme.DefaultName}); err != nil {
+		return nil, err
+	}
+	return reg, nil
+}
+
 // loadDeckDir loads one real on-disk deck directory through the deck loaders and
 // the slide parser, in the fail-fast order the deck validator uses: the config
 // first, then slide filenames and ordering, then each slide's contents in
@@ -90,7 +105,12 @@ func integrationCatalogFor() integrationCatalog {
 func loadDeckDir(dir string) (*Config, *Deck, []*slide.Slide, error) {
 	fsys := os.DirFS(dir)
 
-	cfg, err := LoadConfig(fsys, ConfigFile)
+	themes, err := deckDirThemes(fsys)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	cfg, err := LoadConfig(fsys, ConfigFile, themes)
 	if err != nil {
 		return nil, nil, nil, err
 	}

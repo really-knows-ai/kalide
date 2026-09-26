@@ -21,9 +21,17 @@ const deckPageName = "deck.html.tmpl"
 
 // assetsURLPrefix is the URL the embedded asset tree is mounted under by the
 // phase-7 HTTP server, and what the deck page's <link>/<script> URLs assume
-// ("/assets/reveal/…", "/assets/theme.css"). RenderDeck turns a theme's
-// registry-relative Stylesheet into a URL with this prefix.
+// ("/assets/reveal/…").
 const assetsURLPrefix = "/assets/"
+
+// themesURLPrefix is the URL prefix a project theme's on-disk files are
+// served under: templates/themes/<name>/<file> becomes
+// themesURLPrefix + "<name>/<file>". It must match internal/server's
+// ThemesPath exactly (media.go) — internal/server mounts the handler that
+// serves this space, internal/render only bakes the URL into the rendered
+// page, and the two packages cannot share the constant directly since server
+// imports render.
+const themesURLPrefix = "/assets/templates/themes/"
 
 // RenderDeck renders a whole validated deck into the offline reveal.js page:
 // the embedded assets.DeckPage "deck.html.tmpl" executed with the deck's title,
@@ -40,12 +48,21 @@ const assetsURLPrefix = "/assets/"
 // model's order (vertical-slides). parsed holds the slides' parsed structures
 // (internal/slide.Parse), indexed here by slide.Slide.File, which must be the
 // slide's deck path (deck.Slide.Path) — the convention internal/validate uses.
-// reg is the populated template registry the deck was validated against;
-// themeReg is the theme registry (nil uses theme.Builtin()).
+// reg is the populated template registry the deck was validated against —
+// typically built from the project's templates/ library
+// (template.NewRegistryFromLibrary); themeReg is the project theme registry
+// (theme.LoadDir) and must be non-nil — callers always construct one from the
+// project's on-disk theme library, so a nil themeReg is a caller error and
+// RenderDeck reports it rather than silently substituting a default. funcMap is
+// the library's layout func map (template.LayoutFuncMap: `media` bound to the
+// served templates/media URL base, plus the format functions), threaded into
+// every slide's RenderSlide call so a library layout using `media` renders
+// (template-media, template-language).
 //
 // The output is the complete offline page. reveal.js and the speaker-notes
-// plugin are loaded from the embedded assets, the theme stylesheet from the
-// registry, and Reveal.initialize enables hash anchors and the navigationMode.
+// plugin are loaded from the embedded assets, the theme stylesheet from
+// templates/themes/<name>/theme.css served under themesURLPrefix, and
+// Reveal.initialize enables hash anchors and the navigationMode.
 // Print-to-PDF is reveal.js core support: loading the served page with
 // `?print-pdf` uses the print styles bundled in the embedded dist/reveal.css,
 // so there is no separate print plugin or stylesheet and no export command
@@ -57,7 +74,7 @@ const assetsURLPrefix = "/assets/"
 // structure, and any slide or page execution failure are returned as a
 // *RenderError. RenderDeck is deterministic: the same deck always renders to
 // the same page HTML.
-func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *template.Registry, themeReg *theme.Registry) (htmltmpl.HTML, error) {
+func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *template.Registry, themeReg *theme.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	if cfg == nil {
 		return "", &RenderError{Err: errors.New("nil deck config")}
 	}
@@ -68,7 +85,7 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 		return "", &RenderError{Err: errors.New("nil template registry")}
 	}
 	if themeReg == nil {
-		themeReg = theme.Builtin()
+		return "", &RenderError{Err: errors.New("nil theme registry")}
 	}
 
 	themeCSS, err := themeStylesheet(cfg.Theme, themeReg)
@@ -89,14 +106,14 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 	for i := range d.Stacks {
 		stack := &d.Stacks[i]
 
-		horizontal, err := renderDeckSlide(byFile, stack.Slide, reg)
+		horizontal, err := renderDeckSlide(byFile, stack.Slide, reg, funcMap)
 		if err != nil {
 			return "", err
 		}
 		if len(stack.Vertical) > 0 {
 			var inner strings.Builder
 			for j := range stack.Vertical {
-				vertical, err := renderDeckSlide(byFile, stack.Vertical[j], reg)
+				vertical, err := renderDeckSlide(byFile, stack.Vertical[j], reg, funcMap)
 				if err != nil {
 					return "", err
 				}
@@ -128,19 +145,23 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 
 // renderDeckSlide renders one modelled slide (a horizontal slide or a vertical
 // one) through RenderSlide, looking its parsed structure up by its deck path.
-func renderDeckSlide(byFile map[string]*slide.Slide, s deck.Slide, reg *template.Registry) (htmltmpl.HTML, error) {
+// funcMap is the library's layout func map, threaded straight through to
+// RenderSlide.
+func renderDeckSlide(byFile map[string]*slide.Slide, s deck.Slide, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	parsed, ok := byFile[s.Path]
 	if !ok || parsed == nil {
 		return "", &RenderError{File: s.Path, Err: errors.New("no parsed slide for deck slide")}
 	}
-	return RenderSlide(parsed, s.Label, reg)
+	return RenderSlide(parsed, s.Label, reg, funcMap)
 }
 
 // themeStylesheet resolves a deck config's theme name to the URL of its
-// stylesheet in the embedded asset tree, through the phase-2 theme registry
-// (theme-selection). An empty name resolves to the default theme. An unknown
+// stylesheet, through the project theme registry (theme.LoadDir,
+// theme-selection). An empty name resolves to the default theme. An unknown
 // name carries the registry's positioned unknown-theme error. A theme with no
-// stylesheet yields "" so the deck page's own default link applies.
+// stylesheet yields "" so the deck page's own default link applies. The URL is
+// themesURLPrefix + "<name>/<stylesheet>", matching where internal/server's
+// mediaHandler serves templates/themes/<name>/** from disk.
 func themeStylesheet(name string, reg *theme.Registry) (string, error) {
 	if name == "" {
 		name = theme.DefaultName
@@ -152,7 +173,7 @@ func themeStylesheet(name string, reg *theme.Registry) (string, error) {
 	if t.Stylesheet == "" {
 		return "", nil
 	}
-	return assetsURLPrefix + t.Stylesheet, nil
+	return themesURLPrefix + t.Name + "/" + t.Stylesheet, nil
 }
 
 // insertBeforeSectionClose nests content inside the slide element by inserting

@@ -1,0 +1,43 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "demo-project",
+  "body": "Demo project: the repo contains a small, non-EY-branded demo eypres project at `examples/demo/` (eypres.yaml, slides/, assets/, templates/) with a few slide templates (e.g. title, content, columns), a few section templates (e.g. column, person), one theme and at least one media file under templates/media/. It is the fixture for integration/e2e tests of template loading, validation, rendering and media serving, and is distinct from the minimal `hello` init seed (which stays minimal). It is not embedded in the binary. AC: `eypres start` in `examples/demo/` validates templates and deck cleanly; integration tests run against it; grep of `examples/demo/` finds no EY brand name, font or logo.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.templates-dir-layout",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-media",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-demo-project",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.demo-fixture-placement",
+      "properties": {}
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "person",
   "name": "template-author",
-  "body": "Template author (C4 person): adds templates/theme to the source and builds the binary.",
+  "body": "Template author (C4 person): writes a project `templates/` library (templates, themes, media) and runs `eypres start`/`eypres templates` against it; never builds templates into the binary.",
   "properties": {},
   "out": [
     {
@@ -11,5 +11,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-ey-content-removal",
+      "properties": {}
+    }
+  ]
 }
