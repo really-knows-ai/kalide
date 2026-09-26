@@ -1,10 +1,10 @@
-# Scoop bucket for eypres
+# Scoop bucket for kalide
 
-This directory is the Scoop manifest for `eypres`, hosted in the source repo:
+This directory is the Scoop manifest for `kalide`, hosted in the source repo:
 
 ```
-scoop bucket add ey-present <git url>
-scoop install eypres
+scoop bucket add kalide <git url>
+scoop install kalide
 ```
 
 The repository is private, so users need git access to it plus a GitHub token
@@ -14,26 +14,26 @@ The repository is private, so users need git access to it plus a GitHub token
 
 Scoop's own downloader runs **before** `pre_install` and cannot send an
 `Authorization` header. The release assets live on the private repository
-`really-knows-ai/ey-present`, so a per-architecture `url` pointing straight at
+`really-knows-ai/kalide`, so a per-architecture `url` pointing straight at
 `.../releases/download/...` would make Scoop attempt an unauthenticated fetch,
 get a 404, and abort the install — `pre_install` would never run. The
 token-aware fetch therefore cannot be a fallback; it has to be the only fetch.
 
-So `bucket/eypres.json` carries **no** `architecture.<arch>.url`. The manifest is
+So `bucket/kalide.json` carries **no** `architecture.<arch>.url`. The manifest is
 hash-only (`architecture.<arch>.hash` is still required, to verify the bytes
 `pre_install` downloads) and `pre_install` is the single authenticated fetch:
 
-1. Read the token from `EYPRES_GITHUB_TOKEN`, falling back to `GITHUB_TOKEN`.
+1. Read the token from `KALIDE_GITHUB_TOKEN`, falling back to `GITHUB_TOKEN`.
    A missing token stops with a clear error naming both variables.
 2. Resolve the release by tag `v<version>` via
-   `https://api.github.com/repos/really-knows-ai/ey-present/releases/tags/v<version>`.
-3. Find the asset named `eypres-windows-amd64.exe`, or
-   `eypres-windows-arm64.exe` when Scoop's `$architecture` is `arm64`.
+   `https://api.github.com/repos/really-knows-ai/kalide/releases/tags/v<version>`.
+3. Find the asset named `kalide-windows-amd64.exe`, or
+   `kalide-windows-arm64.exe` when Scoop's `$architecture` is `arm64`.
 4. Download it from the GitHub API asset URL with
    `Accept: application/octet-stream`.
 5. Verify its SHA-256 against the manifest's `architecture.<arch>.hash` and
    discard it on mismatch.
-6. Write `eypres.exe` into the Scoop app directory; `bin` shims it as `eypres`.
+6. Write `kalide.exe` into the Scoop app directory; `bin` shims it as `kalide`.
 
 A missing, invalid or expired token, or a release that lacks the asset, stops
 with an HTTP status and a clear message pointing at `INSTALL.md`.
@@ -41,8 +41,8 @@ with an HTTP status and a clear message pointing at `INSTALL.md`.
 The script uses the `$dir`, `$architecture` and `$manifest` variables Scoop
 sets for a `pre_install` hook: `$dir` is the app directory, `$architecture` is
 Scoop's `64bit`/`arm64`, and `$manifest.architecture.<arch>.hash` is the
-expected checksum. `pre_install` writes `eypres.exe` into `$dir`, which `bin`
-then shims as `eypres`.
+expected checksum. `pre_install` writes `kalide.exe` into `$dir`, which `bin`
+then shims as `kalide`.
 
 ### How Scoop treats a `url`-less architecture entry
 
@@ -50,8 +50,8 @@ Scoop's install pipeline downloads only the URLs a manifest declares (the
 per-architecture `url`, or a top-level `url`/`urls`): with neither present there
 is no URL to fetch, so the download step has nothing to do and Scoop moves on to
 `pre_install`, which is where the private asset is fetched, then continues to
-`bin` shimming. `pre_install` writes `eypres.exe` into `$dir` — the app
-directory Scoop then shims as `eypres` — so there is no separate download or
+`bin` shimming. `pre_install` writes `kalide.exe` into `$dir` — the app
+directory Scoop then shims as `kalide` — so there is no separate download or
 `bin` copy step.
 
 This is also why a placeholder `url` is **not** a safe fallback: any `url` is
@@ -63,13 +63,13 @@ for on the Scoop side is the reference value `pre_install` reads from
 
 ## Token
 
-- Preferred: `EYPRES_GITHUB_TOKEN`.
+- Preferred: `KALIDE_GITHUB_TOKEN`.
 - Fallback: `GITHUB_TOKEN`.
-- Scope: read access to `really-knows-ai/ey-present` (classic `repo`, or a
+- Scope: read access to `really-knows-ai/kalide` (classic `repo`, or a
   fine-grained token with `Contents: Read`).
 
 ```
-setx EYPRES_GITHUB_TOKEN "<your token>"
+setx KALIDE_GITHUB_TOKEN "<your token>"
 ```
 
 ## Architectures
@@ -94,11 +94,11 @@ pushed `vX.Y.Z` tag and `checksums.txt`:
 | Field | Placeholder | Regenerated from |
 |---|---|---|
 | `version` | `0.0.0` | the pushed `vX.Y.Z` tag |
-| `architecture.64bit.hash` | `<sha256-of-eypres-windows-amd64.exe>` | `checksums.txt` |
+| `architecture.64bit.hash` | `<sha256-of-kalide-windows-amd64.exe>` | `checksums.txt` |
 | `architecture.arm64.hash` | (block absent at rest) | `checksums.txt`, when released |
 
 The manifest job **adds** the whole `architecture.arm64` block when
-`checksums.txt` contains `eypres-windows-arm64.exe` and **removes** it when it
+`checksums.txt` contains `kalide-windows-arm64.exe` and **removes** it when it
 does not, so a release that did not ship the windows/arm64 binary has no arm64
 entry — matching `requirements.requirement.scoop-install`. Each block contains a
 `hash` only; the job also defensively drops any stale `url` from `64bit` (and
@@ -108,9 +108,9 @@ never writes one for `arm64`). The job commits only files under `Formula/` and
 ## Validating
 
 ```
-python3 -m json.tool bucket/eypres.json
+python3 -m json.tool bucket/kalide.json
 ```
 
-(or `jq . bucket/eypres.json`). `pre_install` is a JSON array of PowerShell
+(or `jq . bucket/kalide.json`). `pre_install` is a JSON array of PowerShell
 command strings, one per step; keep it as valid JSON when editing and re-check
 the result.

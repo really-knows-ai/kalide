@@ -1,4 +1,4 @@
-# Release for eypres.
+# Release for kalide.
 #
 # Trigger: ONLY a human-pushed version tag vX.Y.Z. There is deliberately no
 # workflow_dispatch and no scheduled/other trigger. This workflow never creates
@@ -15,7 +15,7 @@
 #              runner per supported target (its own matrix);
 #   publish -> create the GitHub Release vX.Y.Z with the binaries + checksums,
 #              but only after every native e2e job has passed (`needs`);
-#   manifest -> regenerate Formula/eypres.rb and bucket/eypres.json from the
+#   manifest -> regenerate Formula/kalide.rb and bucket/kalide.json from the
 #              release tag + checksums.txt, assert only Formula/ and bucket/
 #              changed, and push that manifest commit as the Actions bot.
 #
@@ -66,7 +66,7 @@ jobs:
       - name: Drop windows/arm64 when its runner is unavailable
         if: ${{ vars.WINDOWS_ARM_RUNNER != 'true' }}
         shell: bash
-        run: rm -f dist/eypres-windows-arm64.exe
+        run: rm -f dist/kalide-windows-arm64.exe
 
       # SHA-256 checksums over exactly the binaries shipped in this release, in
       # a fixed order. Format is `<hash>  <filename>` (two spaces), the form the
@@ -77,7 +77,7 @@ jobs:
           set -euo pipefail
           cd dist
           : > checksums.txt
-          for f in eypres-darwin-arm64 eypres-windows-amd64.exe eypres-windows-arm64.exe; do
+          for f in kalide-darwin-arm64 kalide-windows-amd64.exe kalide-windows-arm64.exe; do
             if [ -f "$f" ]; then
               shasum -a 256 "$f" >> checksums.txt
             fi
@@ -90,14 +90,14 @@ jobs:
       - name: Upload binaries and checksums
         uses: actions/upload-artifact@v4
         with:
-          name: eypres-binaries
+          name: kalide-binaries
           path: dist/
           if-no-files-found: error
           retention-days: 7
 
   # Native verification of the exact artifacts built above, on one native runner
   # per supported target. The reusable workflow owns the per-target matrix and
-  # downloads the `eypres-binaries` artifact (release mode) instead of
+  # downloads the `kalide-binaries` artifact (release mode) instead of
   # rebuilding, so each target's own binary is what gets tested.
   native-e2e:
     name: Native e2e
@@ -105,7 +105,7 @@ jobs:
     uses: ./.github/workflows/native-e2e.yml
     with:
       release: true
-      artifact-name: eypres-binaries
+      artifact-name: kalide-binaries
       version: ${{ github.ref_name }}
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
@@ -124,7 +124,7 @@ jobs:
       # Re-fetch the very artifact native e2e verified.
       - uses: actions/download-artifact@v4
         with:
-          name: eypres-binaries
+          name: kalide-binaries
           path: dist
 
       # Create the GitHub Release vX.Y.Z on the private repo with the binaries
@@ -138,17 +138,17 @@ jobs:
         run: |
           set -euo pipefail
           assets=(
-            dist/eypres-darwin-arm64
-            dist/eypres-windows-amd64.exe
+            dist/kalide-darwin-arm64
+            dist/kalide-windows-amd64.exe
           )
-          if [ -f dist/eypres-windows-arm64.exe ]; then
-            assets+=(dist/eypres-windows-arm64.exe)
+          if [ -f dist/kalide-windows-arm64.exe ]; then
+            assets+=(dist/kalide-windows-arm64.exe)
           fi
           assets+=(dist/checksums.txt)
           gh release create "$TAG" "${assets[@]}" \
             --verify-tag \
             --title "$TAG" \
-            --notes "eypres $TAG. Assets: the supported platform binaries and checksums.txt (SHA-256)."
+            --notes "kalide $TAG. Assets: the supported platform binaries and checksums.txt (SHA-256)."
 
   # Regenerate the Homebrew/Scoop manifests after the Release exists, then push
   # them as the GitHub Actions bot. This is the one CI push allowed by
@@ -156,12 +156,12 @@ jobs:
   #
   # The two manifests are pure placeholders at rest, so regeneration is a small
   # deterministic rewrite of exactly the lines their contracts name:
-  #   - Formula/eypres.rb      version / url / sha256  (see its regeneration
+  #   - Formula/kalide.rb      version / url / sha256  (see its regeneration
   #                            contract and Formula/lib/…strategy.rb, which
   #                            requires the release-download URL form)
-  #   - bucket/eypres.json     version / 64bit.hash, plus the whole
+  #   - bucket/kalide.json     version / 64bit.hash, plus the whole
   #                            architecture.arm64 block only when the release
-  #                            actually shipped eypres-windows-arm64.exe
+  #                            actually shipped kalide-windows-arm64.exe
   #                            (see bucket/README.md). The per-arch `url` is
   #                            deliberately NOT written: the assets are private
   #                            and Scoop's own downloader cannot authenticate, so
@@ -202,7 +202,7 @@ jobs:
       # Rewrite only the placeholder lines the artifacts' regeneration contracts
       # name. python3 is used (present on the runner) so the URL/sha256 pairs are
       # matched by asset name rather than by brittle line numbers.
-      - name: Regenerate Formula/eypres.rb and bucket/eypres.json
+      - name: Regenerate Formula/kalide.rb and bucket/kalide.json
         env:
           TAG: ${{ github.ref_name }}
         shell: bash
@@ -213,7 +213,7 @@ jobs:
 
           tag = sys.argv[1]
           version = tag[1:] if tag.startswith("v") else tag
-          base = f"https://github.com/really-knows-ai/ey-present/releases/download/{tag}"
+          base = f"https://github.com/really-knows-ai/kalide/releases/download/{tag}"
 
           # checksums.txt: `<hash>  <name>` (two spaces, shasum -a 256).
           sums = {}
@@ -224,11 +224,11 @@ jobs:
               digest, name = line.split(None, 1)
               sums[name.strip()] = digest.strip()
 
-          darwin = sums["eypres-darwin-arm64"]
-          amd64 = sums["eypres-windows-amd64.exe"]
+          darwin = sums["kalide-darwin-arm64"]
+          amd64 = sums["kalide-windows-amd64.exe"]
 
-          # --- Formula/eypres.rb: version / url / sha256 ---------------------
-          formula = pathlib.Path("Formula/eypres.rb")
+          # --- Formula/kalide.rb: version / url / sha256 ---------------------
+          formula = pathlib.Path("Formula/kalide.rb")
           text = formula.read_text()
 
           def replace_once(text, pattern, replacement):
@@ -238,27 +238,27 @@ jobs:
               return new
 
           text = replace_once(text, r'^  url "https://github\.com/[^"]*"',
-                              f'  url "{base}/eypres-darwin-arm64"')
+                              f'  url "{base}/kalide-darwin-arm64"')
           text = replace_once(text, r'^  version "[^"]*"', f'  version "{version}"')
           text = replace_once(text, r'^  sha256 "[^"]*"', f'  sha256 "{darwin}"')
           formula.write_text(text)
 
-          # --- bucket/eypres.json: version / hashes / arm64 block -----------
+          # --- bucket/kalide.json: version / hashes / arm64 block -----------
           # The hash-only manifest: no per-arch `url` is written, because the
           # release assets are private and Scoop's downloader cannot send an
           # Authorization header. A `url` would make Scoop attempt an
           # unauthenticated fetch (404) before `pre_install` runs; `pre_install`
-          # is the authenticated fetch that writes eypres.exe into $dir.
-          bucket = pathlib.Path("bucket/eypres.json")
+          # is the authenticated fetch that writes kalide.exe into $dir.
+          bucket = pathlib.Path("bucket/kalide.json")
           manifest = json.loads(bucket.read_text())
           manifest["version"] = version
           manifest["architecture"]["64bit"].pop("url", None)
           manifest["architecture"]["64bit"]["hash"] = amd64
 
           arm64 = None
-          if "eypres-windows-arm64.exe" in sums:
+          if "kalide-windows-arm64.exe" in sums:
               arm64 = {
-                  "hash": sums["eypres-windows-arm64.exe"],
+                  "hash": sums["kalide-windows-arm64.exe"],
               }
           # Add when released, remove when not, so the entry always matches the
           # assets actually shipped.

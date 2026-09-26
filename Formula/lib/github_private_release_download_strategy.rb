@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Download strategy for `eypres`, which is distributed from the *private*
-# GitHub repository really-knows-ai/ey-present.
+# Download strategy for `kalide`, which is distributed from the *private*
+# GitHub repository really-knows-ai/kalide.
 #
 # The formula's `url` is the ordinary-looking release URL:
 #
@@ -13,7 +13,7 @@
 #   1. it reads the user's token from HOMEBREW_GITHUB_API_TOKEN at fetch time
 #      (not at formula-load time, so `brew info` stays usable without one);
 #   2. it asks the API for the release identified by TAG and picks the asset
-#      whose name matches ASSET (the formula's `eypres-darwin-arm64`);
+#      whose name matches ASSET (the formula's `kalide-darwin-arm64`);
 #   3. CurlDownloadStrategy then downloads that asset API URL carrying
 #        Authorization: Bearer <token>
 #        Accept: application/octet-stream
@@ -57,7 +57,7 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
   end
 
   # Name the staged/downloaded file after the release asset rather than the
-  # numeric API asset id, so the formula can install `eypres-darwin-arm64`.
+  # numeric API asset id, so the formula can install `kalide-darwin-arm64`.
   def resolved_basename
     @asset_name
   end
@@ -81,7 +81,7 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
     @asset_name = match[:asset]
   end
 
-  # The user's GitHub token. eypres ships from a private repository, so there is
+  # The user's GitHub token. kalide ships from a private repository, so there is
   # no anonymous download path.
   def token
     @token ||= begin
@@ -89,9 +89,9 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
 
       if value.empty?
         raise CurlDownloadStrategyError, <<~EOS
-          HOMEBREW_GITHUB_API_TOKEN is not set, so eypres cannot be downloaded.
+          HOMEBREW_GITHUB_API_TOKEN is not set, so kalide cannot be downloaded.
 
-          eypres is distributed from the private GitHub repository
+          kalide is distributed from the private GitHub repository
           #{@gh_owner}/#{@gh_repo}. Create a GitHub token that can read it and
           export it before installing:
 
@@ -169,6 +169,6 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
     end
   rescue SocketError, SystemCallError, Timeout::Error, IOError => e
     raise CurlDownloadStrategyError,
-          "Could not reach the GitHub API to download eypres: #{e.message}"
+          "Could not reach the GitHub API to download kalide: #{e.message}"
   end
 end

@@ -26,7 +26,7 @@
 #     that artifact into dist/ instead of rebuilding.
 #
 # Either way the job runs
-# `go test ./e2e -run 'TestNativeRelease|TestDemoProject'` with EYPRES_BINARY
+# `go test ./e2e -run 'TestNativeRelease|TestDemoProject'` with KALIDE_BINARY
 # pointing at the target binary, so both e2e tests drive the exact artifact for
 # the runner's own target.
 #
@@ -45,7 +45,7 @@ on:
       artifact-name:
         description: Name of the artifact holding the release binaries (release mode)
         type: string
-        default: eypres-binaries
+        default: kalide-binaries
       version:
         description: Version stamped into the built binaries (build mode)
         type: string
@@ -70,7 +70,7 @@ jobs:
         # runner is available to the private repo. A static entry cannot be made
         # conditional (a job-level `if` cannot read the matrix context), so the
         # list is assembled here from vars.WINDOWS_ARM_RUNNER.
-        include: ${{ fromJSON(vars.WINDOWS_ARM_RUNNER == 'true' && '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/eypres-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/eypres-windows-amd64.exe"},{"target":"windows/arm64","os":"windows-11-arm","binary":"dist/eypres-windows-arm64.exe"}]' || '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/eypres-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/eypres-windows-amd64.exe"}]') }}
+        include: ${{ fromJSON(vars.WINDOWS_ARM_RUNNER == 'true' && '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/kalide-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/kalide-windows-amd64.exe"},{"target":"windows/arm64","os":"windows-11-arm","binary":"dist/kalide-windows-arm64.exe"}]' || '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/kalide-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/kalide-windows-amd64.exe"}]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -108,5 +108,5 @@ jobs:
       # exit assertions.
       - name: Run native e2e
         env:
-          EYPRES_BINARY: ${{ github.workspace }}/${{ matrix.binary }}
+          KALIDE_BINARY: ${{ github.workspace }}/${{ matrix.binary }}
         run: go test ./e2e -run 'TestNativeRelease|TestDemoProject' -v

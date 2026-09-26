@@ -2,13 +2,13 @@
 #
 # One host job runs the fast checks (gofmt, go vet, build) plus the whole test
 # suite `go test ./...` — unit, integration and e2e. The e2e tests build the
-# eypres binary themselves with CGO_ENABLED=0 for the host target (the runner's
+# kalide binary themselves with CGO_ENABLED=0 for the host target (the runner's
 # OS/arch is the target), so the job needs no prebuilt/release binary. The host
 # is macos-14 (darwin/arm64), a supported target: running the host suite on
 # Linux would compile a Linux binary, which the project never builds.
 #
 # The job also carries the module-path guard: the source repo's module path must
-# be exactly github.com/really-knows-ai/ey-present, and no package living in the
+# be exactly github.com/really-knows-ai/kalide, and no package living in the
 # repository may be imported under a different module path.
 #
 # Native end-to-end verification is delegated to the reusable native-e2e.yml
@@ -59,13 +59,13 @@ jobs:
       # The module path is the private repo's path exactly, and every package
       # that lives inside this repository belongs to it. A package whose
       # directory is under the module root yet whose import path is not under
-      # the module path (a stray nested module or a stale, e.g. github.com/ey/
-      # eypres, path) is a project-internal package outside the path.
+      # the module path (a stray nested module or a stale, e.g.
+      # github.com/really-knows-ai/ey-present, path) is a project-internal package outside the path.
       - name: Module-path guard
         shell: bash
         run: |
           set -euo pipefail
-          want='github.com/really-knows-ai/ey-present'
+          want='github.com/really-knows-ai/kalide'
 
           got="$(go list -m)"
           if [ "$got" != "$want" ]; then
@@ -90,7 +90,7 @@ jobs:
           echo "module-path guard OK: $got"
 
       # All tiers, including e2e. The e2e harness builds its own CGO_ENABLED=0
-      # binary for the host target; no EYPRES_BINARY (release artifact) is set.
+      # binary for the host target; no KALIDE_BINARY (release artifact) is set.
       - name: Test
         run: go test ./...
 
