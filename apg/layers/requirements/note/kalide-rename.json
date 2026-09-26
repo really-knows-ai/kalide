@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.stakeholder.kalide-maintainers",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.install-kalide",
+      "properties": {}
     }
   ],
   "in": []
