@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "single-binary",
-  "body": "Delivered as one self-contained static `eypres` binary (Go) per supported target: darwin/arm64 and windows/amd64 (required), plus windows/arm64 only when its GitHub-hosted native runner is available (see supported-platforms). No Intel macOS and no Linux. No runtime, network access or install step needed beyond placing the binary (Homebrew/Scoop channels are a convenience). The binary packages the whole tool (authoring/scaffolding, templating, validation, presentation). AC: for every release, the offline init/start e2e passes on a native GitHub Actions runner for each supported target (see native-ci-verification); cross-compiling alone does not satisfy this AC.",
+  "body": "Delivered as one self-contained static `kalide` binary (Go, built from `cmd/kalide`, released as `kalide-<os>-<arch>`) per supported target: darwin/arm64 and windows/amd64 (required), plus windows/arm64 only when its GitHub-hosted native runner is available (see supported-platforms). No Intel macOS and no Linux. No runtime, network access or install step needed beyond placing the binary (Homebrew/Scoop channels are a convenience). The binary packages the whole tool (authoring/scaffolding, templating, validation, presentation). AC: for every release, the offline init/start e2e passes on a native GitHub Actions runner for each supported target (see native-ci-verification); cross-compiling alone does not satisfy this AC.",
   "properties": {
     "feature": "cross-platform"
   },
