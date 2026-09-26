@@ -41,6 +41,11 @@
       "kind": "details",
       "source": "requirements.note.fix-validation-order",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-component-implemented-by",
+      "properties": {}
     }
   ]
 }
