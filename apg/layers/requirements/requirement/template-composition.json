@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-composition",
-  "body": "Slide templates declare named sections, the section templates each accepts, and repeat limits (min/max, e.g. columns 2–4). Section templates may declare their own sections / use other section templates, with no depth limit (composition inside templates, not author Markdown). Sections only accept section-usage templates, never slide templates.",
+  "body": "Slide templates declare named sections, the section templates each accepts, and repeat limits (min/max, e.g. columns 2–4). Section templates may declare their own sections / use other section templates, with no depth limit (composition inside templates, not author Markdown). Sections only accept section templates (those under `templates/sections/`), never slide templates (those under `templates/slides/`).",
   "properties": {
     "feature": "templates"
   },
