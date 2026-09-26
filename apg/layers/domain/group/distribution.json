@@ -42,6 +42,11 @@
       "kind": "realised-by",
       "target": "solution.container.package-channels",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.install-kalide",
+      "properties": {}
     }
   ],
   "in": [
