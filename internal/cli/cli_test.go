@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -46,41 +48,70 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 
 // TestRunRoutesCommands asserts each recognised command reaches its handler.
 //
-// `init` is still the phase-1 stub, so its routing is observable through the
-// handler name in the "not implemented" error (exit 1). `start` now routes to
-// the real runStart handler (phase-7 task 6): in a directory with no
-// eypres.yaml it validates the deck first and prints exactly the single first
-// error (naming eypres.yaml) before it can serve, exiting non-zero. `templates`
-// is also a real handler (phase-7 task 7): it reaches runTemplates, which lists
-// the built-ins (exit 0), documents one by name (exit 0) and rejects an unknown
-// name (non-zero). The full start/templates assertions belong to phase-7 task 9;
-// here we only pin down that the routes reach the real handlers.
+// All three commands are real handlers now, so there is no stub table left:
+// `init` routes to runInit (phase-8 task 3), `start` to runStart (phase-7
+// task 6) and `templates` to runTemplates (phase-7 task 7). The start case
+// validates the deck before it can serve and exits non-zero in a directory
+// with no eypres.yaml; templates lists the built-ins (exit 0), documents one
+// by name (exit 0) and rejects an unknown name (non-zero). The init case
+// scaffolds a starter deck, so it is run in a throwaway temp directory and
+// never in the package directory. Full per-command coverage lives in the
+// phase-7 task 9 and phase-8 task 5 tests; here we only pin the routes.
 func TestRunRoutesCommands(t *testing.T) {
-	stubs := []struct {
-		name    string
-		args    []string
-		handler string
-	}{
-		{name: "init", args: []string{"init"}, handler: "init"},
-	}
+	t.Run("init scaffolds and refuses a second run", func(t *testing.T) {
+		// runInit resolves the current working directory with os.Getwd and
+		// scaffold.Init writes slides/, assets/ and eypres.yaml there, so the
+		// test must never run in the package directory. t.Chdir gives each
+		// subtest its own temp dir and restores the original afterwards, which
+		// also keeps the suite safe to run repeatedly (no stray deck dirs).
+		dir := t.TempDir()
+		t.Chdir(dir)
 
-	for _, tt := range stubs {
-		t.Run(tt.name, func(t *testing.T) {
-			code, stdout, stderr := runCLI(tt.args...)
-			if code != 1 {
-				t.Fatalf("Run(%q) exit = %d, want 1", tt.args, code)
+		code, stdout, stderr := runCLI("init")
+		if code != 0 {
+			t.Fatalf("Run(init) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(init) stderr = %q, want empty", stderr)
+		}
+		for _, want := range []string{
+			"eypres.yaml",
+			"slides/1-title.md",
+			"slides/2-content.md",
+			"assets/",
+		} {
+			if !strings.Contains(stdout, want) {
+				t.Errorf("Run(init) stdout = %q, want created path %q", stdout, want)
 			}
-			if !strings.Contains(stderr, `"`+tt.handler+`"`) {
-				t.Fatalf("Run(%q) stderr = %q, want mention of handler %q", tt.args, stderr, tt.handler)
+		}
+
+		// The advertised paths must actually exist in the temp dir.
+		for _, created := range []string{
+			"eypres.yaml",
+			"slides/1-title.md",
+			"slides/2-content.md",
+			"assets",
+		} {
+			if _, err := os.Stat(filepath.Join(dir, created)); err != nil {
+				t.Errorf("stat %s after init: %v, want the path created", created, err)
 			}
-			if !strings.Contains(stderr, "not implemented") {
-				t.Fatalf("Run(%q) stderr = %q, want a not-implemented error", tt.args, stderr)
+		}
+
+		// A second init in the same directory must refuse, name the blocking
+		// path and leave the first deck untouched.
+		code, stdout, stderr = runCLI("init")
+		if code == 0 {
+			t.Fatal("Run(init) second run exit = 0, want non-zero refusal")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(init) second run stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{"eypres.yaml", "slides/", "assets/", "never overwrites"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("Run(init) second run stderr = %q, want refusal mentioning %q", stderr, want)
 			}
-			if stdout != "" {
-				t.Fatalf("Run(%q) stdout = %q, want empty", tt.args, stdout)
-			}
-		})
-	}
+		}
+	})
 
 	t.Run("start validates before serving", func(t *testing.T) {
 		// An empty temp dir has no eypres.yaml, so runStart's whole-deck
