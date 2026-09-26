@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.deck-properties",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
