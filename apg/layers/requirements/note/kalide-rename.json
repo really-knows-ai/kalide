@@ -179,6 +179,11 @@
       "kind": "details",
       "target": "requirements.note.parked-template-catalogue",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.watch-deck",
+      "properties": {}
     }
   ],
   "in": []
