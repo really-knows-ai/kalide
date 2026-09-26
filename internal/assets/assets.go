@@ -13,6 +13,8 @@
 //	            its html/template layout and validating example slide source
 //	pages/      full-page html/template shells (the reveal.js deck page, the
 //	            full-page error page and the /templates gallery page)
+//	starter/    the starter deck copied verbatim by `eypres init`: a valid
+//	            eypres.yaml at the root and two valid slides under slides/
 //	theme.css   default EY theme tokens and @font-face rules
 //
 // Everything is compiled into the binary: the served deck never reaches the
@@ -37,7 +39,7 @@ import (
 // fonts/ and logo/ directories: embed cannot include parent directories, so
 // the brand assets were moved under internal/assets/ when they were vendored.
 //
-//go:embed reveal fonts logo templates pages theme.css
+//go:embed reveal fonts logo templates pages starter theme.css
 var FS embed.FS
 
 // revealFS, fontsFS, logoFS and templatesFS are resolved once: fs.Sub can only
@@ -50,6 +52,7 @@ var (
 	logoFS      = mustSub("logo")
 	templatesFS = mustSub("templates")
 	pagesFS     = mustSub("pages")
+	starterFS   = mustSub("starter")
 )
 
 // Reveal returns the vendored reveal.js sub-tree, rooted so that paths such as
@@ -101,6 +104,21 @@ func DeckPage() fs.FS { return pagesFS }
 // never a CDN. Each documents the execution context it expects at the top of
 // the file.
 func Pages() fs.FS { return pagesFS }
+
+// Starter returns the starter-deck sub-tree copied verbatim by `eypres init`
+// (internal/scaffold). It is rooted at the deck directory, so its paths map
+// one-to-one onto the deck a scaffold writes:
+//
+//	eypres.yaml          the deck configuration (title required, theme: default)
+//	slides/1-title.md    a valid title-usage starter slide
+//	slides/2-content.md  a valid content-usage starter slide
+//
+// The two slides use the built-in `title` and `content` templates and the deck
+// passes whole-deck validation (internal/validate) unmodified. internal/scaffold
+// walks this tree and copies each file to the same relative path under the
+// target directory, creating slides/ and an empty assets/ alongside it; the
+// layout is documented for it here and in the accessor's contract.
+func Starter() fs.FS { return starterFS }
 
 // mustSub returns the sub-tree of FS rooted at dir, panicking when dir is not
 // an embedded directory. The embed directive is the source of truth, so a
