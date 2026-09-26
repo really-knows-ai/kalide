@@ -1,26 +1,26 @@
 package e2e
 
 // This file is the phase-9 task-2 end-to-end test for the native release
-// verification: it runs `eypres init` against the real eypres binary on each
+// verification: it runs `kalide init` against the real kalide binary on each
 // native runner (macOS arm64, Windows amd64/arm64).
 //
 // Native CI builds the per-target release binary once and passes it to the
-// harness through EYPRES_BINARY (harness.go skips its own build then); when the
+// harness through KALIDE_BINARY (harness.go skips its own build then); when the
 // variable is unset — a developer running `go test ./e2e` locally — the harness
 // compiles the same CGO-free binary from source. Either way this test drives
 // that exact binary.
 //
 // The sequence:
 //
-//   - a clean temporary working directory is scaffolded with `eypres init`,
+//   - a clean temporary working directory is scaffolded with `kalide init`,
 //     which must exit 0 and write the embedded hello seed;
 //   - every path init reports exists on disk, and the written seed loads and
 //     validates cleanly through template.LoadLibrary and
 //     template.NewRegistryFromLibrary;
-//   - a second `eypres init` in the same directory refuses without touching
+//   - a second `kalide init` in the same directory refuses without touching
 //     anything already on disk.
 //
-// Serving the scaffolded deck (`eypres start`) and fetching the hello
+// Serving the scaffolded deck (`kalide start`) and fetching the hello
 // slide's own theme stylesheet from templates/themes/default/ are exercised
 // below, now that start validates against the hello seed's own templates/
 // library. reveal.js and the rest of the embedded assets are crawled by
@@ -42,17 +42,20 @@ package e2e
 //     (server.AssetsPath+"reveal/dist/reveal.js"), unaffected by the project
 //     templates/ library.
 //
-// Asserting the eypres process makes no outbound connection is offline
+// Asserting the kalide process makes no outbound connection is offline
 // enforcement (offline.go, exercised by TestDemoProject in demo_test.go) and
 // stays out of scope here.
 //
 // It builds (or runs) a real binary, so it is skipped under -short.
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -63,56 +66,61 @@ import (
 // described at the top of this file.
 func TestNativeRelease(t *testing.T) {
 	if testing.Short() {
-		t.Skip("e2e native release test builds or runs the real eypres binary")
+		t.Skip("e2e native release test builds or runs the real kalide binary")
 	}
 
 	h := NewHarness(t)
 
 	// Report which binary this run exercises: native CI feeds the prebuilt
-	// per-target binary through EYPRES_BINARY, a local run lets the harness
+	// per-target binary through KALIDE_BINARY, a local run lets the harness
 	// build one.
-	if prebuilt := os.Getenv("EYPRES_BINARY"); prebuilt != "" {
-		t.Logf("native release: using prebuilt EYPRES_BINARY=%s", prebuilt)
+	if prebuilt := os.Getenv("KALIDE_BINARY"); prebuilt != "" {
+		t.Logf("native release: using prebuilt KALIDE_BINARY=%s", prebuilt)
+		base := strings.TrimSuffix(filepath.Base(prebuilt), ".exe")
+		wantName := fmt.Sprintf("kalide-%s-%s", runtime.GOOS, runtime.GOARCH)
+		if base != wantName {
+			t.Errorf("prebuilt KALIDE_BINARY %q does not match expected naming %q", base, wantName)
+		}
 	} else {
-		t.Logf("native release: EYPRES_BINARY unset; harness built %s from source", h.BinaryPath())
+		t.Logf("native release: KALIDE_BINARY unset; harness built %s from source", h.BinaryPath())
 	}
 
 	// The harness working directory is clean: init must start from a directory
 	// that holds no deck entries.
 	assertDirEmpty(t, h.WorkDir())
 
-	// `eypres init` scaffolds the hello seed, reports the created paths and
+	// `kalide init` scaffolds the hello seed, reports the created paths and
 	// exits 0.
 	stdout, stderr, code := h.Run("init")
 	if code != 0 {
-		t.Fatalf("eypres init exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("kalide init exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
 	if stderr != "" {
-		t.Errorf("eypres init stderr = %q, want empty", stderr)
+		t.Errorf("kalide init stderr = %q, want empty", stderr)
 	}
 	for _, rel := range initCreatedPaths {
 		if !strings.Contains(stdout, rel) {
-			t.Errorf("eypres init output does not name %q:\n%s", rel, stdout)
+			t.Errorf("kalide init output does not name %q:\n%s", rel, stdout)
 		}
 	}
 	if !strings.Contains(stdout, "assets/") {
-		t.Errorf("eypres init output does not name the assets/ directory:\n%s", stdout)
+		t.Errorf("kalide init output does not name the assets/ directory:\n%s", stdout)
 	}
 
 	// The reported paths exist on disk, and assets/ is the empty directory init
 	// makes explicitly (an empty directory is not embeddable).
 	for _, rel := range initCreatedPaths {
 		if _, err := os.Stat(h.Path(rel)); err != nil {
-			t.Errorf("eypres init did not create %s: %v", rel, err)
+			t.Errorf("kalide init did not create %s: %v", rel, err)
 		}
 	}
 	assertDirEmpty(t, h.Path("assets"))
 
 	// The written seed loads and validates cleanly through the same path
-	// `eypres start` uses.
+	// `kalide start` uses.
 	assertSeedLoads(t, h.WorkDir())
 
-	// `eypres start --no-open` serves the hello seed itself: the deck page
+	// `kalide start --no-open` serves the hello seed itself: the deck page
 	// carries the single hello slide, the embedded reveal.js core is fetched
 	// 200, and the seed's own default theme stylesheet
 	// (templates/themes/default/theme.css) is fetched 200 from the project
@@ -192,23 +200,46 @@ func TestNativeRelease(t *testing.T) {
 	// have touched it.
 	before := snapshotTree(t, h.WorkDir())
 
-	// A second `eypres init` in the same directory refuses: non-zero exit,
+	// A second `kalide init` in the same directory refuses: non-zero exit,
 	// the refusal message naming the blocking paths, and nothing written.
 	stdout, stderr, code = h.Run("init")
 	if code == 0 {
-		t.Fatalf("second eypres init exit = 0, want non-zero (stdout = %q)", stdout)
+		t.Fatalf("second kalide init exit = 0, want non-zero (stdout = %q)", stdout)
 	}
 	if stdout != "" {
-		t.Errorf("second eypres init stdout = %q, want empty", stdout)
+		t.Errorf("second kalide init stdout = %q, want empty", stdout)
 	}
-	for _, want := range []string{"slides/", "templates/", "assets/", "eypres.yaml", "never overwrites"} {
+	for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml", "never overwrites"} {
 		if !strings.Contains(stderr, want) {
-			t.Errorf("second eypres init refusal does not mention %q:\n%s", want, stderr)
+			t.Errorf("second kalide init refusal does not mention %q:\n%s", want, stderr)
 		}
 	}
 
 	after := snapshotTree(t, h.WorkDir())
 	if !reflect.DeepEqual(before, after) {
-		t.Errorf("second eypres init modified the directory:\nbefore = %v\nafter  = %v", before, after)
+		t.Errorf("second kalide init modified the directory:\nbefore = %v\nafter  = %v", before, after)
+	}
+}
+
+// TestEypresBinaryIgnored asserts the hard cut: with only EYPRES_BINARY set,
+// the harness ignores it and builds cmd/kalide from source.
+func TestEypresBinaryIgnored(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds the real kalide binary")
+	}
+
+	t.Setenv("KALIDE_BINARY", "")
+	t.Setenv("EYPRES_BINARY", "/nonexistent/eypres-binary")
+
+	h := NewHarness(t)
+	if h.BinaryPath() == "/nonexistent/eypres-binary" {
+		t.Fatalf("harness used EYPRES_BINARY, want it ignored")
+	}
+	if _, err := os.Stat(h.BinaryPath()); err != nil {
+		t.Fatalf("harness did not build binary from source: %v", err)
+	}
+	base := strings.TrimSuffix(filepath.Base(h.BinaryPath()), ".exe")
+	if base != "kalide" {
+		t.Errorf("built binary name = %q, want %q", base, "kalide")
 	}
 }

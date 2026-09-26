@@ -1,6 +1,6 @@
 // Package e2e offline enforcement (phase-9 task 1).
 //
-// assertOffline asserts that the real eypres process makes no outbound
+// assertOffline asserts that the real kalide process makes no outbound
 // (non-loopback) network connection for the whole run. It is the cross-platform
 // half: the per-OS mechanism that reads the process's connections lives in
 // build-tagged files (offline_unix.go, offline_windows.go).
@@ -9,7 +9,7 @@
 //
 //  1. Connection sampling. assertOffline(t, pid) starts a background sampler
 //     and returns an *Offline handle. The sampler repeatedly asks the OS for
-//     the connections owned by the eypres process (and, on Unix, its process
+//     the connections owned by the kalide process (and, on Unix, its process
 //     group) and records any endpoint that is not loopback. Stop reports every
 //     violation with t.Errorf, so any non-127.0.0.1 connection fails the test.
 //     The usual shape, because the PID is only known after Start:
@@ -25,7 +25,7 @@
 //
 //  2. Proxy environment. EnableOfflineProxy points HTTP_PROXY, HTTPS_PROXY and
 //     ALL_PROXY at a freshly-closed loopback port, so any HTTP(S) client in
-//     eypres that honours the proxy environment fails its connection instead of
+//     kalide that honours the proxy environment fails its connection instead of
 //     reaching the network. It must be called before Start, because it changes
 //     the environment the process is started with. NO_PROXY keeps loopback
 //     requests (the deck itself) out of the proxy.
@@ -56,7 +56,7 @@ const (
 )
 
 // Offline is the handle assertOffline returns. It owns a background sampler that
-// records every non-loopback connection the eypres process makes; Stop stops the
+// records every non-loopback connection the kalide process makes; Stop stops the
 // sampler and fails the test if any was seen. Check reports the violations so
 // far without stopping the sampler.
 type Offline struct {
@@ -76,7 +76,7 @@ type Offline struct {
 // (non-loopback) connection while it ran.
 //
 // pid is normally h.PID() after h.Start(). On Unix the process group is sampled
-// too, so a connection opened by a child of eypres is caught. A non-positive pid
+// too, so a connection opened by a child of kalide is caught. A non-positive pid
 // fails the test immediately.
 //
 // The caller must call Stop (commonly via t.Cleanup) to stop the sampler and
@@ -91,7 +91,7 @@ func assertOffline(t T, pid int) *Offline {
 		done: make(chan struct{}),
 	}
 	if pid <= 0 {
-		t.Errorf("e2e: assertOffline: invalid eypres pid %d", pid)
+		t.Errorf("e2e: assertOffline: invalid kalide pid %d", pid)
 		close(o.done)
 		return o
 	}
@@ -114,7 +114,7 @@ func (o *Offline) sampleLoop() {
 
 		conns, err := offlineForeignConnections(o.t, o.pid)
 		if err != nil {
-			o.t.Errorf("e2e: offline: sampling eypres pid %d: %v", o.pid, err)
+			o.t.Errorf("e2e: offline: sampling kalide pid %d: %v", o.pid, err)
 			return
 		}
 		if len(conns) > 0 {
@@ -141,7 +141,7 @@ func (o *Offline) Check() {
 	o.mu.Unlock()
 
 	if len(violations) > 0 {
-		o.t.Errorf("e2e: eypres pid %d made %d outbound (non-loopback) connection(s):\n%s",
+		o.t.Errorf("e2e: kalide pid %d made %d outbound (non-loopback) connection(s):\n%s",
 			o.pid, len(violations), strings.Join(violations, "\n"))
 	}
 }
@@ -163,8 +163,8 @@ func (o *Offline) Stop() {
 	}
 }
 
-// EnableOfflineProxy points the eypres process's proxy environment at a closed
-// loopback port, so an HTTP(S) client in eypres that honours the proxy fails its
+// EnableOfflineProxy points the kalide process's proxy environment at a closed
+// loopback port, so an HTTP(S) client in kalide that honours the proxy fails its
 // connection rather than reaching the network. It must be called before Start:
 // it changes the environment the process is started with.
 //

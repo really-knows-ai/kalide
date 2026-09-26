@@ -4,7 +4,7 @@ package e2e
 // build-tagged samplers). They are unit tests: the parsers are exercised with
 // synthetic lsof/netstat output, and the OS sampler is exercised against this
 // test process itself holding a UDP socket to a documentation address (no
-// traffic is sent). They do not build eypres, so they run under -short too.
+// traffic is sent). They do not build kalide, so they run under -short too.
 //
 // The parser tests are split by build tag: parseLsofConnections is defined only
 // on Unix (offline_unix_test.go) and parseNetstatConnections only on Windows

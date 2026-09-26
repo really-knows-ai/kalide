@@ -2,9 +2,9 @@ package e2e
 
 // This file is the phase-06 task-4 end-to-end test for examples/demo, the
 // non-EY demo project used as an e2e/integration fixture (see
-// examples/demo/eypres.yaml, templates/ and slides/). It copies the fixture to
+// examples/demo/kalide.yaml, templates/ and slides/). It copies the fixture to
 // a clean temporary directory (never mutating the repo checkout), runs the
-// real eypres binary offline against it with `eypres start --no-open`, and
+// real kalide binary offline against it with `kalide start --no-open`, and
 // asserts:
 //
 //   - the deck page is served (HTTP 200) and carries the demo deck's own
@@ -24,7 +24,7 @@ package e2e
 // token outside the "non-EY" phrasing the fixture uses to document that it is
 // deliberately unbranded.
 //
-// Both tests build a binary (or run one via EYPRES_BINARY), so both are
+// Both tests build a binary (or run one via KALIDE_BINARY), so both are
 // skipped under -short.
 
 import (
@@ -40,11 +40,11 @@ import (
 	"github.com/really-knows-ai/kalide/internal/server"
 )
 
-// TestDemoProject drives `eypres start --no-open` against a temporary copy of
+// TestDemoProject drives `kalide start --no-open` against a temporary copy of
 // examples/demo and asserts it serves cleanly, offline, and stops gracefully.
 func TestDemoProject(t *testing.T) {
 	if testing.Short() {
-		t.Skip("e2e test builds and drives the real eypres binary")
+		t.Skip("e2e test builds and drives the real kalide binary")
 	}
 
 	h := NewHarness(t)
@@ -68,6 +68,9 @@ func TestDemoProject(t *testing.T) {
 	}
 	if !strings.Contains(body, "The Demo Project") {
 		t.Errorf("served deck page does not carry the demo deck's title:\n%s", body)
+	}
+	if strings.Contains(strings.ToLower(body), "eypres") {
+		t.Errorf("served deck page contains 'eypres':\n%s", body)
 	}
 
 	// templates/media/** is served locally: examples/demo/templates/media
@@ -93,7 +96,7 @@ func TestDemoProject(t *testing.T) {
 	}
 
 	// templates/themes/<name>/theme.css is served locally: the demo deck's
-	// theme is "demo" (examples/demo/eypres.yaml).
+	// theme is "demo" (examples/demo/kalide.yaml).
 	themeResp, err := h.Get(server.ThemesPath + "demo/theme.css")
 	if err != nil {
 		t.Fatalf("GET %sdemo/theme.css: %v", server.ThemesPath, err)
@@ -120,7 +123,7 @@ func TestDemoProject(t *testing.T) {
 }
 
 // copyDemoProject copies the examples/demo fixture tree into the harness's
-// clean working directory, so the test drives the real eypres binary against
+// clean working directory, so the test drives the real kalide binary against
 // a disposable copy and never mutates the repo checkout.
 func copyDemoProject(t *testing.T, h *Harness) {
 	t.Helper()
@@ -177,7 +180,7 @@ var eyDisclaimerPattern = regexp.MustCompile(`(?i)non-EY|no EY\b`)
 // TestDemoProjectHasNoEYReferences is the grep-guard: examples/demo must carry
 // no EY brand reference (name, font or logo) anywhere in its tree. It reads
 // the fixture directly from the repo checkout (not a harness copy), so it is
-// not gated on building the eypres binary, but it lives alongside
+// not gated on building the kalide binary, but it lives alongside
 // TestDemoProject as its companion assertion for the demo-project requirement.
 func TestDemoProjectHasNoEYReferences(t *testing.T) {
 	root, err := findModuleRoot()

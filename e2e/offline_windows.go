@@ -10,7 +10,7 @@ import (
 )
 
 // This file is the Windows half of the offline enforcement: it reads the
-// connection table the OS attributes to the eypres process. The common
+// connection table the OS attributes to the kalide process. The common
 // machinery and the public assertOffline API live in offline.go; the Unix
 // counterpart is offline_unix.go.
 //
@@ -22,11 +22,11 @@ import (
 //	TCP    127.0.0.1:8080    0.0.0.0:0          LISTENING    1234
 //	TCP    127.0.0.1:51000   93.184.216.34:443  ESTABLISHED  1234
 //
-// Sampling is filtered to the eypres PID: the Foreign Address of every TCP row
+// Sampling is filtered to the kalide PID: the Foreign Address of every TCP row
 // owned by that PID is the remote endpoint, and any non-loopback remote is a
-// violation. Windows has no process group in the Unix sense, so the eypres PID
+// violation. Windows has no process group in the Unix sense, so the kalide PID
 // is the whole surface (the harness starts it with CREATE_NEW_PROCESS_GROUP and
-// eypres leaves no child behind, which Stop already asserts).
+// kalide leaves no child behind, which Stop already asserts).
 
 // offlineForeignConnections samples the TCP endpoints owned by pid and returns
 // those whose remote address is not loopback. It returns an error only when the

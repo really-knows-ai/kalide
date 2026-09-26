@@ -10,7 +10,7 @@ import (
 )
 
 // This file is the Unix (macOS and other non-Windows) half of the offline
-// enforcement: it reads the connection table the OS attributes to the eypres
+// enforcement: it reads the connection table the OS attributes to the kalide
 // process. The common machinery and the public assertOffline API live in
 // offline.go; the Windows counterpart is offline_windows.go.
 //
@@ -19,9 +19,9 @@ import (
 // group leader when it was started in a new group:
 //
 //   - `lsof -nP -i -a -p <pid> -F pctn` selects the internet sockets of the
-//     eypres process itself;
+//     kalide process itself;
 //   - `lsof -nP -i -a -g <pid> -F pctn` selects the internet sockets of every
-//     process in process group <pid>. The harness starts eypres with Setpgid,
+//     process in process group <pid>. The harness starts kalide with Setpgid,
 //     so its group id is its pid and this catches any child it spawns.
 //
 // A process that is not a group leader matches only the first query; the group

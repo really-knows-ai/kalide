@@ -10,7 +10,7 @@ import (
 )
 
 // TestParseNetstatConnections feeds the Windows sampler synthetic netstat -ano
-// output: rows for the eypres PID (loopback listener and a foreign connection),
+// output: rows for the kalide PID (loopback listener and a foreign connection),
 // rows for other PIDs (including a foreign one) that must be ignored, and an
 // IPv6 loopback listener.
 func TestParseNetstatConnections(t *testing.T) {

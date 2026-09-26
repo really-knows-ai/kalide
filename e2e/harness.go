@@ -1,9 +1,9 @@
-// Package e2e is the cross-platform end-to-end harness for the real eypres
+// Package e2e is the cross-platform end-to-end harness for the real kalide
 // binary.
 //
-// Harness builds cmd/eypres with CGO_ENABLED=0 into a temporary directory (the
-// eypres.exe name on Windows), runs it from a clean temporary working directory
-// with a scrubbed environment, and starts `eypres start --no-open` in its own
+// Harness builds cmd/kalide with CGO_ENABLED=0 into a temporary directory (the
+// kalide.exe name on Windows), runs it from a clean temporary working directory
+// with a scrubbed environment, and starts `kalide start --no-open` in its own
 // process group so exactly the tree it started can be stopped again.
 //
 // Process groups and graceful stop are platform-specific and live in
@@ -19,10 +19,10 @@
 // forced kill is only a timeout fallback, and a forced kill always fails the
 // test.
 //
-// By default build compiles cmd/eypres from source. When EYPRES_BINARY is set
+// By default build compiles cmd/kalide from source. When KALIDE_BINARY is set
 // the harness skips the build and runs that prebuilt binary instead, which is
 // how native CI feeds the harness an already-built, per-target executable:
-// EYPRES_BINARY=/path/to/eypres.exe go test ./e2e
+// KALIDE_BINARY=/path/to/kalide.exe go test ./e2e
 //
 // The harness is reused by the phase-8 (init + start) and phase-9 (native
 // release, offline) end-to-end tests, so it lives in non-test files and has no
@@ -76,9 +76,9 @@ const (
 	servingPrefix = "Serving slides at "
 
 	// prebuiltBinaryEnv names the environment variable that, when set, points
-	// the harness at an already-built eypres binary instead of compiling one.
+	// the harness at an already-built kalide binary instead of compiling one.
 	// Native CI sets it to the per-target executable it produced.
-	prebuiltBinaryEnv = "EYPRES_BINARY"
+	prebuiltBinaryEnv = "KALIDE_BINARY"
 )
 
 // T is the subset of testing.TB the harness uses. *testing.T and *testing.B
@@ -92,20 +92,20 @@ type T interface {
 	Errorf(format string, args ...any)
 }
 
-// Harness builds and drives the eypres binary. Create one with NewHarness.
+// Harness builds and drives the kalide binary. Create one with NewHarness.
 //
 // It holds the built binary and a clean temporary working directory for the
-// deck, and, after Start, the running `eypres start --no-open` process.
+// deck, and, after Start, the running `kalide start --no-open` process.
 type Harness struct {
 	t T
 
-	// moduleRoot is the Go module root, from which `go build ./cmd/eypres` runs.
+	// moduleRoot is the Go module root, from which `go build ./cmd/kalide` runs.
 	moduleRoot string
 
 	// binDir holds the built binary and is removed with the test's temp dirs.
 	binDir string
 
-	// binPath is the built eypres binary.
+	// binPath is the built kalide binary.
 	binPath string
 
 	// workDir is the clean temporary working directory the binary runs in.
@@ -134,7 +134,7 @@ type Harness struct {
 	stopOnce sync.Once
 }
 
-// NewHarness builds the eypres binary with CGO_ENABLED=0 into a temporary
+// NewHarness builds the kalide binary with CGO_ENABLED=0 into a temporary
 // directory and returns a harness whose working directory is a second, empty
 // temporary directory. It fails the test if the module root or the binary
 // cannot be found.
@@ -160,11 +160,11 @@ func NewHarness(t T) *Harness {
 	return h
 }
 
-// build compiles cmd/eypres into the harness's binary directory, CGO-free, so
+// build compiles cmd/kalide into the harness's binary directory, CGO-free, so
 // the binary is the same static artifact the release and CI e2e runs exercise.
 //
-// When EYPRES_BINARY is set the build is skipped and that binary is used
-// instead: native CI builds the per-target eypres once and points every test at
+// When KALIDE_BINARY is set the build is skipped and that binary is used
+// instead: native CI builds the per-target kalide once and points every test at
 // it. The path must exist; a missing or non-file path fails the test rather than
 // silently building from source.
 func (h *Harness) build() {
@@ -176,7 +176,7 @@ func (h *Harness) build() {
 			h.t.Fatalf("e2e: %s=%s: %v", prebuiltBinaryEnv, prebuilt, err)
 		}
 		if info.IsDir() {
-			h.t.Fatalf("e2e: %s=%s is a directory, want the eypres binary", prebuiltBinaryEnv, prebuilt)
+			h.t.Fatalf("e2e: %s=%s is a directory, want the kalide binary", prebuiltBinaryEnv, prebuilt)
 		}
 		h.binPath = prebuilt
 		return
@@ -187,17 +187,17 @@ func (h *Harness) build() {
 	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, goCommand(), "build", "-o", h.binPath, "./cmd/eypres")
+	cmd := exec.CommandContext(ctx, goCommand(), "build", "-o", h.binPath, "./cmd/kalide")
 	cmd.Dir = h.moduleRoot
 	cmd.Env = envWith(os.Environ(), "CGO_ENABLED", "0")
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		h.t.Fatalf("e2e: build eypres (CGO_ENABLED=0): %v\n%s", err, out)
+		h.t.Fatalf("e2e: build kalide (CGO_ENABLED=0): %v\n%s", err, out)
 	}
 }
 
-// Command returns an exec.Cmd for `eypres args...` with the harness's clean
+// Command returns an exec.Cmd for `kalide args...` with the harness's clean
 // working directory and scrubbed environment. Entries added by
 // EnableOfflineProxy (if any) are appended, overriding the scrubbed
 // environment. It does not start the command.
@@ -211,7 +211,7 @@ func (h *Harness) Command(args ...string) *exec.Cmd {
 	return cmd
 }
 
-// Run runs `eypres args...` to completion in the clean working directory and
+// Run runs `kalide args...` to completion in the clean working directory and
 // returns its stdout, stderr and exit code. It is for one-shot commands such as
 // `init` and `templates`; `start` does not exit and must go through Start.
 func (h *Harness) Run(args ...string) (stdout, stderr string, code int) {
@@ -230,11 +230,11 @@ func (h *Harness) Run(args ...string) (stdout, stderr string, code int) {
 	if errors.As(err, &ee) {
 		return out.String(), errOut.String(), ee.ExitCode()
 	}
-	h.t.Fatalf("e2e: run eypres %v: %v", args, err)
+	h.t.Fatalf("e2e: run kalide %v: %v", args, err)
 	return "", "", -1
 }
 
-// Start launches `eypres start --no-open` with any extra arguments (for
+// Start launches `kalide start --no-open` with any extra arguments (for
 // example "--port", "8123"), in its own process group, parses the URL it prints
 // and polls until the server answers HTTP 200. It fails the test if the binary
 // exits early or the server never becomes ready.
@@ -261,7 +261,7 @@ func (h *Harness) Start(extra ...string) {
 	cmd.Stderr = errCap
 
 	if err := cmd.Start(); err != nil {
-		h.t.Fatalf("e2e: start eypres: %v", err)
+		h.t.Fatalf("e2e: start kalide: %v", err)
 	}
 
 	exited := make(chan struct{})
@@ -291,12 +291,12 @@ func (h *Harness) Start(extra ...string) {
 	h.mu.Unlock()
 
 	if err := h.waitReady(); err != nil {
-		h.t.Fatalf("e2e: eypres did not serve %s: %v\nstdout:\n%s\nstderr:\n%s",
+		h.t.Fatalf("e2e: kalide did not serve %s: %v\nstdout:\n%s\nstderr:\n%s",
 			raw, err, outCap.String(), errCap.String())
 	}
 }
 
-// waitForURL blocks until `eypres start` prints its "Serving slides at <url>"
+// waitForURL blocks until `kalide start` prints its "Serving slides at <url>"
 // line, the process exits, or startTimeout elapses; the latter two fail the
 // test with the captured output.
 func (h *Harness) waitForURL() string {
@@ -316,10 +316,10 @@ func (h *Harness) waitForURL() string {
 			if u := h.stdoutCapture().URL(); u != "" {
 				return u
 			}
-			h.t.Fatalf("e2e: eypres start exited before serving a deck\nstdout:\n%s\nstderr:\n%s",
+			h.t.Fatalf("e2e: kalide start exited before serving a deck\nstdout:\n%s\nstderr:\n%s",
 				h.Stdout(), h.Stderr())
 		case <-timer.C:
-			h.t.Fatalf("e2e: timed out after %s waiting for eypres to print its URL\nstdout:\n%s\nstderr:\n%s",
+			h.t.Fatalf("e2e: timed out after %s waiting for kalide to print its URL\nstdout:\n%s\nstderr:\n%s",
 				startTimeout, h.Stdout(), h.Stderr())
 		}
 	}
@@ -337,7 +337,7 @@ func (h *Harness) waitReady() error {
 	for time.Now().Before(deadline) {
 		select {
 		case <-exited:
-			return fmt.Errorf("eypres exited early: %v", h.waitErr())
+			return fmt.Errorf("kalide exited early: %v", h.waitErr())
 		default:
 		}
 
@@ -359,7 +359,7 @@ func (h *Harness) waitReady() error {
 
 // Stop gracefully stops the server and asserts a clean shutdown. On Unix it
 // sends SIGTERM to the harness's process group; on Windows it sends
-// CTRL_BREAK_EVENT to the group. It then asserts that eypres exited 0, that the
+// CTRL_BREAK_EVENT to the group. It then asserts that kalide exited 0, that the
 // listening port was released and that no child process was left behind.
 //
 // Stop is idempotent and is registered as a test cleanup by Start. If the
@@ -394,7 +394,7 @@ func (h *Harness) Stop() {
 		case <-exited:
 			timer.Stop()
 		case <-timer.C:
-			h.t.Errorf("e2e: eypres did not stop within %s; forced kill (the test FAILS)", stopTimeout)
+			h.t.Errorf("e2e: kalide did not stop within %s; forced kill (the test FAILS)", stopTimeout)
 			h.forceKill(cmd)
 			<-exited
 			return
@@ -415,23 +415,23 @@ func (h *Harness) checkShutdown(cmd *exec.Cmd) {
 		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		} else {
-			h.t.Errorf("e2e: waiting for eypres: %v", err)
+			h.t.Errorf("e2e: waiting for kalide: %v", err)
 			return
 		}
 	}
 	if code != 0 {
-		h.t.Errorf("e2e: eypres exited with code %d, want 0\nstdout:\n%s\nstderr:\n%s",
+		h.t.Errorf("e2e: kalide exited with code %d, want 0\nstdout:\n%s\nstderr:\n%s",
 			code, h.Stdout(), h.Stderr())
 	}
 
 	if port := h.Port(); port != 0 && !waitPortReleased(port, portTimeout) {
-		h.t.Errorf("e2e: port %d is still listening after eypres stopped", port)
+		h.t.Errorf("e2e: port %d is still listening after kalide stopped", port)
 	}
 
 	if n, err := childProcessCount(cmd.Process.Pid); err != nil {
 		h.t.Errorf("e2e: checking for leftover child processes: %v", err)
 	} else if n > 0 {
-		h.t.Errorf("e2e: %d leftover child process(es) after eypres stopped", n)
+		h.t.Errorf("e2e: %d leftover child process(es) after kalide stopped", n)
 	}
 }
 
@@ -484,7 +484,7 @@ func (h *Harness) GetString(path string) (string, error) {
 	return string(body), nil
 }
 
-// URL returns the URL eypres printed, for example
+// URL returns the URL kalide printed, for example
 // "http://127.0.0.1:8080/", or "" before Start.
 func (h *Harness) URL() string {
 	h.mu.Lock()
@@ -506,7 +506,7 @@ func (h *Harness) Port() int {
 	return h.port
 }
 
-// PID returns the eypres process id, or 0 before Start.
+// PID returns the kalide process id, or 0 before Start.
 func (h *Harness) PID() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -516,7 +516,7 @@ func (h *Harness) PID() int {
 	return h.cmd.Process.Pid
 }
 
-// BinaryPath returns the path of the built eypres binary.
+// BinaryPath returns the path of the built kalide binary.
 func (h *Harness) BinaryPath() string { return h.binPath }
 
 // WorkDir returns the clean temporary working directory the binary runs in.
@@ -543,7 +543,7 @@ func (h *Harness) WriteFile(rel string, data []byte) string {
 	return p
 }
 
-// Stdout returns the eypres process's stdout so far.
+// Stdout returns the kalide process's stdout so far.
 func (h *Harness) Stdout() string {
 	h.mu.Lock()
 	c := h.stdout
@@ -554,7 +554,7 @@ func (h *Harness) Stdout() string {
 	return c.String()
 }
 
-// Stderr returns the eypres process's stderr so far.
+// Stderr returns the kalide process's stderr so far.
 func (h *Harness) Stderr() string {
 	h.mu.Lock()
 	c := h.stderr
@@ -661,7 +661,7 @@ func urlPort(raw string) int {
 }
 
 // waitPortReleased reports whether a loopback listener can bind port again
-// within timeout, i.e. whether eypres released it. It binds and immediately
+// within timeout, i.e. whether kalide released it. It binds and immediately
 // closes on success.
 func waitPortReleased(port int, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
@@ -679,15 +679,15 @@ func waitPortReleased(port int, timeout time.Duration) bool {
 }
 
 // binaryName is the built binary's file name for the target this harness is
-// compiled for: eypres.exe on Windows, eypres elsewhere.
+// compiled for: kalide.exe on Windows, kalide elsewhere.
 func binaryName() string {
 	if runtime.GOOS == "windows" {
-		return "eypres.exe"
+		return "kalide.exe"
 	}
-	return "eypres"
+	return "kalide"
 }
 
-// goCommand is the go binary used to build eypres. The GO environment variable
+// goCommand is the go binary used to build kalide. The GO environment variable
 // overrides the one on PATH, matching the Makefile.
 func goCommand() string {
 	if g := os.Getenv("GO"); g != "" {
@@ -730,7 +730,7 @@ func envWith(environ []string, key, value string) []string {
 	return append(out, key+"="+value)
 }
 
-// scrubAllow is the allow-list of environment variables the eypres process
+// scrubAllow is the allow-list of environment variables the kalide process
 // receives. Everything else — browser selectors, proxy settings and the rest of
 // the developer's shell — is dropped so a run is reproducible and offline by
 // default.
@@ -756,7 +756,7 @@ var scrubAllow = []string{
 	"OS",
 }
 
-// scrubbedEnv returns the minimal environment the eypres binary runs with.
+// scrubbedEnv returns the minimal environment the kalide binary runs with.
 func scrubbedEnv() []string {
 	var out []string
 	for _, kv := range os.Environ() {

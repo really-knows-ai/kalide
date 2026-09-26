@@ -12,7 +12,7 @@ import (
 // runs on the supported windows/amd64 (and windows/arm64) targets. On Windows
 // there is no Setpgid; the equivalent is to create the child with
 // CREATE_NEW_PROCESS_GROUP and then send CTRL_BREAK_EVENT to that group, which
-// eypres receives as os.Interrupt exactly like Ctrl+Break at the console.
+// kalide receives as os.Interrupt exactly like Ctrl+Break at the console.
 //
 // The Win32 entry points are called through the standard library's syscall
 // package rather than golang.org/x/sys/windows, so the harness adds no new
@@ -48,7 +48,7 @@ func setProcessGroup(cmd *exec.Cmd) {
 }
 
 // signalGroupGracefully sends CTRL_BREAK_EVENT to the harness's process group.
-// eypres registers os.Interrupt, which on Windows covers both Ctrl+C and
+// kalide registers os.Interrupt, which on Windows covers both Ctrl+C and
 // Ctrl+Break, so it shuts its server, watcher and reloader down cleanly and
 // exits 0.
 //
@@ -81,7 +81,7 @@ func killGroup(cmd *exec.Cmd) error {
 	return cmd.Process.Kill()
 }
 
-// childProcessCount reports how many processes have the harness's eypres
+// childProcessCount reports how many processes have the harness's kalide
 // process as their parent, by walking a system process snapshot. It is how the
 // harness asserts that a graceful stop left no child process behind.
 func childProcessCount(pid int) (int, error) {

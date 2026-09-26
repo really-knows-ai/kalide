@@ -1,27 +1,27 @@
 package e2e
 
 // This file is the phase-8 task-9 end-to-end test for the init flow:
-// `eypres init` scaffolding the embedded hello seed. It drives the real
-// eypres binary the harness builds (harness.go) in a clean, empty working
+// `kalide init` scaffolding the embedded hello seed. It drives the real
+// kalide binary the harness builds (harness.go) in a clean, empty working
 // directory, so it exercises the path an author takes right after
-// installing eypres:
+// installing kalide:
 //
-//   - `eypres init` writes the embedded hello seed, prints the paths it
+//   - `kalide init` writes the embedded hello seed, prints the paths it
 //     created and exits 0;
 //   - every printed path exists on disk, byte-for-byte the embedded seed:
-//     eypres.yaml, slides/1-hello.md, templates/library.yaml, the hello
+//     kalide.yaml, slides/1-hello.md, templates/library.yaml, the hello
 //     slide template's three files, the default theme's stylesheet, and an
 //     empty assets/ directory;
 //   - the written seed loads and validates cleanly through
 //     template.LoadLibrary and template.NewRegistryFromLibrary, exactly as
-//     `eypres start` would load it;
-//   - a second `eypres init` in the same directory refuses with a
+//     `kalide start` would load it;
+//   - a second `kalide init` in the same directory refuses with a
 //     non-zero exit, prints the refusal, and leaves every file
 //     byte-for-byte unchanged.
 //
-// `eypres start` serving the hello seed IS in scope here (phase 5 deferred
+// `kalide start` serving the hello seed IS in scope here (phase 5 deferred
 // it; phase 3 wires template-backed rendering through it, so it lands in
-// this test): after init, `eypres start --no-open` serves the hello seed
+// this test): after init, `kalide start --no-open` serves the hello seed
 // itself — the single hello slide, its templates/media (there is none in the
 // seed, so this is exercised through the theme route) and the default
 // theme's stylesheet, both fetched 200 with a correct Content-Type — and
@@ -46,12 +46,12 @@ import (
 	"github.com/really-knows-ai/kalide/internal/template"
 )
 
-// initCreatedPaths are the deck-relative paths `eypres init` reports creating;
+// initCreatedPaths are the deck-relative paths `kalide init` reports creating;
 // they mirror internal/cli's initCreatedMessage and the embedded hello seed
 // in internal/scaffold/seed. They are asserted against both the command
 // output and the filesystem.
 var initCreatedPaths = []string{
-	"eypres.yaml",
+	"kalide.yaml",
 	"slides/1-hello.md",
 	"templates/library.yaml",
 	"templates/slides/hello/template.yaml",
@@ -63,7 +63,7 @@ var initCreatedPaths = []string{
 // TestInitStart is the end-to-end init test described above.
 func TestInitStart(t *testing.T) {
 	if testing.Short() {
-		t.Skip("e2e test builds and drives the real eypres binary")
+		t.Skip("e2e test builds and drives the real kalide binary")
 	}
 
 	h := NewHarness(t)
@@ -72,39 +72,42 @@ func TestInitStart(t *testing.T) {
 	// that holds no deck entries.
 	assertDirEmpty(t, h.WorkDir())
 
-	// `eypres init` scaffolds the hello seed, reports the created paths and
+	// `kalide init` scaffolds the hello seed, reports the created paths and
 	// exits 0.
 	stdout, stderr, code := h.Run("init")
 	if code != 0 {
-		t.Fatalf("eypres init exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("kalide init exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
 	if stderr != "" {
-		t.Errorf("eypres init stderr = %q, want empty", stderr)
+		t.Errorf("kalide init stderr = %q, want empty", stderr)
 	}
 	for _, rel := range initCreatedPaths {
 		if !strings.Contains(stdout, rel) {
-			t.Errorf("eypres init output does not name %q:\n%s", rel, stdout)
+			t.Errorf("kalide init output does not name %q:\n%s", rel, stdout)
 		}
 	}
 	if !strings.Contains(stdout, "assets/") {
-		t.Errorf("eypres init output does not name the assets/ directory:\n%s", stdout)
+		t.Errorf("kalide init output does not name the assets/ directory:\n%s", stdout)
 	}
 
 	// The reported paths exist on disk, and assets/ is the empty directory init
 	// makes explicitly (an empty directory is not embeddable).
 	for _, rel := range initCreatedPaths {
 		if _, err := os.Stat(h.Path(rel)); err != nil {
-			t.Errorf("eypres init did not create %s: %v", rel, err)
+			t.Errorf("kalide init did not create %s: %v", rel, err)
 		}
+	}
+	if _, err := os.Stat(h.Path("eypres.yaml")); !os.IsNotExist(err) {
+		t.Errorf("kalide init created eypres.yaml, want only kalide.yaml")
 	}
 	assertDirEmpty(t, h.Path("assets"))
 
 	// The written seed loads and validates cleanly through the same path
-	// `eypres start` uses: template.LoadLibrary and, inside it,
+	// `kalide start` uses: template.LoadLibrary and, inside it,
 	// template.NewRegistryFromLibrary.
 	assertSeedLoads(t, h.WorkDir())
 
-	// `eypres start --no-open` serves the hello seed itself: the deck page
+	// `kalide start --no-open` serves the hello seed itself: the deck page
 	// carries the one hello slide, the seed's default theme stylesheet is
 	// fetched 200 with a css Content-Type through the same
 	// templates/themes/<name>/ route mediaHandler mounts, and /templates
@@ -123,7 +126,7 @@ func TestInitStart(t *testing.T) {
 	}
 
 	// This is the single-binary acceptance check: init and start both ran
-	// against the static eypres binary with no embedded EY templates, fonts
+	// against the static kalide binary with no embedded EY templates, fonts
 	// or logo, and the served deck carries no reference to any of the old
 	// embedded EY asset routes (they no longer exist: phase 7 stripped them
 	// from internal/assets and the /assets/ handler). Note /assets/templates/
@@ -166,24 +169,57 @@ func TestInitStart(t *testing.T) {
 	// touched it.
 	before := snapshotTree(t, h.WorkDir())
 
-	// A second `eypres init` in the same directory refuses: non-zero exit, the
+	// A second `kalide init` in the same directory refuses: non-zero exit, the
 	// refusal message naming the blocking paths, and nothing written.
 	stdout, stderr, code = h.Run("init")
 	if code == 0 {
-		t.Fatalf("second eypres init exit = 0, want non-zero (stdout = %q)", stdout)
+		t.Fatalf("second kalide init exit = 0, want non-zero (stdout = %q)", stdout)
 	}
 	if stdout != "" {
-		t.Errorf("second eypres init stdout = %q, want empty", stdout)
+		t.Errorf("second kalide init stdout = %q, want empty", stdout)
 	}
-	for _, want := range []string{"slides/", "templates/", "assets/", "eypres.yaml", "never overwrites"} {
+	for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml", "never overwrites"} {
 		if !strings.Contains(stderr, want) {
-			t.Errorf("second eypres init refusal does not mention %q:\n%s", want, stderr)
+			t.Errorf("second kalide init refusal does not mention %q:\n%s", want, stderr)
 		}
 	}
 
 	after := snapshotTree(t, h.WorkDir())
 	if !reflect.DeepEqual(before, after) {
-		t.Errorf("second eypres init modified the directory:\nbefore = %v\nafter  = %v", before, after)
+		t.Errorf("second kalide init modified the directory:\nbefore = %v\nafter  = %v", before, after)
+	}
+}
+
+// TestProjectWithOnlyEypresYamlNotRecognised tests the negative hard-cut
+// assertion: a project containing only eypres.yaml (and no kalide.yaml) is not
+// recognised as a deck, so kalide start refuses to serve it and fails naming
+// kalide.yaml.
+func TestProjectWithOnlyEypresYamlNotRecognised(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+
+	// Seed a valid template library via init so missing library is not the failure.
+	if _, stderr, code := h.Run("init"); code != 0 {
+		t.Fatalf("kalide init exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	// Replace kalide.yaml with eypres.yaml only.
+	if err := os.Remove(h.Path("kalide.yaml")); err != nil {
+		t.Fatalf("remove kalide.yaml: %v", err)
+	}
+	h.WriteFile("eypres.yaml", []byte("title: Old Eypres Deck\ntheme: default\n"))
+
+	stdout, stderr, code := h.Run("start", "--no-open")
+	if code == 0 {
+		t.Fatalf("kalide start exit = 0 with only eypres.yaml, want non-zero failure")
+	}
+	if !strings.Contains(stderr, "kalide.yaml") {
+		t.Errorf("kalide start stderr = %q, want error naming kalide.yaml", stderr)
+	}
+	if strings.Contains(stdout, "Serving slides at") {
+		t.Errorf("kalide start stdout = %q, want no server started", stdout)
 	}
 }
 
@@ -202,7 +238,7 @@ func assertDirEmpty(t *testing.T, dir string) {
 
 // assertSeedLoads asserts that the deck written under dir loads and validates
 // cleanly through template.LoadLibrary and template.NewRegistryFromLibrary,
-// exactly as `eypres start` loads a deck's templates/ library.
+// exactly as `kalide start` loads a deck's templates/ library.
 func assertSeedLoads(t *testing.T, dir string) {
 	t.Helper()
 

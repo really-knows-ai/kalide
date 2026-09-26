@@ -1,7 +1,7 @@
 package e2e
 
-// This file is the phase-7 task-11 end-to-end test for `eypres start` and its
-// live reload. It drives the real eypres binary the harness builds
+// This file is the phase-7 task-11 end-to-end test for `kalide start` and its
+// live reload. It drives the real kalide binary the harness builds
 // (harness.go) instead of any internal package, so it exercises the whole path
 // an author takes:
 //
@@ -13,7 +13,7 @@ package e2e
 //     single first formatted validation error, prints the identical error to the
 //     terminal, and a fixing edit recovers the deck;
 //   - /templates serves the gallery of the project's templates/ library;
-//   - `eypres templates` and `eypres templates <name>` print the list and one
+//   - `kalide templates` and `kalide templates <name>` print the list and one
 //     template's documentation, both read from the project's templates/
 //     library;
 //   - a graceful stop exits 0, releases the port and leaves no child behind
@@ -39,9 +39,9 @@ import (
 	"github.com/really-knows-ai/kalide/internal/server"
 )
 
-// The fixture deck. Since `eypres start` now requires a valid project
+// The fixture deck. Since `kalide start` now requires a valid project
 // templates/ library (theme.LoadDir, deck.LoadConfig against it), the test
-// provisions one with `eypres init` (the embedded hello seed) before Start
+// provisions one with `kalide init` (the embedded hello seed) before Start
 // and drives the seed's own `hello` template: a required `title` field and an
 // optional Markdown body, both always-valid, so two minimal slides can be
 // edited and one broken deterministically.
@@ -95,7 +95,7 @@ const wantBrokenError = `slides/2-agenda.md › title: required: field "title" i
 // helloTemplateYAML and helloLayoutTmpl are the seed's own
 // templates/slides/hello manifest and layout (internal/scaffold/seed), kept
 // here so a broken/edited templates/ tree can be restored to the exact seed
-// state the rest of the test (gallery, `eypres templates`) depends on.
+// state the rest of the test (gallery, `kalide templates`) depends on.
 const helloTemplateYAML = `description: "Hello slide: a required title and an optional body."
 fields:
   - name: title
@@ -128,18 +128,18 @@ func helloLayoutTmpl(marker string) string {
 // TestStartLiveReload is the end-to-end live-reload test described above.
 func TestStartLiveReload(t *testing.T) {
 	if testing.Short() {
-		t.Skip("e2e test builds and drives the real eypres binary")
+		t.Skip("e2e test builds and drives the real kalide binary")
 	}
 
 	h := NewHarness(t)
 
-	// `eypres start` now requires a valid project templates/ library
+	// `kalide start` now requires a valid project templates/ library
 	// (theme.LoadDir, deck.LoadConfig resolving `theme` against it): seed one
 	// with the embedded hello seed before writing the fixture deck over it.
 	if _, stderr, code := h.Run("init"); code != 0 {
-		t.Fatalf("eypres init exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("kalide init exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
-	h.WriteFile("eypres.yaml", []byte(deckConfig))
+	h.WriteFile("kalide.yaml", []byte(deckConfig))
 	h.WriteFile("slides/1-hello.md", []byte(introSlide))
 	h.WriteFile("slides/2-agenda.md", []byte(agendaSlide("What we will cover")))
 
@@ -292,35 +292,35 @@ func TestStartLiveReload(t *testing.T) {
 		t.Errorf("gallery does not list the project template %q:\n%s", "hello", gallery)
 	}
 
-	// `eypres templates` lists the project's templates/ library; `eypres
+	// `kalide templates` lists the project's templates/ library; `kalide
 	// templates <name>` shows one template's documentation sections.
 	stdout, stderr, code := h.Run("templates")
 	if code != 0 {
-		t.Fatalf("eypres templates exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("kalide templates exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
 	if stderr != "" {
-		t.Errorf("eypres templates stderr = %q, want empty", stderr)
+		t.Errorf("kalide templates stderr = %q, want empty", stderr)
 	}
 	if !strings.Contains(stdout, "Templates:") {
-		t.Errorf("eypres templates output is missing the list header:\n%s", stdout)
+		t.Errorf("kalide templates output is missing the list header:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "hello") {
-		t.Errorf("eypres templates output does not name %q:\n%s", "hello", stdout)
+		t.Errorf("kalide templates output does not name %q:\n%s", "hello", stdout)
 	}
 
 	stdout, stderr, code = h.Run("templates", "hello")
 	if code != 0 {
-		t.Fatalf("eypres templates hello exit = %d, want 0 (stderr = %q)", code, stderr)
+		t.Fatalf("kalide templates hello exit = %d, want 0 (stderr = %q)", code, stderr)
 	}
 	if stderr != "" {
-		t.Errorf("eypres templates hello stderr = %q, want empty", stderr)
+		t.Errorf("kalide templates hello stderr = %q, want empty", stderr)
 	}
 	if !strings.Contains(stdout, "hello (slide)") {
-		t.Errorf("eypres templates hello output is missing the identity line:\n%s", stdout)
+		t.Errorf("kalide templates hello output is missing the identity line:\n%s", stdout)
 	}
 	for _, section := range []string{"Fields:", "Sections:", "Body:", "Example:"} {
 		if !strings.Contains(stdout, section) {
-			t.Errorf("eypres templates hello output is missing section %q:\n%s", section, stdout)
+			t.Errorf("kalide templates hello output is missing section %q:\n%s", section, stdout)
 		}
 	}
 

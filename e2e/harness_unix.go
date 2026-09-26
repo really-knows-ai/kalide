@@ -10,7 +10,7 @@ import (
 
 // This file is the Unix half of the harness's process-group handling. It is
 // selected for every non-Windows target, so on the supported macOS target it
-// starts `eypres start` in its own process group and stops it gracefully with
+// starts `kalide start` in its own process group and stops it gracefully with
 // SIGTERM to that group. The Windows counterpart is harness_windows.go.
 
 // setProcessGroup makes the child the leader of a new process group
@@ -20,7 +20,7 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// signalGroupGracefully sends SIGTERM to the harness's process group. eypres
+// signalGroupGracefully sends SIGTERM to the harness's process group. kalide
 // listens for os.Interrupt/SIGTERM and shuts its server, watcher and reloader
 // down cleanly, exiting 0. A process group that is already gone (ESRCH) is not
 // an error: the process may have stopped between Wait observing its exit and
