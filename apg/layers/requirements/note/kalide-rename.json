@@ -164,6 +164,11 @@
       "kind": "details",
       "target": "requirements.note.source-repo-module-path",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.tap-bucket-location-open",
+      "properties": {}
     }
   ],
   "in": []
