@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.service.load-template-library",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
     }
   ]
 }
