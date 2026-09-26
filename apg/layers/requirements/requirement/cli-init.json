@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-init-minimal-seed",
+      "properties": {}
     }
   ],
   "in": [
