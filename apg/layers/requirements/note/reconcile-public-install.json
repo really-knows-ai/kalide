@@ -89,6 +89,11 @@
       "kind": "details",
       "target": "domain.value.package-manifest",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.homebrew-formula",
+      "properties": {}
     }
   ],
   "in": []
