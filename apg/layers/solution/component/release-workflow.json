@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "release-workflow",
-  "body": "Release workflow: GitHub Actions workflow triggered by a human-pushed tag. It builds one binary per supported target (darwin/arm64, windows/amd64, plus windows/arm64 only when `windows-11-arm` is available), gates on native-e2e-ci, publishes assets and checksums to the GitHub Release, then updates the Homebrew formula and Scoop manifest (version, URLs, checksums, covering only the targets actually released) and pushes them as a manifest-only commit touching only `Formula/` and `bucket/`. It never pushes code and never creates tags.",
+  "body": "Release workflow: GitHub Actions workflow triggered by a human-pushed tag. It builds one binary per supported target (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64 — each only if its native runner is available), gates on native-e2e-ci, publishes assets and checksums to the GitHub Release, then updates the Homebrew formula and Scoop manifest (version, URLs, checksums, covering only the targets actually released) and pushes them as a manifest-only commit touching only `Formula/` and `bucket/`. It never pushes code and never creates tags.",
   "properties": {},
   "out": [
     {
