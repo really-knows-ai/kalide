@@ -56,6 +56,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.template-language",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-context",
+      "properties": {}
     }
   ],
   "in": [
