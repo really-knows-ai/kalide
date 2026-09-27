@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "anonymous-install",
+  "body": "Installing, upgrading or manually downloading kalide must require no GitHub account, repo access, or token (no `HOMEBREW_GITHUB_API_TOKEN`, no `KALIDE_GITHUB_TOKEN`): the repo really-knows-ai/kalide is public and every release asset, the tap and the bucket are fetched anonymously. No shipped install artifact (formula, Scoop manifest, docs) may reference such a token or a private-release download mechanism.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
