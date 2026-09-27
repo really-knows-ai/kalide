@@ -26,7 +26,7 @@ offline, and there is no separate tool to install or run alongside it.
 - [What `kalide init` refuses to do](#what-kalide-init-refuses-to-do)
 - [Working offline](#working-offline)
 - [Making a PDF](#making-a-pdf)
-- [More install options](#more-install-options)
+- [Install details](#install-details)
 - [License](#license)
 - [Changelog](#changelog)
 
@@ -41,9 +41,33 @@ when they're consistent.
 
 ## Install
 
+### Homebrew (macOS, Apple silicon and Intel)
+
+```sh
+brew tap really-knows-ai/kalide https://github.com/really-knows-ai/kalide
+brew install kalide
+```
+
+To upgrade: `brew update && brew upgrade kalide`.
+
+### Scoop (Windows, amd64 and arm64)
+
+```powershell
+scoop bucket add kalide https://github.com/really-knows-ai/kalide
+scoop install kalide
+```
+
+To upgrade: `scoop update; scoop update kalide`.
+
+### Manual download (Linux, or any platform)
+
+Download the file for your computer from the
+[releases page](https://github.com/really-knows-ai/kalide/releases). This is
+the route on Linux, and a fallback on macOS and Windows.
+
 `kalide` is a **single file**. To install it, copy that one file somewhere on
-your computer and run it. There is no installer, no runtime to install first, no
-package manager requirement, and no setup step.
+your computer and run it. There is no installer, no runtime to install first,
+and no setup step.
 
 - On **macOS**: copy `kalide-darwin-arm64` (Apple silicon) or
   `kalide-darwin-amd64` (Intel) to a folder on your `PATH` (for example
@@ -352,11 +376,10 @@ printer built into the reveal.js page:
 
 The print styles come from the reveal.js version bundled inside `kalide`.
 
-## More install options
+## Install details
 
-The steps above cover copying the single file by hand. Managed installs —
-Homebrew on macOS and Scoop on Windows, including the one-time access and token
-setup — are documented in [`INSTALL.md`](INSTALL.md).
+Full install, upgrade and uninstall steps for every platform are in
+[`INSTALL.md`](INSTALL.md).
 
 ## License
 
