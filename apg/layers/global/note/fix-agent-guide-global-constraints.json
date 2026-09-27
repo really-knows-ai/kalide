@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "note",
+  "name": "fix-agent-guide-global-constraints",
+  "body": "Amendment for agentic authoring (feedback-3). Source statement: global.constraint.no-embedded-template-assets and global.constraint.go-static-embedded-binary permitted only \"the minimal, unbranded `kalide init` seed scaffold, written to disk once by init\" as embedded scaffold content. Inconsistency: the spec also embeds a library/template-author `AGENTS.md` written by `kalide init-library` (read like mustReadSeed/DefaultThemeCSS) and a deck-author `AGENTS.md` written by the external `kalide init <path>` form — additional embedded guide files that are not part of the no-arg init seed tree, so the constraints as written were narrower than the artifacts. Resolution [autonomous]: both global constraints were amended to explicitly permit the static, unbranded, text-only `AGENTS.md` scaffold guide files written verbatim by all three scaffolding commands (`kalide init`, `kalide init <path>`, `kalide init-library`), naming them as scaffold content and not template assets. The prohibitions are unchanged: templates, themes, fonts, logos and other presentation media must never be embedded and remain read-only from the resolved library root, with no built-in fallback; requirements.constraint.brand-not-embedded is unchanged. requirements.note.agent-authoring-decisions was reconciled (its \"Constraint note\" paragraph no longer claims no global change is needed).",
+  "properties": {},
+  "out": [],
+  "in": []
+}
