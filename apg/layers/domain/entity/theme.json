@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "theme",
-  "body": "A theme: a project-defined (`templates/themes/<name>/`) named set of CSS variable tokens (colours, fonts, spacing) in `theme.css`, plus theme-owned files (fonts, logos) in its directory that theme.css references by relative url() (served from the theme dir; not reachable via the layout `media` helper, which resolves only under templates/media/). No built-in themes; deck-wide; omitted selection resolves to the project's `default`.",
+  "body": "A theme: a project-defined (one directory per theme under the resolved library's `themes/<name>/`) named set of CSS variable tokens (colours, fonts, spacing) in `theme.css`, plus theme-owned files (fonts, logos) in its directory that theme.css references by relative url() (served from the theme dir; not reachable via the layout `media` helper, which resolves only under the resolved library's `media/`). No built-in themes; deck-wide; omitted selection resolves to the project's `default`.",
   "properties": {
     "kind": "entity"
   },
