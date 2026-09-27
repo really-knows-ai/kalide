@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.distribution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.version-command",
+      "properties": {}
     }
   ],
   "in": []
