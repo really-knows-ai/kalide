@@ -7,5 +7,11 @@
     "attaches-to": "solution.component.agent-guide"
   },
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.agent-authoring-decisions",
+      "properties": {}
+    }
+  ]
 }
