@@ -36,6 +36,11 @@
       "kind": "drives",
       "source": "requirements.requirement.template-retarget-requires-restart",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.template-retarget-restart-decisions",
+      "properties": {}
     }
   ]
 }
