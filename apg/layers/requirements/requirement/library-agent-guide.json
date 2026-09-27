@@ -41,6 +41,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.templates-dir-layout",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.library-guide-layout",
+      "properties": {}
     }
   ],
   "in": [
