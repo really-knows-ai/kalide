@@ -18,8 +18,9 @@ import (
 // number, matching the plan's ordering:
 //
 //  1. library.yaml present and valid;
-//  2. layout: only the five documented top-level entries, and slide/section
-//     names unique across kinds;
+//  2. layout: only the documented top-level entries plus the single inert
+//     root entry AGENTS.md (library-guide-layout), and slide/section names
+//     unique across kinds;
 //  3. per template, kind then name: the three required files present,
 //     template.yaml well-formed with no `usage:` key, and the layout parses
 //     as html/template with only the documented func set;
@@ -292,10 +293,15 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	return nil
 }
 
-// checkTopLevelLayout rejects a templates/ entry that is not one of the five
-// documented top-level names (step 2).
+// checkTopLevelLayout rejects a templates/ entry that is not one of the
+// documented top-level names (step 2): library.yaml, slides/, sections/,
+// themes/ and media/, plus the single permitted inert top-level entry
+// AGENTS.md (library-guide-layout).
 func checkTopLevelLayout(root string, entries []fs.DirEntry) error {
-	allowed := []string{LibraryFile, SlidesDir, SectionsDir, ThemesDir, MediaDir}
+	// AGENTS.md is the one permitted inert non-template top-level entry
+	// (library-guide-layout): the loader never parses, validates, renders,
+	// lists or serves it, but a library root carrying it must still load.
+	allowed := []string{LibraryFile, SlidesDir, SectionsDir, ThemesDir, MediaDir, "AGENTS.md"}
 	for _, entry := range entries {
 		if containsString(allowed, entry.Name()) {
 			continue
