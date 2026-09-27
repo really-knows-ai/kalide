@@ -5,5 +5,11 @@
   "body": "The server must never present a partially broken deck: if validation fails (startup or reload) — including validation of the resolved library root (the configured `templates:` path, else the local `templates/`) — no slides are rendered: startup exits, reload shows the full-page error. A change to the configured `templates:` value while serving counts as serving a broken state: no slides are rendered and the full-page restart-required error is shown instead (see template-retarget-requires-restart).",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.template-retarget-restart-decisions",
+      "properties": {}
+    }
+  ]
 }

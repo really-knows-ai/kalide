@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "requirements.requirement.deck-config",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.never-serve-broken-deck",
+      "properties": {}
     }
   ],
   "in": []
