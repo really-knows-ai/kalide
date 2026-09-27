@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "domain.entity.template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.file-watcher",
+      "properties": {}
     }
   ],
   "in": []
