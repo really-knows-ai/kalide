@@ -9,10 +9,11 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	libpath "path"
 	"strconv"
 	"strings"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/render"
@@ -164,7 +165,14 @@ type ReloadOptions struct {
 // Build one with NewReloader, then Start (or Run). It is safe for the SSE
 // handler goroutines to broadcast through it concurrently.
 type Reloader struct {
-	srv      *Server
+	srv *Server
+
+	// root is the deck directory holding kalide.yaml, retained from
+	// ReloadOptions.Root. The built-in pipeline resolves the template-library
+	// root against it on every run; the deck fsys alone cannot name an
+	// external library root because os.DirFS/fs.ValidPath reject ".."
+	// (external-template-library).
+	root     string
 	fsys     fs.FS
 	events   <-chan watch.Event
 	pipeline Pipeline
@@ -234,6 +242,7 @@ func NewReloader(opts ReloadOptions) (*Reloader, error) {
 
 	r := &Reloader{
 		srv:     opts.Server,
+		root:    opts.Root,
 		fsys:    fsys,
 		events:  opts.Events,
 		title:   opts.Title,
@@ -252,6 +261,12 @@ func NewReloader(opts ReloadOptions) (*Reloader, error) {
 	}
 	if fsys == nil {
 		return nil, errors.New("server: reload: no deck root or filesystem given")
+	}
+	// The built-in pipeline resolves the template-library root against the real
+	// deck root on every run, so it always needs one: the deck fs.FS cannot
+	// express an external library root (os.DirFS/fs.ValidPath reject "..").
+	if opts.Root == "" {
+		return nil, errors.New("server: reload: no deck root given")
 	}
 
 	r.regOverride = opts.Registry
@@ -533,19 +548,25 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 // loadLibrary returns the collaborators the built-in pipeline validates and
 // renders against for one pipeline run. When Registry and Themes were both
 // given as explicit test overrides (ReloadOptions.Registry/Themes), it returns
-// them unchanged and never touches fsys — the override escape hatch. Otherwise
-// it loads the project's templates/ library fresh from fsys
-// (template.LoadLibrary, template.NewRegistryFromLibrary, theme.LoadDir),
-// so an edit to the library is reflected on the next call rather than being
-// served from a registry cached at construction. An override for only one of
-// Registry/Themes still loads the library (to fill in the other and to
-// resolve the layout func map's media base), but keeps the overridden value.
+// them unchanged and never touches the deck — the override escape hatch.
+//
+// Otherwise it resolves the deck's template-library root afresh from the deck
+// config on every call and loads that root: a configured `templates:` path
+// (relative resolved against the retained deck root, absolute allowed) is
+// authoritative, else the local templates/ (external-template-library). The
+// resolution runs against the retained real deck root (r.root), never the
+// process cwd and never the `..`-rejecting deck fs.FS, so an external library
+// is reachable; nothing is cached, so retargeting `templates:` in kalide.yaml
+// or editing the library is reflected on the next call. The registry and
+// themes are built from the resolved root. An unresolvable root or library is
+// returned as the positioned templates error naming the resolved path, with no
+// fallback to a local templates/ (never-serve-broken-deck).
 func (r *Reloader) loadLibrary(fsys fs.FS) (*template.Library, *template.Registry, *theme.Registry, error) {
 	if r.regOverride != nil && r.themesOverride != nil {
 		return nil, r.regOverride, r.themesOverride, nil
 	}
 
-	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	lib, err := template.LoadDeckLibrary(r.root, configuredTemplates(fsys))
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -560,13 +581,33 @@ func (r *Reloader) loadLibrary(fsys fs.FS) (*template.Library, *template.Registr
 
 	themes := r.themesOverride
 	if themes == nil {
-		themes, err = theme.LoadDir(fsys, libpath.Join(template.TemplatesDir, template.ThemesDir))
+		themes, err = theme.LoadDir(os.DirFS(lib.RootPath), template.ThemesDir)
 		if err != nil {
 			return lib, reg, nil, err
 		}
 	}
 
 	return lib, reg, themes, nil
+}
+
+// configuredTemplates returns the deck's raw top-level `templates:` value as
+// written in kalide.yaml, or "" when the file cannot be read, the key is absent
+// or empty, or the config cannot be decoded. It is the deck-side input to the
+// template loader's single resolution point: it deliberately does not validate
+// the config (deck.LoadConfig needs a theme registry, which itself comes from
+// the not-yet-resolved library) — the whole-deck validator reports any config
+// error afterwards, through the themes loaded from the resolved root.
+func configuredTemplates(fsys fs.FS) string {
+	data, err := fs.ReadFile(fsys, deck.ConfigFile)
+	if err != nil {
+		return ""
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return ""
+	}
+	configured, _ := raw["templates"].(string)
+	return configured
 }
 
 // errorTitle is the title shown on the error page: the deck's configured title

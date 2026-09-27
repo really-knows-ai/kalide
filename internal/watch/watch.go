@@ -2,11 +2,13 @@
 // them as a debounced stream of events.
 //
 // It is the file-watching half of live reload (domain.service.watch-deck): the
-// watched paths are the deck's slides/ subtree, its assets/ subtree and its
-// kalide.yaml. The watcher never reads, validates or renders a deck; it only
-// reports that something under those paths changed. internal/server consumes
-// the events to re-validate and re-render the deck and to push a reload to the
-// open browser (requirements.requirement.live-reload).
+// watched paths are the deck's slides/ subtree, its assets/ subtree, its
+// resolved template-library root (the configured `templates:` path, else the
+// local templates/; see external-template-library) and its kalide.yaml. The
+// watcher never reads, validates or renders a deck; it only reports that
+// something under those paths changed. internal/server consumes the events to
+// re-validate and re-render the deck and to push a reload to the open browser
+// (requirements.requirement.live-reload).
 package watch
 
 import (
@@ -20,6 +22,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -32,13 +35,14 @@ import (
 // assets/ directory is not an error.
 const AssetsDir = "assets"
 
-// TemplatesDir is the fixed name of the project's templates library directory
-// at the root of a deck, alongside deck.SlidesDir and AssetsDir. It aliases
-// template.TemplatesDir. It is watched recursively so an edit anywhere in the
-// templates/ library (slides/, sections/, themes/<name>/, media/ or the
-// top-level library.yaml) triggers a reload. Like assets/, a missing
-// templates/ directory is not an error at startup: the root watch picks it up
-// if it is created later.
+// TemplatesDir is the fixed name of the local template library directory at
+// the root of a deck, alongside deck.SlidesDir and AssetsDir. It aliases
+// template.TemplatesDir and is the fallback library root when kalide.yaml has
+// no `templates:` key; otherwise the configured path is the resolved root
+// (external-template-library). The resolved root is watched recursively so an
+// edit anywhere in the library triggers a reload. Like assets/, a missing
+// local templates/ directory is not an error at startup: the root watch picks
+// it up if it is created later.
 const TemplatesDir = template.TemplatesDir
 
 // mutate is the set of fsnotify operations that count as a change to the deck.
@@ -72,16 +76,20 @@ type Event struct {
 //
 //   - the slides/ subtree (deck.SlidesDir) recursively;
 //   - the assets/ subtree (AssetsDir) recursively;
-//   - the templates/ subtree (TemplatesDir) recursively — slides/, sections/,
-//     themes/<name>/, media/ and the top-level library.yaml; and
+//   - the resolved template-library root recursively — the configured
+//     `templates:` path in kalide.yaml (relative to root, or absolute; it may
+//     lie outside root), else the local templates/ (TemplatesDir) — covering
+//     slides/, sections/, themes/<name>/, media/ and the top-level
+//     library.yaml; and
 //   - the kalide.yaml file (deck.ConfigFile) at the root.
 //
-// fsnotify is not recursive, so Watch walks slides/, assets/ and templates/ at
-// startup and registers every directory it finds. A directory created later is
-// picked up from the create event that the parent's watch reports and has its
-// subtree added; a directory removed or renamed has its watch (and its
-// descendants') dropped. A missing slides/, assets/ or templates/ directory is
-// not an error: the root watch sees it if it is created later.
+// fsnotify is not recursive, so Watch walks slides/, assets/ and the resolved
+// library root at startup and registers every directory it finds. A directory
+// created later is picked up from the create event that the parent's watch
+// reports and has its subtree added; a directory removed or renamed has its
+// watch (and its descendants') dropped. A missing slides/, assets/ or library
+// directory is not an error: the root watch sees a local one if it is created
+// later.
 //
 // Debounce: each relevant event resets a timer, and a single Event is sent only
 // after no relevant event has arrived for debounce (one event per burst). No
@@ -116,8 +124,17 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 		return nil, nil, fmt.Errorf("watch %s: %w", root, err)
 	}
 
+	// Resolve the deck's template-library root from kalide.yaml (the
+	// configured `templates:` path, else the local templates/) so the resolved
+	// root — possibly an external directory outside the deck root — is watched
+	// too (external-template-library). A missing or unresolvable library is
+	// not an error: the deck's slides/, assets/ and kalide.yaml are still
+	// watched, and the resolved root is picked up later if it appears.
+	library := libraryRoot(root)
+
 	w := &watcher{
 		root:     root,
+		library:  library,
 		fsw:      fsw,
 		debounce: debounce,
 		watched:  make(map[string]struct{}),
@@ -137,7 +154,9 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 	}
 	w.addTree(filepath.Join(root, deck.SlidesDir))
 	w.addTree(filepath.Join(root, AssetsDir))
-	w.addTree(filepath.Join(root, TemplatesDir))
+	if library != "" {
+		w.addTree(library)
+	}
 
 	go w.loop()
 
@@ -158,7 +177,15 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 // its watched set and debounce state are only touched by the single event-loop
 // goroutine started by Watch.
 type watcher struct {
-	root     string
+	root string
+
+	// library is the deck's resolved template-library root (external-template-
+	// library): the configured `templates:` path resolved against root, or the
+	// local templates/ when the key is absent. It may be outside root (begins
+	// with ".." relative to it). It is "" when no root could be resolved; a
+	// change at or beneath it is a deck change even when it lies outside root.
+	library string
+
 	fsw      *fsnotify.Watcher
 	debounce time.Duration
 
@@ -214,15 +241,27 @@ func (w *watcher) dropTree(dir string) {
 
 // rel reports whether ev is relevant to the deck and, if so, its path relative
 // to the root as a slash-separated string. Relevant paths are kalide.yaml at
-// the root and anything at or beneath slides/, assets/ or templates/
-// (including templates/library.yaml).
+// the root, anything at or beneath slides/ or assets/, and anything at or
+// beneath the resolved library root (external-template-library) — including an
+// external root outside the deck, whose reported path then begins with "../".
+// A path outside both the root's watched subtrees and the resolved library is
+// ignored.
 func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	r, err := filepath.Rel(w.root, ev.Name)
 	if err != nil {
 		return "", false
 	}
 	r = filepath.ToSlash(r)
-	if r == "." || r == ".." || strings.HasPrefix(r, "../") {
+	if r == "." {
+		return "", false
+	}
+	// The resolved library root may sit outside the deck root (e.g.
+	// `templates: ../shared-lib`), where r is "../shared-lib/…": treat it as a
+	// deck change and report the same stable deck-relative path.
+	if w.library != "" && atOrUnder(w.library, ev.Name) {
+		return r, true
+	}
+	if r == ".." || strings.HasPrefix(r, "../") {
 		return "", false
 	}
 	switch {
@@ -232,11 +271,58 @@ func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 		return r, true
 	case r == AssetsDir, strings.HasPrefix(r, AssetsDir+"/"):
 		return r, true
-	case r == TemplatesDir, strings.HasPrefix(r, TemplatesDir+"/"):
-		return r, true
 	default:
 		return "", false
 	}
+}
+
+// atOrUnder reports whether name is dir itself or a path beneath dir. Both are
+// expected to be absolute, cleaned OS paths.
+func atOrUnder(dir, name string) bool {
+	rel, err := filepath.Rel(dir, name)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+// libraryRoot returns the deck's resolved template-library root as an absolute
+// OS path, or "" when none can be resolved. configured is the raw `templates:`
+// value read from the deck's kalide.yaml; it resolves through the template
+// loader's single resolution point (external-template-library). Resolution
+// requires the directory to exist, but a missing/unresolvable library must not
+// fail the watch: when the key is absent, the local templates/ path is still
+// returned so a directory created there after startup is picked up by the root
+// watch; when a configured path does not resolve, "" is returned and only the
+// deck's own paths are watched.
+func libraryRoot(deckRoot string) string {
+	configured := configuredTemplates(deckRoot)
+	if resolved, err := template.ResolveLibraryRoot(deckRoot, configured); err == nil {
+		return resolved
+	}
+	if configured == "" {
+		return filepath.Join(deckRoot, template.TemplatesDir)
+	}
+	return ""
+}
+
+// configuredTemplates returns the deck's raw top-level `templates:` value as
+// written in kalide.yaml, or "" when the file cannot be read, the key is absent
+// or empty, or the config cannot be decoded. It mirrors internal/server's
+// reader: reading the raw key is what lets the library root be resolved before
+// a theme registry exists (deck.LoadConfig needs one, and the registry itself
+// comes from the not-yet-resolved library).
+func configuredTemplates(deckRoot string) string {
+	data, err := os.ReadFile(filepath.Join(deckRoot, deck.ConfigFile))
+	if err != nil {
+		return ""
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return ""
+	}
+	configured, _ := raw["templates"].(string)
+	return configured
 }
 
 // loop is the single event-loop goroutine: it reads fsnotify events, keeps the
