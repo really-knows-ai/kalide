@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "fix-validation-agents-md",
+  "body": "Amendment for agentic authoring. Source statement: requirements.requirement.templates-dir-validation step (2) stated the library top level holds \"only library.yaml, slides/, sections/, themes/, media/\". Inconsistency: requirements.requirement.templates-dir-layout was amended to permit exactly one inert non-template root entry, `AGENTS.md` (library-guide-layout), and requirements.requirement.library-guide-layout states the exception — an implementer following step (2) would keep rejecting `AGENTS.md`, making init-library's load-cleanly AC unsatisfiable. Resolution [autonomous]: amend step (2) to mirror the amended templates-dir-layout — the five documented entries plus the one permitted inert root entry `AGENTS.md` (library-guide-layout), ignored by load/validate/render/serve/list; every other unknown top-level entry still errors naming the offending entry. Fail-fast ordering and the rest of the body are unchanged.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
