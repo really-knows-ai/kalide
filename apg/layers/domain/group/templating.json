@@ -77,6 +77,11 @@
       "kind": "realised-by",
       "target": "solution.component.renderer",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.scaffold-template-library",
+      "properties": {}
     }
   ],
   "in": [
