@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.install-docs",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.license",
+      "properties": {}
     }
   ],
   "in": [
