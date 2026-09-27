@@ -40,7 +40,7 @@ class Kalide < Formula
       using: GitHubPrivateReleaseDownloadStrategy
   version "0.0.0"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-  license :cannot_represent
+  license "Apache-2.0"
 
   # Only a darwin/arm64 binary is built. Refuse Intel Macs before anything is
   # downloaded, with a plain-language explanation. This cannot live in an

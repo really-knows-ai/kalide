@@ -1,0 +1,30 @@
+kalide
+Copyright Really Knows AI
+
+This product is licensed under the Apache License, Version 2.0 (see
+LICENSE), with the exception of the contents of the brand/ directory.
+
+Third-party software
+--------------------
+
+This product bundles reveal.js (https://revealjs.com), which is licensed
+under the MIT License. The full reveal.js license text is included at
+internal/assets/reveal/LICENSE.
+
+Brand assets
+------------
+
+The contents of the brand/ directory (including the kalide logo files) are
+excluded from the Apache License, Version 2.0. They are Copyright Really
+Knows AI, all rights reserved; see brand/LICENSE.
+
+Trademarks
+----------
+
+"kalide" and the kalide logo are trademarks of Really Knows AI. They are
+not licensed under the Apache License, Version 2.0: as stated in Section 6
+(Trademarks) of that License, it does not grant permission to use the trade
+names, trademarks, service marks, or product names of the Licensor, except
+as required for reasonable and customary use in describing the origin of
+the Work and reproducing the content of this NOTICE file. See TRADEMARKS.md
+for the permitted-use policy.
