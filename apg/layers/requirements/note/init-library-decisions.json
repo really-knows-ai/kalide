@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "domain.service.scaffold-template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.template-library",
+      "properties": {}
     }
   ],
   "in": []

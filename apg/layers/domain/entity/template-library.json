@@ -58,6 +58,11 @@
       "kind": "drives",
       "source": "requirements.requirement.init-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.init-library-decisions",
+      "properties": {}
     }
   ]
 }
