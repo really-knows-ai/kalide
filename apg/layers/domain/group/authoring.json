@@ -62,6 +62,11 @@
       "kind": "contains",
       "target": "domain.value.deck-properties",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.agent-guide",
+      "properties": {}
     }
   ],
   "in": [
