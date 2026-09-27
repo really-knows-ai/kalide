@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "linux-install",
+  "body": "Linux users install kalide by downloading the `kalide-linux-<arch>` asset directly from the private GitHub Release (no Homebrew/Scoop-equivalent tap or bucket), making it executable (`chmod +x kalide-linux-<arch>`), and running it. AC: on a clean Linux machine of a supported arch, downloading the release asset, chmod +x, and running it starts kalide successfully.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
