@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "requirements.requirement.tap-bucket-location",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.package-manifest-update",
+      "properties": {}
     }
   ],
   "in": []
