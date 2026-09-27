@@ -4,6 +4,12 @@
   "name": "fix-init-library-agents-md",
   "body": "Amendment for agentic authoring. Source statement: `kalide init-library <path>` writes `library.yaml`, the empty layout entries and `themes/default/theme.css`, and the created library loads cleanly (templates-dir-validation). Inconsistency: the locked decision that init-library ships an `AGENTS.md` at the library root conflicts with templates-dir-layout's rule that unknown top-level entries in a library are an error (confirmed in internal/template/loadlibrary.go checkTopLevelLayout, which allows only library.yaml, slides, sections, themes, media): the guide would make the created library fail to load. Resolution [autonomous, FLAGGED]: amend requirements.requirement.templates-dir-layout to permit the single inert root entry `AGENTS.md`, add requirements.requirement.library-guide-layout to state and test the exception, and record the guide write in requirements.requirement.init-library (library-agent-guide). Every other unknown top-level entry still errors. [with user: init-library ships a guide at the library root; autonomous: the layout exception that makes it load-valid]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.init-library",
+      "properties": {}
+    }
+  ],
   "in": []
 }
