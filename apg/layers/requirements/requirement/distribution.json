@@ -71,6 +71,11 @@
       "kind": "contains",
       "target": "requirements.requirement.changelog",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.license",
+      "properties": {}
     }
   ],
   "in": [
