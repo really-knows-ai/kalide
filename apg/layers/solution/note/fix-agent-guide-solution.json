@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "fix-agent-guide-solution",
+  "body": "Solution/domain wiring for agentic authoring. Added solution.component.agent-guide (contained by solution.container.cli-binary, implemented-by internal/scaffold.Init, internal/scaffold.writeHelloSeed, internal/scaffold.InitExternal, internal/scaffold.InitLibrary, internal/scaffold.DefaultThemeCSS) and the domain values domain.value.agent-guide (domain.group.authoring) and domain.value.library-agent-guide (domain.group.templating). Amended solution.component.init-seed and solution.component.cli-commands bodies to name `AGENTS.md`, and added implemented-by internal/cli.runInit and internal/cli.runInitLibrary to solution.component.cli-commands (the command handlers and created-path messages that must list the guide). Added realised-by edges domain.group.authoring → solution.component.agent-guide, domain.group.templating → solution.component.agent-guide, domain.service.scaffold-deck → solution.component.agent-guide and domain.service.scaffold-template-library → solution.component.agent-guide, so each guide value realises through its containing group (solution.note.spine-values-and-tier4). DefaultThemeCSS stands in for the existing library-form embedded-seed read (mustReadSeed); the concrete guide files and any new read helper do not exist yet and are plan-time planned Implementation nodes (tier-4 deferral). [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
