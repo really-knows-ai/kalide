@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-retarget-requires-restart",
+      "properties": {}
     }
   ]
 }
