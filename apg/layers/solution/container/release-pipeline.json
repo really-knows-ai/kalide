@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "container",
   "name": "release-pipeline",
-  "body": "Release pipeline: GitHub Actions workflows in the private repo. The native-runner CI/e2e runs one job per supported target (darwin/arm64, windows/amd64, plus windows/arm64 when `windows-11-arm` is available). The tag-triggered release workflow publishes GitHub Releases assets and updates the package manifests.",
+  "body": "Release pipeline: GitHub Actions workflows in the public repo (`ci.yml`, `native-e2e.yml`, `release.yml`). The native-runner CI/e2e runs one job per supported target for which a hosted runner is available. The tag-triggered release workflow publishes GitHub Releases assets and updates the package manifests.",
   "properties": {
     "kind": "service"
   },
