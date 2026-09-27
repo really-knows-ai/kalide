@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "deck-changed",
-  "body": "Event: a file changed while serving — under slides/, assets/, kalide.yaml, or anywhere under the resolved library root (the configured `templates:` path, else the local `templates/`; library.yaml, slides/, sections/, themes/, media/). Published (debounced) by watch-deck; triggers templates reload → validate → render.",
+  "body": "Event: a file changed while serving — under slides/, assets/, kalide.yaml, or anywhere under the resolved library root (the configured `templates:` path, else the local `templates/`; library.yaml, slides/, sections/, themes/, media/). Published (debounced) by watch-deck; triggers templates reload → validate → render. A change to the configured `templates:` value is a distinct restart-required condition: it does not retarget the library root, and the server shows the full-page restart-required error (see template-retarget-requires-restart).",
   "properties": {
     "kind": "event"
   },
