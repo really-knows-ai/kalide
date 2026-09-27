@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "domain.service.scaffold-template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.group.authoring",
+      "properties": {}
     }
   ],
   "in": []
