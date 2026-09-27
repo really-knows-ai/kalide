@@ -181,6 +181,15 @@ type Reloader struct {
 	log      io.Writer
 	initial  *Page
 
+	// startupTemplates is the raw top-level `templates:` value exactly as
+	// written in kalide.yaml when the built-in pipeline was built, captured
+	// by NewReloader through configuredTemplates (an absent key is ""). It is
+	// the session's raw-value baseline: renderDefault refuses any run whose
+	// currently-configured raw value differs, serving the standard
+	// restart-required error instead (template-retarget-requires-restart). It
+	// is unused by an injected pipeline, which owns its own view of the deck.
+	startupTemplates string
+
 	// regOverride and themesOverride are explicit test overrides supplied
 	// through ReloadOptions.Registry/ReloadOptions.Themes; nil when a caller
 	// injected its own Pipeline or left them unset. When either is nil, the
@@ -268,6 +277,14 @@ func NewReloader(opts ReloadOptions) (*Reloader, error) {
 	if opts.Root == "" {
 		return nil, errors.New("server: reload: no deck root given")
 	}
+
+	// Pin the session's raw `templates:` baseline from the startup deck
+	// config (template-retarget-requires-restart): the value exactly as
+	// written, with an absent key recorded as "". renderDefault compares the
+	// currently-configured raw value against it on every run. Only the
+	// built-in pipeline is pinned; an injected pipeline (handled above) owns
+	// its own view of the deck and never reaches renderDefault.
+	r.startupTemplates = configuredTemplates(fsys)
 
 	r.regOverride = opts.Registry
 	r.themesOverride = opts.Themes
@@ -505,7 +522,18 @@ func injectLiveReload(doc htmltmpl.HTML, eventPath string) htmltmpl.HTML {
 // reload without restarting the server. A library that fails to load is
 // reported the same way as an invalid deck — the full-page error, never a
 // stale or partially-loaded library (never-serve-broken-deck).
+//
+// Before resolving anything it compares the currently-configured raw
+// `templates:` value against the raw value captured at startup: a difference
+// (a different path, or the key added or removed) is not retargeted live — the
+// standard full-page restart-required error is published instead and the
+// server keeps serving (template-retarget-requires-restart). When the value is
+// unchanged the run proceeds exactly as before.
 func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
+	if templatesRetargeted(r.startupTemplates, configuredTemplates(fsys)) {
+		return NewErrorPage(r.title, restartRequiredError())
+	}
+
 	lib, reg, themes, err := r.loadLibrary(fsys)
 	if err != nil {
 		return NewErrorPage(r.title, validate.New("templates", 0, nil, err.Error(), ""))
@@ -556,11 +584,15 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 // authoritative, else the local templates/ (external-template-library). The
 // resolution runs against the retained real deck root (r.root), never the
 // process cwd and never the `..`-rejecting deck fs.FS, so an external library
-// is reachable; nothing is cached, so retargeting `templates:` in kalide.yaml
-// or editing the library is reflected on the next call. The registry and
-// themes are built from the resolved root. An unresolvable root or library is
-// returned as the positioned templates error naming the resolved path, with no
-// fallback to a local templates/ (never-serve-broken-deck).
+// is reachable; nothing is cached, so an edit of files under the resolved root
+// is reflected on the next call. A changed raw `templates:` value, however, is
+// NOT retargeted here: renderDefault compares the currently-configured raw
+// value against the raw startup baseline and refuses the run with the standard
+// restart-required error before reaching this method
+// (template-retarget-requires-restart). The registry and themes are built from
+// the resolved root. An unresolvable root or library is returned as the
+// positioned templates error naming the resolved path, with no fallback to a
+// local templates/ (never-serve-broken-deck).
 func (r *Reloader) loadLibrary(fsys fs.FS) (*template.Library, *template.Registry, *theme.Registry, error) {
 	if r.regOverride != nil && r.themesOverride != nil {
 		return nil, r.regOverride, r.themesOverride, nil
@@ -608,6 +640,33 @@ func configuredTemplates(fsys fs.FS) string {
 	}
 	configured, _ := raw["templates"].(string)
 	return configured
+}
+
+// templatesRetargeted reports whether the currently-configured raw `templates:`
+// value differs from the raw value captured at startup
+// (template-retarget-requires-restart). The comparison is on the raw configured
+// string exactly as written, NOT on the resolved library root: two different
+// values that resolve to the same directory still count as a change. Any
+// difference is a retarget — a different path, a `./`-prefixed spelling of the
+// same path (`../shared-lib` vs `./../shared-lib`), or the key added or removed
+// ("" vs a value) — while an unchanged string, including "" on both sides (the
+// key absent throughout), is not.
+func templatesRetargeted(startup, current string) bool {
+	return startup != current
+}
+
+// restartRequiredError is the standard full-page restart-required error for
+// template-retarget-requires-restart: the raw `templates:` value in kalide.yaml
+// no longer matches the raw value captured when `kalide start` started, so the
+// template library is not retargeted live. It is a positioned ValidationError
+// at kalide.yaml naming the `templates:` key, so renderDefault publishes it
+// through the same NewErrorPage shell as any other deck error — the process
+// keeps serving — and its text is shared verbatim by browser and terminal
+// (never-serve-broken-deck, requirements.requirement.error-reporting).
+func restartRequiredError() validate.ValidationError {
+	return validate.New(deck.ConfigFile, 0, []string{"templates"},
+		"changed after startup",
+		"restart kalide start to use the new template library")
 }
 
 // errorTitle is the title shown on the error page: the deck's configured title
