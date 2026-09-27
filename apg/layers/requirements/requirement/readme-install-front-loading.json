@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.service.install-kalide",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.install-docs",
+      "properties": {}
     }
   ],
   "in": [
