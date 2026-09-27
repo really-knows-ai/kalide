@@ -35,7 +35,7 @@ const (
 // configKeys is the complete set of keys kalide.yaml may contain, in
 // declaration order. It is both the unknown-key whitelist and the candidate
 // list for closest-match suggestions.
-var configKeys = []string{"title", "author", "date", "theme", "navigation"}
+var configKeys = []string{"title", "author", "date", "theme", "navigation", "properties"}
 
 // dateLayout is the only accepted date form: an ISO calendar date, no time and
 // no zone.
@@ -62,6 +62,12 @@ type Config struct {
 	// NavigationLinear or NavigationGrid. It is NavigationDefault when the
 	// key is omitted.
 	Navigation string
+
+	// Properties is the deck-wide author-declared `properties` block
+	// (deck-properties): arbitrary non-empty author keys mapped to simple
+	// typed YAML scalars (string, number, boolean or date). It is always
+	// non-nil — the empty map when the block is absent, null or empty.
+	Properties map[string]any
 }
 
 // LoadConfig reads and validates the deck configuration at path within fsys —
@@ -79,6 +85,10 @@ type Config struct {
 //     and must otherwise resolve in themes;
 //   - navigation is optional, defaults to "default", and must be default,
 //     linear or grid;
+//   - properties is optional and, when present, must be a mapping of arbitrary
+//     non-empty author keys to simple typed scalars (string, number, boolean or
+//     date YYYY-MM-DD); a mapping or sequence value is a config error naming
+//     its key. The resolved map is always non-nil;
 //   - any other key is an unknown key, rejected with a closest-match "did you
 //     mean …?" suggestion.
 //
@@ -113,6 +123,7 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 	cfg := &Config{
 		Theme:      theme.DefaultName,
 		Navigation: NavigationDefault,
+		Properties: map[string]any{},
 	}
 	haveTitle := false
 	haveTheme := false
@@ -190,6 +201,13 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 					key.Value, mode, strings.Join([]string{NavigationDefault, NavigationLinear, NavigationGrid}, ", "))
 			}
 
+		case "properties":
+			props, err := parseProperties(path, key, val)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Properties = props
+
 		default:
 			if s := suggest.Closest(key.Value, configKeys); s != "" {
 				return nil, positioned(path, line, "unknown key %q: did you mean %q?", key.Value, s)
@@ -211,6 +229,64 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 		}
 	}
 	return cfg, nil
+}
+
+// parseProperties parses the value of the top-level `properties` key: a mapping
+// of arbitrary non-empty author keys to simple typed YAML scalars (string,
+// number, boolean or date). A mapping or sequence value — or a null value — is
+// a config error naming the offending property key. The returned map is always
+// non-nil, empty when the value is absent (null) or an empty mapping.
+//
+// Property keys are not checked against the top-level whitelist: any non-empty
+// string key is accepted.
+func parseProperties(path string, key, val *yaml.Node) (map[string]any, error) {
+	props := map[string]any{}
+	if val == nil || isNull(val) {
+		return props, nil
+	}
+	if val.Kind != yaml.MappingNode {
+		return nil, positioned(path, nodeLine(val, nodeLine(key, 1)),
+			"key %q: expected a mapping, got %s", key.Value, kindWord(val))
+	}
+	for i := 0; i+1 < len(val.Content); i += 2 {
+		name := val.Content[i]
+		value := val.Content[i+1]
+		line := nodeLine(name, nodeLine(val, nodeLine(key, 1)))
+
+		if !isString(name) || name.Value == "" {
+			return nil, positioned(path, line, "property keys must be non-empty strings")
+		}
+		if !isScalar(value) || isNull(value) {
+			return nil, positioned(path, line,
+				"key %q: expected a string, number, boolean or date, got %s",
+				name.Value, kindWord(value))
+		}
+		v, err := decodeProperty(value)
+		if err != nil {
+			return nil, positioned(path, line, "key %q: %v", name.Value, err)
+		}
+		props[name.Value] = v
+	}
+	return props, nil
+}
+
+// decodeProperty resolves one property scalar to its typed Go value: a string
+// stays a string, a number resolves to int or float64, a boolean to bool, and a
+// date written YYYY-MM-DD to time.Time. It mirrors how frontmatter field values
+// are decoded.
+func decodeProperty(value *yaml.Node) (any, error) {
+	if value.ShortTag() == "!!timestamp" {
+		t, err := time.Parse(dateLayout, value.Value)
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a valid date, expected YYYY-MM-DD", value.Value)
+		}
+		return t, nil
+	}
+	var v any
+	if err := value.Decode(&v); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // documentMapping returns the root mapping of a parsed YAML document, or nil
