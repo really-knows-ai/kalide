@@ -73,6 +73,11 @@
       "kind": "details",
       "source": "requirements.note.template-retarget-restart-decisions",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.library-agent-guide",
+      "properties": {}
     }
   ]
 }
