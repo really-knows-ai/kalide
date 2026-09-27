@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "requirements.note.agent-authoring-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-init-library-agents-md",
+      "properties": {}
     }
   ]
 }
