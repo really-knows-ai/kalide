@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "changelog",
+  "body": "A repo-root `CHANGELOG.md`, in Keep-a-Changelog style, seeded with an `Unreleased` section ready to receive the 0.5.0 entry ahead of kalide's first tagged release. AC: `CHANGELOG.md` exists at the repo root with an `Unreleased` heading; before the `v0.5.0` tag is pushed, an entry for `0.5.0` is added under it summarising the release.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
