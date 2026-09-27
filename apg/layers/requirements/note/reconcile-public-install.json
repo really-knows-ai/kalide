@@ -69,6 +69,11 @@
       "kind": "details",
       "target": "requirements.requirement.native-ci-verification",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.stakeholder.kalide-maintainers",
+      "properties": {}
     }
   ],
   "in": []
