@@ -38,6 +38,10 @@ Usage:
 //     starter deck into the current directory, or refuses non-zero when one of
 //     the deck paths already exists;
 //   - an unknown command or malformed arguments print usage and return 2.
+//
+// Both `start` and `templates` operate on decks whose reserved deck-wide
+// `.deck`/`.slide` template context is enforced by internal/template's
+// reserved-name rejection and injected at render time by internal/render.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
 		fmt.Fprint(stdout, usage)
