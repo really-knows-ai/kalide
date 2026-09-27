@@ -20,6 +20,7 @@ Usage:
                              [path], write a starter slide and a local
                              templates/ library; with [path], reference the
                              external template library there
+  kalide init-library <path> Create a new, empty template library at <path>
   kalide start [--port N] [--no-open]
                              Validate and serve the deck, then open a browser
   kalide templates [name]    List the project's templates/ library, or show
@@ -50,6 +51,11 @@ Usage:
 //     library (no local templates/, no starter slide) after validating it
 //     fail-fast. Either form refuses non-zero when one of the deck paths
 //     already exists (a local templates/ blocks only the no-path form);
+//   - `init-library <path>` routes to runInitLibrary, which creates a new,
+//     deck-ready template library at the required <path> (library.yaml, empty
+//     slides//sections//media/, a minimal default theme), refusing non-zero
+//     when the target already holds one; a missing or extra argument is a
+//     usage error;
 //   - an unknown command or malformed arguments print usage and return 2.
 //
 // Both `start` and `templates` operate on decks whose reserved deck-wide
@@ -75,6 +81,8 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 		return 0
 	case "init":
 		return runInit(args[2:], stdout, stderr)
+	case "init-library":
+		return runInitLibrary(args[2:], stdout, stderr)
 	case "start":
 		return runStart(args[2:], stdout, stderr)
 	case "templates":
