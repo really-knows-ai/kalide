@@ -5,5 +5,11 @@
   "body": "Anonymous-install e2e: the CI check that the public install channels work with no GitHub credentials. `e2e/install_test.go` (`TestAnonymousPackageInstall`, with helpers such as `anonymousEnv`/`installedVersion`) runs the real package-manager install (Homebrew tap + `brew install kalide` on macOS, Scoop bucket + `scoop install kalide` on Windows) or the anonymous release download (Linux) with every GitHub token env var (`GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, `KALIDE_GITHUB_TOKEN`) removed, and asserts the installed `kalide` reports the expected version. Wired into CI by `.github/workflows/native-e2e.yml`, which this component owns. It covers global.constraint.anonymous-install and the homebrew-install / scoop-install / linux-install acceptance criteria. The native-binary init/start e2e (TestNativeRelease) stays in solution.component.native-e2e-ci.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.release-pipeline",
+      "properties": {}
+    }
+  ]
 }
