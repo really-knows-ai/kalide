@@ -76,6 +76,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.theme-selection",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-media",
+      "properties": {}
     }
   ],
   "in": [
