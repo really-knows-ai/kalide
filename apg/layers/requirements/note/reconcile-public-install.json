@@ -84,6 +84,11 @@
       "kind": "details",
       "target": "domain.service.install-kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.package-manifest",
+      "properties": {}
     }
   ],
   "in": []
