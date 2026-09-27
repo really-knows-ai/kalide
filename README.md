@@ -13,6 +13,7 @@ offline, and there is no separate tool to install or run alongside it.
 - [Commands](#commands)
 - [How a deck is laid out](#how-a-deck-is-laid-out)
 - [The templates/ library](#the-templates-library)
+  - [The `.deck` and `.slide` context](#the-deck-and-slide-context)
 - [What `kalide init` refuses to do](#what-kalide-init-refuses-to-do)
 - [Working offline](#working-offline)
 - [Making a PDF](#making-a-pdf)
@@ -161,7 +162,20 @@ author: A. Presenter     # optional
 date: 2026-09-25         # optional, YYYY-MM-DD
 theme: default           # optional, a theme name from templates/themes
 navigation: default      # optional: default, linear or grid
+properties:              # optional, arbitrary deck-wide values for templates
+  audience: Investors
+  revision: 3
+  confidential: true
 ```
+
+`properties` is an arbitrary mapping: any key you like, each holding a
+**typed scalar** — string, number, boolean, or a date written `YYYY-MM-DD`.
+A key whose value is itself a mapping or a list is a config error naming the
+key. `properties` is the one addition to the top-level keys above; any other
+unrecognized top-level key is still an error, and `kalide` suggests the
+closest match if it looks like a typo. These values are for templates to read
+(see [The templates/ library](#the-templates-library)) — `kalide` itself does
+nothing with them beyond loading and typing.
 
 Each slide starts with a short header between `---` lines that names its
 template and fills in the fields, followed by the slide body in Markdown. The
@@ -223,6 +237,42 @@ templates/
 `kalide templates` and `kalide templates <name>` read straight from this
 library, so its documentation output can never drift from what actually
 renders.
+
+### The `.deck` and `.slide` context
+
+Every slide layout, and every section instance nested inside it at any
+depth, is executed with two reserved, read-only names alongside its own
+fields: `.deck` and `.slide`. Neither is authored — they are supplied by
+`kalide` at render time — and both are **data**, not helpers: the v1
+template helper set stays exactly `media`.
+
+- **`.deck`** carries the deck-wide settings from `kalide.yaml`:
+  - `.deck.title` — always present.
+  - `.deck.author` and `.deck.date` — empty strings when omitted.
+  - `.deck.properties` — always a non-nil map, even when `kalide.yaml`
+    declares no `properties:` at all, so `{{ .deck.properties.audience }}`
+    is safe to write unconditionally. Values keep their declared type — a
+    number or boolean property stays a number or boolean — and any string
+    value is escaped like the rest of an `html/template` layout: it is
+    never treated as Markdown and never inserted as pre-rendered HTML.
+- **`.slide`** carries this slide's position, derived at render time and
+  never authored in a slide's frontmatter:
+  - `.slide.number` — the slide's position label as a **string**, for
+    example `"1"` for a horizontal slide or `"1a"` for the vertical slide
+    beneath it.
+  - `.slide.total` — the deck's total slide count, as an integer.
+
+Both are available identically in a slide layout and in every section
+template instance it nests, at every level of composition — the motivating
+case is a reusable footer section rendering:
+
+```
+{{ .slide.number }} / {{ .slide.total }}
+```
+
+which renders `2a / 12` on the second vertical slide of a twelve-slide
+deck, regardless of how deeply the footer section is nested inside other
+sections.
 
 `examples/demo` in this repository is a small, deliberately non-EY reference
 project that exercises the format end to end: a `demo` library with a
