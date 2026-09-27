@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "install-docs",
-  "body": "Install documentation explains, in plain language for non-developers, how to get repo access (really-knows-ai/kalide), create a GitHub token with the needed scope, set it (`HOMEBREW_GITHUB_API_TOKEN` on macOS; `KALIDE_GITHUB_TOKEN` for the Scoop install on Windows), add the tap/bucket (`really-knows-ai/kalide` / `kalide`), install, and upgrade. AC: following the docs on a clean machine of each OS gets `kalide` installed.",
+  "body": "Install documentation explains, in plain language for non-developers, how to get repo access (really-knows-ai/kalide), create a GitHub token with the needed scope, set it (`HOMEBREW_GITHUB_API_TOKEN` on macOS; `KALIDE_GITHUB_TOKEN` for the Scoop install on Windows), add the tap/bucket (`really-knows-ai/kalide` / `kalide`), install, and upgrade. Linux has no package-manager channel: the docs direct Linux users to download the matching `kalide-linux-<arch>` asset from the GitHub Release, make it executable (`chmod +x`), and run it directly. AC: following the docs on a clean machine of each supported OS gets `kalide` installed or runnable.",
   "properties": {
     "feature": "distribution"
   },
