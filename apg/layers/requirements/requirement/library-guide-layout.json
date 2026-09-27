@@ -33,6 +33,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.agent-authoring-decisions",
+      "properties": {}
     }
   ]
 }
