@@ -5,22 +5,24 @@
 # manual fallback.
 #
 #   - darwin/arm64   -> macos-14
+#   - darwin/amd64   -> macos-15-intel
 #   - windows/amd64  -> windows-latest
-#   - windows/arm64  -> windows-11-arm, only while that runner is available to
-#                       this private repo
+#   - windows/arm64  -> windows-11-arm
+#   - linux/amd64    -> ubuntu-latest
+#   - linux/arm64    -> ubuntu-24.04-arm
 #
-# The matrix is composed inline from the repository variable WINDOWS_ARM_RUNNER:
-# the windows/arm64 entry is present only when it is the string "true". While it
-# is unset or not "true", that job simply does not exist (and windows/arm64 is
-# consequently never built, verified or released). There is deliberately no
-# self-hosted runner and no manual verification path.
+# All six runners are GitHub-hosted and generally available today, so the
+# matrix below is a plain static list, not conditionally assembled. There is
+# deliberately no self-hosted runner and no manual verification path: if
+# GitHub ever stops offering one of these runners, the fix is to remove that
+# target's matrix line (and its build/publish counterparts), not to add a
+# fallback.
 #
 # In both modes the binary under test lives at the same target-specific path
 # under dist/ (the Makefile's layout):
 #
 #   - build mode (default; ci.yml): `make release` builds the CGO_ENABLED=0
-#     release binary for exactly darwin/arm64, windows/amd64 and windows/arm64
-#     — never darwin/amd64 or Linux;
+#     release binary for all six supported targets;
 #   - release mode (release.yml): the caller's build job has already produced
 #     the binaries and uploaded them as an artifact, so this workflow downloads
 #     that artifact into dist/ instead of rebuilding.
@@ -35,11 +37,12 @@
 #
 # Requirement ACs (audited in release-0.5.0 phase-05 task-2):
 #   - native-ci-verification: one job per supported target on a GitHub-hosted
-#     native runner (macos-14, windows-latest, windows-11-arm when available),
-#     no self-hosted/manual fallback; each job tests the binary built for its
-#     own target via KALIDE_BINARY and runs e2e.TestNativeRelease (steps 1-6).
-#     fail-fast is off so every target reports, and release.yml's `publish`
-#     needs this whole workflow, so any failure blocks publishing.
+#     native runner (macos-14, macos-15-intel, windows-latest, windows-11-arm,
+#     ubuntu-latest, ubuntu-24.04-arm), no self-hosted/manual fallback; each
+#     job tests the binary built for its own target via KALIDE_BINARY and runs
+#     e2e.TestNativeRelease (steps 1-6). fail-fast is off so every target
+#     reports, and release.yml's `publish` needs this whole workflow, so any
+#     failure blocks publishing.
 #   - single-binary: cross-compiling alone is not accepted; the e2e runs natively.
 
 name: Native e2e
@@ -78,11 +81,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Required targets always; windows/arm64 only when its GitHub-hosted
-        # runner is available to the private repo. A static entry cannot be made
-        # conditional (a job-level `if` cannot read the matrix context), so the
-        # list is assembled here from vars.WINDOWS_ARM_RUNNER.
-        include: ${{ fromJSON(vars.WINDOWS_ARM_RUNNER == 'true' && '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/kalide-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/kalide-windows-amd64.exe"},{"target":"windows/arm64","os":"windows-11-arm","binary":"dist/kalide-windows-arm64.exe"}]' || '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/kalide-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/kalide-windows-amd64.exe"}]') }}
+        # Static six-entry list: all six GitHub-hosted native runners are GA
+        # today. If GitHub ever stops offering one of these runners, remove
+        # that target's line here (and its Makefile/release.yml counterparts)
+        # rather than adding a self-hosted or manual fallback.
+        include:
+          - target: darwin/arm64
+            os: macos-14
+            binary: dist/kalide-darwin-arm64
+          - target: darwin/amd64
+            os: macos-15-intel
+            binary: dist/kalide-darwin-amd64
+          - target: windows/amd64
+            os: windows-latest
+            binary: dist/kalide-windows-amd64.exe
+          - target: windows/arm64
+            os: windows-11-arm
+            binary: dist/kalide-windows-arm64.exe
+          - target: linux/amd64
+            os: ubuntu-latest
+            binary: dist/kalide-linux-amd64
+          - target: linux/arm64
+            os: ubuntu-24.04-arm
+            binary: dist/kalide-linux-arm64
     steps:
       - uses: actions/checkout@v7
 

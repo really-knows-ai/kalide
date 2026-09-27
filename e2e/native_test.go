@@ -2,7 +2,7 @@ package e2e
 
 // This file is the phase-9 task-2 end-to-end test for the native release
 // verification: it runs `kalide init` against the real kalide binary on each
-// native runner (macOS arm64, Windows amd64/arm64).
+// native runner (macOS arm64/amd64, Windows amd64/arm64, Linux amd64/arm64).
 //
 // Native CI builds the per-target release binary once and passes it to the
 // harness through KALIDE_BINARY (harness.go skips its own build then); when the
@@ -63,8 +63,8 @@ package e2e
 //     on Windows; exit 0, port released, no leftover children; forced kill
 //     only as a failing timeout fallback): h.Stop / checkShutdown / forceKill;
 //   - supported-platforms: a prebuilt KALIDE_BINARY must be named
-//     kalide-<goos>-<goarch> for a supported target (darwin/arm64,
-//     windows/amd64, windows/arm64); never darwin/amd64 or Linux.
+//     kalide-<goos>-<goarch> for a supported target: darwin/arm64,
+//     darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64.
 //
 // It builds (or runs) a real binary, so it is skipped under -short.
 
@@ -83,12 +83,15 @@ import (
 	"github.com/really-knows-ai/kalide/internal/server"
 )
 
-// supportedTargets are the GOOS/GOARCH pairs of supported-platforms: darwin/arm64
-// and windows/amd64 required, windows/arm64 conditional on its native runner.
+// supportedTargets are the six GOOS/GOARCH pairs of supported-platforms, all
+// GA on their own native runners.
 var supportedTargets = map[string]bool{
 	"darwin/arm64":  true,
+	"darwin/amd64":  true,
 	"windows/amd64": true,
 	"windows/arm64": true,
+	"linux/amd64":   true,
+	"linux/arm64":   true,
 }
 
 // externalRefPattern matches a src/href attribute that loads from an

@@ -19,18 +19,17 @@
 #              release tag + checksums.txt, assert only Formula/ and bucket/
 #              changed, and push that manifest commit as the Actions bot.
 #
-# Target set (supported-platforms): darwin/arm64 and windows/amd64 are always
-# built; windows/arm64 is built only while the GitHub-hosted `windows-11-arm`
-# runner is available to this private repo, signalled by the repository
-# variable WINDOWS_ARM_RUNNER == "true" (the same toggle native-e2e.yml reads).
-# Never darwin/amd64, never Linux.
+# Target set (supported-platforms): all six targets are always built and
+# always GA - darwin/arm64, darwin/amd64, windows/amd64, windows/arm64,
+# linux/amd64, linux/arm64. Every native runner these targets need is
+# generally available (checked at plan time; see native-e2e.yml's matrix),
+# so there is no per-target conditional here anymore.
 #
 # Requirement ACs this workflow satisfies (audited in release-0.5.0 phase-05 task-1):
 #   - github-releases: a pushed vX.Y.Z tag yields Release vX.Y.Z with
 #     checksums.txt and one kalide-<os>-<arch> binary per supported target.
-#   - supported-platforms / single-binary: `make release` builds from cmd/kalide;
-#     darwin/arm64 + windows/amd64 always, windows/arm64 only when
-#     WINDOWS_ARM_RUNNER == "true"; never darwin/amd64 or Linux.
+#   - supported-platforms / single-binary: `make release` builds from cmd/kalide
+#     for all six supported targets, unconditionally.
 #   - native-ci-verification: `publish` needs every native e2e job to pass.
 #   - package-manifest-update: `manifest` rewrites Formula/ + bucket/ from
 #     checksums.txt and fails if any other path changed.
@@ -66,33 +65,27 @@ jobs:
           cache: true
 
       # The Makefile is the single build entry point; the release recipe is a
-      # CGO_ENABLED=0 cross-build for exactly darwin/arm64, windows/amd64 and
-      # windows/arm64 with -trimpath and the version stamped in. VERSION is the
-      # pushed tag, passed through to `-X main.version`.
+      # CGO_ENABLED=0 cross-build for all six supported targets (darwin/arm64,
+      # darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64)
+      # with -trimpath and the version stamped in. VERSION is the pushed tag,
+      # passed through to `-X main.version`.
       - name: Build release binaries
         env:
           VERSION: ${{ github.ref_name }}
         run: make release
 
-      # windows/arm64 is built/released only while its native runner exists. The
-      # Makefile still cross-builds it unconditionally, so drop it here before
-      # checksums and upload when the runner is unavailable — then the artifact,
-      # checksums.txt and the Release carry exactly the supported targets.
-      - name: Drop windows/arm64 when its runner is unavailable
-        if: ${{ vars.WINDOWS_ARM_RUNNER != 'true' }}
-        shell: bash
-        run: rm -f dist/kalide-windows-arm64.exe
-
       # SHA-256 checksums over exactly the binaries shipped in this release, in
       # a fixed order. Format is `<hash>  <filename>` (two spaces), the form the
       # phase-09 task-5 manifest job and the Homebrew/Scoop manifests consume.
+      # Each entry is still guarded by `if [ -f ... ]` so a future runner
+      # disappearing degrades gracefully instead of failing the build outright.
       - name: Write checksums.txt (SHA-256)
         shell: bash
         run: |
           set -euo pipefail
           cd dist
           : > checksums.txt
-          for f in kalide-darwin-arm64 kalide-windows-amd64.exe kalide-windows-arm64.exe; do
+          for f in kalide-darwin-arm64 kalide-darwin-amd64 kalide-windows-amd64.exe kalide-windows-arm64.exe kalide-linux-amd64 kalide-linux-arm64; do
             if [ -f "$f" ]; then
               shasum -a 256 "$f" >> checksums.txt
             fi
@@ -153,13 +146,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          assets=(
-            dist/kalide-darwin-arm64
-            dist/kalide-windows-amd64.exe
-          )
-          if [ -f dist/kalide-windows-arm64.exe ]; then
-            assets+=(dist/kalide-windows-arm64.exe)
-          fi
+          # All six targets are GA, so each is expected to be present; each is
+          # still guarded by `if [ -f ... ]` so a future runner disappearing
+          # degrades gracefully instead of failing the release outright.
+          assets=()
+          for f in \
+            dist/kalide-darwin-arm64 \
+            dist/kalide-darwin-amd64 \
+            dist/kalide-windows-amd64.exe \
+            dist/kalide-windows-arm64.exe \
+            dist/kalide-linux-amd64 \
+            dist/kalide-linux-arm64 \
+          ; do
+            if [ -f "$f" ]; then
+              assets+=("$f")
+            fi
+          done
           assets+=(dist/checksums.txt)
           gh release create "$TAG" "${assets[@]}" \
             --verify-tag \
