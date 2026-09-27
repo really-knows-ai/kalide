@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "install-docs",
-  "body": "Install docs: README.md — plain-language install guide (repo access, token creation and setup per OS, add tap/bucket, install, upgrade, plus a direct-download path for Linux, which has no package-manager channel), presented as kalide's front page with a brand hero image from `brand/` and links to LICENSE and CHANGELOG.md (readme-presentation).",
+  "body": "Install docs: README.md's Install section — front-loaded Homebrew (macOS) and Scoop (Windows) commands for tap/bucket, install and upgrade, followed by manual GitHub Release download as the Linux route and fallback, linking to INSTALL.md (readme-install-front-loading) — and INSTALL.md, the detailed plain-language guide per OS. Neither requires or mentions a GitHub account, repo access or token. README.md is presented as kalide's front page with a brand hero image from `brand/` and links to LICENSE and CHANGELOG.md (readme-presentation).",
   "properties": {},
   "out": [
     {
