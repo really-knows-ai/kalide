@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.note.fix-native-e2e-install-test-coverage",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.cli-commands",
+      "properties": {}
     }
   ],
   "in": []

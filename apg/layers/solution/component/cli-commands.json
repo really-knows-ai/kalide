@@ -51,6 +51,11 @@
       "kind": "realised-by",
       "source": "domain.entity.release",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.split-anonymous-install-e2e",
+      "properties": {}
     }
   ]
 }
