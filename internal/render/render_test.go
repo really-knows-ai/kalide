@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -43,13 +44,20 @@ func mustFixtureRegistry(t *testing.T) (*template.Registry, htmltmpl.FuncMap) {
 func TestRenderSlide(t *testing.T) {
 	reg, funcMap := mustFixtureRegistry(t)
 
+	// TestRenderSlide exercises the layout mechanics, not the reserved
+	// deck/slide values, so it threads a well-formed but minimal context
+	// through every RenderSlide call.
+	cfg := &deck.Config{Title: "Test Deck"}
+	meta := deck.Slide{Number: 1, Label: "hello"}
+	total := 2
+
 	t.Run("media func renders the served templates/media URL", func(t *testing.T) {
 		parsed := &slide.Slide{
 			File:        "slides/1-hello.md",
 			Template:    "hello",
 			Frontmatter: map[string]any{"title": "Hello, world"},
 		}
-		got := renderSlideString(t, parsed, "hello", reg, funcMap)
+		got := renderSlideString(t, parsed, "hello", cfg, meta, total, reg, funcMap)
 
 		if !strings.Contains(got, `<img src="/media/logo.svg" alt="logo">`) {
 			t.Errorf("rendered slide does not contain the served media URL:\n%s", got)
@@ -65,12 +73,12 @@ func TestRenderSlide(t *testing.T) {
 			Template:    "hello",
 			Frontmatter: map[string]any{"title": "Hello"},
 		}
-		got := renderSlideString(t, parsed, "hello", reg, funcMap)
+		got := renderSlideString(t, parsed, "hello", cfg, meta, total, reg, funcMap)
 		if !strings.Contains(got, `<section id="hello">`) {
 			t.Errorf("slide label is not the root anchor id:\n%s", got)
 		}
 
-		escaped := renderSlideString(t, parsed, `a"b<c>&d`, reg, funcMap)
+		escaped := renderSlideString(t, parsed, `a"b<c>&d`, cfg, meta, total, reg, funcMap)
 		if !strings.Contains(escaped, `<section id="a&#34;b&lt;c&gt;&amp;d">`) {
 			t.Errorf("slide label is not attribute-escaped:\n%s", escaped)
 		}
@@ -83,7 +91,7 @@ func TestRenderSlide(t *testing.T) {
 			Frontmatter: map[string]any{"title": "Hello"},
 			Notes:       &slide.Notes{Body: "Pause on the metric so the number lands.\n"},
 		}
-		got := renderSlideString(t, withNotes, "hello", reg, funcMap)
+		got := renderSlideString(t, withNotes, "hello", cfg, meta, total, reg, funcMap)
 
 		wantAside := `<aside class="notes"><p>Pause on the metric so the number lands.</p>` + "\n" + `</aside>`
 		if !strings.Contains(got, wantAside) {
@@ -100,7 +108,7 @@ func TestRenderSlide(t *testing.T) {
 			Template:    "hello",
 			Frontmatter: map[string]any{"title": "Hello"},
 		}
-		plain := renderSlideString(t, none, "hello", reg, funcMap)
+		plain := renderSlideString(t, none, "hello", cfg, meta, total, reg, funcMap)
 		if strings.Contains(plain, "aside") {
 			t.Errorf("slide without notes emits an aside:\n%s", plain)
 		}
@@ -112,7 +120,7 @@ func TestRenderSlide(t *testing.T) {
 			Template:    "hello",
 			Frontmatter: map[string]any{"title": "R&D and Tom & Jerry"},
 		}
-		got := renderSlideString(t, parsed, "hello", reg, funcMap)
+		got := renderSlideString(t, parsed, "hello", cfg, meta, total, reg, funcMap)
 		if !strings.Contains(got, "R&amp;D and Tom &amp; Jerry") {
 			t.Errorf("text field is not escaped:\n%s", got)
 		}
@@ -159,8 +167,8 @@ func TestRenderSlide(t *testing.T) {
 			Template:    "hello",
 			Frontmatter: map[string]any{"title": "Hello"},
 		}
-		first := renderSlideString(t, parsed, "hello", reg, funcMap)
-		second := renderSlideString(t, parsed, "hello", reg, funcMap)
+		first := renderSlideString(t, parsed, "hello", cfg, meta, total, reg, funcMap)
+		second := renderSlideString(t, parsed, "hello", cfg, meta, total, reg, funcMap)
 		if first != second {
 			t.Errorf("RenderSlide is not deterministic:\nfirst:  %q\nsecond: %q", first, second)
 		}
@@ -173,13 +181,13 @@ func TestRenderSlide(t *testing.T) {
 			Frontmatter: map[string]any{"title": "Hello"},
 		}
 
-		if _, err := RenderSlide(nil, "x", reg, funcMap); err == nil {
+		if _, err := RenderSlide(nil, "x", cfg, meta, total, reg, funcMap); err == nil {
 			t.Error("nil slide: want an error")
 		} else if _, ok := err.(*RenderError); !ok {
 			t.Errorf("nil slide: got %T, want *RenderError", err)
 		}
 
-		if _, err := RenderSlide(parsed, "x", nil, funcMap); err == nil {
+		if _, err := RenderSlide(parsed, "x", cfg, meta, total, nil, funcMap); err == nil {
 			t.Error("nil registry: want an error")
 		} else if re, ok := err.(*RenderError); !ok {
 			t.Errorf("nil registry: got %T, want *RenderError", err)
@@ -189,7 +197,7 @@ func TestRenderSlide(t *testing.T) {
 
 		unknown := *parsed
 		unknown.Template = "does-not-exist"
-		if _, err := RenderSlide(&unknown, "x", reg, funcMap); err == nil {
+		if _, err := RenderSlide(&unknown, "x", cfg, meta, total, reg, funcMap); err == nil {
 			t.Error("unknown template: want an error")
 		} else if !strings.Contains(err.Error(), "unknown slide template") {
 			t.Errorf("unknown template: error %q does not name the unknown template", err)
@@ -197,7 +205,7 @@ func TestRenderSlide(t *testing.T) {
 
 		sectionAsSlide := *parsed
 		sectionAsSlide.Template = "item"
-		if _, err := RenderSlide(&sectionAsSlide, "x", reg, funcMap); err == nil {
+		if _, err := RenderSlide(&sectionAsSlide, "x", cfg, meta, total, reg, funcMap); err == nil {
 			t.Error("section template used as a slide: want an error")
 		} else if !strings.Contains(err.Error(), "not a slide template") {
 			t.Errorf("section-as-slide: error %q does not reject the usage", err)
@@ -206,11 +214,12 @@ func TestRenderSlide(t *testing.T) {
 }
 
 // renderSlideString renders one slide with the library's layout func map
-// (MediaFunc plus the format functions) and returns the fragment as a
-// string, failing the test on a render error.
-func renderSlideString(t *testing.T, parsed *slide.Slide, label string, reg *template.Registry, funcMap htmltmpl.FuncMap) string {
+// (MediaFunc plus the format functions) and returns the fragment as a string,
+// failing the test on a render error. cfg, meta and total are the reserved
+// `deck`/`slide` context RenderSlide threads into the layout.
+func renderSlideString(t *testing.T, parsed *slide.Slide, label string, cfg *deck.Config, meta deck.Slide, total int, reg *template.Registry, funcMap htmltmpl.FuncMap) string {
 	t.Helper()
-	out, err := RenderSlide(parsed, label, reg, funcMap)
+	out, err := RenderSlide(parsed, label, cfg, meta, total, reg, funcMap)
 	if err != nil {
 		t.Fatalf("RenderSlide(%q): %v", label, err)
 	}

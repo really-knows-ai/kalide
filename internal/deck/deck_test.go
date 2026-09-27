@@ -20,6 +20,7 @@ func TestDeck(t *testing.T) {
 	t.Run("constants", testDeckConstants)
 	t.Run("config", testLoadConfig)
 	t.Run("slides", testLoadSlides)
+	t.Run("position labels and total", testPositionLabelsAndTotal)
 }
 
 // testDeckConstants pins the fixed names and navigation vocabulary the loaders
@@ -699,6 +700,82 @@ func testLoadSlides(t *testing.T) {
 	t.Run("fs.ReadDir error is wrapped with the directory", func(t *testing.T) {
 		_, err := LoadSlides(fstest.MapFS{}, "nope")
 		wantErr(t, err, "nope")
+	})
+}
+
+// testPositionLabelsAndTotal covers the render-time slide metadata the deck
+// model supplies (slide-metadata, slide-position): Slide.PositionLabel is the
+// STRING (number, letter) position label — the letter lower-cased and appended
+// only for a vertical slide — with numbering gaps preserved rather than
+// flattened to an index, and Deck.Total is the integer count of every slide
+// file, horizontal and vertical.
+func testPositionLabelsAndTotal(t *testing.T) {
+	t.Run("label appends the lower-cased letter only for a vertical slide", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			slide Slide
+			want  string
+		}{
+			{"horizontal one", Slide{Number: 1}, "1"},
+			{"vertical one-a", Slide{Number: 1, Letter: "a"}, "1a"},
+			{"horizontal two", Slide{Number: 2}, "2"},
+			{"horizontal five", Slide{Number: 5}, "5"},
+			{"vertical five-c", Slide{Number: 5, Letter: "c"}, "5c"},
+		}
+		for _, tc := range cases {
+			if got := tc.slide.PositionLabel(); got != tc.want {
+				t.Errorf("%s: PositionLabel() = %q, want %q", tc.name, got, tc.want)
+			}
+		}
+	})
+
+	t.Run("an uppercase filename letter resolves to a lower-cased label", func(t *testing.T) {
+		d, err := LoadSlides(slideFS("1-main.md", "1A-Detail.md"), SlidesDir)
+		if err != nil {
+			t.Fatalf("LoadSlides: %v", err)
+		}
+		if got := d.Stacks[0].Vertical[0].PositionLabel(); got != "1a" {
+			t.Errorf("vertical PositionLabel() = %q, want %q", got, "1a")
+		}
+	})
+
+	t.Run("numbering gaps are not flattened to an index", func(t *testing.T) {
+		d, err := LoadSlides(slideFS("1-one.md", "5-five.md", "9-nine.md"), SlidesDir)
+		if err != nil {
+			t.Fatalf("LoadSlides: %v", err)
+		}
+		var got []string
+		for _, stack := range d.Stacks {
+			got = append(got, stack.Slide.PositionLabel())
+		}
+		if !equalStrings(got, []string{"1", "5", "9"}) {
+			t.Errorf("position labels = %v, want [1 5 9] (gaps preserved)", got)
+		}
+	})
+
+	t.Run("total counts every horizontal and vertical slide file", func(t *testing.T) {
+		d, err := LoadSlides(slideFS(
+			"1-main.md", "1a-alpha.md", "1b-beta.md",
+			"2-second.md", "2a-third.md",
+		), SlidesDir)
+		if err != nil {
+			t.Fatalf("LoadSlides: %v", err)
+		}
+		if got := d.Total(); got != 5 {
+			t.Errorf("Total() = %d, want 5 (2 horizontal + 3 vertical)", got)
+		}
+
+		if got := (Deck{}).Total(); got != 0 {
+			t.Errorf("empty deck Total() = %d, want 0", got)
+		}
+
+		direct := Deck{Stacks: []Stack{
+			{Slide: Slide{Number: 1}},
+			{Slide: Slide{Number: 2}, Vertical: []Slide{{Number: 2, Letter: "a"}, {Number: 2, Letter: "b"}}},
+		}}
+		if got := direct.Total(); got != 4 {
+			t.Errorf("direct deck Total() = %d, want 4", got)
+		}
 	})
 }
 
