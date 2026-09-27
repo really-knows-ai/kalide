@@ -86,6 +86,11 @@
       "kind": "contains",
       "target": "requirements.requirement.readme-presentation",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.linux-install",
+      "properties": {}
     }
   ],
   "in": [
