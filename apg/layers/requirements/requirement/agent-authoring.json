@@ -121,6 +121,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.closest-match-suggestions",
+      "properties": {}
     }
   ],
   "in": [
