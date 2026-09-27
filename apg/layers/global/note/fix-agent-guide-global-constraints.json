@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "global.constraint.no-embedded-template-assets",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.go-static-embedded-binary",
+      "properties": {}
     }
   ],
   "in": []
