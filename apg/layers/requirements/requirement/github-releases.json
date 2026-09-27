@@ -58,6 +58,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.version-command",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-public-install",
+      "properties": {}
     }
   ]
 }
