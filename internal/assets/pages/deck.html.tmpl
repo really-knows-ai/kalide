@@ -28,6 +28,14 @@
                                nested as vertical stacks). Injected verbatim
                                into the .reveal > .slides container.
 
+  This shell intentionally does NOT receive `.deck.properties` or `.slide`.
+  Those reserved keys are part of the per-slide execution context supplied to
+  slide layouts and section templates only (template-context,
+  section-template-context); the deck page shell is parsed and executed once
+  per deck with the four keys above, after every slide has already been
+  rendered into .Slides, so it has no use for and never sees per-slide or
+  deck-properties context.
+
   Hook slots (phase 7):
     Both "theme-css" and "live-reload" are named blocks, so a caller may
     override them with {{ define }} before parsing and without editing this

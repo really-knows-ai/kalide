@@ -458,6 +458,11 @@ func dateString(raw any) string {
 // number/date format functions, installed on the namespace root so every
 // library layout using `media` or a format function parses and executes
 // (template-media, template-language).
+//
+// Parse time is unaffected by the reserved execution context
+// (`.deck.properties`, `.slide`): those keys are injected only when the
+// parsed layout is later executed (see slideData / values / fieldValue), not
+// while its text is being parsed here.
 func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
 	// The namespace root carries its own name only so html/template has a
 	// handle; it deliberately differs from every layout name. Naming the root
