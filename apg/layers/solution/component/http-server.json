@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "solution.note.reconcile-implemented-by-reusable-templates",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.watch-deck",
+      "properties": {}
     }
   ]
 }
