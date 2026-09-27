@@ -5,5 +5,11 @@
   "body": "A kalide version string: `vX.Y.Z` taken from the human-pushed release tag and stamped into the binary at build time (`-ldflags -X main.version=...`); `dev` for unstamped/source builds. Immutable; one per release.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.distribution",
+      "properties": {}
+    }
+  ]
 }
