@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.external-template-library-decisions",
+      "properties": {}
     }
   ]
 }
