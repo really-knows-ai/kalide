@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.agent-authoring",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.library-agent-guide",
+      "properties": {}
     }
   ],
   "in": [
