@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.anonymous-install-e2e",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
     }
   ],
   "in": []

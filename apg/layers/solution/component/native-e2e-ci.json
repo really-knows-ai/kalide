@@ -71,6 +71,11 @@
       "kind": "details",
       "source": "solution.note.fix-native-e2e-install-test-coverage",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.split-anonymous-install-e2e",
+      "properties": {}
     }
   ]
 }
