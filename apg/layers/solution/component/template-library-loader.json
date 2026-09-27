@@ -61,6 +61,11 @@
       "kind": "details",
       "source": "requirements.note.template-retarget-restart-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-loader-agents-md",
+      "properties": {}
     }
   ]
 }
