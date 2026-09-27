@@ -1,6 +1,7 @@
 ---
 description: Reviews the code implemented in a kalide plan phase against the plan and the phase's spec; attaches/resolves Feedback or marks the phase complete. Never edits, builds, or runs tests.
 mode: subagent
+model: github-copilot/claude-opus-5.5
 hidden: true
 generated: true
 permission:
