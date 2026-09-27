@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-init-refuse-existing",
-  "body": "`kalide init` refuses (clear message, non-zero exit, nothing written) if any of `slides/`, `assets/`, `templates/` or `kalide.yaml` already exists. Other files (e.g. `.git`, or a legacy `eypres.yaml`, which is not recognised) do not block. There is no `--force` flag. The check is independent of the optional path argument: `kalide init <path>` still refuses when a local `templates/` (or any of the other entries) already exists — passing a path never relaxes or widens it, so init only ever seeds an otherwise-empty directory.",
+  "body": "`kalide init` refuses (clear message, non-zero exit, nothing written) if `slides/`, `assets/` or `kalide.yaml` already exists — with or without a path argument. An existing `templates/` blocks init ONLY when no path argument is given. When a path argument is given, a pre-existing local `templates/` is exempt from the check: init proceeds, writes the deck referencing the external path, and the local `templates/` is ignored (never deleted, never overwritten). Other files (e.g. `.git`, or a legacy `eypres.yaml`, which is not recognised) do not block. There is no `--force` flag.",
   "properties": {
     "feature": "cli"
   },
