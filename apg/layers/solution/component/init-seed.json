@@ -51,6 +51,11 @@
       "kind": "realised-by",
       "source": "domain.service.scaffold-template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.init-library-decisions",
+      "properties": {}
     }
   ]
 }

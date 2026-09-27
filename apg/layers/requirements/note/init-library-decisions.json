@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "domain.entity.template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": []
