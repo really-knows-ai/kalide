@@ -33,6 +33,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }
