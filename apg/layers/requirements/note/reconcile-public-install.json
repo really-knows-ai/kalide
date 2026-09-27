@@ -59,6 +59,11 @@
       "kind": "details",
       "target": "requirements.requirement.github-releases",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.supported-platforms",
+      "properties": {}
     }
   ],
   "in": []
