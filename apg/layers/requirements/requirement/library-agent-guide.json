@@ -86,6 +86,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.body-rules",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.templates-dir-validation",
+      "properties": {}
     }
   ],
   "in": [
