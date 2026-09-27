@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "theme-selection",
-  "body": "`theme` is optional and deck-wide only (never per slide); omitted = `default`. Available themes are exactly the directories under the project's `templates/themes/`; there are no built-in themes. A named (or defaulted) theme that the project does not define = error listing the project's available themes with a closest-match suggestion. The theme mechanism remains a registry so themes are added by adding a directory, without template changes.",
+  "body": "`theme` is optional and deck-wide only (never per slide); omitted = `default`. Available themes are exactly the directories under the resolved library's `themes/` (the configured `templates:` path, else the local `templates/`; see external-template-library); there are no built-in themes. A named (or defaulted) theme that the project does not define = error listing the project's available themes with a closest-match suggestion. The theme mechanism remains a registry so themes are added by adding a directory, without template changes.",
   "properties": {
     "feature": "deck-structure"
   },
