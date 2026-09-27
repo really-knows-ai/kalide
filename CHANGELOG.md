@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-27
+
+### Added
+
+- External template libraries: `kalide.yaml` gains an optional top-level
+  `templates:` key naming a template-library directory outside the deck
+  (relative to the deck root, or absolute). A configured path wins over a local
+  `templates/`; the resolved library is used for loading, validation,
+  rendering, serving, the `/templates` gallery and live reload, and there is no
+  fallback when neither resolves.
+- `kalide init <path>`: scaffold a deck that references an external template
+  library. The library and the deck's theme are validated before anything is
+  written, and no local `templates/` is created.
+- `kalide init-library <path>`: create a new, deck-ready, empty template
+  library (`library.yaml`, empty `slides/`, `sections/` and `media/`, and a
+  minimal `default` theme).
+
+### Changed
+
+- Retargeting `templates:` while `kalide start` is running now serves a
+  full-page "restart kalide start" error on the deck page instead of silently
+  switching libraries. Editing the value back to the one captured at startup
+  resumes serving, and restarting applies the new library. Live reload still
+  applies to edits under the resolved library and to every other
+  `kalide.yaml`, `slides/` and `assets/` change.
+
 ## [0.5.0] - 2026-09-27
 
 ### Added
@@ -42,5 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/really-knows-ai/kalide/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/really-knows-ai/kalide/releases/tag/v0.5.0
