@@ -24,11 +24,6 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/e2e.TestAnonymousPackageInstall",
       "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "e2e/install_test.go",
-      "properties": {}
     }
   ],
   "in": [
