@@ -42,6 +42,14 @@ type Slide struct {
 	Label string
 }
 
+// PositionLabel returns the slide's position label: the number with the
+// lower-cased letter appended for a vertical (letter) slide, and no letter for
+// a horizontal slide (slide-position). It is neither a flattened presentation
+// index nor the bare filename integer.
+func (s Slide) PositionLabel() string {
+	return strconv.Itoa(s.Number) + s.Letter
+}
+
 // Stack is one horizontal slide together with the vertical slides revealed
 // beneath it. Vertical slides nest exactly one level: a letter slide is always
 // a child of its numbered slide.
@@ -58,6 +66,17 @@ type Stack struct {
 type Deck struct {
 	// Stacks is the ordered horizontal slides.
 	Stacks []Stack
+}
+
+// Total returns the number of slide files in the deck: every horizontal stack
+// slide plus its vertical slides. It is derived at render time from the deck
+// model, never read from frontmatter (slide-metadata).
+func (d Deck) Total() int {
+	total := 0
+	for _, stack := range d.Stacks {
+		total += 1 + len(stack.Vertical)
+	}
+	return total
 }
 
 // positionKey identifies a slide's (number, letter) position; two slides may
