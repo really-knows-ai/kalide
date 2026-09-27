@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.fix-field-value-syntax",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }

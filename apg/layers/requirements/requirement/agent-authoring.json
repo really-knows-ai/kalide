@@ -86,6 +86,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.error-reporting",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.field-types",
+      "properties": {}
     }
   ],
   "in": [
