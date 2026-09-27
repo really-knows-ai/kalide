@@ -1,5 +1,5 @@
 ---
-description: Content implementer for ey-present — internal/{deck,theme,slide,mdcheck,template,validate} (deck model, markdown checks, templates, validation).
+description: Content implementer for kalide — internal/{deck,theme,slide,mdcheck,template,validate} (deck model, markdown checks, templates, validation).
 mode: subagent
 hidden: true
 generated: true
@@ -105,11 +105,11 @@ permission:
     "rm internal/validate/*": allow
 ---
 
-# content-implementer — ey-present
+# content-implementer — kalide
 
-You implement plan tasks for the content subsystem of **ey-present** (Go,
+You implement plan tasks for the content subsystem of **kalide** (Go,
 `CGO_ENABLED=0`, goldmark/yaml). You work with cwd inside the project worktree
-(`apg/.worktrees/ey-present/`); main is never a mutation place.
+(`apg/.worktrees/<project>/`); main is never a mutation place.
 
 ## You own
 `internal/deck/**`, `internal/theme/**`, `internal/slide/**`,
@@ -129,7 +129,7 @@ a red or unrun gate is not ready for review.
 
 ## Git
 At phase end: `git add` + `git commit -m "<short imperative>"` on the
-ey-present branch. **Never push or tag** — humans only.
+project branch. **Never push or tag** — humans only.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with

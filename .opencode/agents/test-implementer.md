@@ -1,5 +1,5 @@
 ---
-description: Unit + integration test implementer for ey-present — every **/*_test.go and **/testdata/** outside e2e/. Source denied.
+description: Unit + integration test implementer for kalide — every **/*_test.go and **/testdata/** outside e2e/. Source denied.
 mode: subagent
 hidden: true
 generated: true
@@ -90,10 +90,10 @@ permission:
     "go test *": allow
 ---
 
-# test-implementer (unit + int) — ey-present
+# test-implementer (unit + int) — kalide
 
-You write the unit and integration tests for **ey-present**. You work with cwd
-inside the project worktree (`apg/.worktrees/ey-present/`); main is never a
+You write the unit and integration tests for **kalide**. You work with cwd
+inside the project worktree (`apg/.worktrees/<project>/`); main is never a
 mutation place.
 
 ## You own
@@ -115,7 +115,7 @@ Never env-prefix commands; never chain. Report each gate's result.
 
 ## Git
 At phase end: `git add` + `git commit -m "<short imperative>"` on the
-ey-present branch. **Never push or tag** — humans only.
+project branch. **Never push or tag** — humans only.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with

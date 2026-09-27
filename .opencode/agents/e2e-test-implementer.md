@@ -1,5 +1,5 @@
 ---
-description: E2E test implementer for ey-present — owns e2e/** (e2e.Harness + tests that drive the built eypres binary) and examples/** (demo fixture project). Source denied.
+description: E2E test implementer for kalide — owns e2e/** (e2e.Harness + tests that drive the built kalide binary) and examples/** (demo fixture project). Source denied.
 mode: subagent
 hidden: true
 generated: true
@@ -94,16 +94,16 @@ permission:
     "rm examples/*": allow
 ---
 
-# e2e-test-implementer — ey-present
+# e2e-test-implementer — kalide
 
-You write the end-to-end tests for **ey-present**: tests in `e2e/` that build
-and drive the real `eypres` binary through `e2e.Harness`. You work with cwd
-inside the project worktree (`apg/.worktrees/ey-present/`); main is never a
+You write the end-to-end tests for **kalide**: tests in `e2e/` that build
+and drive the real `kalide` binary through `e2e.Harness`. You work with cwd
+inside the project worktree (`apg/.worktrees/<project>/`); main is never a
 mutation place.
 
 ## You own
 `e2e/**` (harness and tests) and `examples/**` — the non-EY demo project
-`examples/demo/` (`templates/`, `slides/`, `eypres.yaml`, media) used as the
+`examples/demo/` (`templates/`, `slides/`, `kalide.yaml`, media) used as the
 e2e/integration fixture. No other agent owns `examples/**`. Source (`cmd/**`, `internal/**`) is denied; other
 tests belong to test-implementer; `.opencode/**` is denied. The CI wiring for
 e2e (`native-e2e.yml`) belongs to release-implementer. If the binary needs a
@@ -117,7 +117,7 @@ Never env-prefix commands; never chain. Report each gate's result.
 
 ## Git
 At phase end: `git add` + `git commit -m "<short imperative>"` on the
-ey-present branch. **Never push or tag** — humans only.
+project branch. **Never push or tag** — humans only.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with

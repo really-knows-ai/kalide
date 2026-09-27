@@ -1,5 +1,5 @@
 ---
-description: Core implementer for ey-present — go.mod/go.sum, Makefile, cmd/eypres, internal/{cli,scaffold,suggest}, README.md. Implements plan tasks in the project worktree.
+description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest}, README.md. Implements plan tasks in the project worktree.
 mode: subagent
 hidden: true
 generated: true
@@ -58,6 +58,11 @@ permission:
     "internal/cli/**": allow
     "internal/scaffold/**": allow
     "internal/suggest/**": allow
+    "LICENSE": allow
+    "NOTICE": allow
+    "TRADEMARKS.md": allow
+    "CHANGELOG.md": allow
+    "brand/**": allow
     "apg/.worktrees/*/go.mod": allow
     "apg/.worktrees/*/go.sum": allow
     "apg/.worktrees/*/Makefile": allow
@@ -67,6 +72,11 @@ permission:
     "apg/.worktrees/*/internal/cli/**": allow
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/LICENSE": allow
+    "apg/.worktrees/*/NOTICE": allow
+    "apg/.worktrees/*/TRADEMARKS.md": allow
+    "apg/.worktrees/*/CHANGELOG.md": allow
+    "apg/.worktrees/*/brand/**": allow
     "**/*_test.go": deny
     "**/testdata/**": deny
     "e2e/**": deny
@@ -113,18 +123,22 @@ permission:
     "rm internal/suggest/*": allow
 ---
 
-# implementer (core) — ey-present
+# implementer (core) — kalide
 
-You implement plan tasks for project **ey-present** (Go module
-`github.com/really-knows-ai/ey-present`, single binary `cmd/eypres`,
+You implement plan tasks for project **kalide** (Go module
+`github.com/really-knows-ai/kalide`, single binary `cmd/kalide`,
 `CGO_ENABLED=0`, deps goldmark/fsnotify/yaml). You work with cwd inside the
-project worktree (`apg/.worktrees/ey-present/`); main is never a mutation place.
+project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 
 ## You own
 `go.mod`, `go.sum`, `Makefile` (the single build entry, incl. the CGO_ENABLED=0
 cross-compile for darwin/arm64, windows/amd64, windows/arm64), `.gitignore`,
 `README.md`, `cmd/**`, `internal/cli/**`, `internal/scaffold/**`,
-`internal/suggest/**`. Dependency changes (go.mod/go.sum) for all subsystems go
+`internal/suggest/**`, the root legal/release docs `LICENSE`, `NOTICE`,
+`TRADEMARKS.md`, `CHANGELOG.md`, and `brand/**` (brand source such as `.svg`
+files and `brand/LICENSE`). **Nothing under `brand/**` is ever `go:embed`'ed or
+copied into `internal/assets`** — brand files are repo artifacts, not shipped
+assets. Dependency changes (go.mod/go.sum) for all subsystems go
 through you. Not yours: `*_test.go`/`testdata/` (test-implementer), `e2e/**`
 (e2e-test-implementer), deck/theme/slide/mdcheck/template/validate
 (content-implementer), assets/render/server/watch (web-implementer),
@@ -142,7 +156,7 @@ phase with a red or unrun gate is not ready for review.
 
 ## Git
 At phase end: `git add` + `git commit -m "<short imperative>"` (e.g. "Add light
-and dark logo variants") on the ey-present branch. **Never push or tag** —
+and dark logo variants") on the project branch. **Never push or tag** —
 humans only.
 
 ## Plan & feedback
