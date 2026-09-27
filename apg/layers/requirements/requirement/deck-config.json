@@ -68,6 +68,11 @@
       "kind": "details",
       "source": "requirements.note.template-retarget-restart-decisions",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }

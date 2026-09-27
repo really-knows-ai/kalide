@@ -66,6 +66,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.slide-template-required",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.deck-config",
+      "properties": {}
     }
   ],
   "in": [
