@@ -53,6 +53,11 @@
       "kind": "drives",
       "source": "requirements.requirement.external-template-library",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.init-library",
+      "properties": {}
     }
   ]
 }
