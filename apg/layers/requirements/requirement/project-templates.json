@@ -81,6 +81,11 @@
       "kind": "contains",
       "target": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.library-guide-layout",
+      "properties": {}
     }
   ],
   "in": [
