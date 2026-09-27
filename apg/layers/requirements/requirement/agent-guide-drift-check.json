@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.field-types",
+      "properties": {}
     }
   ],
   "in": [
