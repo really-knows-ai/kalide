@@ -9,6 +9,11 @@
       "kind": "implemented-by",
       "target": "bucket/kalide.json",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "bucket/README.md",
+      "properties": {}
     }
   ],
   "in": [
