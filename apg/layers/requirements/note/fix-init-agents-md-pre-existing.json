@@ -4,6 +4,12 @@
   "name": "fix-init-agents-md-pre-existing",
   "body": "source: feedback-5 on requirements.requirement.cli-init-refuse-existing — init and init-library now write `AGENTS.md`, but the refusal rules named only `slides/`, `assets/`, `kalide.yaml` (deck) and `library.yaml`/`slides/`/`sections/`/`themes/`/`media/` (library), so a target directory containing only a pre-existing `AGENTS.md` would have it silently overwritten. inconsistency: that violates kalide's \"init never overwrites your work\" guarantee and is inconsistent with the other scaffold-owned paths, which never clobber. resolution [with user, coordinator-resolved]: a pre-existing `AGENTS.md` at the scaffolding target must NOT be overwritten and must NOT block scaffolding. All three scaffolding forms — no-arg `kalide init`, `kalide init <path>` and `kalide init-library <path>` — write their guide ONLY when no `AGENTS.md` exists at the target; when one is already present it is left byte-for-byte untouched and the directory is still scaffolded normally (so a deck/library created in a directory that already has an unrelated `AGENTS.md` succeeds and leaves that file alone). `AGENTS.md` is explicitly not a blocking path in either form; there is still no `--force`. Amended requirements.requirement.cli-init-refuse-existing, requirements.requirement.cli-init, requirements.requirement.init-library, requirements.requirement.agent-authoring and requirements.requirement.library-agent-guide (new ACs).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.cli-init-refuse-existing",
+      "properties": {}
+    }
+  ],
   "in": []
 }
