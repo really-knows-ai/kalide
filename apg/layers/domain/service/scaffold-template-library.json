@@ -41,6 +41,11 @@
       "kind": "drives",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-agent-guide-solution",
+      "properties": {}
     }
   ]
 }

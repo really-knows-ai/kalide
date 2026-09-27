@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "domain.service.scaffold-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.scaffold-template-library",
+      "properties": {}
     }
   ],
   "in": []
