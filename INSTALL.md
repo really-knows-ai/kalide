@@ -3,16 +3,14 @@
 `kalide` is a small program that turns a folder of Markdown files into a slide
 deck and shows it in your browser. This guide is for people who want to install
 it with **Homebrew** (macOS) or **Scoop** (Windows), or download the single
-binary directly from GitHub Releases. No programming knowledge is needed —
-follow the steps in order.
+binary directly from GitHub Releases. No programming knowledge, GitHub account
+or token is needed — follow the steps in order.
 
 If you would rather not use a package manager, you can instead download the
 `kalide` file and run it directly. That simpler route is described in [Manual download](#manual-download)
 below and in the [README](README.md#install).
 
 - [Before you start](#before-you-start)
-- [Step 1 — Ask for access to the repository](#step-1--ask-for-access-to-the-repository)
-- [Step 2 — Create a GitHub token](#step-2--create-a-github-token)
 - [On macOS (Homebrew)](#on-macos-homebrew)
 - [On Windows (Scoop)](#on-windows-scoop)
 - [On Linux (manual download)](#on-linux-manual-download)
@@ -25,16 +23,10 @@ below and in the [README](README.md#install).
 
 ## Before you start
 
-You need three things:
-
-1. **A supported computer** — see
-   [Supported computers](#supported-computers) below. `kalide` supports
-   macOS (Apple silicon and Intel), Windows (64-bit Intel/AMD and ARM), and
-   Linux (64-bit Intel/AMD and ARM), for each target a release exists for.
-2. **A GitHub account that can see the private repository**
-   `really-knows-ai/kalide` — see step 1.
-3. **A GitHub token** — a long password-like string that lets your computer
-   download the private release — see step 2.
+You need **a supported computer** — see
+[Supported computers](#supported-computers) below. `kalide` supports macOS
+(Apple silicon and Intel), Windows (64-bit Intel/AMD and ARM), and Linux
+(64-bit Intel/AMD and ARM), for each target a release exists for.
 
 You also need the package manager for your system. If you do not have it yet:
 
@@ -44,63 +36,8 @@ You also need the package manager for your system. If you do not have it yet:
   command works in PowerShell.
 
 You do **not** need to be a developer, and `kalide` itself needs no internet
-connection once installed. The token is only needed for downloading and
-upgrading.
-
-## Step 1 — Ask for access to the repository
-
-`kalide` is distributed from a **private** GitHub repository, so your GitHub
-account must be allowed to read it before anything can be downloaded.
-
-Ask whoever manages the `really-knows-ai/kalide` repository to add your
-GitHub username as a collaborator (or to a team with read access).
-
-To check that it worked, sign in to GitHub and open:
-
-<https://github.com/really-knows-ai/kalide>
-
-If you can see the repository, you have access. If you get a "404" or "not
-found" page, either you are signed in to the wrong account or your access has
-not been granted yet.
-
-## Step 2 — Create a GitHub token
-
-Homebrew, Scoop and direct release downloads need a token to fetch assets from the private repository.
-A token is a secret — treat it like a password. Never share it or paste it into a
-chat, email or issue.
-
-There are two kinds of token. **The fine-grained token is recommended** because
-you can limit it to this one repository.
-
-### Recommended: a fine-grained token
-
-1. Sign in to GitHub and go to
-   <https://github.com/settings/tokens?type=beta>.
-2. Click **Generate new token**.
-3. Give it a name such as `kalide install`.
-4. Under **Expiration**, choose a period you are comfortable with (for example
-   90 days). You will repeat this step when it expires.
-5. Under **Repository access**, choose **Only select repositories**, then pick
-   **really-knows-ai/kalide**.
-6. Under **Permissions → Repository permissions**, find **Contents** and set it
-   to **Read-only**. Leave everything else as-is. (GitHub adds the required
-   **Metadata: Read-only** permission automatically.)
-7. Click **Generate token** and copy the value that starts with `github_pat_…`.
-   You will not be able to see it again — copy it now.
-
-### Alternative: a classic token
-
-1. Go to <https://github.com/settings/tokens>.
-2. Click **Generate new token (classic)**.
-3. Name it `kalide install`, choose an expiration, and tick the **`repo`**
-   checkbox (the top-level one that includes all its sub-entries).
-4. Click **Generate token** and copy the value that starts with `ghp_…`.
-
-A classic `repo` token can read **all** of your repositories, so the
-fine-grained token above is safer. Either works for `kalide`.
-
-> Keep the token somewhere safe until the next step. If you lose it, just
-> generate a new one — the old one can be deleted on the same settings page.
+connection once installed. Downloading and upgrading need a normal internet
+connection only.
 
 ## On macOS (Homebrew)
 
@@ -109,37 +46,17 @@ repository (`really-knows-ai/kalide`). There is **no separate tap
 repository** to add. The same steps work on both Apple silicon (M-series) and
 Intel Macs — Homebrew picks the matching binary for your Mac automatically.
 
-### Set the token
-
-Homebrew reads the token from an environment variable named
-`HOMEBREW_GITHUB_API_TOKEN`.
-
-For the current Terminal window only, run (paste your own token in place of
-`YOUR_TOKEN`):
-
-```
-export HOMEBREW_GITHUB_API_TOKEN=YOUR_TOKEN
-```
-
-To make it persist, add that same line to the end of your shell profile
-(`~/.zshrc` on modern macOS) and open a new Terminal window.
-
 ### Tap and install
 
 Run these two commands:
 
 ```
-brew tap really-knows-ai/kalide https://github.com/really-knows-ai/kalide.git
+brew tap really-knows-ai/kalide https://github.com/really-knows-ai/kalide
 ```
 
 ```
 brew install kalide
 ```
-
-`brew tap` clones the private repository, so git may ask for a username and
-password. Enter your GitHub username and paste the token **as the password**.
-If you already use an SSH key with GitHub, you can use the SSH address
-instead: `brew tap really-knows-ai/kalide git@github.com:really-knows-ai/kalide.git`.
 
 That is it. Check the install with:
 
@@ -148,8 +65,6 @@ kalide help
 ```
 
 ### Upgrading (macOS)
-
-Set `HOMEBREW_GITHUB_API_TOKEN` again if you opened a new Terminal window, then:
 
 ```
 brew update
@@ -173,40 +88,17 @@ brew uninstall kalide
 repository (`really-knows-ai/kalide`). There is **no separate bucket
 repository** to add.
 
-### Set the token
-
-Scoop reads the token from an environment variable named
-`KALIDE_GITHUB_TOKEN`, or `GITHUB_TOKEN` if the first is not set.
-
-For the current PowerShell window only, run (paste your own token in place of
-`YOUR_TOKEN`):
-
-```
-$env:KALIDE_GITHUB_TOKEN = "YOUR_TOKEN"
-```
-
-To make it persist, run this once and then open a new PowerShell window:
-
-```
-setx KALIDE_GITHUB_TOKEN "YOUR_TOKEN"
-```
-
 ### Add the bucket and install
 
 Run these two commands:
 
 ```
-scoop bucket add kalide https://github.com/really-knows-ai/kalide.git
+scoop bucket add kalide https://github.com/really-knows-ai/kalide
 ```
 
 ```
 scoop install kalide
 ```
-
-`scoop bucket add` clones the private repository, so git may ask for a username
-and password. Enter your GitHub username and paste the token **as the password**.
-If you already use an SSH key with GitHub, you can use the SSH address
-instead: `scoop bucket add kalide git@github.com:really-knows-ai/kalide.git`.
 
 That is it. Check the install with:
 
@@ -216,8 +108,6 @@ kalide help
 
 ### Upgrading (Windows)
 
-Set `KALIDE_GITHUB_TOKEN` again if you opened a new PowerShell window, then:
-
 ```
 scoop update
 ```
@@ -225,9 +115,6 @@ scoop update
 ```
 scoop update kalide
 ```
-
-The token is needed again on every upgrade, because the new version is
-downloaded from the private release just like the first install.
 
 ### Removing kalide (Windows)
 
@@ -242,18 +129,21 @@ bucket equivalent). Install by downloading the matching release asset
 directly:
 
 1. Download the binary for your architecture from
-   <https://github.com/really-knows-ai/kalide/releases>:
-   - **64-bit Intel/AMD:** `kalide-linux-amd64`
-   - **ARM64:** `kalide-linux-arm64`
-
-   Because the repository is private, download using a browser signed in to
-   your GitHub account, or with `gh release download` using your GitHub
-   token (see step 2).
-2. Also download `checksums.txt` from the same release and verify the
-   binary's SHA-256 matches the entry for your file:
+   <https://github.com/really-knows-ai/kalide/releases> in your browser, or
+   with `curl`, for example:
 
    ```
-   shasum -a 256 kalide-linux-amd64
+   curl -LO https://github.com/really-knows-ai/kalide/releases/latest/download/kalide-linux-amd64
+   ```
+
+   - **64-bit Intel/AMD:** `kalide-linux-amd64`
+   - **ARM64:** `kalide-linux-arm64`
+2. Also download `checksums.txt` from the same release
+   (`curl -LO https://github.com/really-knows-ai/kalide/releases/latest/download/checksums.txt`)
+   and verify the binary's SHA-256 matches the entry for your file:
+
+   ```
+   sha256sum kalide-linux-amd64
    ```
 
    Compare the printed hash against the matching line in `checksums.txt`.
@@ -277,25 +167,27 @@ the new release's asset.
 ## Manual download
 
 If you do not want to use Homebrew or Scoop, you can download the matching
-`kalide-<os>-<arch>` binary directly from GitHub releases:
+`kalide-<os>-<arch>` binary directly from GitHub releases, in a browser or with
+`curl -LO`:
 
 <https://github.com/really-knows-ai/kalide/releases>
 
-Because the repository is private, download using a browser signed in to your
-GitHub account or with `gh release download` using your GitHub token.
-
-1. Download the binary for your platform:
+1. Download the binary for your platform, plus `checksums.txt` from the same
+   release:
    - **macOS Apple silicon:** `kalide-darwin-arm64`
    - **macOS Intel:** `kalide-darwin-amd64`
    - **Windows 64-bit:** `kalide-windows-amd64.exe`
    - **Windows ARM:** `kalide-windows-arm64.exe`
    - **Linux 64-bit Intel/AMD:** `kalide-linux-amd64`
    - **Linux ARM64:** `kalide-linux-arm64`
-2. Rename the downloaded file to `kalide` (or `kalide.exe` on Windows).
-3. On macOS and Linux, make it executable if needed (`chmod +x kalide`).
-4. Move it to a folder on your `PATH` (such as `/usr/local/bin` on macOS and
+2. Verify its SHA-256 against the matching line in `checksums.txt`
+   (`shasum -a 256 <file>` on macOS, `sha256sum <file>` on Linux,
+   `Get-FileHash <file>` in PowerShell).
+3. Rename the downloaded file to `kalide` (or `kalide.exe` on Windows).
+4. On macOS and Linux, make it executable if needed (`chmod +x kalide`).
+5. Move it to a folder on your `PATH` (such as `/usr/local/bin` on macOS and
    Linux).
-5. Open a terminal and check:
+6. Open a terminal and check:
 
 ```
 kalide help
@@ -340,36 +232,24 @@ commands for your system above.
 
 ## If something goes wrong
 
-**"no GitHub token found" / "HOMEBREW_GITHUB_API_TOKEN is not set" / "KALIDE_GITHUB_TOKEN is not set"**
+**Download fails with HTTP 404**
 
-The token is not set in the window you are using. Repeat the *Set the token*
-step for your system, then run the install or upgrade command again. On Windows,
-remember that `setx` only affects **new** windows.
+The version, or the file for your computer, has not been published. Check
+<https://github.com/really-knows-ai/kalide/releases> in a browser, then try
+again.
 
-**GitHub rejected the token (HTTP 401 or 403)**
+**The checksum does not match**
 
-The token is wrong, expired, or does not have access to
-`really-knows-ai/kalide`. Check step 1 (repository access) and step 2 (token
-scope), then set the token again. For a fine-grained token, make sure
-**Contents** is set to **Read-only** and the repository is selected.
-
-**"could not read release" / HTTP 404**
-
-The token is valid but cannot see the release, or the version has not been
-published. Confirm you can open
-<https://github.com/really-knows-ai/kalide> in a browser, then try again.
-
-**`brew tap` or `scoop bucket add` asks for a password**
-
-That is git asking for access to the private repository. Use your GitHub
-username, and paste the token as the password.
+Delete the downloaded file and download it again; do not run a file whose
+checksum does not match `checksums.txt`.
 
 **The install works but the version is old**
 
 Run the upgrade commands for your system above. `kalide` never checks for
 updates by itself.
 
-If none of these helps, ask the person who granted you repository access.
+If none of these helps, open an issue at
+<https://github.com/really-knows-ai/kalide/issues>.
 
 ## For maintainers: how a release is published
 
@@ -386,6 +266,12 @@ This section is background only — you never need it to install or use `kalide`
   checksums) and pushes a single commit containing **only** files under
   `Formula/` and `bucket/`. The workflow fails if anything else is in that
   commit. It never creates tags and never pushes other code.
+- **CI checks the public install.** After the manifest commit is pushed, the
+  `package-install-e2e` job installs the new release anonymously (no token)
+  with Homebrew on macOS (Apple silicon and Intel) and Scoop on Windows (64-bit
+  and ARM), and checks that `kalide version` reports the pushed tag. It runs
+  after publishing, so it flags a broken public install rather than blocking
+  the release.
 
-In short: humans push `vX.Y.Z` tags, and CI publishes the release and pushes
-only the package-manifest commit.
+In short: humans push `vX.Y.Z` tags, and CI publishes the release, pushes
+only the package-manifest commit, and then verifies the anonymous install.
