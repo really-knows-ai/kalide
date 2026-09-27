@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "project-templates",
-  "body": "Project templates: every kalide project defines its own templates and assets (slide/section templates, themes, fonts, logos and any other media such as video) in a `templates/` directory at the project root, alongside `slides/`, `assets/` and `kalide.yaml`. The binary ships none (no fallback). Parent of the project-templates feature.",
+  "body": "Project templates: every kalide project defines its own templates and assets (slide/section templates, themes, fonts, logos and any other media such as video) as a template library. By default the library is a `templates/` directory at the project root, alongside `slides/`, `assets/` and `kalide.yaml`; a deck may instead point at an external library directory via `kalide.yaml` (see external-template-library). Exactly one library per deck. The binary ships none (no fallback). Parent of the project-templates feature.",
   "properties": {
     "feature": "project-templates"
   },
