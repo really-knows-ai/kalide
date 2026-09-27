@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "supported-platforms",
-  "body": "test",
+  "body": "Supported targets (six), each gated purely on GitHub currently offering a hosted native runner for it to this private repo:\n- darwin/arm64 (Apple silicon macOS) — runner: macos-14 / macos-latest\n- darwin/amd64 (Intel macOS) — runner: macos-15-intel / macos-26-intel\n- windows/amd64 — runner: windows-latest\n- windows/arm64 — runner: windows-11-arm\n- linux/amd64 — runner: ubuntu-latest / ubuntu-24.04\n- linux/arm64 — runner: ubuntu-24.04-arm\n\nGeneral rule: a target is supported precisely when GitHub currently offers a hosted native runner for it in this repo. If GitHub ever stops offering a runner for a target, that target silently drops out — not built, released or packaged — with no self-hosted or manual fallback. Every target follows this same conditional rule now; none is unconditionally \"always\" supported.\n\nAC: each release contains exactly one binary per target for which a runner exists at release time — no more, no less.",
   "properties": {
     "feature": "distribution"
   },
