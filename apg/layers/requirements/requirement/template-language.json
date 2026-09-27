@@ -48,6 +48,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.template-context",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }
