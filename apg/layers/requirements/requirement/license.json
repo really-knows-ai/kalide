@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.homebrew-install",
+      "properties": {}
     }
   ],
   "in": [

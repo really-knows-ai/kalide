@@ -48,6 +48,11 @@
       "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.license",
+      "properties": {}
     }
   ]
 }
