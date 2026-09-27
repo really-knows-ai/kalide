@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.cli-init",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-init-minimal-seed",
+      "properties": {}
     }
   ],
   "in": [
