@@ -26,6 +26,11 @@
       "kind": "contains",
       "source": "domain.group.templating",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.init-library-decisions",
+      "properties": {}
     }
   ]
 }
