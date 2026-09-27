@@ -114,6 +114,11 @@
       "kind": "details",
       "target": "solution.container.release-pipeline",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
     }
   ],
   "in": []
