@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "install-docs",
-  "body": "Install docs: README.md's Install section — front-loaded Homebrew (macOS) and Scoop (Windows) commands for tap/bucket, install and upgrade, followed by manual GitHub Release download as the Linux route and fallback, linking to INSTALL.md (readme-install-front-loading) — and INSTALL.md, the detailed plain-language guide per OS. Neither requires or mentions a GitHub account, repo access or token. README.md is presented as kalide's front page with a brand hero image from `brand/` and links to LICENSE and CHANGELOG.md (readme-presentation).",
+  "body": "Install docs: README.md's Install section — front-loaded Homebrew (macOS) and Scoop (Windows) commands for tap/bucket, install and upgrade, followed by manual GitHub Release download as the Linux route and fallback, linking to INSTALL.md (readme-install-front-loading) — and INSTALL.md, the detailed plain-language guide per OS. The macOS Homebrew commands are `brew tap really-knows-ai/kalide <url>`, then the tap-level `brew trust really-knows-ai/kalide`, then `brew install kalide`; the trust step is required by Homebrew 6.0.0+ for the custom-remote third-party tap (the per-formula `brew trust --formula` form is refused for it) and is shown in both README.md and INSTALL.md. Neither requires or mentions a GitHub account, repo access or token. README.md is presented as kalide's front page with a brand hero image from `brand/` and links to LICENSE and CHANGELOG.md (readme-presentation).",
   "properties": {},
   "out": [
     {
