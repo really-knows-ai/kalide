@@ -64,8 +64,11 @@ on:
         description: Token used to download the release artifact from the private repo
         required: false
 
+# actions: read is required to download the release artifact in release mode;
+# a `permissions:` block denies every scope it omits, so it must be listed.
 permissions:
   contents: read
+  actions: read
 
 jobs:
   e2e:

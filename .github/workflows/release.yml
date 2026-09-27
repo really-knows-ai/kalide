@@ -45,9 +45,12 @@ on:
       - 'v*.*.*'
 
 # Least privilege by default; only `publish` (release) and `manifest` (the
-# manifest-only push) need to write.
+# manifest-only push) need to write. `actions: read` is required to download the
+# build artifact: once a `permissions:` block is present, every scope it omits
+# is denied, and actions/download-artifact needs actions: read.
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -132,6 +135,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     steps:
       # Re-fetch the very artifact native e2e verified.
       - uses: actions/download-artifact@v8
