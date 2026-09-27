@@ -101,6 +101,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.slide-file-ordering",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.slide-sections",
+      "properties": {}
     }
   ],
   "in": [
