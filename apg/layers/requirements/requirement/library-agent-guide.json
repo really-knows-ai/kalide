@@ -96,6 +96,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.cli-templates-list",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-templates-show",
+      "properties": {}
     }
   ],
   "in": [
