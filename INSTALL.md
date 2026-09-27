@@ -15,6 +15,7 @@ below and in the [README](README.md#install).
 - [Step 2 — Create a GitHub token](#step-2--create-a-github-token)
 - [On macOS (Homebrew)](#on-macos-homebrew)
 - [On Windows (Scoop)](#on-windows-scoop)
+- [On Linux (manual download)](#on-linux-manual-download)
 - [Manual download](#manual-download)
 - [Supported computers](#supported-computers)
 - [Check the installed version](#check-the-installed-version)
@@ -27,8 +28,9 @@ below and in the [README](README.md#install).
 You need three things:
 
 1. **A supported computer** — see
-   [Supported computers](#supported-computers) below. On a Mac this means an
-   Apple silicon (M-series) machine; Intel Macs are not supported.
+   [Supported computers](#supported-computers) below. `kalide` supports
+   macOS (Apple silicon and Intel), Windows (64-bit Intel/AMD and ARM), and
+   Linux (64-bit Intel/AMD and ARM), for each target a release exists for.
 2. **A GitHub account that can see the private repository**
    `really-knows-ai/kalide` — see step 1.
 3. **A GitHub token** — a long password-like string that lets your computer
@@ -104,7 +106,8 @@ fine-grained token above is safer. Either works for `kalide`.
 
 `kalide` is installed from a Homebrew "tap" that lives inside the same source
 repository (`really-knows-ai/kalide`). There is **no separate tap
-repository** to add.
+repository** to add. The same steps work on both Apple silicon (M-series) and
+Intel Macs — Homebrew picks the matching binary for your Mac automatically.
 
 ### Set the token
 
@@ -232,6 +235,45 @@ downloaded from the private release just like the first install.
 scoop uninstall kalide
 ```
 
+## On Linux (manual download)
+
+There is no package-manager channel for Linux (no Homebrew tap or Scoop
+bucket equivalent). Install by downloading the matching release asset
+directly:
+
+1. Download the binary for your architecture from
+   <https://github.com/really-knows-ai/kalide/releases>:
+   - **64-bit Intel/AMD:** `kalide-linux-amd64`
+   - **ARM64:** `kalide-linux-arm64` (when included in the release)
+
+   Because the repository is private, download using a browser signed in to
+   your GitHub account, or with `gh release download` using your GitHub
+   token (see step 2).
+2. Also download `checksums.txt` from the same release and verify the
+   binary's SHA-256 matches the entry for your file:
+
+   ```
+   shasum -a 256 kalide-linux-amd64
+   ```
+
+   Compare the printed hash against the matching line in `checksums.txt`.
+3. Rename the downloaded file to `kalide` and make it executable:
+
+   ```
+   chmod +x kalide
+   ```
+4. Move it to a folder on your `PATH` (such as `/usr/local/bin`).
+5. Check the install:
+
+   ```
+   kalide help
+   ```
+
+### Upgrading (Linux)
+
+Repeat the download, checksum-verification and `chmod +x` steps above with
+the new release's asset.
+
 ## Manual download
 
 If you do not want to use Homebrew or Scoop, you can download the matching
@@ -244,8 +286,11 @@ GitHub account or with `gh release download` using your GitHub token.
 
 1. Download the binary for your platform:
    - **macOS Apple silicon:** `kalide-darwin-arm64`
+   - **macOS Intel:** `kalide-darwin-amd64`
    - **Windows 64-bit:** `kalide-windows-amd64.exe`
    - **Windows ARM:** `kalide-windows-arm64.exe` (when included in the release)
+   - **Linux 64-bit Intel/AMD:** `kalide-linux-amd64` (when included in the release)
+   - **Linux ARM64:** `kalide-linux-arm64` (when included in the release)
 2. Rename the downloaded file to `kalide` (or `kalide.exe` on Windows).
 3. On macOS, make it executable if needed (`chmod +x kalide`).
 4. Move it to a folder on your `PATH` (such as `/usr/local/bin` on macOS).
@@ -260,15 +305,17 @@ kalide help
 | Your computer | Supported | Notes |
 |---|---|---|
 | macOS on Apple silicon (M-series) | Yes | Installed with Homebrew (`darwin/arm64`) |
+| macOS on Intel | Yes | Installed with Homebrew (`darwin/amd64`) |
 | Windows on 64-bit Intel/AMD | Yes | Installed with Scoop (`windows/amd64`) |
-| Windows on ARM | Only when a release includes it | `windows/arm64` may be missing from a release |
-| macOS on Intel | No | No `darwin/amd64` build exists |
-| Linux | No | Not built |
+| Windows on ARM | Yes, when a release includes it | Installed with Scoop (`windows/arm64`) |
+| Linux on 64-bit Intel/AMD | Yes, when a release includes it | Manual download (`linux/amd64`); no package-manager channel |
+| Linux on ARM64 | Yes, when a release includes it | Manual download (`linux/arm64`); no package-manager channel |
 
-Windows on ARM is published only while a build machine for it is available, so
-the ARM installer may not be present in every release. If it is missing,
-`scoop install kalide` says so clearly on an ARM machine. The Homebrew formula
-also refuses to run on an Intel Mac with a plain-language message.
+All six targets are supported when a release for them exists: publishing is
+gated on runner availability at release time, not on a fixed required/optional
+split. If a target's asset is missing from a given release, the corresponding
+install command (Scoop, or the manual-download instructions) will say so
+clearly rather than silently failing.
 
 ## Check the installed version
 
@@ -315,10 +362,6 @@ published. Confirm you can open
 
 That is git asking for access to the private repository. Use your GitHub
 username, and paste the token as the password.
-
-**`kalide is Apple silicon only`**
-
-You are on an Intel Mac. `kalide` runs only on Apple silicon (M-series) Macs.
 
 **The install works but the version is old**
 

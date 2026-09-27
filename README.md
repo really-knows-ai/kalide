@@ -45,11 +45,15 @@ when they're consistent.
 your computer and run it. There is no installer, no runtime to install first, no
 package manager requirement, and no setup step.
 
-- On **macOS**: copy `kalide-darwin-arm64` to a folder on your `PATH` (for
-  example `/usr/local/bin/kalide`), then run it in a terminal.
+- On **macOS**: copy `kalide-darwin-arm64` (Apple silicon) or
+  `kalide-darwin-amd64` (Intel) to a folder on your `PATH` (for example
+  `/usr/local/bin/kalide`), then run it in a terminal.
 - On **Windows**: copy `kalide-windows-amd64.exe` (or
   `kalide-windows-arm64.exe`) to a folder on your `PATH` and run it in a
   terminal (PowerShell or Command Prompt).
+- On **Linux**: copy `kalide-linux-amd64` or `kalide-linux-arm64` to a
+  folder on your `PATH` (for example `/usr/local/bin/kalide`), `chmod +x`
+  it, then run it in a terminal.
 
 The file is self-contained: the reveal.js runtime and everything needed to
 serve a deck are inside it. Slide and section templates, themes, fonts, logos
@@ -64,14 +68,15 @@ going.
 | Your computer | Supported |
 |---|---|
 | macOS on Apple silicon (M-series) | Yes — `darwin/arm64` |
+| macOS on Intel | Yes — `darwin/amd64` |
 | Windows on 64-bit Intel/AMD | Yes — `windows/amd64` |
-| Windows on ARM | Only when a release includes it — `windows/arm64` |
-| macOS on Intel | No (`darwin/amd64` is not built) |
-| Linux | No |
+| Windows on ARM | Yes — `windows/arm64` (subject to release availability) |
+| Linux on 64-bit Intel/AMD | Yes — `linux/amd64` |
+| Linux on ARM64 | Yes — `linux/arm64` |
 
-Windows on ARM (`windows/arm64`) is published only while a build machine for it
-is available, so it may be missing from a release. Everything else in the table
-is fixed.
+All six targets are built and released for every version. Each is published
+only while its build machine is available, so any one of them may
+occasionally be missing from a given release.
 
 ## Getting started
 
