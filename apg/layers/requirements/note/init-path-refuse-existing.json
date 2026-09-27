@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-init-refuse-existing",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
     }
   ],
   "in": []
