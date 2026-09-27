@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "install-docs",
-  "body": "Install docs: plain-language install guide (repo access, token creation and setup per OS, add tap/bucket, install, upgrade).",
+  "body": "Install docs: README.md — plain-language install guide (repo access, token creation and setup per OS, add tap/bucket, install, upgrade), presented as kalide's front page with a brand hero image from `brand/` and links to LICENSE and CHANGELOG.md (readme-presentation).",
   "properties": {},
   "out": [
     {
