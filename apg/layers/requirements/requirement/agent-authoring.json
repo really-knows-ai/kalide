@@ -116,6 +116,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.speaker-notes",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ],
   "in": [
