@@ -15,6 +15,11 @@
       "kind": "drives",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
     }
   ]
 }
