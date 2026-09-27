@@ -1,6 +1,7 @@
 package scaffold
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -431,4 +434,384 @@ func readString(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+// externalDeckTree is the exact deck-relative set of entries InitExternal
+// writes: kalide.yaml and the empty slides/ and assets/ directories, and
+// deliberately no local templates/ and no starter slide. It is the external
+// counterpart of wantSeedTree.
+var externalDeckTree = []string{
+	"assets",
+	"kalide.yaml",
+	"slides",
+}
+
+// TestInitExternal covers the external-library form of Init (phase-03 task-7):
+// requirements.requirement.cli-init and
+// requirements.requirement.cli-init-refuse-existing.
+//
+// It exercises Init's optional external path (which delegates to InitExternal)
+// and InitExternal directly on real temporary directories: a valid external
+// library whose default theme resolves writes `templates: <path>`, an empty
+// slides/ with no starter slide, an empty assets/ and no local templates/; the
+// refusal matrix still blocks slides/, assets/ and kalide.yaml while a
+// pre-existing local templates/ is exempt and left untouched; an invalid or
+// missing library, or one whose default theme does not resolve, aborts with
+// nothing written; and the no-arg hello-seed path is unchanged, including the
+// empty-string path.
+func TestInitExternal(t *testing.T) {
+	t.Run("valid external library writes an external deck", testInitExternalWrites)
+	t.Run("absolute external path is written as given", testInitExternalAbsolutePath)
+	t.Run("missing external library aborts with nothing written", testInitExternalMissingLibrary)
+	t.Run("invalid external library aborts with nothing written", testInitExternalInvalidLibrary)
+	t.Run("unresolvable default theme aborts with nothing written", testInitExternalUnresolvableTheme)
+	t.Run("refusal matrix blocks deck paths", testInitExternalRefusalMatrix)
+	t.Run("pre-existing local templates is exempt and left untouched", testInitExternalTemplatesExempt)
+	t.Run("more than one external path is rejected", testInitExternalRejectsExtraPath)
+	t.Run("empty external path is rejected by InitExternal", testInitExternalEmptyPath)
+	t.Run("no-arg hello-seed path is unchanged", testInitNoArgSeed)
+}
+
+// testInitExternalWrites asserts Init(dir, "../shared-lib") on a clean
+// directory whose sibling shared-lib is a valid external library writes
+// kalide.yaml with templates: ../shared-lib, an empty slides/ and an empty
+// assets/, and no local templates/ or starter slide.
+func testInitExternalWrites(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "deck")
+	writeExternalLibrary(t, filepath.Join(parent, "shared-lib"), "shared-lib")
+
+	if err := Init(dir, "../shared-lib"); err != nil {
+		t.Fatalf("Init(dir, ../shared-lib) error = %v, want nil", err)
+	}
+
+	title, templates := externalConfigOf(t, dir)
+	if strings.TrimSpace(title) == "" {
+		t.Error("external deck title is empty, want a non-empty title")
+	}
+	if templates != "../shared-lib" {
+		t.Errorf("kalide.yaml templates = %q, want the external path %q written verbatim", templates, "../shared-lib")
+	}
+
+	if got := listTree(t, dir); !reflect.DeepEqual(got, externalDeckTree) {
+		t.Fatalf("external deck tree = %v, want %v (no local templates/, no starter slide)", got, externalDeckTree)
+	}
+	for _, name := range []string{"slides", "assets"} {
+		entries, err := os.ReadDir(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("ReadDir(%s/): %v", name, err)
+		}
+		if len(entries) != 0 {
+			t.Errorf("%s/ contains %d entries, want an empty directory", name, len(entries))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "templates")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("local templates/ present after external init (stat err = %v), want none", err)
+	}
+}
+
+// testInitExternalAbsolutePath asserts an absolute external path is written to
+// kalide.yaml as given and validated directly (no resolution against the deck
+// root), producing the same external deck tree.
+func testInitExternalAbsolutePath(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "deck")
+	lib := t.TempDir() // absolute, unrelated to dir
+	writeExternalLibrary(t, lib, "shared-lib")
+
+	if err := InitExternal(dir, lib); err != nil {
+		t.Fatalf("InitExternal(dir, %s) error = %v, want nil", lib, err)
+	}
+
+	if _, templates := externalConfigOf(t, dir); templates != lib {
+		t.Errorf("kalide.yaml templates = %q, want the absolute path %q verbatim", templates, lib)
+	}
+	if got := listTree(t, dir); !reflect.DeepEqual(got, externalDeckTree) {
+		t.Fatalf("external deck tree = %v, want %v", got, externalDeckTree)
+	}
+}
+
+// testInitExternalMissingLibrary asserts a configured external path that does
+// not exist aborts naming the resolved path and creates nothing at all.
+func testInitExternalMissingLibrary(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "deck")
+
+	err := Init(dir, "../nope")
+	if err == nil {
+		t.Fatal("Init(dir, ../nope) error = nil, want a missing-library error")
+	}
+	if want := filepath.Join(parent, "nope"); !strings.Contains(err.Error(), want) {
+		t.Errorf("Init error = %q, want it to name the resolved path %q", err, want)
+	}
+	assertNothingWritten(t, dir)
+}
+
+// testInitExternalInvalidLibrary asserts an external path that exists but is
+// not a valid template library aborts naming the offending library.yaml and
+// creates nothing at all.
+func testInitExternalInvalidLibrary(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "deck")
+	lib := filepath.Join(parent, "bad-lib")
+	writeExternalFile(t, filepath.Join(lib, "library.yaml"), "name: Bad_Name\nformat: 1\n")
+
+	err := Init(dir, "../bad-lib")
+	if err == nil {
+		t.Fatal("Init(dir, ../bad-lib) error = nil, want an invalid-library error")
+	}
+	if want := filepath.Join(lib, "library.yaml"); !strings.Contains(err.Error(), want) {
+		t.Errorf("Init error = %q, want it to name the offending %q", err, want)
+	}
+	if !strings.Contains(err.Error(), "not a valid name") {
+		t.Errorf("Init error = %q, want the library.yaml name error", err)
+	}
+	assertNothingWritten(t, dir)
+}
+
+// testInitExternalUnresolvableTheme asserts the deck's default theme must
+// resolve in the external library: a library with no themes/ at all, and one
+// whose only theme is not `default`, both abort naming the library path and
+// create nothing.
+func testInitExternalUnresolvableTheme(t *testing.T) {
+	t.Run("no themes directory", func(t *testing.T) {
+		parent := t.TempDir()
+		dir := filepath.Join(parent, "deck")
+		lib := filepath.Join(parent, "no-themes-lib")
+		// A valid library with no themes/ entry: LoadLibrary accepts it, but
+		// the deck's default theme cannot resolve.
+		writeExternalFile(t, filepath.Join(lib, "library.yaml"), "name: no-themes-lib\nformat: 1\n")
+
+		err := Init(dir, "../no-themes-lib")
+		if err == nil {
+			t.Fatal("Init(dir, ../no-themes-lib) error = nil, want a themes error")
+		}
+		if !strings.Contains(err.Error(), filepath.Join("themes")) {
+			t.Errorf("Init error = %q, want it to name the missing themes/ directory", err)
+		}
+		assertNothingWritten(t, dir)
+	})
+
+	t.Run("only a non-default theme", func(t *testing.T) {
+		parent := t.TempDir()
+		dir := filepath.Join(parent, "deck")
+		lib := filepath.Join(parent, "plain-lib")
+		writeExternalFile(t, filepath.Join(lib, "library.yaml"), "name: plain-lib\nformat: 1\n")
+		writeExternalFile(t, filepath.Join(lib, "themes", "plain", "theme.css"), "body {}\n")
+
+		err := Init(dir, "../plain-lib")
+		if err == nil {
+			t.Fatal("Init(dir, ../plain-lib) error = nil, want an unresolvable default theme error")
+		}
+		if !strings.Contains(err.Error(), "default") {
+			t.Errorf("Init error = %q, want it to name the unresolvable default theme", err)
+		}
+		if !strings.Contains(err.Error(), "plain-lib") {
+			t.Errorf("Init error = %q, want it to name the external library path", err)
+		}
+		assertNothingWritten(t, dir)
+	})
+}
+
+// testInitExternalRefusalMatrix asserts slides/, assets/ and kalide.yaml — as a
+// file or a directory — still block the external form, naming the path and
+// writing nothing, even though the external library itself is valid.
+func testInitExternalRefusalMatrix(t *testing.T) {
+	lib := filepath.Join(t.TempDir(), "shared-lib")
+	writeExternalLibrary(t, lib, "shared-lib")
+
+	cases := []struct {
+		name    string
+		block   string
+		isDir   bool
+		display string
+	}{
+		{"existing slides directory", "slides", true, "slides/"},
+		{"existing slides file", "slides", false, "slides/"},
+		{"existing assets directory", "assets", true, "assets/"},
+		{"existing assets file", "assets", false, "assets/"},
+		{"existing kalide.yaml file", "kalide.yaml", false, "kalide.yaml"},
+		{"existing kalide.yaml directory", "kalide.yaml", true, "kalide.yaml"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			block := filepath.Join(dir, tc.block)
+			if tc.isDir {
+				mkdir(t, block)
+				writeFile(t, filepath.Join(block, "keep.txt"), "keep")
+			} else {
+				writeFile(t, block, "sentinel")
+			}
+
+			before := snapshot(t, dir)
+
+			err := Init(dir, lib)
+			if err == nil {
+				t.Fatalf("Init(dir, %s) error = nil, want a refusal naming %q", lib, tc.display)
+			}
+			if !strings.Contains(err.Error(), tc.display) {
+				t.Errorf("Init error = %q, want it to name %q", err, tc.display)
+			}
+
+			if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
+				t.Fatalf("Init modified the directory on refusal:\n before %v\n after  %v", before, after)
+			}
+		})
+	}
+}
+
+// testInitExternalTemplatesExempt asserts a pre-existing local templates/ is
+// exempt for the external form: it is left byte-for-byte untouched while the
+// external deck is written. The no-arg form still blocks on it, so the
+// exemption is specific to the external path.
+func testInitExternalTemplatesExempt(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "deck")
+	writeExternalLibrary(t, filepath.Join(parent, "shared-lib"), "shared-lib")
+
+	mkdir(t, filepath.Join(dir, "templates"))
+	const sentinel = "local templates content that external init must not touch\n"
+	writeFile(t, filepath.Join(dir, "templates", "keep.txt"), sentinel)
+
+	if err := Init(dir, "../shared-lib"); err != nil {
+		t.Fatalf("Init(dir, ../shared-lib) error = %v, want nil with a pre-existing local templates/", err)
+	}
+
+	if got := readString(t, filepath.Join(dir, "templates", "keep.txt")); got != sentinel {
+		t.Errorf("templates/keep.txt = %q, want the pre-existing content unchanged", got)
+	}
+	if _, templates := externalConfigOf(t, dir); templates != "../shared-lib" {
+		t.Errorf("kalide.yaml templates = %q, want %q", templates, "../shared-lib")
+	}
+	for _, name := range []string{"kalide.yaml", "slides", "assets"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("stat %s after external init: %v, want created", name, err)
+		}
+	}
+
+	// The no-arg form still refuses a pre-existing templates/ (the exemption
+	// is not a general relaxation).
+	noArg := t.TempDir()
+	mkdir(t, filepath.Join(noArg, "templates"))
+	before := snapshot(t, noArg)
+	if err := Init(noArg); err == nil {
+		t.Error("no-arg Init on a directory with templates/ error = nil, want a refusal")
+	}
+	if after := snapshot(t, noArg); !reflect.DeepEqual(after, before) {
+		t.Errorf("no-arg Init modified the directory on refusal:\n before %v\n after  %v", before, after)
+	}
+}
+
+// testInitExternalRejectsExtraPath asserts Init rejects more than one optional
+// path as a programming error, writing nothing.
+func testInitExternalRejectsExtraPath(t *testing.T) {
+	dir := t.TempDir()
+	before := snapshot(t, dir)
+
+	err := Init(dir, "a", "b")
+	if err == nil {
+		t.Fatal("Init(dir, a, b) error = nil, want the at-most-one-path error")
+	}
+	if !strings.Contains(err.Error(), "at most one") {
+		t.Errorf("Init error = %q, want it to say at most one path is allowed", err)
+	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
+		t.Errorf("Init(dir, a, b) modified the directory:\n before %v\n after  %v", before, after)
+	}
+}
+
+// testInitExternalEmptyPath asserts InitExternal rejects an empty external path
+// directly, writing nothing. (Through Init, an empty path selects the no-arg
+// seed instead — see testInitNoArgSeed.)
+func testInitExternalEmptyPath(t *testing.T) {
+	dir := t.TempDir()
+	before := snapshot(t, dir)
+
+	err := InitExternal(dir, "")
+	if err == nil {
+		t.Fatal("InitExternal(dir, \"\") error = nil, want an empty-path error")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("InitExternal error = %q, want it to say the external library path is empty", err)
+	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
+		t.Errorf("InitExternal(dir, \"\") modified the directory:\n before %v\n after  %v", before, after)
+	}
+}
+
+// testInitNoArgSeed asserts the no-arg hello-seed path is unchanged: both
+// Init(dir) and Init(dir, "") write exactly wantSeedTree (including the local
+// templates/ library) and a kalide.yaml with no `templates:` key.
+func testInitNoArgSeed(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"no argument", nil},
+		{"empty external path", []string{""}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			if err := Init(dir, tc.args...); err != nil {
+				t.Fatalf("Init(dir, %v) error = %v, want the hello seed", tc.args, err)
+			}
+			if got := listTree(t, dir); !reflect.DeepEqual(got, wantSeedTree) {
+				t.Fatalf("seed tree = %v, want %v", got, wantSeedTree)
+			}
+			if _, templates := externalConfigOf(t, dir); templates != "" {
+				t.Errorf("seed kalide.yaml templates = %q, want empty (no external library)", templates)
+			}
+		})
+	}
+}
+
+// writeExternalLibrary writes a minimal valid external template library at dir:
+// library.yaml with the given (valid) name and format 1, and a default theme
+// with its required theme.css. A library with no slides/sections/media is
+// valid, and themes/default is exactly what InitExternal needs to resolve the
+// deck's default theme.
+func writeExternalLibrary(t *testing.T, dir, name string) {
+	t.Helper()
+	writeExternalFile(t, filepath.Join(dir, "library.yaml"), "name: "+name+"\nformat: 1\n")
+	writeExternalFile(t, filepath.Join(dir, "themes", "default", "theme.css"), "body { margin: 0; }\n")
+}
+
+// writeExternalFile is writeFile with parent directories created, for the
+// nested files an external library needs.
+func writeExternalFile(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// externalConfigOf parses kalide.yaml under dir and returns its title and
+// templates values, so a test asserts the written configuration rather than
+// its exact formatting.
+func externalConfigOf(t *testing.T, dir string) (title, templates string) {
+	t.Helper()
+	var cfg struct {
+		Title     string `yaml:"title"`
+		Templates string `yaml:"templates"`
+	}
+	if err := yaml.Unmarshal([]byte(readString(t, filepath.Join(dir, "kalide.yaml"))), &cfg); err != nil {
+		t.Fatalf("parse %s: %v", filepath.Join(dir, "kalide.yaml"), err)
+	}
+	return cfg.Title, cfg.Templates
+}
+
+// assertNothingWritten asserts dir was not created, so a failed init wrote
+// nothing at all.
+func assertNothingWritten(t *testing.T, dir string) {
+	t.Helper()
+	if _, err := os.Lstat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("directory %s exists after a failed init (stat err = %v), want nothing written", dir, err)
+	}
 }
