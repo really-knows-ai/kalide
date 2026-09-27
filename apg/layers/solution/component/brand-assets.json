@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "brand-assets",
-  "body": "Brand assets: repo-root `brand/` directory holding the SVG mark source, wordmark, and PNG exports at 512/128/32/16px (palette per brand-identity). Referenced only from README.md, package-channel descriptions and an optional GitHub social preview. NOT part of embedded-assets; never go:embed'ed; never referenced from the served page shells (see solution.constraint.brand-not-embedded). implemented-by deferred: `brand/*` files do not exist yet — plan declares them as planned file nodes.",
+  "body": "Brand assets: repo-root `brand/` directory holding the SVG mark source, wordmark, and PNG exports at 512/128/32/16px (palette per brand-identity). Referenced only from README.md, package-channel descriptions and an optional GitHub social preview. NOT part of embedded-assets; never go:embed'ed; never referenced from the served page shells (see requirements.constraint.brand-not-embedded). implemented-by deferred: `brand/*` files do not exist yet — plan declares them as planned file nodes.",
   "properties": {},
   "out": [],
   "in": []
