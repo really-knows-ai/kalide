@@ -16,6 +16,11 @@
       "kind": "drives",
       "target": "domain.service.load-template-library",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
     }
   ],
   "in": [
