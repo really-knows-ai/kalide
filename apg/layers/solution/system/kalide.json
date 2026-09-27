@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "system",
   "name": "kalide",
-  "body": "kalide: local slide-deck tool — single Go binary that validates Markdown/YAML decks against the project's own `templates/` library (no built-in templates) and serves them with reveal.js. (Name: portmanteau of Greek Kalón — the ideal of the beautiful and good — and Slide; pronounced like \"collide\" (kuh-LIDE); always written lowercase; formerly \"ey-present\"/\"eypres\".)",
+  "body": "kalide: local slide-deck tool — single Go binary that validates Markdown/YAML decks against the deck's own template library (a local `templates/` directory or a configured external path; see external-template-library; no built-in templates) and serves them with reveal.js. (Name: portmanteau of Greek Kalón — the ideal of the beautiful and good — and Slide; pronounced like \"collide\" (kuh-LIDE); always written lowercase; formerly \"ey-present\"/\"eypres\".)",
   "properties": {},
   "out": [
     {
