@@ -30,6 +30,10 @@ import (
 // into LibraryTemplate.Layout/Layout.Text and LibraryTemplate.ExampleBytes by
 // LoadLibrary, so there is no filesystem for Register to load them from —
 // they are copied onto the parsed Template directly instead.
+//
+// Each parsed definition still passes through Register's reserved field/
+// section name checks (checkDeclaredName): "deck" and "slide" are reserved
+// alongside "body", "notes", and "_format".
 func NewRegistryFromLibrary(lib *Library) (*Registry, error) {
 	r := NewRegistry(nil)
 	if lib == nil {

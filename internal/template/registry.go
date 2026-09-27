@@ -56,6 +56,10 @@ type Registry struct {
 // source); the built-ins pass assets.Templates(). A nil content makes Register
 // skip content loading, so a template must carry its Layout.Text and
 // Example.Markdown already — useful for tests and fully in-code templates.
+//
+// Templates registered here are subject to Register's reserved field/section
+// name checks (checkDeclaredName): "deck" and "slide" are reserved alongside
+// "body", "notes", and "_format".
 func NewRegistry(content fs.FS) *Registry {
 	return &Registry{content: content, templates: make(map[string]*Template)}
 }
