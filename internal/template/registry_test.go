@@ -592,6 +592,21 @@ func TestRegistryRejections(t *testing.T) {
 	bodySection := regSlide("resvbody")
 	bodySection.Sections = []SectionDecl{{Name: "body", Accepted: []string{"col"}}}
 
+	// `deck` and `slide` are the reserved top-level template-context names
+	// (template-context-reserved): neither is declarable as a field or a
+	// section, alongside `body`, `notes` and the `_format` suffix.
+	reservedDeckField := regSlide("resvdeck")
+	reservedDeckField.Fields = []Field{{Name: "deck", Type: FieldText}}
+
+	reservedSlideField := regSlide("resvslide")
+	reservedSlideField.Fields = []Field{{Name: "slide", Type: FieldText}}
+
+	deckSection := regSlide("resvdecksec")
+	deckSection.Sections = []SectionDecl{{Name: "deck", Accepted: []string{"col"}}}
+
+	slideSection := regSlide("resvslidesec")
+	slideSection.Sections = []SectionDecl{{Name: "slide", Accepted: []string{"col"}}}
+
 	cycleA := regSection("cyclea")
 	cycleA.Sections = []SectionDecl{{Name: "slot", Accepted: []string{"cycleb"}}}
 	cycleB := regSection("cycleb")
@@ -658,6 +673,26 @@ func TestRegistryRejections(t *testing.T) {
 			name:      "reserved section name body",
 			templates: []*Template{bodySection},
 			want:      `template "resvbody": section name "body" is reserved and cannot be declared`,
+		},
+		{
+			name:      "reserved field name deck",
+			templates: []*Template{reservedDeckField},
+			want:      `template "resvdeck": field name "deck" is reserved and cannot be declared`,
+		},
+		{
+			name:      "reserved field name slide",
+			templates: []*Template{reservedSlideField},
+			want:      `template "resvslide": field name "slide" is reserved and cannot be declared`,
+		},
+		{
+			name:      "reserved section name deck",
+			templates: []*Template{deckSection},
+			want:      `template "resvdecksec": section name "deck" is reserved and cannot be declared`,
+		},
+		{
+			name:      "reserved section name slide",
+			templates: []*Template{slideSection},
+			want:      `template "resvslidesec": section name "slide" is reserved and cannot be declared`,
 		},
 		{
 			name:      "example missing a required field",
@@ -830,8 +865,8 @@ func TestRegistryRejections(t *testing.T) {
 		}
 	})
 
-	t.Run("reserved field name notes and body", func(t *testing.T) {
-		for _, name := range []string{"notes", "body"} {
+	t.Run("reserved field name notes, body, deck and slide", func(t *testing.T) {
+		for _, name := range []string{"notes", "body", "deck", "slide"} {
 			libErr := libraryRejection(t, "fields:\n  - name: "+name+"\n    type: text\n", "")
 			if !strings.Contains(libErr.Message, "reserved") {
 				t.Errorf("field %q: Message = %q, want it to say the name is reserved", name, libErr.Message)
@@ -839,8 +874,8 @@ func TestRegistryRejections(t *testing.T) {
 		}
 	})
 
-	t.Run("reserved section name notes and body", func(t *testing.T) {
-		for _, name := range []string{"notes", "body"} {
+	t.Run("reserved section name notes, body, deck and slide", func(t *testing.T) {
+		for _, name := range []string{"notes", "body", "deck", "slide"} {
 			libErr := libraryRejection(t, "sections:\n  - name: "+name+"\n    accepted: [badsec]\n", "")
 			if !strings.Contains(libErr.Message, "reserved") {
 				t.Errorf("section %q: Message = %q, want it to say the name is reserved", name, libErr.Message)
