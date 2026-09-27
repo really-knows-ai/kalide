@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "load-template-library",
-  "body": "Load template library: locate the project's `templates/`, validate it fail-fast (templates-dir-validation), and build the template and theme registries from its files; the first failure is a templates error.",
+  "body": "Load template library: resolve the library root from the deck config — the `templates:` path when set (a relative path resolved against the deck root, or an absolute path), otherwise the local `templates/`; neither resolvable = error (templates-dir-required) — then validate the resolved root fail-fast (templates-dir-validation) and build the template and theme registries from its files; the first failure is a templates error. A configured path is authoritative: it never silently falls back to a local `templates/`.",
   "properties": {},
   "out": [
     {
