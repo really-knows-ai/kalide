@@ -242,23 +242,48 @@ jobs:
               digest, name = line.split(None, 1)
               sums[name.strip()] = digest.strip()
 
-          darwin = sums["kalide-darwin-arm64"]
+          darwin_arm64 = sums["kalide-darwin-arm64"]
+          darwin_amd64 = sums["kalide-darwin-amd64"]
           amd64 = sums["kalide-windows-amd64.exe"]
 
-          # --- Formula/kalide.rb: version / url / sha256 ---------------------
+          # --- Formula/kalide.rb: version / TWO url+sha256 pairs -------------
+          # There are two independent url/sha256 pairs, one per architecture
+          # (Hardware::CPU.intel? branch -> kalide-darwin-amd64, else branch ->
+          # kalide-darwin-arm64). Each pair is matched and replaced as a whole
+          # block (url line through its sha256 line) keyed by the asset name
+          # already present in that block's url, so the regex is robust to
+          # which branch comes first and to the if/else structure — not
+          # dependent on line position.
           formula = pathlib.Path("Formula/kalide.rb")
           text = formula.read_text()
 
-          def replace_once(text, pattern, replacement):
+          def replace_once(text, pattern, replacement, label):
               new, n = re.subn(pattern, replacement, text, flags=re.MULTILINE)
               if n != 1:
-                  raise SystemExit(f"formula: expected exactly one match for {pattern!r}, got {n}")
+                  raise SystemExit(f"formula: expected exactly one match for {label!r}, got {n}")
               return new
 
-          text = replace_once(text, r'^  url "https://github\.com/[^"]*"',
-                              f'  url "{base}/kalide-darwin-arm64"')
-          text = replace_once(text, r'^  version "[^"]*"', f'  version "{version}"')
-          text = replace_once(text, r'^  sha256 "[^"]*"', f'  sha256 "{darwin}"')
+          def replace_url_sha_pair(text, asset, digest):
+              pattern = re.compile(
+                  r'(url ")[^"]*/' + re.escape(asset) + r'('
+                  r'"[^\n]*\n'
+                  r'\s*using: GitHubPrivateReleaseDownloadStrategy\n'
+                  r'\s*sha256 ")[0-9a-fA-F]+(")'
+              )
+              new_text, n = pattern.subn(
+                  lambda m: f'{m.group(1)}{base}/{asset}{m.group(2)}{digest}{m.group(3)}',
+                  text,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit(
+                      f"formula: expected exactly one url/sha256 match for {asset!r}, got {n}"
+                  )
+              return new_text
+
+          text = replace_once(text, r'^  version "[^"]*"', f'  version "{version}"', "version")
+          text = replace_url_sha_pair(text, "kalide-darwin-arm64", darwin_arm64)
+          text = replace_url_sha_pair(text, "kalide-darwin-amd64", darwin_amd64)
           formula.write_text(text)
 
           # --- bucket/kalide.json: version / hashes / arm64 block -----------
