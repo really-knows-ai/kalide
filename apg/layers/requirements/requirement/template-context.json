@@ -48,6 +48,11 @@
       "kind": "details",
       "source": "requirements.note.deck-properties-decisions",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }
