@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "theme-registry",
-  "body": "Theme registry: project themes (one per `templates/themes/<name>/`) mapping to their `theme.css` and files, registered by the template-library-loader; lookup by deck config, omitted theme resolves to `default`; unknown = error listing project themes. No built-in theme.",
+  "body": "Theme registry: project themes (one directory per theme under the resolved library's `themes/<name>/`) mapping to their `theme.css` and files, registered by the template-library-loader; lookup by deck config, omitted theme resolves to `default`; unknown = error listing project themes. No built-in theme.",
   "properties": {},
   "out": [
     {
