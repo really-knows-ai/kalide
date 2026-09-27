@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "linux-install",
-  "body": "Linux users install kalide by downloading the `kalide-linux-<arch>` asset directly from the private GitHub Release (no Homebrew/Scoop-equivalent tap or bucket), making it executable (`chmod +x kalide-linux-<arch>`), and running it. AC: on a clean Linux machine of a supported arch, downloading the release asset, chmod +x, and running it starts kalide successfully.",
+  "body": "Linux users install kalide by downloading the `kalide-linux-<arch>` asset directly (anonymously, no token) from the public GitHub Release of really-knows-ai/kalide (no Homebrew/Scoop-equivalent tap or bucket), making it executable (`chmod +x kalide-linux-<arch>`), and running it. The same manual download is the fallback route for macOS and Windows. AC: on a clean Linux machine of a supported arch with no GitHub credentials, downloading the release asset (e.g. with `curl -L` on the public release URL), chmod +x, and running it starts kalide successfully.",
   "properties": {
     "feature": "distribution"
   },
