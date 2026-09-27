@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.scaffold-template-library",
+      "properties": {}
     }
   ]
 }
