@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "templates-dir-required",
-  "body": "Missing templates dir is an error: `kalide start` and `kalide templates [name]` (and the gallery) fail with a clear message — naming the expected `templates/` path and suggesting `kalide init` for new projects — and a non-zero exit when the project has no `templates/` directory (or it is not a directory). There is no built-in fallback.",
+  "body": "The template library must be resolvable: kalide uses the library at the `templates:` path configured in `kalide.yaml` when present (see external-template-library), otherwise a local `templates/` directory at the deck root. If neither resolves — the key is absent and there is no local `templates/` (or it is not a directory), or the configured path is missing or not a valid library — `kalide start` and `kalide templates [name]` (and the gallery) fail with a clear message naming the expected/offending path and a non-zero exit, suggesting `kalide init` for new projects when there is no local `templates/`. There is no built-in fallback, and a configured path never silently falls back to a local `templates/`.",
   "properties": {
     "feature": "project-templates"
   },
