@@ -53,6 +53,11 @@
       "kind": "details",
       "source": "requirements.note.init-path-refuse-existing",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }
