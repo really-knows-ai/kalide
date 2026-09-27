@@ -126,6 +126,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.closest-match-suggestions",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-templates-list",
+      "properties": {}
     }
   ],
   "in": [
