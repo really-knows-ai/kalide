@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "library-guide-layout",
+  "body": "Library agent-guide layout exception: the library layout permits exactly one non-template top-level entry, `AGENTS.md` (the library/template-author agent guide, library-agent-guide). A library root may hold `AGENTS.md` alongside `library.yaml`, `slides/`, `sections/`, `themes/` and `media/`; it is inert — never parsed as YAML/template, validated, rendered, listed or served — and is NOT a template asset. Without this exception the unknown-top-level-entry rule (templates-dir-layout, enforced by internal/template/loadlibrary.go checkTopLevelLayout) would reject the guide, so a freshly created library would fail templates-dir-validation, contradicting library-agent-guide's and init-library's load-cleanly ACs. Every OTHER unknown top-level entry remains an error. The exception is specific to the library (templates) root; the deck root has no such rule and its `AGENTS.md` is unaffected.\n\nAC:\n- `kalide init-library ../lib` writes `../lib/AGENTS.md` and `../lib` still loads cleanly (templates-dir-validation);\n- any other unknown top-level entry in a library root (e.g. `README.md`, `notes.txt`) still errors naming the offending entry;\n- `../lib/AGENTS.md` is ignored by load/validate/render/serve/list (the guide is not a template asset).",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
