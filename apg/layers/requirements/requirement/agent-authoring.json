@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.group.authoring",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
     }
   ],
   "in": [
