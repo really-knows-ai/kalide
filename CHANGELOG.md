@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `darwin/amd64` (Intel Mac), `linux/amd64` and `linux/arm64` as supported
   release targets, alongside the existing `darwin/arm64`, `windows/amd64`
   and `windows/arm64`. Homebrew now serves both Mac architectures.
+- Linux install by direct download of `kalide-linux-<arch>` with checksum
+  verification against `checksums.txt` (no package-manager channel).
 
 ### Changed
 

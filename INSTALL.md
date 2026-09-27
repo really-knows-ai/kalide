@@ -244,7 +244,7 @@ directly:
 1. Download the binary for your architecture from
    <https://github.com/really-knows-ai/kalide/releases>:
    - **64-bit Intel/AMD:** `kalide-linux-amd64`
-   - **ARM64:** `kalide-linux-arm64` (when included in the release)
+   - **ARM64:** `kalide-linux-arm64`
 
    Because the repository is private, download using a browser signed in to
    your GitHub account, or with `gh release download` using your GitHub
@@ -288,12 +288,13 @@ GitHub account or with `gh release download` using your GitHub token.
    - **macOS Apple silicon:** `kalide-darwin-arm64`
    - **macOS Intel:** `kalide-darwin-amd64`
    - **Windows 64-bit:** `kalide-windows-amd64.exe`
-   - **Windows ARM:** `kalide-windows-arm64.exe` (when included in the release)
-   - **Linux 64-bit Intel/AMD:** `kalide-linux-amd64` (when included in the release)
-   - **Linux ARM64:** `kalide-linux-arm64` (when included in the release)
+   - **Windows ARM:** `kalide-windows-arm64.exe`
+   - **Linux 64-bit Intel/AMD:** `kalide-linux-amd64`
+   - **Linux ARM64:** `kalide-linux-arm64`
 2. Rename the downloaded file to `kalide` (or `kalide.exe` on Windows).
-3. On macOS, make it executable if needed (`chmod +x kalide`).
-4. Move it to a folder on your `PATH` (such as `/usr/local/bin` on macOS).
+3. On macOS and Linux, make it executable if needed (`chmod +x kalide`).
+4. Move it to a folder on your `PATH` (such as `/usr/local/bin` on macOS and
+   Linux).
 5. Open a terminal and check:
 
 ```
@@ -307,9 +308,9 @@ kalide help
 | macOS on Apple silicon (M-series) | Yes | Installed with Homebrew (`darwin/arm64`) |
 | macOS on Intel | Yes | Installed with Homebrew (`darwin/amd64`) |
 | Windows on 64-bit Intel/AMD | Yes | Installed with Scoop (`windows/amd64`) |
-| Windows on ARM | Yes, when a release includes it | Installed with Scoop (`windows/arm64`) |
-| Linux on 64-bit Intel/AMD | Yes, when a release includes it | Manual download (`linux/amd64`); no package-manager channel |
-| Linux on ARM64 | Yes, when a release includes it | Manual download (`linux/arm64`); no package-manager channel |
+| Windows on ARM | Yes | Installed with Scoop (`windows/arm64`) |
+| Linux on 64-bit Intel/AMD | Yes | Manual download (`linux/amd64`); no package-manager channel |
+| Linux on ARM64 | Yes | Manual download (`linux/arm64`); no package-manager channel |
 
 All six targets are supported when a release for them exists: publishing is
 gated on runner availability at release time, not on a fixed required/optional

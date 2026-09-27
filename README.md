@@ -70,7 +70,7 @@ going.
 | macOS on Apple silicon (M-series) | Yes — `darwin/arm64` |
 | macOS on Intel | Yes — `darwin/amd64` |
 | Windows on 64-bit Intel/AMD | Yes — `windows/amd64` |
-| Windows on ARM | Yes — `windows/arm64` (subject to release availability) |
+| Windows on ARM | Yes — `windows/arm64` |
 | Linux on 64-bit Intel/AMD | Yes — `linux/amd64` |
 | Linux on ARM64 | Yes — `linux/arm64` |
 
