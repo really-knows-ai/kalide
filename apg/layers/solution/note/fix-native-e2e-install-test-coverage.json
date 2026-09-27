@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "fix-native-e2e-install-test-coverage",
+  "body": "source: feedback-7 on plan.phase-01 — the plan creates e2e/install_test.go (TestAnonymousPackageInstall, planned) instead of modifying TestNativeRelease; inconsistency: solution.component.native-e2e-ci traced only to unchanged code (TestNativeRelease, e2e/native_test.go, native-e2e.yml), so plan coverage of the component regressed; resolution: added implemented-by native-e2e-ci → go.github.com/really-knows-ai/kalide/e2e.TestAnonymousPackageInstall and → e2e/install_test.go (planned targets, accepted by the tool); existing TestNativeRelease / e2e/native_test.go / native-e2e.yml edges kept as still valid. [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
