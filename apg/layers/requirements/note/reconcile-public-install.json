@@ -94,6 +94,11 @@
       "kind": "details",
       "target": "solution.component.homebrew-formula",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.scoop-manifest",
+      "properties": {}
     }
   ],
   "in": []
