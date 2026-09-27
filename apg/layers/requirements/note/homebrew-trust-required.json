@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "solution.component.install-docs",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.homebrew-formula",
+      "properties": {}
     }
   ],
   "in": []
