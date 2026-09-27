@@ -60,6 +60,12 @@ type Registry struct {
 // Templates registered here are subject to Register's reserved field/section
 // name checks (checkDeclaredName): "deck" and "slide" are reserved alongside
 // "body", "notes", and "_format".
+//
+// single-binary (requirements.requirement.single-binary): the registry is
+// packaged in the binary and works offline — content is read only through
+// the given fs.FS (the go:embed'ed assets for the built-ins), with slash-
+// separated io/fs paths built by path.Join, never path/filepath, the OS or
+// the network, so lookup behaves identically on darwin and windows.
 func NewRegistry(content fs.FS) *Registry {
 	return &Registry{content: content, templates: make(map[string]*Template)}
 }
@@ -346,6 +352,11 @@ func checkFieldVariants(tmpl string, f *Field) error {
 // `deck` and `slide` the reserved top-level template-context names, and a
 // trailing `_format` the reserved format-selection sibling of a field. None of
 // them is declarable.
+//
+// single-binary (requirements.requirement.single-binary): the check is OS-
+// neutral — an exact, case-sensitive byte comparison on the declared name,
+// with no case folding, path-separator or filesystem handling, so it accepts
+// and rejects exactly the same names on darwin and windows.
 func checkDeclaredName(kind, tmpl, name string) error {
 	if name == "" {
 		return fmt.Errorf("template %q: %s name must not be empty", tmpl, kind)

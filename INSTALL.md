@@ -135,6 +135,8 @@ brew install kalide
 
 `brew tap` clones the private repository, so git may ask for a username and
 password. Enter your GitHub username and paste the token **as the password**.
+If you already use an SSH key with GitHub, you can use the SSH address
+instead: `brew tap really-knows-ai/kalide git@github.com:really-knows-ai/kalide.git`.
 
 That is it. Check the install with:
 
@@ -200,6 +202,8 @@ scoop install kalide
 
 `scoop bucket add` clones the private repository, so git may ask for a username
 and password. Enter your GitHub username and paste the token **as the password**.
+If you already use an SSH key with GitHub, you can use the SSH address
+instead: `scoop bucket add kalide git@github.com:really-knows-ai/kalide.git`.
 
 That is it. Check the install with:
 

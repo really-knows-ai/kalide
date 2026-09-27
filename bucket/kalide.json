@@ -1,4 +1,9 @@
 {
+  "##": [
+    "Audited in release-0.5.0 phase-05 task-5 against scoop-install, tap-bucket-location and package-manifest-update.",
+    "Hosted in the source repo's bucket/; hash-only manifest (no url) so pre_install is the single KALIDE_GITHUB_TOKEN-authenticated fetch of kalide-windows-<arch>.",
+    "64bit always; the arm64 block is added by release.yml only when kalide-windows-arm64.exe was released; version/hash are regenerated from the tag and checksums.txt."
+  ],
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
   "version": "0.0.0",
   "description": "kalide turns a folder of Markdown files into a slide deck and shows it in your browser.",

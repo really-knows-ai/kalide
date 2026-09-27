@@ -34,6 +34,10 @@ import (
 // Each parsed definition still passes through Register's reserved field/
 // section name checks (checkDeclaredName): "deck" and "slide" are reserved
 // alongside "body", "notes", and "_format".
+//
+// single-binary (requirements.requirement.single-binary): the library is
+// resolved locally and offline — it works purely on the in-memory Library
+// LoadLibrary already built, performing no filesystem, OS or network access.
 func NewRegistryFromLibrary(lib *Library) (*Registry, error) {
 	r := NewRegistry(nil)
 	if lib == nil {

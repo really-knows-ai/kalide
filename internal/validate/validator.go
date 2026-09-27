@@ -73,6 +73,12 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 //
 // Validate is deterministic: the same deck always yields the same single
 // error.
+//
+// single-binary (requirements.requirement.single-binary): validation is
+// packaged in the binary and runs offline — every read goes through fsys
+// with slash-separated io/fs paths (deck.ConfigFile, deck.SlidesDir, slide
+// paths, image fs.Stat), never path/filepath, the OS or the network, so the
+// same deck yields the same result on darwin and windows.
 func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (ValidationError, bool) {
 	if fsys == nil {
 		return New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS"), true
