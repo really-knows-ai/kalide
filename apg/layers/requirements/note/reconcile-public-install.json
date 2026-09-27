@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "requirements.requirement.readme-install-front-loading",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.source-repo",
+      "properties": {}
     }
   ],
   "in": []
