@@ -66,6 +66,11 @@
       "kind": "contains",
       "target": "requirements.requirement.version-command",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.changelog",
+      "properties": {}
     }
   ],
   "in": [
