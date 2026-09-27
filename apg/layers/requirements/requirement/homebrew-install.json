@@ -53,6 +53,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.license",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.reconcile-public-install",
+      "properties": {}
     }
   ]
 }
