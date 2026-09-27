@@ -79,6 +79,11 @@
       "kind": "details",
       "target": "domain.entity.release",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.install-kalide",
+      "properties": {}
     }
   ],
   "in": []
