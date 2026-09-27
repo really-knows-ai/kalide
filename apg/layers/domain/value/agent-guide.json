@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "agent-guide",
+  "body": "Agent guide (deck) value: the project-root `AGENTS.md` written verbatim by kalide scaffolding for deck authors — a single unbranded, text-only, offline Markdown reference to the current deck/template format, not a template asset and inert to load/validate/render/serve/list. It is a descriptor of the authoring domain (like domain.value.format), so it carries no realised-by of its own and realises through its containing domain.group.authoring.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
