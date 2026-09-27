@@ -36,6 +36,11 @@
       "kind": "details",
       "source": "solution.note.split-anonymous-install-e2e",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.homebrew-trust-required",
+      "properties": {}
     }
   ]
 }
