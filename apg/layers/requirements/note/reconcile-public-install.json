@@ -64,6 +64,11 @@
       "kind": "details",
       "target": "requirements.requirement.supported-platforms",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.native-ci-verification",
+      "properties": {}
     }
   ],
   "in": []
