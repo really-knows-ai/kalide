@@ -5,5 +5,11 @@
   "body": "License & notices: repo-root `LICENSE` (Apache-2.0 full text) and repo-root `NOTICE` naming reveal.js vendored under MIT at `internal/assets/reveal/LICENSE` (which stays untouched and remains part of embedded-assets). Also drives the `license` field change in `Formula/kalide.rb` (owned by homebrew-formula). implemented-by deferred: `LICENSE` and `NOTICE` do not exist yet — plan declares them as planned file nodes.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.release",
+      "properties": {}
+    }
+  ]
 }
