@@ -31,6 +31,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.init-library",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.external-template-library",
+      "properties": {}
     }
   ],
   "in": [
