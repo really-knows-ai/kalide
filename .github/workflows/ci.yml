@@ -23,6 +23,9 @@ on:
 
 permissions:
   contents: read
+  # native-e2e.yml (called below) requests actions: read; a caller must grant
+  # every permission its reusable workflow requests.
+  actions: read
 
 jobs:
   test:
