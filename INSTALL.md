@@ -46,17 +46,25 @@ repository (`really-knows-ai/kalide`). There is **no separate tap
 repository** to add. The same steps work on both Apple silicon (M-series) and
 Intel Macs — Homebrew picks the matching binary for your Mac automatically.
 
-### Tap and install
+### Tap, trust and install
 
-Run these two commands:
+Run these three commands:
 
 ```
 brew tap really-knows-ai/kalide https://github.com/really-knows-ai/kalide
 ```
 
 ```
+brew trust really-knows-ai/kalide
+```
+
+```
 brew install kalide
 ```
+
+Homebrew 6.0.0 and later require trusting a third-party tap before installing
+from it; because `kalide`'s tap is added from a custom remote, you trust it by
+name as above. No GitHub account or token is needed.
 
 That is it. Check the install with:
 
