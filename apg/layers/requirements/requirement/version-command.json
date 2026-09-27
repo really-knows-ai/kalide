@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "version-command",
+  "body": "kalide exposes its build-stamped version to users: `kalide version` (and `--version`/`-v` accepted as a top-level flag equivalent) prints the version string stamped at build time via `-ldflags -X main.version=...` (`dev` for unbuilt/source runs) to stdout and exits 0. This reverses the prior \"no user-facing surface\" design for the `version` variable in `cmd/kalide/main.go` — see the reconciliation note — while leaving the build-time stamping mechanism itself unchanged. AC: `kalide version` and `kalide --version` each print exactly one line containing the stamped version (or `dev`) and exit 0; a release binary built with `-ldflags \"-X main.version=vX.Y.Z\"` prints `vX.Y.Z`.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
