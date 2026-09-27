@@ -217,3 +217,15 @@ func mustReadSeed(name string) []byte {
 	}
 	return data
 }
+
+// mustReadLibraryGuide returns the content of the embedded library/template-
+// author agent guide (libraryguide/AGENTS.md). The embed directive in
+// libraryguide.go is the source of truth, so a failure here is a programming
+// error, not a runtime condition; it mirrors mustReadSeed.
+func mustReadLibraryGuide() []byte {
+	data, err := fs.ReadFile(libraryGuideRoot, "AGENTS.md")
+	if err != nil {
+		panic("scaffold: missing embedded library guide AGENTS.md: " + err.Error())
+	}
+	return data
+}
