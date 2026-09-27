@@ -27,10 +27,10 @@
 #     the binaries and uploaded them as an artifact, so this workflow downloads
 #     that artifact into dist/ instead of rebuilding.
 #
-# Either way the job runs
-# `go test ./e2e -run 'TestNativeRelease|TestDemoProject'` with KALIDE_BINARY
-# pointing at the target binary, so both e2e tests drive the exact artifact for
-# the runner's own target.
+# Either way the job runs the pinned
+# `go test ./e2e -run 'TestNativeRelease|TestDemoProject|TestExternalLibrary|TestInitLibrary'`
+# with KALIDE_BINARY pointing at the target binary, so all four pinned e2e tests
+# drive the exact artifact for the runner's own target.
 #
 # The offline enforcement, URL parsing, process-group graceful stop and clean
 # exit assertions live in the e2e package (TestNativeRelease / the Harness).
@@ -145,4 +145,4 @@ jobs:
       - name: Run native e2e
         env:
           KALIDE_BINARY: ${{ github.workspace }}/${{ matrix.binary }}
-        run: go test ./e2e -run 'TestNativeRelease|TestDemoProject' -v
+        run: go test ./e2e -run 'TestNativeRelease|TestDemoProject|TestExternalLibrary|TestInitLibrary' -v
