@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "templating",
-  "body": "Templating: the project's template library (`templates/` dir) — its templates, their schemas (fields, types, formats, body rules, sections), themes and media.",
+  "body": "Templating: the deck's template library (the resolved library root — the configured `templates:` path, else the local `templates/` dir) — its templates, their schemas (fields, types, formats, body rules, sections), themes and media.",
   "properties": {
     "attribute": "core",
     "root": "template"
