@@ -79,6 +79,11 @@
       "kind": "drives",
       "source": "requirements.requirement.single-binary",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }
