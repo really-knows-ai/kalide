@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "brand-identity",
+  "body": "kalide has a documented visual identity, currently absent from the repo (no `logo/`/brand directory or brand SVG exists anywhere today): a hexagonal faceted mark with an orange triangular accent; a wordmark \"kalide\" set in Inter, lowercase-only; a three-colour palette — \"the void\" `#0F1115`, \"the structure\" `#F8F9FA`, \"the enforcer\" `#FF5722` (hex values as given on the brand board; documented here as the approved decision, not derived or guessed beyond what was supplied); the mark scalable/exported at 512, 128, 32 and 16px. It lives as plain repository files (e.g. an SVG source plus PNG exports under a repo-root `brand/` directory) referenced only from documentation and marketing surfaces — README hero image, package-channel (Homebrew/Scoop) descriptions, an optional GitHub social-preview image — never embedded in the binary. AC: the repo holds a scalable SVG mark and PNG exports at 512/128/32/16px whose palette hex values match those recorded here; no file under `internal/assets` or any `go:embed` directive references the brand files.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
