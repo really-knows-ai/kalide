@@ -51,6 +51,11 @@
       "kind": "drives",
       "source": "requirements.requirement.readme-presentation",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.linux-install",
+      "properties": {}
     }
   ]
 }
