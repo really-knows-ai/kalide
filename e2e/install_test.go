@@ -7,14 +7,17 @@ package e2e
 // manager — Homebrew on macOS, Scoop on Windows — from the public repository
 // (https://github.com/really-knows-ai/kalide, used as both the Homebrew tap and
 // the Scoop bucket) with every GitHub token/credential variable stripped from
-// the subprocess environment (anonymousEnv). It then runs the installed
-// kalide's `version` (installedVersion) and asserts it reports the expected
-// release version from KALIDE_RELEASE_VERSION.
+// the subprocess environment (anonymousEnv). The macOS flow taps the public
+// repository, trusts the tap (`brew trust really-knows-ai/kalide`, Homebrew
+// 6.0.0+ tap-level trust), then installs kalide; the Windows flow adds the
+// bucket, then installs kalide. It then runs the installed kalide's `version`
+// (installedVersion) and asserts it reports the expected release version from
+// KALIDE_RELEASE_VERSION.
 //
 // Linux has no package-manager route (manual download is the Linux install),
 // so the test skips there. It also skips under -short, when brew/scoop is not
-// on PATH, or when KALIDE_RELEASE_VERSION is unset. The tap/bucket and the
-// installed package are removed on cleanup.
+// on PATH, or when KALIDE_RELEASE_VERSION is unset. Cleanup uninstalls the
+// package and removes the tap/bucket, untrusting the Homebrew tap first.
 
 import (
 	"context"
@@ -60,10 +63,12 @@ func TestAnonymousPackageInstall(t *testing.T) {
 		mgr = "brew"
 		setup = [][]string{
 			{"brew", "tap", "really-knows-ai/kalide", publicRepoURL},
+			{"brew", "trust", "really-knows-ai/kalide"},
 			{"brew", "install", "kalide"},
 		}
 		teardown = [][]string{
 			{"brew", "uninstall", "kalide"},
+			{"brew", "untrust", "really-knows-ai/kalide"},
 			{"brew", "untap", "really-knows-ai/kalide"},
 		}
 	case "windows":
