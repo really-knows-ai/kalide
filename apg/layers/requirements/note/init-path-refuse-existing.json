@@ -4,6 +4,12 @@
   "name": "init-path-refuse-existing",
   "body": "`kalide init <path>` and the refuse-existing check [autonomous judgment call]. `kalide init <path>` names an external library, so a local `templates/` is irrelevant to what the command would write. Decision: providing a path does NOT relax the refuse-existing check — init still refuses (clear message, non-zero exit, nothing written) if any of slides/, assets/, templates/ or kalide.yaml already exists, even when a path is given. Rationale: keeps one uniform 'init seeds only an otherwise-empty directory' rule, preserves the no-`--force` safety guarantee, and avoids leaving a half-deck that mixes an existing local library with a newly-referenced external one. Alternative considered and rejected: allowing a path when only a local `templates/` exists — surprising and inconsistent. Escalate to the user if the intent was instead to let a path argument override/ignore an existing local `templates/`.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.cli-init",
+      "properties": {}
+    }
+  ],
   "in": []
 }
