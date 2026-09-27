@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "container",
   "name": "package-channels",
-  "body": "Package channels: the Homebrew tap `really-knows-ai/kalide` (`Formula/kalide.rb`) and Scoop bucket `kalide` (`bucket/kalide.json`), both hosted in the source repo really-knows-ai/kalide, which users add to install kalide.",
+  "body": "Package channels: the Homebrew tap `really-knows-ai/kalide` (`Formula/kalide.rb`) and Scoop bucket `kalide` (`bucket/kalide.json`, `bucket/README.md`), both hosted in the public source repo really-knows-ai/kalide, which users add anonymously to install kalide — the primary install channels on macOS and Windows.",
   "properties": {
     "kind": "service"
   },
