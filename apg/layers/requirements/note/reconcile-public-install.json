@@ -129,6 +129,11 @@
       "kind": "details",
       "target": "global.constraint.anonymous-install",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.distribution-decisions",
+      "properties": {}
     }
   ],
   "in": []
