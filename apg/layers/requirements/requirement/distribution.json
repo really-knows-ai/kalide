@@ -81,6 +81,11 @@
       "kind": "contains",
       "target": "requirements.requirement.brand-identity",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-presentation",
+      "properties": {}
     }
   ],
   "in": [
