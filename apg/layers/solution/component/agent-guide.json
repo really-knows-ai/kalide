@@ -4,7 +4,13 @@
   "name": "agent-guide",
   "body": "Agent guide: the embedded `AGENTS.md` seed content and its verbatim write for all three scaffolding forms — the shared deck-author guide written by `kalide init` and `kalide init <path>` (agent-authoring) and the library/template-author guide written by `kalide init-library` (library-agent-guide, library-guide-layout). Realised by the scaffold package's embedded seed and writers (internal/scaffold) and announced by the CLI handlers (internal/cli), evidenced today by Init, writeHelloSeed, InitExternal, InitLibrary and DefaultThemeCSS; the guide file(s) themselves and any new library-form read helper (mirroring mustReadSeed/DefaultThemeCSS) are declared planned at plan time.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.Init",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
