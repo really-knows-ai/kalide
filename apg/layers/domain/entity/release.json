@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "release",
-  "body": "A release: a version (from a human-pushed tag `vX.Y.Z`) with one binary asset per supported target plus checksums, published on the private repo's GitHub Releases. Aggregate root of distribution.",
+  "body": "A release: a version (from a human-pushed tag `vX.Y.Z`) with one binary asset per supported target plus checksums, published on the public repo's GitHub Releases and downloadable anonymously. Aggregate root of distribution.",
   "properties": {
     "kind": "entity"
   },
