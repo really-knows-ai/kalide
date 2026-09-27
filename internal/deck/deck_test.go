@@ -3,9 +3,11 @@ package deck
 import (
 	"errors"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
@@ -82,14 +84,18 @@ func testLoadConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
+		// Config now carries a map field, so it is not comparable with ==;
+		// reflect.DeepEqual also pins the always-non-nil Properties contract
+		// (a nil map is not deeply equal to the empty non-nil one).
 		want := Config{
 			Title:      "EY Deck",
 			Author:     "Ada Lovelace",
 			Date:       "2026-09-25",
 			Theme:      "default",
 			Navigation: NavigationGrid,
+			Properties: map[string]any{},
 		}
-		if *cfg != want {
+		if !reflect.DeepEqual(*cfg, want) {
 			t.Errorf("Config = %+v, want %+v", *cfg, want)
 		}
 	})
@@ -99,8 +105,13 @@ func testLoadConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
-		want := Config{Title: "Minimal", Theme: theme.DefaultName, Navigation: NavigationDefault}
-		if *cfg != want {
+		want := Config{
+			Title:      "Minimal",
+			Theme:      theme.DefaultName,
+			Navigation: NavigationDefault,
+			Properties: map[string]any{},
+		}
+		if !reflect.DeepEqual(*cfg, want) {
 			t.Errorf("Config = %+v, want %+v", *cfg, want)
 		}
 	})
@@ -291,6 +302,82 @@ func testLoadConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("properties scalar values resolve typed", func(t *testing.T) {
+		cfg, err := LoadConfig(configFS(
+			"title: D\n"+
+				"properties:\n"+
+				"  audience: exec\n"+
+				"  slides: 42\n"+
+				"  ratio: 1.5\n"+
+				"  draft: true\n"+
+				"  presented_on: 2026-09-25\n"), ConfigFile, themes)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if cfg.Properties == nil {
+			t.Fatal("Properties = nil, want a non-nil map")
+		}
+		if got := len(cfg.Properties); got != 5 {
+			t.Fatalf("len(Properties) = %d, want 5", got)
+		}
+		if v, ok := cfg.Properties["audience"].(string); !ok || v != "exec" {
+			t.Errorf("audience = %#v, want string %q", cfg.Properties["audience"], "exec")
+		}
+		if v, ok := cfg.Properties["slides"].(int); !ok || v != 42 {
+			t.Errorf("slides = %#v, want int 42", cfg.Properties["slides"])
+		}
+		if v, ok := cfg.Properties["ratio"].(float64); !ok || v != 1.5 {
+			t.Errorf("ratio = %#v, want float64 1.5", cfg.Properties["ratio"])
+		}
+		if v, ok := cfg.Properties["draft"].(bool); !ok || !v {
+			t.Errorf("draft = %#v, want bool true", cfg.Properties["draft"])
+		}
+		if v, ok := cfg.Properties["presented_on"].(time.Time); !ok {
+			t.Fatalf("presented_on = %#v (%T), want time.Time",
+				cfg.Properties["presented_on"], cfg.Properties["presented_on"])
+		} else if want := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC); !v.Equal(want) {
+			t.Errorf("presented_on = %v, want %v", v, want)
+		}
+	})
+
+	t.Run("properties mapping or sequence value names the key", func(t *testing.T) {
+		tests := []struct {
+			name string
+			yaml string
+			want string
+		}{
+			{"mapping", "title: D\nproperties:\n  team:\n    name: x\n", "a mapping"},
+			{"sequence", "title: D\nproperties:\n  team:\n    - a\n    - b\n", "a list"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := LoadConfig(configFS(tt.yaml), ConfigFile, themes)
+				wantErr(t, err, "kalide.yaml:3:", `key "team"`,
+					"expected a string, number, boolean or date, got "+tt.want)
+			})
+		}
+	})
+
+	t.Run("properties absent, null or empty is a non-nil empty map", func(t *testing.T) {
+		for _, yaml := range []string{
+			"title: D\n",
+			"title: D\nproperties:\n",
+			"title: D\nproperties: {}\n",
+		} {
+			cfg, err := LoadConfig(configFS(yaml), ConfigFile, themes)
+			if err != nil {
+				t.Fatalf("LoadConfig(%q): %v", yaml, err)
+			}
+			if cfg.Properties == nil {
+				t.Errorf("Config(%q).Properties = nil, want a non-nil empty map", yaml)
+				continue
+			}
+			if len(cfg.Properties) != 0 {
+				t.Errorf("Config(%q).Properties = %#v, want empty", yaml, cfg.Properties)
+			}
+		}
+	})
+
 	t.Run("misspelled config key suggests closest", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\ntitel: Nope\n"), ConfigFile, themes)
 		wantErr(t, err, `kalide.yaml:2: unknown key "titel": did you mean "title"?`)
@@ -299,6 +386,11 @@ func testLoadConfig(t *testing.T) {
 	t.Run("misspelled navigation key suggests navigation", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: D\nnavigaton: grid\n"), ConfigFile, themes)
 		wantErr(t, err, `unknown key "navigaton": did you mean "navigation"?`)
+	})
+
+	t.Run("misspelled properties key suggests properties", func(t *testing.T) {
+		_, err := LoadConfig(configFS("title: D\npropertes: {}\n"), ConfigFile, themes)
+		wantErr(t, err, `kalide.yaml:2: unknown key "propertes": did you mean "properties"?`)
 	})
 
 	t.Run("far-off unknown key has no suggestion", func(t *testing.T) {

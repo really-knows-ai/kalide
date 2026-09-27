@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -161,14 +162,17 @@ func testValidDeck(t *testing.T) {
 		t.Fatalf("loadDeckDir(%s): %v", dir, err)
 	}
 
+	// Config now carries a map field, so it is not comparable with ==;
+	// reflect.DeepEqual also pins the always-non-nil Properties contract.
 	wantCfg := Config{
 		Title:      "Integration Deck",
 		Author:     "Ada Lovelace",
 		Date:       "2026-09-25",
 		Theme:      theme.DefaultName,
 		Navigation: NavigationGrid,
+		Properties: map[string]any{},
 	}
-	if *cfg != wantCfg {
+	if !reflect.DeepEqual(*cfg, wantCfg) {
 		t.Errorf("Config = %+v, want %+v", *cfg, wantCfg)
 	}
 
