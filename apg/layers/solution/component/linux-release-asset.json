@@ -5,5 +5,11 @@
   "body": "Linux release asset: no tap/bucket — the release workflow's published `kalide-linux-<arch>` GitHub Release asset is the entire Linux distribution channel; users download it directly, `chmod +x`, and run it.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.package-channels",
+      "properties": {}
+    }
+  ]
 }

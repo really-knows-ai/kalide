@@ -26,6 +26,11 @@
       "kind": "contains",
       "target": "solution.component.brand-assets",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.linux-release-asset",
+      "properties": {}
     }
   ],
   "in": [
