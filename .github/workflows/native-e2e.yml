@@ -134,6 +134,14 @@ jobs:
           path: dist
           github-token: ${{ secrets.token || github.token }}
 
+      # actions/download-artifact does not preserve the executable bit, so the
+      # downloaded unix binary would fail to exec with "permission denied"
+      # (Windows does not need +x). Restore it before the e2e run.
+      - name: Make the downloaded binary executable
+        if: ${{ inputs.release && runner.os != 'Windows' }}
+        shell: bash
+        run: chmod +x "${{ matrix.binary }}"
+
       # TestNativeRelease drives the target binary through init, a clean
       # start --no-open, URL/asset checks, offline enforcement and a graceful
       # stop with clean-exit assertions. TestDemoProject drives the same
