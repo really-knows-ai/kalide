@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "deck-changed",
-  "body": "Event: a file changed while serving — under slides/, assets/, kalide.yaml, or anywhere under templates/ (library.yaml, slides/, sections/, themes/, media/). Published (debounced) by watch-deck; triggers templates reload → validate → render.",
+  "body": "Event: a file changed while serving — under slides/, assets/, kalide.yaml, or anywhere under the resolved library root (the configured `templates:` path, else the local `templates/`; library.yaml, slides/, sections/, themes/, media/). Published (debounced) by watch-deck; triggers templates reload → validate → render.",
   "properties": {
     "kind": "event"
   },
