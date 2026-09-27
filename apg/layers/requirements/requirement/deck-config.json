@@ -58,6 +58,11 @@
       "kind": "details",
       "source": "requirements.note.fix-kalide-xml-name",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.external-template-library-decisions",
+      "properties": {}
     }
   ]
 }
