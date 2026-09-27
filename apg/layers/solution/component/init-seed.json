@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "init-seed",
-  "body": "Init seed: the minimal unbranded seed tree (kalide.yaml, slides/1-hello.md, templates/library.yaml, templates/slides/hello/{template.yaml,layout.html.tmpl,example.md}, templates/themes/default/theme.css) embedded in internal/scaffold (moved from internal/assets/starter) and copied verbatim by a no-arg `kalide init`. Read only by init. Used only when no path argument is given; `kalide init <path>` writes no seed `templates/` and references the external library instead.",
+  "body": "Init seed: the minimal unbranded seed tree (kalide.yaml, slides/1-hello.md, templates/library.yaml, templates/slides/hello/{template.yaml,layout.html.tmpl,example.md}, templates/themes/default/theme.css) embedded in internal/scaffold (moved from internal/assets/starter) and copied verbatim by a no-arg `kalide init`. Read only by init. Used only when no path argument is given; `kalide init <path>` writes no seed `templates/`, no starter slide and references the external library instead. The same on-disk scaffold component also creates a new empty template library for `kalide init-library` (library.yaml plus the empty `slides/`, `sections/`, `themes/`, `media/` entries; no seed content), via internal/scaffold.",
   "properties": {},
   "out": [
     {
