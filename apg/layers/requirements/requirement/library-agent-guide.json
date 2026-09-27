@@ -51,6 +51,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.template-manifest",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
     }
   ],
   "in": [
