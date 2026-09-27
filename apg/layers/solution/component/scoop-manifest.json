@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "scoop-manifest",
-  "body": "Scoop manifest: the bucket's `kalide` manifest (`bucket/kalide.json`, bucket `kalide`) plus a token-aware workaround (Scoop has no native auth-header support; e.g. a pre-install script using the user's `KALIDE_GITHUB_TOKEN`) to fetch the `kalide-windows-<arch>` asset from the private GitHub Release of really-knows-ai/kalide. Exact mechanism is an implementation decision.",
+  "body": "Scoop manifest: the bucket's `kalide` manifest (`bucket/kalide.json`, bucket `kalide`) using Scoop's standard `architecture` block — `64bit` url+hash for `kalide-windows-amd64`, and `arm64` url+hash for `kalide-windows-arm64` only when released — with plain public release-download URLs of really-knows-ai/kalide (renamed to `kalide.exe`, `bin: kalide.exe`), fetched anonymously. No `pre_install` script and no `KALIDE_GITHUB_TOKEN`. `bucket/README.md` documents the tokenless `scoop bucket add` / `scoop install` / `scoop update` flow.",
   "properties": {},
   "out": [],
   "in": [
