@@ -115,8 +115,6 @@ jobs:
       release: true
       artifact-name: kalide-binaries
       version: ${{ github.ref_name }}
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
 
   # Publish only after the build and EVERY native e2e job inside the reusable
   # workflow have succeeded: `needs: native-e2e` gates on the whole called
@@ -136,7 +134,7 @@ jobs:
           name: kalide-binaries
           path: dist
 
-      # Create the GitHub Release vX.Y.Z on the private repo with the binaries
+      # Create the GitHub Release vX.Y.Z with the binaries
       # and checksums.txt. `--verify-tag` guarantees the tag already exists
       # (the human pushed it); gh must never create one. This job has no
       # checkout, so `--repo` is required: gh cannot infer the repository from
@@ -177,19 +175,12 @@ jobs:
   #
   # The two manifests are pure placeholders at rest, so regeneration is a small
   # deterministic rewrite of exactly the lines their contracts name:
-  #   - Formula/kalide.rb      version / url / sha256  (see its regeneration
-  #                            contract and Formula/lib/…strategy.rb, which
-  #                            requires the release-download URL form)
-  #   - bucket/kalide.json     version / 64bit.hash, plus the whole
-  #                            architecture.arm64 block only when the release
-  #                            actually shipped kalide-windows-arm64.exe
-  #                            (see bucket/README.md). The per-arch `url` is
-  #                            deliberately NOT written: the assets are private
-  #                            and Scoop's own downloader cannot authenticate, so
-  #                            `pre_install` fetches the asset itself and the
-  #                            manifest is hash-only (a `url` would make Scoop
-  #                            fetch it unauthenticated and 404 before
-  #                            `pre_install` runs).
+  #   - Formula/kalide.rb      version / per-arch public url + sha256 (see its
+  #                            regeneration contract)
+  #   - bucket/kalide.json     version / architecture.64bit url + hash, plus
+  #                            the whole architecture.arm64 url + hash block
+  #                            only when the release actually shipped
+  #                            kalide-windows-arm64.exe (see bucket/README.md).
   # checksums.txt is the release asset in `<hash>  <name>` (two spaces) form
   # written by `build`; the SHAs come from it so the manifests match the exact
   # published bytes.
@@ -269,8 +260,7 @@ jobs:
           def replace_url_sha_pair(text, asset, digest):
               pattern = re.compile(
                   r'(url ")[^"]*/' + re.escape(asset) + r'('
-                  r'"[^\n]*\n'
-                  r'\s*using: GitHubPrivateReleaseDownloadStrategy\n'
+                  r'"\n'
                   r'\s*sha256 ")[0-9a-fA-F]+(")'
               )
               new_text, n = pattern.subn(
@@ -290,20 +280,21 @@ jobs:
           formula.write_text(text)
 
           # --- bucket/kalide.json: version / hashes / arm64 block -----------
-          # The hash-only manifest: no per-arch `url` is written, because the
-          # release assets are private and Scoop's downloader cannot send an
-          # Authorization header. A `url` would make Scoop attempt an
-          # unauthenticated fetch (404) before `pre_install` runs; `pre_install`
-          # is the authenticated fetch that writes kalide.exe into $dir.
+          # Standard public manifest: each architecture carries the public
+          # release-download url plus its SHA-256 hash; Scoop fetches and
+          # verifies it anonymously.
           bucket = pathlib.Path("bucket/kalide.json")
           manifest = json.loads(bucket.read_text())
           manifest["version"] = version
-          manifest["architecture"]["64bit"].pop("url", None)
-          manifest["architecture"]["64bit"]["hash"] = amd64
+          manifest["architecture"]["64bit"] = {
+              "url": f"{base}/kalide-windows-amd64.exe#/kalide.exe",
+              "hash": amd64,
+          }
 
           arm64 = None
           if "kalide-windows-arm64.exe" in sums:
               arm64 = {
+                  "url": f"{base}/kalide-windows-arm64.exe#/kalide.exe",
                   "hash": sums["kalide-windows-arm64.exe"],
               }
           # Add when released, remove when not, so the entry always matches the

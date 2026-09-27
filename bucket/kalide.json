@@ -1,44 +1,26 @@
 {
   "##": [
-    "Audited in release-0.5.0 phase-05 task-5 against scoop-install, tap-bucket-location and package-manifest-update.",
-    "Hosted in the source repo's bucket/; hash-only manifest (no url) so pre_install is the single KALIDE_GITHUB_TOKEN-authenticated fetch of kalide-windows-<arch>.",
-    "64bit always; the arm64 block is added by release.yml only when kalide-windows-arm64.exe was released; version/hash are regenerated from the tag and checksums.txt."
+    "Hosted in the source repo's bucket/; standard public manifest with a per-architecture url + hash.",
+    "64bit always; the arm64 block is added by release.yml only when kalide-windows-arm64.exe was released; version/url/hash are regenerated from the tag and checksums.txt."
   ],
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
   "version": "0.5.0",
   "description": "kalide turns a folder of Markdown files into a slide deck and shows it in your browser.",
   "homepage": "https://github.com/really-knows-ai/kalide",
+  "license": "Apache-2.0",
   "architecture": {
     "64bit": {
+      "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.5.0/kalide-windows-amd64.exe#/kalide.exe",
       "hash": "6297a5a7df7187b84c3a7770a731a85ab34166d995d283163405037417db6654"
     },
     "arm64": {
+      "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.5.0/kalide-windows-arm64.exe#/kalide.exe",
       "hash": "d771d0bad07fc7dee6f98403fd65f0f342f71a607a11341b4e708e2e955888fa"
     }
   },
-  "pre_install": [
-    "$ErrorActionPreference = 'Stop'",
-    "$repo = 'really-knows-ai/kalide'",
-    "$tag = 'v' + $version",
-    "$asset = if ($architecture -eq 'arm64') { 'kalide-windows-arm64.exe' } else { 'kalide-windows-amd64.exe' }",
-    "$expected = if ($architecture -eq 'arm64') { [string]$manifest.architecture.arm64.hash } else { [string]$manifest.architecture.'64bit'.hash }",
-    "$token = $env:KALIDE_GITHUB_TOKEN",
-    "if ([string]::IsNullOrWhiteSpace($token)) { $token = $env:GITHUB_TOKEN }",
-    "if ([string]::IsNullOrWhiteSpace($token)) { throw 'kalide: no GitHub token found. Set KALIDE_GITHUB_TOKEN (or GITHUB_TOKEN) to a token that can read the private repository really-knows-ai/kalide, then run ''scoop install kalide'' again. See INSTALL.md.' }",
-    "$apiHeaders = @{ Authorization = ('Bearer ' + $token); Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'kalide' }",
-    "try { $release = Invoke-RestMethod -Uri ('https://api.github.com/repos/' + $repo + '/releases/tags/' + $tag) -Headers $apiHeaders } catch { $status = [int]$_.Exception.Response.StatusCode; throw ('kalide: could not read release ' + $tag + ' from ' + $repo + ' (HTTP ' + $status + '). Check that your token is valid and has access to the private repository. See INSTALL.md.') }",
-    "$releaseAsset = $release.assets | Where-Object { $_.name -eq $asset } | Select-Object -First 1",
-    "if ($null -eq $releaseAsset) { throw ('kalide: release ' + $tag + ' has no asset named ' + $asset + '. This release may not include the ' + $architecture + ' build; see INSTALL.md for supported Windows targets.') }",
-    "$downloadHeaders = @{ Authorization = ('Bearer ' + $token); Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'kalide' }",
-    "$kalidePath = Join-Path $dir 'kalide.exe'",
-    "try { Invoke-WebRequest -Uri $releaseAsset.url -Headers $downloadHeaders -OutFile $kalidePath -UseBasicParsing } catch { $status = [int]$_.Exception.Response.StatusCode; throw ('kalide: could not download ' + $asset + ' from release ' + $tag + ' (HTTP ' + $status + '). Check your token and network connection. See INSTALL.md.') }",
-    "$actual = (Get-FileHash -Path $kalidePath -Algorithm SHA256).Hash",
-    "if ($actual.ToLower() -ne $expected.ToLower()) { Remove-Item -Path $kalidePath -Force -ErrorAction SilentlyContinue; throw ('kalide: SHA-256 check failed for ' + $asset + ' (expected ' + $expected + ', got ' + $actual + '). The download was discarded; do not use it.') }"
-  ],
   "bin": "kalide.exe",
   "notes": [
-    "kalide is downloaded from the private GitHub Release really-knows-ai/kalide.",
-    "Set KALIDE_GITHUB_TOKEN (or GITHUB_TOKEN) to a GitHub token that can read that private repository before installing; without it the install stops with a clear message.",
+    "kalide is downloaded from the public GitHub Release really-knows-ai/kalide; no token is needed.",
     "Windows ARM: the arm64 entry is present only for releases that shipped a windows/arm64 binary."
   ]
 }

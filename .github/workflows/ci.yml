@@ -59,7 +59,7 @@ jobs:
       - name: Build
         run: make build
 
-      # The module path is the private repo's path exactly, and every package
+      # The module path is the repository's path exactly, and every package
       # that lives inside this repository belongs to it. A package whose
       # directory is under the module root yet whose import path is not under
       # the module path (a stray nested module or a stale, e.g.
