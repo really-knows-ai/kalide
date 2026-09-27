@@ -4,6 +4,12 @@
   "name": "split-anonymous-install-e2e",
   "body": "source: feedback-7/feedback-8 on plan.phase-01 plus user decision \"split the spec so verify's coverage only reaches code this change edits\"; inconsistency: solution.component.native-e2e-ci owned both unchanged native-binary test code (e2e/native_test.go, e2e.TestNativeRelease) and this change's new code (e2e/install_test.go, e2e.TestAnonymousPackageInstall, .github/workflows/native-e2e.yml), so `apg plan verify` demanded coverage of the unchanged tests; resolution: added solution.component.anonymous-install-e2e (contained by solution.container.release-pipeline, realised-by domain.service.install-kalide) implemented-by e2e/install_test.go, go.github.com/really-knows-ai/kalide/e2e.TestAnonymousPackageInstall (planned) and .github/workflows/native-e2e.yml; removed those three implemented-by edges from native-e2e-ci, which keeps only e2e/native_test.go and e2e.TestNativeRelease. Supersedes the edge additions in solution.note.fix-native-e2e-install-test-coverage. cli-commands (internal/cli.Run) was left linked: it is reached legitimately via requirements.requirement.github-releases → drives domain.entity.release → realised-by solution.component.cli-commands (the version command), and both github-releases and release had their body wording changed from private to public in this change. [with user]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.anonymous-install-e2e",
+      "properties": {}
+    }
+  ],
   "in": []
 }
