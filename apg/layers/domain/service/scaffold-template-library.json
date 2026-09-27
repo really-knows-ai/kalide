@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "scaffold-template-library",
-  "body": "Scaffold template library: create a new empty but valid library at a target path — write `library.yaml` (name derived from the directory base name and validated against the `[a-z0-9][a-z0-9-]*` identifier convention, `format: 1`) and the empty standard layout entries `slides/`, `sections/`, `themes/` and `media/`; refuse to clobber an existing library (a present `library.yaml` or any layout entry) with no `--force`; local filesystem only (no network, no git).",
+  "body": "Scaffold template library: create a new, deck-ready library at a target path — write `library.yaml` (name derived from the directory base name and validated against the `[a-z0-9][a-z0-9-]*` identifier convention, `format: 1`), the empty layout entries `slides/`, `sections/` and `media/`, and a minimal `themes/default/theme.css` (system fonts and neutral colours only) so that a deck's defaulted `theme` resolves (theme-selection); refuse to clobber an existing library (a present `library.yaml` or any layout entry) with no `--force`; local filesystem only (no network, no git).",
   "properties": {},
   "out": [
     {
