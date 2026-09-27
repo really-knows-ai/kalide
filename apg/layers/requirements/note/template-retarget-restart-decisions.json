@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-retarget-requires-restart",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.external-template-library",
+      "properties": {}
     }
   ],
   "in": []
