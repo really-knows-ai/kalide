@@ -67,6 +67,11 @@
       "kind": "contains",
       "target": "domain.value.agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.agent-guide",
+      "properties": {}
     }
   ],
   "in": [
