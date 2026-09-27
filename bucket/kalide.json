@@ -5,12 +5,15 @@
     "64bit always; the arm64 block is added by release.yml only when kalide-windows-arm64.exe was released; version/hash are regenerated from the tag and checksums.txt."
   ],
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "0.0.0",
+  "version": "0.5.0",
   "description": "kalide turns a folder of Markdown files into a slide deck and shows it in your browser.",
   "homepage": "https://github.com/really-knows-ai/kalide",
   "architecture": {
     "64bit": {
-      "hash": "<sha256-of-kalide-windows-amd64.exe>"
+      "hash": "6297a5a7df7187b84c3a7770a731a85ab34166d995d283163405037417db6654"
+    },
+    "arm64": {
+      "hash": "d771d0bad07fc7dee6f98403fd65f0f342f71a607a11341b4e708e2e955888fa"
     }
   },
   "pre_install": [
