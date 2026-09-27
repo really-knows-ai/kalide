@@ -41,6 +41,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.template-context",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.deck-config",
+      "properties": {}
     }
   ],
   "in": [
