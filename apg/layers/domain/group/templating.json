@@ -82,6 +82,11 @@
       "kind": "contains",
       "target": "domain.service.scaffold-template-library",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.library-agent-guide",
+      "properties": {}
     }
   ],
   "in": [
