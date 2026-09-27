@@ -45,8 +45,12 @@ when they're consistent.
 
 ```sh
 brew tap really-knows-ai/kalide https://github.com/really-knows-ai/kalide
+brew trust really-knows-ai/kalide
 brew install kalide
 ```
+
+Homebrew 6.0.0 and later requires explicitly trusting a third-party tap before
+installing from it; no account or token is needed.
 
 To upgrade: `brew update && brew upgrade kalide`.
 
