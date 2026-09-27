@@ -24,6 +24,11 @@
       "kind": "realised-by",
       "target": "solution.component.linux-release-asset",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.anonymous-install-e2e",
+      "properties": {}
     }
   ],
   "in": [
