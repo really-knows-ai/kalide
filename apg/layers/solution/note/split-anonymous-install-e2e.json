@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.note.fix-native-e2e-install-test-coverage",
+      "properties": {}
     }
   ],
   "in": []

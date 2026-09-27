@@ -11,5 +11,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "solution.note.split-anonymous-install-e2e",
+      "properties": {}
+    }
+  ]
 }
