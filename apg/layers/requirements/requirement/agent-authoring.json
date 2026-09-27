@@ -91,6 +91,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.field-types",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.body-rules",
+      "properties": {}
     }
   ],
   "in": [
