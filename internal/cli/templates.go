@@ -4,22 +4,24 @@ package cli
 // requirements.requirement.cli-templates-list and
 // requirements.requirement.cli-templates-show.
 //
-//   - `kalide templates` lists every template in the project's templates/
-//     library: its name, its usage (slide|section) and its one-line
-//     description.
+//   - `kalide templates` lists every template in the project's resolved
+//     template library (the configured `templates:` path, or the local
+//     templates/ directory when the key is absent): its name, its usage
+//     (slide|section) and its one-line description.
 //   - `kalide templates <name>` documents one template: its fields (type,
 //     required, default, limits, formats, description), its sections (accepted
 //     templates and min/max repeats), its implied body rules and its example
-//     slide, exactly as loaded from the project's templates/ directory.
+//     slide, exactly as loaded from the resolved library.
 //
-// The catalogue is the project's templates/ library
-// (template.LoadLibrary + template.NewRegistryFromLibrary), the same loaded
-// registry the validator and renderer use, so the documentation cannot drift
-// from the behaviour. A missing or invalid templates/ directory is reported
-// the same way `kalide start` reports it, before any listing is attempted
-// (no-built-in-fallback). An unknown name is an author error: it is reported
-// with the closest-match "did you mean …?" suggestion from internal/suggest,
-// matching the parser's and theme registry's error style.
+// The catalogue is the project's resolved template library
+// (template.LoadDeckLibrary + template.NewRegistryFromLibrary), the same
+// loaded registry the validator and renderer use, so the documentation cannot
+// drift from the behaviour. An unresolvable library is reported the same way
+// `kalide start` reports it, before any listing is attempted
+// (templates-dir-required, no-built-in-fallback). An unknown name is an author
+// error: it is reported with the closest-match "did you mean …?" suggestion
+// from internal/suggest, matching the parser's and theme registry's error
+// style.
 //
 // runTemplates is called from Run with the arguments after the `templates`
 // command word (Run rejects more than one name before dispatching here). All
@@ -29,20 +31,24 @@ package cli
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strconv"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
+	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/suggest"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
 
 // runTemplates implements `kalide templates [name]`.
 //
-// With no arguments it lists every template in the project's templates/
-// library. With exactly one argument it shows that template's full
+// With no arguments it lists every template in the project's resolved
+// template library. With exactly one argument it shows that template's full
 // documentation. It returns the process status code: 0 on success; 1 when
-// the project's templates/ directory is missing or invalid, when the name is
+// the project's template library cannot be resolved, when the name is
 // unknown (the error names the available templates and suggests the
 // closest), or when the loaded library cannot be built into a registry,
 // which is a programming error rather than an author error.
@@ -53,7 +59,28 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	library, err := template.LoadLibrary(os.DirFS(root), template.TemplatesDir)
+	// Resolve the deck's template library through the loader's single
+	// root-resolution point (external-template-library): a configured
+	// `templates:` path wins and is authoritative, else the local templates/
+	// directory is used. The resolved root may sit outside the deck, so the
+	// library is loaded from the operating-system path, not through the deck
+	// fs.FS. A missing or unresolvable library is a templates error naming the
+	// path, with no fallback (templates-dir-required).
+	//
+	// The raw `templates:` value is read directly here because deck.LoadConfig
+	// needs a theme registry, which comes from the not-yet-resolved library;
+	// this mirrors the reload pipeline. An unreadable config yields "" and the
+	// loader then looks for the local templates/ directory.
+	deckFS := os.DirFS(root)
+	configured := ""
+	if data, readErr := fs.ReadFile(deckFS, deck.ConfigFile); readErr == nil {
+		var raw map[string]any
+		if yaml.Unmarshal(data, &raw) == nil {
+			configured, _ = raw["templates"].(string)
+		}
+	}
+
+	library, err := template.LoadDeckLibrary(root, configured)
 	if err != nil {
 		fmt.Fprintf(stderr, "kalide templates: %v\n", err)
 		return 1

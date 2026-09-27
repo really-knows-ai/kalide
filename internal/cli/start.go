@@ -38,16 +38,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
+	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/server"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
@@ -121,18 +124,37 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Load the project's templates/ library and its themes registry before
-	// anything else: a missing or invalid templates/ directory is reported
-	// the same way a broken deck is, and never falls back to any compiled-in
-	// content (no-built-in-fallback).
+	// Resolve the deck's template library and its themes through the loader's
+	// single root-resolution point (external-template-library) before anything
+	// else: a configured `templates:` path wins and is authoritative, else the
+	// local templates/ directory is used. The resolved root may sit outside the
+	// deck (e.g. `../shared-lib`), so the library and its themes are loaded from
+	// the operating-system path that holds the library, not through the deck
+	// fs.FS, which cannot express paths above the deck root. A missing or
+	// invalid library, or a theme that does not resolve in it, is reported the
+	// same way a broken deck is — before anything is served — and never falls
+	// back to any compiled-in content (no-built-in-fallback).
+	//
+	// The raw `templates:` value is read directly here because deck.LoadConfig
+	// needs a theme registry, which comes from the not-yet-resolved library;
+	// this mirrors the reload pipeline. An unreadable config yields "" and the
+	// loader then looks for the local templates/ directory.
 	deckFS := os.DirFS(root)
-	library, err := template.LoadLibrary(deckFS, template.TemplatesDir)
+	configured := ""
+	if data, readErr := fs.ReadFile(deckFS, deck.ConfigFile); readErr == nil {
+		var raw map[string]any
+		if yaml.Unmarshal(data, &raw) == nil {
+			configured, _ = raw["templates"].(string)
+		}
+	}
+
+	library, err := template.LoadDeckLibrary(root, configured)
 	if err != nil {
 		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
 
-	themeReg, err := theme.LoadDir(deckFS, path.Join(template.TemplatesDir, template.ThemesDir))
+	themeReg, err := theme.LoadDir(os.DirFS(library.RootPath), template.ThemesDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
