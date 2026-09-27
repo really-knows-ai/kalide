@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.homebrew-install",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.scoop-install",
+      "properties": {}
     }
   ],
   "in": []
