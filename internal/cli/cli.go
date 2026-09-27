@@ -50,6 +50,11 @@ Usage:
 // Both `start` and `templates` operate on decks whose reserved deck-wide
 // `.deck`/`.slide` template context is enforced by internal/template's
 // reserved-name rejection and injected at render time by internal/render.
+//
+// single-binary: cli.Run stays offline, self-contained and OS-neutral across
+// all six supported targets (darwin/arm64, darwin/amd64, windows/amd64,
+// windows/arm64, linux/amd64, linux/arm64) — it needs no runtime, network or
+// install step (requirements.requirement.single-binary).
 func Run(args []string, version string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
 		fmt.Fprint(stdout, usage)

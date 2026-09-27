@@ -65,7 +65,9 @@ type Registry struct {
 // packaged in the binary and works offline — content is read only through
 // the given fs.FS (the go:embed'ed assets for the built-ins), with slash-
 // separated io/fs paths built by path.Join, never path/filepath, the OS or
-// the network, so lookup behaves identically on darwin and windows.
+// the network. It is in-binary, self-contained and OS-neutral across all six
+// supported targets (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64,
+// linux/amd64, linux/arm64), so lookup behaves identically on each.
 func NewRegistry(content fs.FS) *Registry {
 	return &Registry{content: content, templates: make(map[string]*Template)}
 }
@@ -353,10 +355,12 @@ func checkFieldVariants(tmpl string, f *Field) error {
 // trailing `_format` the reserved format-selection sibling of a field. None of
 // them is declarable.
 //
-// single-binary (requirements.requirement.single-binary): the check is OS-
-// neutral — an exact, case-sensitive byte comparison on the declared name,
-// with no case folding, path-separator or filesystem handling, so it accepts
-// and rejects exactly the same names on darwin and windows.
+// single-binary (requirements.requirement.single-binary): the check is pure
+// string logic, OS-neutral and offline — an exact, case-sensitive byte
+// comparison on the declared name, with no case folding, path-separator or
+// filesystem handling — and identical across all six supported targets
+// (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64,
+// linux/arm64), so it accepts and rejects exactly the same names on each.
 func checkDeclaredName(kind, tmpl, name string) error {
 	if name == "" {
 		return fmt.Errorf("template %q: %s name must not be empty", tmpl, kind)

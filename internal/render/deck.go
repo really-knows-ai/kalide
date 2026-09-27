@@ -73,11 +73,14 @@ const themesURLPrefix = "/assets/templates/themes/"
 // phase-7 server overrides to inject its client script; RenderDeck leaves it
 // wired and does not implement reloading (live-reload).
 //
-// single-binary: the page references only root-relative local URLs — the
-// embedded reveal.js under assetsURLPrefix and the project theme under
-// themesURLPrefix (or the /assets/theme.css fallback) — never an external host;
-// the page shell is read from the embedded assets.DeckPage, and theme URLs are
-// built with "/" joins only, so output is identical on darwin/arm64 and windows.
+// single-binary: deck rendering stays in-process and offline — the page
+// references only root-relative local URLs, the embedded reveal.js under
+// assetsURLPrefix and the project theme under themesURLPrefix (or the
+// /assets/theme.css fallback), never an external host; the page shell is read
+// from the embedded assets.DeckPage, and theme URLs are built with "/" joins
+// only, so the output is OS-neutral and identical across all six supported
+// targets (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64,
+// linux/amd64, linux/arm64) (requirements.requirement.single-binary).
 //
 // A nil config, deck, registry or slide model, a slide missing its parsed
 // structure, and any slide or page execution failure are returned as a

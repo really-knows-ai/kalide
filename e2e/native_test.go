@@ -66,6 +66,12 @@ package e2e
 //     kalide-<goos>-<goarch> for a supported target: darwin/arm64,
 //     darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64.
 //
+// single-binary (requirements.requirement.single-binary): this native e2e
+// file verifies the offline, self-contained, OS-neutral binary — one static
+// binary with no runtime, network or install step — across all six supported
+// targets: darwin/arm64, darwin/amd64, windows/amd64, windows/arm64,
+// linux/amd64, linux/arm64.
+//
 // It builds (or runs) a real binary, so it is skipped under -short.
 
 import (

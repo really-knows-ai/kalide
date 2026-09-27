@@ -37,7 +37,11 @@ import (
 //
 // single-binary (requirements.requirement.single-binary): the library is
 // resolved locally and offline — it works purely on the in-memory Library
-// LoadLibrary already built, performing no filesystem, OS or network access.
+// LoadLibrary already built (which reads only the project's templates/
+// directory), performing no filesystem, OS or network access. It is in-binary,
+// self-contained and OS-neutral across all six supported targets
+// (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64,
+// linux/arm64), so it behaves identically on each.
 func NewRegistryFromLibrary(lib *Library) (*Registry, error) {
 	r := NewRegistry(nil)
 	if lib == nil {

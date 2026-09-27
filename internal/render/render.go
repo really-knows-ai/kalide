@@ -117,10 +117,12 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // unresolvable format) is returned as a *RenderError. RenderSlide is
 // deterministic: the same slide always renders to the same fragment.
 //
-// single-binary: rendering is entirely in-process — goldmark and html/template
-// compiled into the binary, layouts from the in-memory registry — with no
-// network, filesystem or external lookup, so the seed hello slide renders
-// offline and identically on darwin/arm64 and windows.
+// single-binary: slide rendering stays in-process and offline — goldmark and
+// html/template compiled into the binary, layouts from the in-memory registry —
+// with no network, filesystem or external lookup, so the same slide renders
+// OS-neutrally and identically across all six supported targets (darwin/arm64,
+// darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64)
+// (requirements.requirement.single-binary).
 func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.Slide, total int, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	if parsed == nil {
 		return "", &RenderError{Err: errors.New("nil slide")}
@@ -185,8 +187,12 @@ type renderer struct {
 // same reserved entries via the secCtx threaded into values/fieldValue
 // (section-template-context).
 //
-// single-binary: the context is built in-process from the parsed slide, the
-// registry and cfg only — no environment, clock, filesystem or network lookup.
+// single-binary: the slide context is built in-process with no external
+// lookup — from the parsed slide, the registry and cfg only, with no
+// environment, clock, filesystem or network access — so it is offline and
+// OS-neutral, identical across all six supported targets (darwin/arm64,
+// darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64)
+// (requirements.requirement.single-binary).
 func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.Config, meta deck.Slide, total int) (map[string]any, error) {
 	data, err := r.values(s.Frontmatter, tmpl, nil)
 	if err != nil {
@@ -472,10 +478,13 @@ func dateString(raw any) string {
 // parsed layout is later executed (see slideData / values / fieldValue), not
 // while its text is being parsed here.
 //
-// single-binary: layouts come only from the registry's already-loaded
-// Layout.Text (project library / embedded sources); nothing is fetched, and
-// namespace keys are layout names, not OS paths, so no separator handling is
-// involved on darwin/arm64 or windows.
+// single-binary: layout parsing uses only the in-process html/template engine:
+// layouts come from the registry's already-loaded Layout.Text (project library
+// / embedded sources), nothing is fetched, and namespace keys are layout names,
+// not OS paths, so no separator handling is involved; parsing is offline and
+// OS-neutral, identical across all six supported targets (darwin/arm64,
+// darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64)
+// (requirements.requirement.single-binary).
 func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
 	// The namespace root carries its own name only so html/template has a
 	// handle; it deliberately differs from every layout name. Naming the root

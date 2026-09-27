@@ -77,8 +77,10 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 // single-binary (requirements.requirement.single-binary): validation is
 // packaged in the binary and runs offline — every read goes through fsys
 // with slash-separated io/fs paths (deck.ConfigFile, deck.SlidesDir, slide
-// paths, image fs.Stat), never path/filepath, the OS or the network, so the
-// same deck yields the same result on darwin and windows.
+// paths, image fs.Stat), never path/filepath, the OS or the network. It stays
+// in-process, self-contained and OS-neutral across all six supported targets
+// (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64,
+// linux/arm64), so the same deck yields the same result on each.
 func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (ValidationError, bool) {
 	if fsys == nil {
 		return New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS"), true
