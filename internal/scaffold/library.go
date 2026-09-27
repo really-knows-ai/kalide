@@ -66,14 +66,17 @@ var libraryBlockPaths = []struct {
 	{path: template.MediaDir, display: template.MediaDir + "/"},
 }
 
-// DefaultThemeCSS is the content InitLibrary writes to themes/default/theme.css:
-// the minimal default theme, using only system fonts and neutral colours,
-// mirrored verbatim from the embedded no-arg `kalide init` seed's
-// templates/themes/default/theme.css. Deriving it from the one embedded seed
-// guarantees the two never drift, so a deck whose `theme` defaults to `default`
-// resolves in a freshly created library exactly as it does in a fresh deck.
-var DefaultThemeCSS = string(mustReadSeed(path.Join(
-	template.TemplatesDir, template.ThemesDir, theme.DefaultName, template.ThemeStylesheet)))
+// DefaultThemeCSS returns the content InitLibrary writes to
+// themes/default/theme.css: the minimal default theme, using only system fonts
+// and neutral colours, mirrored verbatim from the embedded no-arg `kalide init`
+// seed's templates/themes/default/theme.css. Deriving it from the one embedded
+// seed guarantees the two never drift, so a deck whose `theme` defaults to
+// `default` resolves in a freshly created library exactly as it does in a fresh
+// deck.
+func DefaultThemeCSS() string {
+	return string(mustReadSeed(path.Join(
+		template.TemplatesDir, template.ThemesDir, theme.DefaultName, template.ThemeStylesheet)))
+}
 
 // libraryConfig is the subset of library.yaml InitLibrary writes: the derived
 // name, the optional description (omitted when empty) and the required format
@@ -140,7 +143,7 @@ func InitLibrary(dir string) error {
 		return fmt.Errorf("init-library: create %s/%s/: %w", template.ThemesDir, theme.DefaultName, err)
 	}
 	stylesheet := filepath.Join(themeDir, template.ThemeStylesheet)
-	if err := os.WriteFile(stylesheet, []byte(DefaultThemeCSS), 0o644); err != nil {
+	if err := os.WriteFile(stylesheet, []byte(DefaultThemeCSS()), 0o644); err != nil {
 		return fmt.Errorf("init-library: write %s/%s/%s: %w",
 			template.ThemesDir, theme.DefaultName, template.ThemeStylesheet, err)
 	}

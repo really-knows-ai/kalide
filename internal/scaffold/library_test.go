@@ -88,10 +88,10 @@ func testInitLibraryFresh(t *testing.T) {
 	}
 
 	style := filepath.Join(dir, template.ThemesDir, theme.DefaultName, template.ThemeStylesheet)
-	if got := readString(t, style); got != DefaultThemeCSS {
+	if got := readString(t, style); got != DefaultThemeCSS() {
 		t.Errorf("themes/default/theme.css = %q, want DefaultThemeCSS", got)
 	}
-	if DefaultThemeCSS == "" {
+	if DefaultThemeCSS() == "" {
 		t.Error("DefaultThemeCSS is empty, want the minimal default theme")
 	}
 
@@ -318,7 +318,7 @@ func testInitLibraryLoads(t *testing.T) {
 	}
 	if got, ok := lib.Themes[theme.DefaultName]; !ok {
 		t.Errorf("loaded library has no %q theme", theme.DefaultName)
-	} else if string(got.StylesheetBytes) != DefaultThemeCSS {
+	} else if string(got.StylesheetBytes) != DefaultThemeCSS() {
 		t.Errorf("loaded default theme stylesheet differs from DefaultThemeCSS")
 	}
 	if len(lib.Slides) != 0 || len(lib.Sections) != 0 {
@@ -352,9 +352,9 @@ func testDefaultThemeCSS(t *testing.T) {
 	if len(want) == 0 {
 		t.Fatal("embedded seed default theme is empty")
 	}
-	if DefaultThemeCSS != string(want) {
+	if DefaultThemeCSS() != string(want) {
 		t.Errorf("DefaultThemeCSS differs from the embedded seed's default theme:\n got %q\nwant %q",
-			DefaultThemeCSS, want)
+			DefaultThemeCSS(), want)
 	}
 }
 
