@@ -13,7 +13,8 @@
 #   1. it reads the user's token from HOMEBREW_GITHUB_API_TOKEN at fetch time
 #      (not at formula-load time, so `brew info` stays usable without one);
 #   2. it asks the API for the release identified by TAG and picks the asset
-#      whose name matches ASSET (the formula's `kalide-darwin-arm64`);
+#      whose name matches ASSET (the formula's arch-specific
+#      `kalide-darwin-arm64` or `kalide-darwin-amd64`);
 #   3. CurlDownloadStrategy then downloads that asset API URL carrying
 #        Authorization: Bearer <token>
 #        Accept: application/octet-stream
@@ -57,7 +58,8 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
   end
 
   # Name the staged/downloaded file after the release asset rather than the
-  # numeric API asset id, so the formula can install `kalide-darwin-arm64`.
+  # numeric API asset id, so the formula can install the arch-specific asset
+  # (`kalide-darwin-arm64` or `kalide-darwin-amd64`).
   def resolved_basename
     @asset_name
   end
