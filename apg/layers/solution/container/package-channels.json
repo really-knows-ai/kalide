@@ -21,6 +21,11 @@
       "kind": "contains",
       "target": "solution.component.install-docs",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.brand-assets",
+      "properties": {}
     }
   ],
   "in": [
