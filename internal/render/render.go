@@ -46,6 +46,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 
+	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -99,6 +100,15 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // library layout may format a value or resolve a media URL itself
 // (template-media, template-language).
 //
+// The layout also carries the two reserved context entries (template-context):
+// `deck` is the deck-wide data from cfg — title, author, date and the author's
+// properties — and `slide` is the current slide's render-time metadata: the
+// string position label number and the integer total. cfg is the deck
+// configuration the slide belongs to, meta is its modelled deck position
+// (deck.Slide, supplying PositionLabel), and total is the deck's slide-file
+// count (deck.Deck.Total). A nil cfg yields a well-formed but empty deck
+// context. Neither entry is a helper: the v1 helper set stays exactly `media`.
+//
 // When parsed has a `# notes` section, RenderSlide appends an
 // `<aside class="notes">` inside the slide with its rendered body; the embedded
 // reveal.js notes plugin reads it. When it has none, no aside is emitted.
@@ -106,7 +116,7 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // A definition failure (unknown or non-slide template, missing layout, an
 // unresolvable format) is returned as a *RenderError. RenderSlide is
 // deterministic: the same slide always renders to the same fragment.
-func RenderSlide(parsed *slide.Slide, label string, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
+func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.Slide, total int, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	if parsed == nil {
 		return "", &RenderError{Err: errors.New("nil slide")}
 	}
@@ -124,7 +134,7 @@ func RenderSlide(parsed *slide.Slide, label string, reg *template.Registry, func
 
 	r := &renderer{reg: reg, formats: template.BuiltinFormats}
 
-	data, err := r.slideData(parsed, slideTmpl)
+	data, err := r.slideData(parsed, slideTmpl, cfg, meta, total)
 	if err != nil {
 		return "", &RenderError{File: parsed.File, Err: err}
 	}
@@ -161,9 +171,13 @@ type renderer struct {
 	formats *template.Format
 }
 
-// slideData builds the layout execution context for one slide: its converted
-// field values, its rendered body, and its sections grouped by declared name.
-func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template) (map[string]any, error) {
+// slideData builds the LAYOUT execution context for one slide: its converted
+// field values, its rendered body, its sections grouped by declared name, and
+// the reserved `deck` and `slide` entries (template-context). cfg, meta and
+// total are threaded from RenderSlide/RenderDeck. Only the layout map receives
+// the reserved entries; the section-instance maps are wired separately in a
+// later phase.
+func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.Config, meta deck.Slide, total int) (map[string]any, error) {
 	data, err := r.values(s.Frontmatter, tmpl)
 	if err != nil {
 		return nil, err
@@ -204,7 +218,51 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template) (map[strin
 	for name, instances := range groups {
 		data[name] = instances
 	}
+
+	// The reserved `deck` and `slide` entries are injected into the layout map
+	// only (template-context). A declared field or section named deck or slide
+	// is rejected at load time, so neither can collide with a field value.
+	data["deck"] = deckContext(cfg)
+	data["slide"] = slideContext(meta, total)
 	return data, nil
+}
+
+// deckContext builds the reserved `deck` execution context
+// (deck-data-in-templates): the deck-wide config values under title, author
+// and date, plus the author-declared properties under properties. title is
+// always present; author and date are empty strings when omitted; properties is
+// always a non-nil map. Values keep the type they had in the config, so a
+// string property is escaped text via html/template while a number, boolean or
+// date stays typed — nothing here is Markdown-rendered or pre-rendered as safe
+// HTML (deck-properties). A nil cfg yields a well-formed but empty context.
+func deckContext(cfg *deck.Config) map[string]any {
+	title, author, date := "", "", ""
+	properties := map[string]any{}
+	if cfg != nil {
+		title, author, date = cfg.Title, cfg.Author, cfg.Date
+		if cfg.Properties != nil {
+			properties = cfg.Properties
+		}
+	}
+	return map[string]any{
+		"title":      title,
+		"author":     author,
+		"date":       date,
+		"properties": properties,
+	}
+}
+
+// slideContext builds the reserved `slide` execution context (slide-metadata):
+// number is the STRING position label of s — the number with the lower-cased
+// letter appended only for a vertical slide (deck.Slide.PositionLabel) — and
+// total is the integer number of slide files in the deck, derived at render
+// time (deck.Deck.Total, threaded in by RenderDeck). Neither value is authored
+// frontmatter and number is never a flattened index or bare filename integer.
+func slideContext(s deck.Slide, total int) map[string]any {
+	return map[string]any{
+		"number": s.PositionLabel(),
+		"total":  total,
+	}
 }
 
 // values converts one map of validated field data against t's field schema,

@@ -57,7 +57,10 @@ const themesURLPrefix = "/assets/templates/themes/"
 // the library's layout func map (template.LayoutFuncMap: `media` bound to the
 // served templates/media URL base, plus the format functions), threaded into
 // every slide's RenderSlide call so a library layout using `media` renders
-// (template-media, template-language).
+// (template-media, template-language). RenderDeck derives the deck's slide-file
+// count once (deck.Deck.Total) and threads cfg plus each slide's modelled
+// position into RenderSlide, so every slide layout executes with the reserved
+// `deck` and `slide` context (deck-data-in-templates, slide-metadata).
 //
 // The output is the complete offline page. reveal.js and the speaker-notes
 // plugin are loaded from the embedded assets, the theme stylesheet from
@@ -101,19 +104,22 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 	}
 
 	// Horizontal slides in the model's order; a horizontal slide with letter
-	// slides wraps them as a vertical stack inside its own <section>.
+	// slides wraps them as a vertical stack inside its own <section>. The
+	// deck's slide-file count is derived once, at render time, and threaded
+	// into every slide's reserved `slide` context (slide-metadata).
+	total := d.Total()
 	var slides strings.Builder
 	for i := range d.Stacks {
 		stack := &d.Stacks[i]
 
-		horizontal, err := renderDeckSlide(byFile, stack.Slide, reg, funcMap)
+		horizontal, err := renderDeckSlide(byFile, stack.Slide, cfg, total, reg, funcMap)
 		if err != nil {
 			return "", err
 		}
 		if len(stack.Vertical) > 0 {
 			var inner strings.Builder
 			for j := range stack.Vertical {
-				vertical, err := renderDeckSlide(byFile, stack.Vertical[j], reg, funcMap)
+				vertical, err := renderDeckSlide(byFile, stack.Vertical[j], cfg, total, reg, funcMap)
 				if err != nil {
 					return "", err
 				}
@@ -145,14 +151,16 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 
 // renderDeckSlide renders one modelled slide (a horizontal slide or a vertical
 // one) through RenderSlide, looking its parsed structure up by its deck path.
-// funcMap is the library's layout func map, threaded straight through to
-// RenderSlide.
-func renderDeckSlide(byFile map[string]*slide.Slide, s deck.Slide, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
+// cfg and total are the deck configuration and the deck's slide-file count,
+// threaded straight through to RenderSlide so the slide layout executes with
+// its reserved `deck` and `slide` context (template-context); funcMap is the
+// library's layout func map, threaded through the same way.
+func renderDeckSlide(byFile map[string]*slide.Slide, s deck.Slide, cfg *deck.Config, total int, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	parsed, ok := byFile[s.Path]
 	if !ok || parsed == nil {
 		return "", &RenderError{File: s.Path, Err: errors.New("no parsed slide for deck slide")}
 	}
-	return RenderSlide(parsed, s.Label, reg, funcMap)
+	return RenderSlide(parsed, s.Label, cfg, s, total, reg, funcMap)
 }
 
 // themeStylesheet resolves a deck config's theme name to the URL of its
