@@ -134,6 +134,11 @@
       "kind": "details",
       "target": "requirements.note.distribution-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.tap-bucket-location-open",
+      "properties": {}
     }
   ],
   "in": []
