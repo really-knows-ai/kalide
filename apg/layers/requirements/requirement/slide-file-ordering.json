@@ -38,6 +38,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.slide-metadata",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }

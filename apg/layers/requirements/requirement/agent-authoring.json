@@ -96,6 +96,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.body-rules",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.slide-file-ordering",
+      "properties": {}
     }
   ],
   "in": [
