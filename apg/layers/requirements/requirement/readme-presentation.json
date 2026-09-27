@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "readme-presentation",
+  "body": "README.md is presented as kalide's polished front page: a brand hero (the brand-identity mark/wordmark, referenced as a repo-relative image under `brand/`) at the top, consistent heading/badge/section styling, while all existing technical content (install guide per install-docs, usage, CLI reference, table of contents) is retained, not cut. AC: README.md opens with an image referencing a file under `brand/` that exists in the repo; the table of contents still resolves to every section; every install-docs step (token, tap/bucket, install, upgrade) is still present; a link to LICENSE and CHANGELOG.md is present.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
