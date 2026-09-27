@@ -15,6 +15,11 @@
       "kind": "contains",
       "source": "solution.container.package-channels",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.release-0-5-0-decisions",
+      "properties": {}
     }
   ]
 }
