@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "brand-not-embedded",
+  "body": "kalide's own brand collateral (the `brand/` files: mark, wordmark, PNG exports) must stay repository/documentation-only: it must never be go:embed'ed into the binary, never placed under `internal/assets`, and never referenced from the served deck/error/gallery page shells or the `kalide init` seed. This reinforces global.constraint.go-static-embedded-binary and global.constraint.no-embedded-template-assets (\"the core must remain unbranded\"), applying them to kalide's own identity, not only to template/EY branding.",
+  "properties": {
+    "attaches-to": "requirements.requirement.brand-identity"
+  },
+  "out": [],
+  "in": []
+}
