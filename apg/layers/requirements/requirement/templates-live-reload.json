@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "templates-live-reload",
-  "body": "Templates live reload: while `kalide start` runs, changes anywhere under the RESOLVED library root — the configured `templates:` path when set, otherwise the local `templates/` (see external-template-library) — are detected like deck changes; the resolved library is re-validated, templates/themes reloaded, the deck re-validated and re-rendered, and the browser reloads (or shows the full-page templates error).",
+  "body": "Templates live reload: while `kalide start` runs, changes anywhere under the RESOLVED library root — the configured `templates:` path when set, otherwise the local `templates/` (see external-template-library) — are detected like deck changes; the resolved library is re-validated, templates/themes reloaded, the deck re-validated and re-rendered, and the browser reloads (or shows the full-page templates error). Carve-out: this covers changes to files and directories under the resolved root only. A change to the configured `templates:` value itself in `kalide.yaml` is NOT a live retarget: it stops serving and shows the full-page restart-required error (see template-retarget-requires-restart).",
   "properties": {
     "feature": "project-templates"
   },
