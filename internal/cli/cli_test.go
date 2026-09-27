@@ -95,17 +95,6 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 	}
 }
 
-// TestRunRoutesCommands asserts each recognised command reaches its handler.
-//
-// All three commands are real handlers now, so there is no stub table left:
-// `init` routes to runInit (phase-8 task 3), `start` to runStart (phase-7
-// task 6) and `templates` to runTemplates (phase-7 task 7). The start case
-// validates the deck before it can serve and exits non-zero in a directory
-// with no kalide.yaml; templates lists the built-ins (exit 0), documents one
-// by name (exit 0) and rejects an unknown name (non-zero). The init case
-// scaffolds a starter deck, so it is run in a throwaway temp directory and
-// never in the package directory. Full per-command coverage lives in the
-// phase-7 task 9 and phase-8 task 5 tests; here we only pin the routes.
 // TestRunVersion pins the version surface: each of `version`, `--version` and
 // `-v` prints exactly one line `kalide <version>\n` to stdout and returns 0,
 // with nothing on stderr. The version string is injected in-process, standing
@@ -130,6 +119,17 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+// TestRunRoutesCommands asserts each recognised command reaches its handler.
+//
+// All three commands are real handlers now, so there is no stub table left:
+// `init` routes to runInit (phase-8 task 3), `start` to runStart (phase-7
+// task 6) and `templates` to runTemplates (phase-7 task 7). The start case
+// validates the deck before it can serve and exits non-zero in a directory
+// with no kalide.yaml; templates lists the built-ins (exit 0), documents one
+// by name (exit 0) and rejects an unknown name (non-zero). The init case
+// scaffolds a starter deck, so it is run in a throwaway temp directory and
+// never in the package directory. Full per-command coverage lives in the
+// phase-7 task 9 and phase-8 task 5 tests; here we only pin the routes.
 func TestRunRoutesCommands(t *testing.T) {
 	t.Run("init scaffolds and refuses a second run", func(t *testing.T) {
 		// runInit resolves the current working directory with os.Getwd and
