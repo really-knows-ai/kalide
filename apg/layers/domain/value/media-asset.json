@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "media-asset",
-  "body": "Media asset: any file (font, logo, image, video, …) in the template library, addressed by its relative path within `templates/`; type-agnostic.",
+  "body": "Media asset: any file (font, logo, image, video, …) in the template library, addressed by its relative path within the resolved library root (`templates/media/` for a local library); type-agnostic.",
   "properties": {},
   "out": [],
   "in": [
