@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "domain.value.agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.library-agent-guide",
+      "properties": {}
     }
   ],
   "in": []
