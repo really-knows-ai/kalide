@@ -23,6 +23,11 @@
       "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.init-path-refuse-existing",
+      "properties": {}
     }
   ]
 }
