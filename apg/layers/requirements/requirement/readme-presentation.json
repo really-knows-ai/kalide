@@ -16,6 +16,11 @@
       "kind": "drives",
       "target": "domain.value.brand-identity",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.brand-identity",
+      "properties": {}
     }
   ],
   "in": [
