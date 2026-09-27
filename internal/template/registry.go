@@ -274,7 +274,7 @@ func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, ma
 // with a name, its usage must be slide or section (an empty usage is tolerated
 // so a partially built fixture can exercise the other checks), and its declared
 // field and section names must be non-empty, unique, and free of the reserved
-// `body`, `notes` and `_format` names.
+// `body`, `notes`, `deck`, `slide` and `_format` names.
 func checkDefinition(t *Template) error {
 	if t == nil {
 		return errors.New("template: definition must not be nil")
@@ -339,13 +339,14 @@ func checkFieldVariants(tmpl string, f *Field) error {
 
 // checkDeclaredName rejects a field or section name that is empty or reserved.
 // `body` is the implied body field, `notes` the parser's speaker-notes section,
-// and a trailing `_format` the reserved format-selection sibling of a field.
-// None of them is declarable.
+// `deck` and `slide` the reserved top-level template-context names, and a
+// trailing `_format` the reserved format-selection sibling of a field. None of
+// them is declarable.
 func checkDeclaredName(kind, tmpl, name string) error {
 	if name == "" {
 		return fmt.Errorf("template %q: %s name must not be empty", tmpl, kind)
 	}
-	if name == "body" || name == "notes" {
+	if name == "body" || name == "notes" || name == "deck" || name == "slide" {
 		return fmt.Errorf("template %q: %s name %q is reserved and cannot be declared", tmpl, kind, name)
 	}
 	if strings.HasSuffix(name, "_format") {
