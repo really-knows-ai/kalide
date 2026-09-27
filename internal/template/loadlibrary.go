@@ -34,40 +34,58 @@ import (
 //     definition and its layout executes; phase 1 leaves this a no-op,
 //     phase-2 task-12 fills it in.
 //
-// There is no built-in fallback when templates/ is missing or is not a
-// directory (no-built-in-fallback): LoadLibrary reports a *LibraryError
-// naming the expected path and suggesting `kalide init`, and the caller must
-// not substitute compiled-in content.
+// There is no built-in fallback when the library root is missing or is not a
+// directory (no-built-in-fallback): the loader reports a *LibraryError naming
+// the expected path and suggesting `kalide init`, and the caller must not
+// substitute compiled-in content. ResolveLibraryRoot and LoadDeckLibrary
+// (resolve.go) are the single point that picks the root — the configured
+// `templates:` path, else the local templates/ (external-template-library).
 
 // LoadLibrary loads and validates the templates/ library at root within
 // fsys — typically root == TemplatesDir at a project's root directory — and
 // returns it once every templates-dir-validation check has passed. It
 // returns the first *LibraryError encountered, in the fixed step order
 // documented on this file.
+//
+// root is both the library directory's path within fsys and the path errors
+// are qualified with. LoadDeckLibrary (resolve.go) is the deck-level entry
+// point: it resolves the root (the configured `templates:` path, else the
+// local templates/) and calls loadLibrary with a display root that may differ
+// from the path within fsys when the resolved library sits outside the deck.
 func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
-	info, err := fs.Stat(fsys, root)
+	return loadLibrary(fsys, root, root)
+}
+
+// loadLibrary is LoadLibrary's shared body. fsRoot is the library directory's
+// path within fsys; displayRoot is the path errors are qualified with and that
+// is stored as Library.RootPath. The two differ when the loader validates a
+// resolved external root (external-template-library): fsys is then
+// os.DirFS(resolved), fsRoot is ".", and displayRoot is the resolved
+// operating-system path. displayRoot is never empty.
+func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
+	info, err := fs.Stat(fsys, fsRoot)
 	if err != nil {
-		return nil, missingTemplatesDirError(root, root+" directory not found")
+		return nil, missingTemplatesDirError(displayRoot, displayRoot+" directory not found")
 	}
 	if !info.IsDir() {
-		return nil, missingTemplatesDirError(root, root+" exists but is not a directory")
+		return nil, missingTemplatesDirError(displayRoot, displayRoot+" exists but is not a directory")
 	}
 
-	sub, err := fs.Sub(fsys, root)
+	sub, err := fs.Sub(fsys, fsRoot)
 	if err != nil {
-		return nil, missingTemplatesDirError(root, root+" is not usable as a directory")
+		return nil, missingTemplatesDirError(displayRoot, displayRoot+" is not usable as a directory")
 	}
 
 	lib := &Library{
 		Root:     sub,
-		RootPath: root,
+		RootPath: displayRoot,
 		Slides:   make(map[string]*LibraryTemplate),
 		Sections: make(map[string]*LibraryTemplate),
 		Themes:   make(map[string]*LibraryTheme),
 	}
 
 	// Step 1: library.yaml present and valid.
-	if err := loadLibraryMeta(sub, root, lib); err != nil {
+	if err := loadLibraryMeta(sub, displayRoot, lib); err != nil {
 		return nil, err
 	}
 
@@ -75,21 +93,21 @@ func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
 	// section names unique across kinds.
 	entries, err := fs.ReadDir(sub, ".")
 	if err != nil {
-		return nil, libraryErrorf(root, 0, "read directory: %v", err)
+		return nil, libraryErrorf(displayRoot, 0, "read directory: %v", err)
 	}
-	if err := checkTopLevelLayout(root, entries); err != nil {
+	if err := checkTopLevelLayout(displayRoot, entries); err != nil {
 		return nil, err
 	}
 
-	slideNames, err := templateDirNames(sub, root, SlidesDir)
+	slideNames, err := templateDirNames(sub, displayRoot, SlidesDir)
 	if err != nil {
 		return nil, err
 	}
-	sectionNames, err := templateDirNames(sub, root, SectionsDir)
+	sectionNames, err := templateDirNames(sub, displayRoot, SectionsDir)
 	if err != nil {
 		return nil, err
 	}
-	if err := checkCrossKindNames(root, slideNames, sectionNames); err != nil {
+	if err := checkCrossKindNames(displayRoot, slideNames, sectionNames); err != nil {
 		return nil, err
 	}
 
@@ -107,14 +125,14 @@ func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
 	// func set.
 	funcMap := LayoutFuncMap(lib.Media, "/"+MediaDir)
 	for _, name := range slideNames {
-		t, err := loadLibraryTemplate(sub, root, SlidesDir, KindSlide, name, funcMap)
+		t, err := loadLibraryTemplate(sub, displayRoot, SlidesDir, KindSlide, name, funcMap)
 		if err != nil {
 			return nil, err
 		}
 		lib.Slides[name] = t
 	}
 	for _, name := range sectionNames {
-		t, err := loadLibraryTemplate(sub, root, SectionsDir, KindSection, name, funcMap)
+		t, err := loadLibraryTemplate(sub, displayRoot, SectionsDir, KindSection, name, funcMap)
 		if err != nil {
 			return nil, err
 		}
@@ -128,12 +146,12 @@ func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
 	}
 
 	// Step 5: every theme has theme.css.
-	themeNames, err := templateDirNames(sub, root, ThemesDir)
+	themeNames, err := templateDirNames(sub, displayRoot, ThemesDir)
 	if err != nil {
 		return nil, err
 	}
 	for _, name := range themeNames {
-		th, err := loadLibraryTheme(sub, root, name)
+		th, err := loadLibraryTheme(sub, displayRoot, name)
 		if err != nil {
 			return nil, err
 		}
@@ -144,17 +162,17 @@ func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
 	// a layout's literal src/href references stay inside templates/, and
 	// every `media` call argument is valid and exists.
 	for _, name := range themeNames {
-		if err := checkThemeURLs(root, lib.Themes[name]); err != nil {
+		if err := checkThemeURLs(displayRoot, lib.Themes[name]); err != nil {
 			return nil, err
 		}
 	}
 	for _, name := range slideNames {
-		if err := checkLayoutReferences(root, lib.Slides[name], lib.Media); err != nil {
+		if err := checkLayoutReferences(displayRoot, lib.Slides[name], lib.Media); err != nil {
 			return nil, err
 		}
 	}
 	for _, name := range sectionNames {
-		if err := checkLayoutReferences(root, lib.Sections[name], lib.Media); err != nil {
+		if err := checkLayoutReferences(displayRoot, lib.Sections[name], lib.Media); err != nil {
 			return nil, err
 		}
 	}

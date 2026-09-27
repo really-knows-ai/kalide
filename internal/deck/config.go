@@ -35,7 +35,7 @@ const (
 // configKeys is the complete set of keys kalide.yaml may contain, in
 // declaration order. It is both the unknown-key whitelist and the candidate
 // list for closest-match suggestions.
-var configKeys = []string{"title", "author", "date", "theme", "navigation", "properties"}
+var configKeys = []string{"title", "author", "date", "theme", "navigation", "properties", "templates"}
 
 // dateLayout is the only accepted date form: an ISO calendar date, no time and
 // no zone.
@@ -68,6 +68,14 @@ type Config struct {
 	// typed YAML scalars (string, number, boolean or date). It is always
 	// non-nil — the empty map when the block is absent, null or empty.
 	Properties map[string]any
+
+	// Templates is the optional top-level `templates:` value: the path to
+	// the deck's external template library directory
+	// (external-template-library). It is kept exactly as written in
+	// kalide.yaml and is "" when the key is absent or empty. A relative
+	// path is resolved against the deck root by the template loader, not
+	// here; use TemplatesPath to read it.
+	Templates string
 }
 
 // LoadConfig reads and validates the deck configuration at path within fsys —
@@ -89,6 +97,10 @@ type Config struct {
 //     non-empty author keys to simple typed scalars (string, number, boolean or
 //     date YYYY-MM-DD); a mapping or sequence value is a config error naming
 //     its key. The resolved map is always non-nil;
+//   - templates is optional and, when present, must be a string path to the
+//     deck's external template library (external-template-library); it is
+//     stored exactly as written (empty when the key is absent or empty), and a
+//     relative path is later resolved against the deck root by the loader;
 //   - any other key is an unknown key, rejected with a closest-match "did you
 //     mean …?" suggestion.
 //
@@ -208,6 +220,14 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 			}
 			cfg.Properties = props
 
+		case "templates":
+			if !isNull(val) && !isString(val) {
+				return nil, typeError(path, line, key, val)
+			}
+			if !isNull(val) {
+				cfg.Templates = val.Value
+			}
+
 		default:
 			if s := suggest.Closest(key.Value, configKeys); s != "" {
 				return nil, positioned(path, line, "unknown key %q: did you mean %q?", key.Value, s)
@@ -229,6 +249,21 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 		}
 	}
 	return cfg, nil
+}
+
+// TemplatesPath returns the configured top-level `templates:` path from a
+// deck's Config exactly as it was written in kalide.yaml, or "" when the key
+// is absent or empty (external-template-library).
+//
+// It is the deck-side accessor for the template loader's single root
+// resolution point; it does not resolve, clean or validate the path — a
+// relative path is resolved against the deck root by the loader
+// (template.ResolveLibraryRoot), not here.
+func TemplatesPath(cfg *Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Templates
 }
 
 // parseProperties parses the value of the top-level `properties` key: a mapping
