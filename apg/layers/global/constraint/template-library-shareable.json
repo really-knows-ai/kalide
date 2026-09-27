@@ -5,5 +5,11 @@
   "body": "Forward compatibility with git-based sharing (future, out of scope now): the `templates/` directory must be a self-contained, relocatable unit — it must not reference files outside itself (no absolute paths, no `..` escapes, no references into `slides/` or the project `assets/`), must carry its identity and format version in `templates/library.yaml`, and must hold no machine- or project-specific state — so that it can later be the root of (or be pulled from) its own git repository without layout changes.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.external-template-library-decisions",
+      "properties": {}
+    }
+  ]
 }
