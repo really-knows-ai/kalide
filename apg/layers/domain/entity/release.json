@@ -11,6 +11,11 @@
       "kind": "realised-by",
       "target": "solution.component.release-workflow",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.changelog",
+      "properties": {}
     }
   ],
   "in": [
