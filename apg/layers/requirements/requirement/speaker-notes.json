@@ -28,6 +28,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-reveal-pin",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ]
 }

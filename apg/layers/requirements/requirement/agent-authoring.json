@@ -111,6 +111,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.section-frontmatter",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.speaker-notes",
+      "properties": {}
     }
   ],
   "in": [
