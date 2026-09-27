@@ -81,9 +81,9 @@ jobs:
         # list is assembled here from vars.WINDOWS_ARM_RUNNER.
         include: ${{ fromJSON(vars.WINDOWS_ARM_RUNNER == 'true' && '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/kalide-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/kalide-windows-amd64.exe"},{"target":"windows/arm64","os":"windows-11-arm","binary":"dist/kalide-windows-arm64.exe"}]' || '[{"target":"darwin/arm64","os":"macos-14","binary":"dist/kalide-darwin-arm64"},{"target":"windows/amd64","os":"windows-latest","binary":"dist/kalide-windows-amd64.exe"}]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -104,7 +104,7 @@ jobs:
       # them in at the same dist/ paths the build mode would use.
       - name: Download release binary
         if: ${{ inputs.release }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.artifact-name }}
           path: dist
