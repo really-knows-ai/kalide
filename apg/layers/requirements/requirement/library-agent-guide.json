@@ -101,6 +101,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.cli-templates-show",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-start",
+      "properties": {}
     }
   ],
   "in": [
