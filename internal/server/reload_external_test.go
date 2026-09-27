@@ -11,16 +11,19 @@ import (
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
-// This file is the integration-test deliverable for plan.phase-02.task-8: the
+// This file is the integration-test deliverable for plan.phase-02.task-4: the
 // server reload pipeline over a library resolved from an external `templates:`
 // root (external-template-library). It proves that, with `templates:
 // ../shared-lib` and no local templates/, the built-in pipeline loads,
 // validates and renders the deck from the resolved root; the /templates gallery
 // and the media/theme routes serve files from that root; each reload
-// re-resolves the root from kalide.yaml, so a library edit and a retargeted
-// `templates:` path are picked up without restarting the server; and an invalid
-// resolved library publishes the positioned error page naming the resolved
-// path while the server keeps running and recovers.
+// re-resolves the root from kalide.yaml, so a library edit is picked up without
+// restarting the server; a retargeted `templates:` path is NOT applied live but
+// refused with the standard full-page restart-required error while the process
+// keeps serving (template-retarget-requires-restart), and reverting the raw
+// value resumes the deck; and an invalid resolved library publishes the
+// positioned error page naming the resolved path while the server keeps running
+// and recovers.
 //
 // It writes a real deck and real external libraries to temporary directories
 // and drives NewReloader/(Reloader).Reload directly (no watcher, no SSE
@@ -102,37 +105,59 @@ func TestReloaderExternalLibraryIntegration(t *testing.T) {
 		t.Fatalf("reload did not pick up the edited external library layout: %q", body)
 	}
 
-	// Retargeting `templates:` is re-resolved from kalide.yaml on the next
-	// reload: the page now comes from the other external library.
+	// Retargeting the raw `templates:` value is NOT re-resolved on the next
+	// reload: the built-in pipeline refuses it with the standard full-page
+	// restart-required error, even though the target library is valid, and the
+	// page never comes from the other external library. The server keeps
+	// serving (getBody would fail on a non-200).
 	writeFile(t, filepath.Join(deckDir, "kalide.yaml"),
 		"title: External Deck\ntheme: default\ntemplates: ../other-lib\n")
 	rl.Reload()
 	body = getBody(t, srv, rootPath)
-	if !strings.Contains(body, `<h1 class="other">Hi</h1>`) {
-		t.Fatalf("reload did not re-resolve the retargeted templates: path: %q", body)
+	if !strings.Contains(body, "Deck error") {
+		t.Fatalf("retargeted templates: path did not publish the error page: %q", body)
+	}
+	if want := restartRequiredError().Error(); !strings.Contains(body, want) {
+		t.Fatalf("retarget error page does not carry the restart-required error %q: %q", want, body)
+	}
+	if strings.Contains(body, `<h1 class="other">Hi</h1>`) {
+		t.Fatalf("retargeted templates: path was applied live instead of requiring a restart: %q", body)
+	}
+
+	// Reverting the raw value to the startup baseline resumes the deck from
+	// the startup library (with the earlier layout edit still applied).
+	writeFile(t, filepath.Join(deckDir, "kalide.yaml"),
+		"title: External Deck\ntheme: default\ntemplates: ../shared-lib\n")
+	rl.Reload()
+	body = getBody(t, srv, rootPath)
+	if strings.Contains(body, "Deck error") {
+		t.Fatalf("reverting the templates: value still serves the error page: %q", body)
+	}
+	if !strings.Contains(body, `<h1 class="edited">Hi</h1>`) {
+		t.Fatalf("reverting the templates: value did not resume the startup library's deck: %q", body)
 	}
 
 	// An invalid resolved library publishes the positioned error page naming
 	// the resolved path, and the server keeps running (still serving "/").
-	writeFile(t, filepath.Join(otherLibDir, "library.yaml"), "name: Bad_Name\nformat: 1\n")
+	writeFile(t, filepath.Join(libDir, "library.yaml"), "name: Bad_Name\nformat: 1\n")
 	rl.Reload()
 	body = getBody(t, srv, rootPath)
 	if !strings.Contains(body, "Deck error") {
 		t.Fatalf("invalid external library did not publish the error page: %q", body)
 	}
-	if want := filepath.Join(otherLibDir, "library.yaml"); !strings.Contains(body, want) {
+	if want := filepath.Join(libDir, "library.yaml"); !strings.Contains(body, want) {
 		t.Fatalf("error page does not name the resolved path %q: %q", want, body)
 	}
 
 	// Restoring the library recovers the deck without a restart.
-	writeFile(t, filepath.Join(otherLibDir, "library.yaml"),
-		"name: other-lib\ndescription: other hello description\nformat: 1\n")
+	writeFile(t, filepath.Join(libDir, "library.yaml"),
+		"name: shared-lib\ndescription: shared hello description\nformat: 1\n")
 	rl.Reload()
 	body = getBody(t, srv, rootPath)
 	if strings.Contains(body, "Deck error") {
 		t.Fatalf("restored external library still serves the error page: %q", body)
 	}
-	if !strings.Contains(body, `<h1 class="other">Hi</h1>`) {
+	if !strings.Contains(body, `<h1 class="edited">Hi</h1>`) {
 		t.Fatalf("restored external library did not restore the deck page: %q", body)
 	}
 }
