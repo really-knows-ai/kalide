@@ -95,7 +95,11 @@ type T interface {
 // Harness builds and drives the kalide binary. Create one with NewHarness.
 //
 // It holds the built binary and a clean temporary working directory for the
-// deck, and, after Start, the running `kalide start --no-open` process.
+// deck, and, after Start, the running `kalide start --no-open` process. A
+// Harness is reusable: Stop ends the current run and Start may be called again
+// (for example to prove that a configuration change takes effect on a fresh
+// process), preserving workDir, binPath and extraEnv while resetting the
+// per-run state and re-running the clean-shutdown check for each run.
 type Harness struct {
 	t T
 
@@ -121,6 +125,8 @@ type Harness struct {
 	// environment is fixed when the command is executed.
 	extraEnv []string
 
+	// mu guards the per-run state below, which Start and Stop touch from the
+	// test goroutine and from the cleanup callbacks.
 	mu      sync.Mutex
 	cmd     *exec.Cmd
 	stdout  *capture
@@ -131,7 +137,13 @@ type Harness struct {
 	baseURL string
 	port    int
 
-	stopOnce sync.Once
+	// running reports whether the current run's kalide process is live. Start
+	// refuses to begin a second run until Stop has ended this one.
+	running bool
+
+	// stopOnce makes a run's graceful stop idempotent. Start re-arms it for the
+	// next run, so a stopped-and-restarted Harness gets its own shutdown check.
+	stopOnce *sync.Once
 }
 
 // NewHarness builds the kalide binary with CGO_ENABLED=0 into a temporary
@@ -151,6 +163,7 @@ func NewHarness(t T) *Harness {
 		moduleRoot: root,
 		binDir:     t.TempDir(),
 		workDir:    t.TempDir(),
+		stopOnce:   &sync.Once{},
 		client: &http.Client{
 			Timeout:   10 * time.Second,
 			Transport: &http.Transport{Proxy: nil},
@@ -241,14 +254,33 @@ func (h *Harness) Run(args ...string) (stdout, stderr string, code int) {
 //
 // Stop is registered as a test cleanup, so a test that forgets to call it still
 // gets a graceful shutdown and a leaked process is reported.
+//
+// Start may be called again after Stop on the same Harness to begin a fresh
+// run: workDir, binPath and extraEnv are preserved, the per-run state is reset,
+// a new cleanup is registered and readiness is polled afresh. Start refuses to
+// run while a previous run's process is still live.
 func (h *Harness) Start(extra ...string) {
 	h.t.Helper()
 
 	h.mu.Lock()
-	if h.cmd != nil {
+	if h.running {
 		h.mu.Unlock()
-		h.t.Fatalf("e2e: Start called twice on one Harness")
+		h.t.Fatalf("e2e: Start called while a kalide process is already running")
 	}
+	// Reset the per-run state so a Harness whose previous run was stopped can
+	// start again: fresh captures, exit channel, URL and port, and a re-armed
+	// stop so this run's shutdown is checked on its own. workDir, binPath and
+	// extraEnv are deliberately preserved across runs.
+	h.cmd = nil
+	h.stdout = nil
+	h.stderr = nil
+	h.exited = nil
+	h.exitErr = nil
+	h.url = ""
+	h.baseURL = ""
+	h.port = 0
+	h.stopOnce = &sync.Once{}
+	h.running = true
 	h.mu.Unlock()
 
 	args := append([]string{"start", "--no-open"}, extra...)
@@ -364,12 +396,19 @@ func (h *Harness) waitReady() error {
 //
 // Stop is idempotent and is registered as a test cleanup by Start. If the
 // process does not stop before stopTimeout it is forcibly killed and the test
-// fails.
+// fails. After Stop returns the Harness may be started again; each run gets its
+// own clean-shutdown check (exit 0 / port released / no leftover children).
 func (h *Harness) Stop() {
 	h.t.Helper()
 
+	h.mu.Lock()
+	once := h.stopOnce
+	h.mu.Unlock()
+	if once == nil {
+		return
+	}
 	first := false
-	h.stopOnce.Do(func() { first = true })
+	once.Do(func() { first = true })
 	if !first {
 		return
 	}
@@ -378,6 +417,15 @@ func (h *Harness) Stop() {
 	cmd := h.cmd
 	exited := h.exited
 	h.mu.Unlock()
+
+	// The run is over however Stop returns, so a later Start may begin a fresh
+	// run on the same Harness.
+	defer func() {
+		h.mu.Lock()
+		h.running = false
+		h.mu.Unlock()
+	}()
+
 	if cmd == nil {
 		return
 	}
