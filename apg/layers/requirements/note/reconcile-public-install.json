@@ -39,6 +39,11 @@
       "kind": "details",
       "target": "requirements.requirement.readme-presentation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.readme-install-front-loading",
+      "properties": {}
     }
   ],
   "in": []
