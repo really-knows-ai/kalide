@@ -25,6 +25,11 @@
       "kind": "realised-by",
       "source": "domain.service.scaffold-deck",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.scaffold-template-library",
+      "properties": {}
     }
   ]
 }
