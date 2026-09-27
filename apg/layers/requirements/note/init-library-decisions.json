@@ -4,6 +4,12 @@
   "name": "init-library-decisions",
   "body": "`kalide init-library <path>` [with user request; autonomous detail choices flagged]. A new command to create a new empty but valid template library. Feature `project-templates`, child of `requirements.requirement.project-templates`; drives `domain.service.scaffold-template-library` and `domain.entity.template-library`. Decisions: `<path>` is REQUIRED (omitting it is a usage error) [autonomous]. The library name is derived from the target directory's base name and validated against `[a-z0-9][a-z0-9-]*`; an invalid name is a hard error and is never sanitised, consistent with the identifier convention elsewhere [autonomous]. Refusal (no `--force`): refuse if `<path>` already holds a `library.yaml` or any standard layout entry (`slides/`, `sections/`, `themes/`, `media/`); allow a non-existent path (created), an empty directory, or a directory holding only unrelated files such as `.git`/README (left untouched) — mirroring cli-init-refuse-existing; a non-directory path is an error [autonomous]. It seeds nothing else: `library.yaml` + the four empty directory entries only; no starter template, no theme, no media; the created library must load cleanly (templates-dir-validation) [with user: 'empty but valid']. Implementation may drop a `.gitkeep` INSIDE each created directory so the empty dirs survive a git commit, but never a stray top-level file (an unknown top-level entry would make the library invalid) [autonomous]. Local filesystem only — no network, no git (external-template-library, global.constraint.anonymous-install); it composes with `kalide init <path>` (create a library, then point a deck at it). implemented-by: realised by the existing `solution.component.init-seed` (implemented-by internal/scaffold.Init, internal/scaffold.writeHelloSeed) and `solution.component.cli-commands` (implemented-by internal/cli.Run) — the real scanned code today. The concrete new functions (a scaffold library-init function and a cli init-library handler) do not exist yet; the plan-writer should add their implemented-by edges when built.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.init-library",
+      "properties": {}
+    }
+  ],
   "in": []
 }
