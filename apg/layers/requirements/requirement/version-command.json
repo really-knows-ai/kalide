@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.version",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.release",
+      "properties": {}
     }
   ],
   "in": [

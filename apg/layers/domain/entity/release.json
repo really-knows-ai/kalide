@@ -23,6 +23,11 @@
       "kind": "drives",
       "source": "requirements.requirement.github-releases",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.version-command",
+      "properties": {}
     }
   ]
 }
