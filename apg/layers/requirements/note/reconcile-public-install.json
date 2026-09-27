@@ -104,6 +104,11 @@
       "kind": "details",
       "target": "solution.component.install-docs",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.release-workflow",
+      "properties": {}
     }
   ],
   "in": []
