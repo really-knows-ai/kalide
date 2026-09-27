@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.version-command",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.readme-presentation",
+      "properties": {}
     }
   ],
   "in": []
