@@ -17,7 +17,10 @@
 #              but only after every native e2e job has passed (`needs`);
 #   manifest -> regenerate Formula/kalide.rb and bucket/kalide.json from the
 #              release tag + checksums.txt, assert only Formula/ and bucket/
-#              changed, and push that manifest commit as the Actions bot.
+#              changed, and push that manifest commit as the Actions bot;
+#   package-install-e2e -> after the manifest push, install anonymously via
+#              brew (macOS) / scoop (Windows) from the public tap/bucket and
+#              run e2e.TestAnonymousPackageInstall (no token env).
 #
 # Target set (supported-platforms): all six targets are always built and
 # always GA - darwin/arm64, darwin/amd64, windows/amd64, windows/arm64,
@@ -341,3 +344,56 @@ jobs:
           git add Formula/ bucket/
           git commit -m "Update package manifests for ${GITHUB_REF_NAME}"
           git push origin "HEAD:${{ github.event.repository.default_branch }}"
+
+  # Post-publish anonymous install check. Runs only after `manifest` has pushed
+  # the regenerated Formula/ and bucket/ to the default branch, so brew/scoop
+  # install exactly the release just published. It does not gate publishing
+  # (the Release already exists); a failure flags a broken public install.
+  # No token is passed: the test installs anonymously from the public tap/bucket
+  # and asserts `kalide version` reports the pushed tag (vX.Y.Z, as stamped by
+  # `make release`). All four targets are always released (see the target-set
+  # note above), so the matrix is static.
+  package-install-e2e:
+    name: Package install e2e ${{ matrix.target }}
+    needs: manifest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin/arm64
+            os: macos-14
+          - target: darwin/amd64
+            os: macos-15-intel
+          - target: windows/amd64
+            os: windows-latest
+          - target: windows/arm64
+            os: windows-11-arm
+    steps:
+      # The default branch, which now carries the manifest commit.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Homebrew is preinstalled on GitHub-hosted macOS runners; Scoop is not
+      # on Windows runners, so install it and put its shims on PATH.
+      - name: Install Scoop
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install.ps1
+          .\install.ps1 -RunAsAdmin
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\scoop\shims"
+
+      - name: Run anonymous package install e2e
+        env:
+          KALIDE_RELEASE_VERSION: ${{ github.ref_name }}
+        run: go test ./e2e -run TestAnonymousPackageInstall -v
