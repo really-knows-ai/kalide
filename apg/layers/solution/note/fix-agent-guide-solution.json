@@ -39,6 +39,11 @@
       "kind": "details",
       "target": "domain.group.templating",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.agent-guide",
+      "properties": {}
     }
   ],
   "in": []
