@@ -138,7 +138,9 @@ jobs:
 
       # Create the GitHub Release vX.Y.Z on the private repo with the binaries
       # and checksums.txt. `--verify-tag` guarantees the tag already exists
-      # (the human pushed it); gh must never create one.
+      # (the human pushed it); gh must never create one. This job has no
+      # checkout, so `--repo` is required: gh cannot infer the repository from
+      # a working tree that isn't there.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -164,6 +166,7 @@ jobs:
           done
           assets+=(dist/checksums.txt)
           gh release create "$TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "$TAG" \
             --notes "kalide $TAG. Assets: the supported platform binaries and checksums.txt (SHA-256)."
