@@ -91,6 +91,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-templates-list",
+      "properties": {}
     }
   ],
   "in": [
