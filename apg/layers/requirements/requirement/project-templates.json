@@ -66,6 +66,11 @@
       "kind": "contains",
       "target": "requirements.requirement.init-library",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-retarget-requires-restart",
+      "properties": {}
     }
   ],
   "in": [
