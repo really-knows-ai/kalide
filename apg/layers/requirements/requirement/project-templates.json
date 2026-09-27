@@ -56,6 +56,11 @@
       "kind": "contains",
       "target": "requirements.requirement.template-context",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.external-template-library",
+      "properties": {}
     }
   ],
   "in": [
