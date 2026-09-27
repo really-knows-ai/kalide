@@ -57,7 +57,10 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 		return other.Definition, true
 	}
 
-	ctx := map[string]any{}
+	ctx := map[string]any{
+		"deck":  emptyExampleDeckContext(),
+		"slide": emptyExampleSlideContext(),
+	}
 
 	if len(def.Fields) > 0 || len(def.Sections) > 0 {
 		block, err := parseExampleBlock(string(lt.ExampleBytes), lt.Kind, 1)
@@ -356,6 +359,31 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 		ctx[name] = instances
 	}
 	return nil
+}
+
+// emptyExampleDeckContext returns a well-formed but empty stand-in for the
+// reserved `.deck` render context, matching the shape render.deckContext
+// produces, so a library example layout that reads `.deck.*` (including
+// `.deck.properties`) executes cleanly at load-time even though no real deck
+// data exists yet. internal/template cannot import internal/render (would
+// create an import cycle), so the shape is duplicated here intentionally.
+func emptyExampleDeckContext() map[string]any {
+	return map[string]any{
+		"title":      "",
+		"author":     "",
+		"date":       "",
+		"properties": map[string]any{},
+	}
+}
+
+// emptyExampleSlideContext returns a well-formed but empty stand-in for the
+// reserved `.slide` render context, matching the shape render.slideContext
+// produces. See emptyExampleDeckContext for why this is duplicated here.
+func emptyExampleSlideContext() map[string]any {
+	return map[string]any{
+		"number": "",
+		"total":  0,
+	}
 }
 
 // withPath re-positions err (from decodeFrontmatter, which carries no path)
