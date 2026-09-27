@@ -61,6 +61,11 @@
       "kind": "drives",
       "source": "requirements.requirement.linux-install",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.readme-install-front-loading",
+      "properties": {}
     }
   ]
 }
