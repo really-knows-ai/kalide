@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "license",
+  "body": "kalide is licensed under the Apache License 2.0: a repo-root `LICENSE` file carries the full Apache-2.0 text. This is new — no repo-root LICENSE exists today. It is separate from, and must not replace or alter, the vendored `internal/assets/reveal/LICENSE` (reveal.js's own MIT license, committed alongside the vendored runtime per embedded-assets); a third-party notice (e.g. `NOTICE` or a \"Third-party licenses\" section/file) records that reveal.js is vendored under MIT at that path. `Formula/kalide.rb`'s `license :cannot_represent` (line 43) is updated to reflect the real license once `LICENSE` exists. AC: repo-root `LICENSE` contains the Apache License 2.0 text; `internal/assets/reveal/LICENSE` is unchanged and still states reveal.js's MIT license; a third-party notice document names reveal.js/MIT; `Formula/kalide.rb`'s `license` field no longer reads `:cannot_represent`.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [],
+  "in": []
+}
