@@ -1,0 +1,11 @@
+{
+  "layer": "solution",
+  "type": "constraint",
+  "name": "agent-guide-unbranded-inert",
+  "body": "The embedded AGENTS.md guide content must remain unbranded (no EY branding and no reference to files under `brand/`), text-only and offline, format-accurate (no drift from the format the code implements; see agent-guide-drift-check), and inert: written verbatim by scaffolding, permitted by the library layout only as the single non-template root entry (library-guide-layout), and never read by the load/validate/render/serve/list code paths. It is not a template asset and must not be referenced as one.",
+  "properties": {
+    "attaches-to": "solution.component.agent-guide"
+  },
+  "out": [],
+  "in": []
+}
