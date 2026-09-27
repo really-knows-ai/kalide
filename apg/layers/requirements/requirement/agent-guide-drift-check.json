@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-agent-guide",
+      "properties": {}
     }
   ],
   "in": [
