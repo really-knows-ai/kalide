@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "init-library",
+  "body": "`kalide init-library <path>` creates a new, empty but valid template library at `<path>`. It writes the library root: `library.yaml` (name derived from the target directory's base name and validated against the `[a-z0-9][a-z0-9-]*` convention — an invalid name is a hard error, never sanitised; `format: 1` required; optional `description`) and the standard top-level layout entries `slides/`, `sections/`, `themes/` and `media/`, created empty so the structure exists. An empty library has no templates and needs no theme; nothing else is seeded — no starter template, no theme, no media. The created library loads cleanly (templates-dir-validation). The command is local-filesystem only: no network, no git (consistent with external-template-library, global.constraint.anonymous-install).\n\nArgument and refusal rules: `<path>` is required — omitting it is a usage error (usage to stderr, non-zero exit, nothing written). It refuses to clobber (clear message, non-zero exit, nothing written; no `--force`): if `<path>` exists and already holds a `library.yaml`, or any of the standard layout entries `slides/`, `sections/`, `themes/` or `media/`, it fails. A non-existent `<path>` is created; an existing directory that is empty — or holds only unrelated files such as `.git` or a README — is allowed, and its unrelated files are left untouched (mirroring cli-init-refuse-existing). `<path>` existing as a non-directory is an error.\n\nAC:\n- `kalide init-library ../my-lib` in a fresh location creates `../my-lib/library.yaml` (name `my-lib`, `format: 1`) plus empty `slides/`, `sections/`, `themes/` and `media/`, and the result loads cleanly (templates-dir-validation);\n- a subsequent `kalide init-library ../my-lib` refuses (non-zero exit, nothing written);\n- `kalide init-library dir` where `dir` already holds a `library.yaml` or any of the four layout entries refuses and writes nothing;\n- a target whose base name does not match `[a-z0-9][a-z0-9-]*` (e.g. `My Lib`) fails with a clear error and writes nothing;\n- `kalide init-library` with no `<path>` is a usage error and writes nothing.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
