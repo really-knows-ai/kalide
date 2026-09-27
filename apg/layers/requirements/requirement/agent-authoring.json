@@ -51,6 +51,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.deck-data-in-templates",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.templates-dir-layout",
+      "properties": {}
     }
   ],
   "in": [
