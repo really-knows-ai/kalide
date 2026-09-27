@@ -42,6 +42,21 @@
       "kind": "contains",
       "target": "domain.service.install-kalide",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.version",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.brand-identity",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.brand-assets",
+      "properties": {}
     }
   ],
   "in": [

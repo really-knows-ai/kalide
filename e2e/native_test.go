@@ -42,9 +42,29 @@ package e2e
 //     (server.AssetsPath+"reveal/dist/reveal.js"), unaffected by the project
 //     templates/ library.
 //
-// Asserting the kalide process makes no outbound connection is offline
-// enforcement (offline.go, exercised by TestDemoProject in demo_test.go) and
-// stays out of scope here.
+// Mapping to requirements.requirement.native-ci-verification (e2e steps 1-6)
+// and requirements.requirement.supported-platforms:
+//
+//   - step 1 (clean temp dir, `kalide init`, `kalide start --no-open` in its
+//     own process group): assertDirEmpty + h.Run("init") here; h.Start in
+//     harness.go (setProcessGroup: Setpgid on macOS, CREATE_NEW_PROCESS_GROUP
+//     on Windows — harness_unix.go / harness_windows.go);
+//   - step 2 (parse the printed URL): Harness.waitForURL / findServingURL;
+//   - step 3 (poll ~30s for HTTP 200 with the single hello slide):
+//     Harness.waitReady (readyTimeout = 30s) plus the "Hello, world" and
+//     single-<section> assertions here;
+//   - step 4 (reveal.js from the embedded core and the theme from
+//     templates/themes/default/, both referenced by the page, served 200 by
+//     the local server, no external URLs): the page-reference, no-external
+//     src/href, reveal.js and theme.css assertions here;
+//   - step 5 (offline): h.EnableOfflineProxy before Start plus the
+//     assertOffline connection sampler (offline.go) for the whole serve;
+//   - step 6 (graceful stop: SIGTERM on macOS, CTRL_BREAK_EVENT to the group
+//     on Windows; exit 0, port released, no leftover children; forced kill
+//     only as a failing timeout fallback): h.Stop / checkShutdown / forceKill;
+//   - supported-platforms: a prebuilt KALIDE_BINARY must be named
+//     kalide-<goos>-<goarch> for a supported target (darwin/arm64,
+//     windows/amd64, windows/arm64); never darwin/amd64 or Linux.
 //
 // It builds (or runs) a real binary, so it is skipped under -short.
 
@@ -55,12 +75,26 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/server"
 )
+
+// supportedTargets are the GOOS/GOARCH pairs of supported-platforms: darwin/arm64
+// and windows/amd64 required, windows/arm64 conditional on its native runner.
+var supportedTargets = map[string]bool{
+	"darwin/arm64":  true,
+	"windows/amd64": true,
+	"windows/arm64": true,
+}
+
+// externalRefPattern matches a src/href attribute that loads from an
+// http(s) URL, i.e. anything the deck page would fetch from off the local
+// server's relative paths.
+var externalRefPattern = regexp.MustCompile(`(?i)(?:src|href)\s*=\s*["']?(?:https?:)?//[^"'\s>]+`)
 
 // TestNativeRelease is the end-to-end native release init verification
 // described at the top of this file.
@@ -80,6 +114,10 @@ func TestNativeRelease(t *testing.T) {
 		wantName := fmt.Sprintf("kalide-%s-%s", runtime.GOOS, runtime.GOARCH)
 		if base != wantName {
 			t.Errorf("prebuilt KALIDE_BINARY %q does not match expected naming %q", base, wantName)
+		}
+		if !supportedTargets[runtime.GOOS+"/"+runtime.GOARCH] {
+			t.Errorf("native release run on %s/%s, which is not a supported target (supported-platforms)",
+				runtime.GOOS, runtime.GOARCH)
 		}
 	} else {
 		t.Logf("native release: KALIDE_BINARY unset; harness built %s from source", h.BinaryPath())
@@ -125,11 +163,26 @@ func TestNativeRelease(t *testing.T) {
 	// 200, and the seed's own default theme stylesheet
 	// (templates/themes/default/theme.css) is fetched 200 from the project
 	// library through the same route mediaHandler mounts.
+	// Step 5: keep the process offline for the whole serve.
+	h.EnableOfflineProxy()
 	h.Start()
+
+	off := assertOffline(t, h.PID())
+	t.Cleanup(off.Stop)
 
 	body, err := h.GetString("/")
 	if err != nil {
 		t.Fatalf("GET /: %v", err)
+	}
+	// Step 4: the page itself references the local reveal.js core and the
+	// project theme, and loads nothing from an external URL.
+	for _, ref := range []string{server.AssetsPath + "reveal/dist/reveal.js", server.ThemesPath + "default/theme.css"} {
+		if !strings.Contains(body, ref) {
+			t.Errorf("served deck page does not reference %s:\n%s", ref, body)
+		}
+	}
+	if m := externalRefPattern.FindAllString(body, -1); len(m) > 0 {
+		t.Errorf("served deck page references external URLs %q", m)
 	}
 	if !strings.Contains(body, "Hello, world") {
 		t.Errorf("served deck page does not carry the hello slide's title:\n%s", body)
@@ -195,6 +248,7 @@ func TestNativeRelease(t *testing.T) {
 	}
 
 	h.Stop()
+	off.Stop()
 
 	// Snapshot the scaffolded tree so the second init can be proven not to
 	// have touched it.

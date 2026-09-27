@@ -1,4 +1,11 @@
-# kalide
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo_dark.svg">
+    <img src="brand/logo_light.svg" alt="kalide logo" width="112" height="112">
+  </picture>
+</p>
+
+<h1 id="kalide" align="center">kalide</h1>
 
 `kalide` turns a folder of Markdown files into a slide deck and shows it in your
 browser. You write slides as plain text, run one command, and present — with the
@@ -7,6 +14,8 @@ browser updating live as you edit.
 Everything needed to render and present is built into the program. It works
 offline, and there is no separate tool to install or run alongside it.
 
+- [kalide](#kalide)
+- [About the name](#about-the-name)
 - [Install](#install)
 - [Supported computers](#supported-computers)
 - [Getting started](#getting-started)
@@ -18,6 +27,17 @@ offline, and there is no separate tool to install or run alongside it.
 - [Working offline](#working-offline)
 - [Making a PDF](#making-a-pdf)
 - [More install options](#more-install-options)
+- [License](#license)
+- [Changelog](#changelog)
+
+## About the name
+
+kalide comes from the Greek *kalón* (καλόν) — the ideal of the beautiful and
+the good — joined with *slide*. It is pronounced like "collide"
+(kuh-LIDE), and the name is always written in lowercase: kalide.
+
+kalide is not quite as pedantic as the ancient Greeks, but slides look better
+when they're consistent.
 
 ## Install
 
@@ -133,6 +153,11 @@ kalide templates content
 ```
 
 If the name is misspelled, `kalide` suggests the closest match.
+
+### `kalide version`
+
+Prints the version of the `kalide` you are running (stamped into the binary
+when it was built). Use it to check an install or upgrade worked.
 
 ### `kalide help`
 
@@ -327,3 +352,15 @@ The print styles come from the reveal.js version bundled inside `kalide`.
 The steps above cover copying the single file by hand. Managed installs —
 Homebrew on macOS and Scoop on Windows, including the one-time access and token
 setup — are documented in [`INSTALL.md`](INSTALL.md).
+
+## License
+
+kalide is licensed under the [Apache License 2.0](LICENSE) (Apache-2.0); see
+also [`NOTICE`](NOTICE). The kalide name and logo are covered by
+[`TRADEMARKS.md`](TRADEMARKS.md). The brand assets in [`brand/`](brand/) are
+**excluded** from the Apache-2.0 grant and carry their own terms in
+[`brand/LICENSE`](brand/LICENSE).
+
+## Changelog
+
+Release notes for every version are in [`CHANGELOG.md`](CHANGELOG.md).

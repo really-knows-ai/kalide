@@ -1,3 +1,4 @@
+// source-repo: module path must stay exactly github.com/really-knows-ai/kalide; all internal imports use it.
 module github.com/really-knows-ai/kalide
 
 go 1.27

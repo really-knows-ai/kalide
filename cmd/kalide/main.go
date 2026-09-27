@@ -15,10 +15,12 @@ import (
 //	go build -ldflags "-X main.version=v1.2.3"
 //
 // `make release` injects $(VERSION) this way; unbuilt/source runs report the
-// default. It is intentionally a plain variable with no user-facing surface —
-// the release workflow is the only setter.
+// default (`dev`). main passes it to internal/cli.Run, which exposes it to
+// users through `kalide version` (and `--version`/`-v`): the build-time
+// stamping is still the only setter, but the variable now has a user-facing
+// surface.
 var version = "dev"
 
 func main() {
-	os.Exit(cli.Run(os.Args, os.Stdout, os.Stderr))
+	os.Exit(cli.Run(os.Args, version, os.Stdout, os.Stderr))
 }

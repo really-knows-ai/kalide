@@ -26,6 +26,14 @@
 #
 # The asset name is fixed: `kalide-darwin-arm64` (see the Makefile `release`
 # target). `depends_on :macos` / the strategy are not touched by regeneration.
+#
+# Requirement ACs (audited in release-0.5.0 phase-05 task-6):
+#   - homebrew-install: kalide-darwin-arm64 is fetched from the private release
+#     via the custom strategy using HOMEBREW_GITHUB_API_TOKEN; a missing or
+#     rejected token fails with a clear message; Intel Macs are refused with
+#     "kalide is Apple silicon only".
+#   - tap-bucket-location: this file lives in the source repo's Formula/.
+#   - package-manifest-update: version/url/sha256 follow the contract above.
 
 require_relative "lib/github_private_release_download_strategy"
 
@@ -40,7 +48,7 @@ class Kalide < Formula
       using: GitHubPrivateReleaseDownloadStrategy
   version "0.0.0"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-  license :cannot_represent
+  license "Apache-2.0"
 
   # Only a darwin/arm64 binary is built. Refuse Intel Macs before anything is
   # downloaded, with a plain-language explanation. This cannot live in an

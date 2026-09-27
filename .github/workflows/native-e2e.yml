@@ -32,6 +32,15 @@
 #
 # The offline enforcement, URL parsing, process-group graceful stop and clean
 # exit assertions live in the e2e package (TestNativeRelease / the Harness).
+#
+# Requirement ACs (audited in release-0.5.0 phase-05 task-2):
+#   - native-ci-verification: one job per supported target on a GitHub-hosted
+#     native runner (macos-14, windows-latest, windows-11-arm when available),
+#     no self-hosted/manual fallback; each job tests the binary built for its
+#     own target via KALIDE_BINARY and runs e2e.TestNativeRelease (steps 1-6).
+#     fail-fast is off so every target reports, and release.yml's `publish`
+#     needs this whole workflow, so any failure blocks publishing.
+#   - single-binary: cross-compiling alone is not accepted; the e2e runs natively.
 
 name: Native e2e
 

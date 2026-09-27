@@ -11,6 +11,21 @@
       "kind": "realised-by",
       "target": "solution.component.release-workflow",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.changelog",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.license-notice",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.cli-commands",
+      "properties": {}
     }
   ],
   "in": [
@@ -22,6 +37,21 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.github-releases",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.version-command",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.changelog",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.license",
       "properties": {}
     }
   ]

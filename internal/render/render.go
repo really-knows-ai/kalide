@@ -116,6 +116,11 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // A definition failure (unknown or non-slide template, missing layout, an
 // unresolvable format) is returned as a *RenderError. RenderSlide is
 // deterministic: the same slide always renders to the same fragment.
+//
+// single-binary: rendering is entirely in-process — goldmark and html/template
+// compiled into the binary, layouts from the in-memory registry — with no
+// network, filesystem or external lookup, so the seed hello slide renders
+// offline and identically on darwin/arm64 and windows.
 func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.Slide, total int, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	if parsed == nil {
 		return "", &RenderError{Err: errors.New("nil slide")}
@@ -179,6 +184,9 @@ type renderer struct {
 // nested section-template-as-type value or list item within it) carries the
 // same reserved entries via the secCtx threaded into values/fieldValue
 // (section-template-context).
+//
+// single-binary: the context is built in-process from the parsed slide, the
+// registry and cfg only — no environment, clock, filesystem or network lookup.
 func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.Config, meta deck.Slide, total int) (map[string]any, error) {
 	data, err := r.values(s.Frontmatter, tmpl, nil)
 	if err != nil {
@@ -463,6 +471,11 @@ func dateString(raw any) string {
 // (`.deck.properties`, `.slide`): those keys are injected only when the
 // parsed layout is later executed (see slideData / values / fieldValue), not
 // while its text is being parsed here.
+//
+// single-binary: layouts come only from the registry's already-loaded
+// Layout.Text (project library / embedded sources); nothing is fetched, and
+// namespace keys are layout names, not OS paths, so no separator handling is
+// involved on darwin/arm64 or windows.
 func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
 	// The namespace root carries its own name only so html/template has a
 	// handle; it deliberately differs from every layout name. Naming the root

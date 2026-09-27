@@ -24,6 +24,18 @@
 # runner is available to this private repo, signalled by the repository
 # variable WINDOWS_ARM_RUNNER == "true" (the same toggle native-e2e.yml reads).
 # Never darwin/amd64, never Linux.
+#
+# Requirement ACs this workflow satisfies (audited in release-0.5.0 phase-05 task-1):
+#   - github-releases: a pushed vX.Y.Z tag yields Release vX.Y.Z with
+#     checksums.txt and one kalide-<os>-<arch> binary per supported target.
+#   - supported-platforms / single-binary: `make release` builds from cmd/kalide;
+#     darwin/arm64 + windows/amd64 always, windows/arm64 only when
+#     WINDOWS_ARM_RUNNER == "true"; never darwin/amd64 or Linux.
+#   - native-ci-verification: `publish` needs every native e2e job to pass.
+#   - package-manifest-update: `manifest` rewrites Formula/ + bucket/ from
+#     checksums.txt and fails if any other path changed.
+#   - global.constraint.humans-push-and-tag: no tag is created (--verify-tag);
+#     the manifest-only commit is the single CI push.
 
 name: Release
 

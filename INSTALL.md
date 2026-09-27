@@ -17,6 +17,8 @@ below and in the [README](README.md#install).
 - [On Windows (Scoop)](#on-windows-scoop)
 - [Manual download](#manual-download)
 - [Supported computers](#supported-computers)
+- [Check the installed version](#check-the-installed-version)
+- [License, changes and trademarks](#license-changes-and-trademarks)
 - [If something goes wrong](#if-something-goes-wrong)
 - [For maintainers: how a release is published](#for-maintainers-how-a-release-is-published)
 
@@ -133,6 +135,8 @@ brew install kalide
 
 `brew tap` clones the private repository, so git may ask for a username and
 password. Enter your GitHub username and paste the token **as the password**.
+If you already use an SSH key with GitHub, you can use the SSH address
+instead: `brew tap really-knows-ai/kalide git@github.com:really-knows-ai/kalide.git`.
 
 That is it. Check the install with:
 
@@ -198,6 +202,8 @@ scoop install kalide
 
 `scoop bucket add` clones the private repository, so git may ask for a username
 and password. Enter your GitHub username and paste the token **as the password**.
+If you already use an SSH key with GitHub, you can use the SSH address
+instead: `scoop bucket add kalide git@github.com:really-knows-ai/kalide.git`.
 
 That is it. Check the install with:
 
@@ -263,6 +269,26 @@ Windows on ARM is published only while a build machine for it is available, so
 the ARM installer may not be present in every release. If it is missing,
 `scoop install kalide` says so clearly on an ARM machine. The Homebrew formula
 also refuses to run on an Intel Mac with a plain-language message.
+
+## Check the installed version
+
+However you installed `kalide`, you can confirm which version you have. Open a
+terminal and run:
+
+```
+kalide version
+```
+
+It prints one line such as `kalide vX.Y.Z`. Compare it with the latest release
+listed in the [changelog](CHANGELOG.md). If yours is older, run the upgrade
+commands for your system above.
+
+## License, changes and trademarks
+
+- [LICENSE](LICENSE): `kalide` is licensed under the Apache License 2.0. The
+  `brand/` folder is not covered by that license.
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+- [TRADEMARKS.md](TRADEMARKS.md): how you may use the "kalide" name and logo.
 
 ## If something goes wrong
 

@@ -21,6 +21,16 @@
       "kind": "contains",
       "target": "solution.component.demo-fixture",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.changelog",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.license-notice",
+      "properties": {}
     }
   ],
   "in": [

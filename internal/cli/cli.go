@@ -22,6 +22,8 @@ Usage:
                              Validate and serve the deck, then open a browser
   kalide templates [name]    List the project's templates/ library, or show
                              one template by name
+  kalide version             Print the build-stamped version (also --version,
+                             -v)
   kalide help                Show this help
 `
 
@@ -29,7 +31,13 @@ Usage:
 // dispatches to a command. It returns the process status code: 0 on success,
 // non-zero on error.
 //
+// version is the build-stamped release version supplied by cmd/kalide (the
+// `main.version` variable set via -ldflags -X, or "dev" for unbuilt/source
+// runs); it is reported verbatim by the version surface.
+//
 //   - no arguments and `help` print usage and return 0;
+//   - `version`, `--version` and `-v` print a single line `kalide <version>`
+//     to stdout and return 0;
 //   - `templates [name]` routes to runTemplates, which lists the project's
 //     templates/ library or documents one template by name;
 //   - `start [--port N] [--no-open]` routes to runStart, which validates the
@@ -42,7 +50,7 @@ Usage:
 // Both `start` and `templates` operate on decks whose reserved deck-wide
 // `.deck`/`.slide` template context is enforced by internal/template's
 // reserved-name rejection and injected at render time by internal/render.
-func Run(args []string, stdout, stderr io.Writer) int {
+func Run(args []string, version string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
 		fmt.Fprint(stdout, usage)
 		return 0
@@ -51,6 +59,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	switch cmd := args[1]; cmd {
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
+		return 0
+	case "version", "--version", "-v":
+		fmt.Fprintf(stdout, "kalide %s\n", version)
 		return 0
 	case "init":
 		return runInit(args[2:], stdout, stderr)

@@ -46,11 +46,16 @@ func chdirFixtureLibrary(t *testing.T) string {
 	return dir
 }
 
+// testVersion is the build-stamped version injected into Run by runCLI. It
+// stands in for the `main.version` value cmd/kalide sets via -ldflags -X.
+const testVersion = "dev"
+
 // runCLI invokes Run with a program name prepended, exactly as cmd/kalide does
-// with os.Args, and returns the status code plus captured output.
+// with os.Args, and returns the status code plus captured output. The version
+// argument is testVersion; version-surface cases call Run directly to vary it.
 func runCLI(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := Run(append([]string{"kalide"}, args...), &stdout, &stderr)
+	code := Run(append([]string{"kalide"}, args...), testVersion, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -85,6 +90,30 @@ func TestRunHelpPrintsUsage(t *testing.T) {
 			}
 			if stderr != "" {
 				t.Fatalf("Run(%q) stderr = %q, want empty", arg, stderr)
+			}
+		})
+	}
+}
+
+// TestRunVersion pins the version surface: each of `version`, `--version` and
+// `-v` prints exactly one line `kalide <version>\n` to stdout and returns 0,
+// with nothing on stderr. The version string is injected in-process, standing
+// in for the -ldflags -X stamp cmd/kalide applies to main.version.
+func TestRunVersion(t *testing.T) {
+	const version = "0.5.0"
+
+	for _, arg := range []string{"version", "--version", "-v"} {
+		t.Run(arg, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run([]string{"kalide", arg}, version, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("Run(%q) exit = %d, want 0", arg, code)
+			}
+			if got, want := stdout.String(), "kalide "+version+"\n"; got != want {
+				t.Errorf("Run(%q) stdout = %q, want %q", arg, got, want)
+			}
+			if stderr.String() != "" {
+				t.Errorf("Run(%q) stderr = %q, want empty", arg, stderr.String())
 			}
 		})
 	}

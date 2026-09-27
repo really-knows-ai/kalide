@@ -61,6 +61,31 @@
       "kind": "contains",
       "target": "requirements.requirement.kalide-rename",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.version-command",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.changelog",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.license",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.brand-identity",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-presentation",
+      "properties": {}
     }
   ],
   "in": [
@@ -77,6 +102,11 @@
     {
       "kind": "details",
       "source": "requirements.note.kalide-rename",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.release-0-5-0-decisions",
       "properties": {}
     }
   ]

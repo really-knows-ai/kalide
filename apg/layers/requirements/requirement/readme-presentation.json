@@ -1,0 +1,53 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "readme-presentation",
+  "body": "README.md is presented as kalide's polished front page. At the top is a brand hero: the kalide mark (`brand/logo_light.svg` / `brand/logo_dark.svg`, switched via GitHub `<picture>` + `prefers-color-scheme`) with the name \"kalide\" as lowercase Helvetica-styled text. Next to the hero, the README gives the name's etymology — kalide is a portmanteau of Greek *kalón* (καλόν), the ideal of the beautiful and the good, and *slide* (wording per solution.system.kalide, no further claims) — and a pronunciation guide: said like \"collide\" (kuh-LIDE). Right after these comes a light, playful line (one or two sentences, gentle and self-aware, not snarky or overdone). It conveys that while kalide is perhaps not quite as pedantic as the ancient Greeks, it does believe slides look better when they're consistent, tying the name to the product's philosophy of strict templates and no per-slide styling (global.constraint.no-per-slide-styling). The implementer may polish the wording but keeps the meaning and tone. The name is always written lowercase (\"kalide\"), consistent with the brand wordmark. Headings, badges and sections are styled consistently. All existing technical content is retained, not cut: the install guide per install-docs, usage, CLI reference and table of contents. AC: README.md opens with a hero that references `brand/logo_dark.svg` and/or `brand/logo_light.svg`, both of which exist in the repo; near the top it states the etymology (kalón/καλόν, the beautiful and the good, + slide) and that kalide is pronounced like \"collide\" (kuh-LIDE); the etymology passage includes the playful consistency line (not as pedantic as the ancient Greeks, but slides look better when consistent); the name appears in lowercase throughout the prose; the table of contents still resolves to every section; every install-docs step (token, tap/bucket, install, upgrade) is still present; a link to LICENSE and CHANGELOG.md is present.",
+  "properties": {
+    "feature": "distribution"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.install-kalide",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.brand-identity",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.brand-identity",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.install-docs",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.license",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.changelog",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.distribution",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.release-0-5-0-decisions",
+      "properties": {}
+    }
+  ]
+}

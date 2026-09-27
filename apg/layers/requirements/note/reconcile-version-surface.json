@@ -1,0 +1,15 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "reconcile-version-surface",
+  "body": "source: `cmd/kalide/main.go` doc comment (lines 13-20) states the `version` var \"is intentionally a plain variable with no user-facing surface — the release workflow is the only setter.\" inconsistency: requirements.requirement.version-command (v0.5.0 release) requires a user-facing `kalide version` / `--version` / `-v` surface, reversing that documented design. resolution: the spec now requires the surface; the build-time stamping (`-ldflags -X main.version=...`, release workflow as sole setter) is kept unchanged; `main` passes `version` into `cli.Run` (solution.component.cli-commands) and the main.go doc comment must be rewritten to describe the new surface. [with user — the reversal was the requested release scope]",
+  "properties": {},
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.version-command",
+      "properties": {}
+    }
+  ],
+  "in": []
+}

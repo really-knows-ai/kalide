@@ -114,3 +114,9 @@ python3 -m json.tool bucket/kalide.json
 (or `jq . bucket/kalide.json`). `pre_install` is a JSON array of PowerShell
 command strings, one per step; keep it as valid JSON when editing and re-check
 the result.
+
+## License, changes and trademarks
+
+- [LICENSE](../LICENSE): Apache License 2.0 (the `brand/` folder is excluded).
+- [CHANGELOG.md](../CHANGELOG.md): what changed in each release.
+- [TRADEMARKS.md](../TRADEMARKS.md): permitted use of the "kalide" name and logo.
