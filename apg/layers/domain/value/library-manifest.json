@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "library-manifest",
-  "body": "Library manifest (`templates/library.yaml`): name identifier, optional description, format version (required, currently 1). Identity for future git-based sharing.",
+  "body": "Library manifest (the resolved library's `library.yaml`; `templates/library.yaml` for a local library): name identifier, optional description, format version (required, currently 1). Identity for future git-based sharing.",
   "properties": {},
   "out": [],
   "in": [
