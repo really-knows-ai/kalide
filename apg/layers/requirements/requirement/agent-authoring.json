@@ -71,6 +71,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.deck-config",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.theme-selection",
+      "properties": {}
     }
   ],
   "in": [
