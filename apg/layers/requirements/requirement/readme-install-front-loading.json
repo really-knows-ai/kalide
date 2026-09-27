@@ -28,6 +28,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-public-install",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.homebrew-trust-required",
+      "properties": {}
     }
   ]
 }
