@@ -16,8 +16,10 @@ import (
 const usage = `kalide — author and present Markdown slide decks
 
 Usage:
-  kalide init                Create a starter deck and templates/ library
-                             in the current directory
+  kalide init [path]         Create a deck in the current directory. With no
+                             [path], write a starter slide and a local
+                             templates/ library; with [path], reference the
+                             external template library there
   kalide start [--port N] [--no-open]
                              Validate and serve the deck, then open a browser
   kalide templates [name]    List the project's templates/ library, or show
@@ -42,9 +44,12 @@ Usage:
 //     templates/ library or documents one template by name;
 //   - `start [--port N] [--no-open]` routes to runStart, which validates the
 //     whole deck and then serves it with live reload until a shutdown signal;
-//   - `init` routes to runInit, which seeds a minimal templates/ library and a
-//     starter deck into the current directory, or refuses non-zero when one of
-//     the deck paths already exists;
+//   - `init [path]` routes to runInit. With no [path] it seeds a minimal
+//     templates/ library and a starter deck into the current directory; with
+//     an optional external library [path] it writes a deck referencing that
+//     library (no local templates/, no starter slide) after validating it
+//     fail-fast. Either form refuses non-zero when one of the deck paths
+//     already exists (a local templates/ blocks only the no-path form);
 //   - an unknown command or malformed arguments print usage and return 2.
 //
 // Both `start` and `templates` operate on decks whose reserved deck-wide
