@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.brand-assets",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.brand-identity",
+      "properties": {}
     }
   ],
   "in": []
