@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "scaffold-deck",
-  "body": "Scaffold deck: `init` — check for existing slides/, assets/, templates/, kalide.yaml; write the minimal unbranded seed (deck + templates/) from the scaffold's embedded seed.",
+  "body": "Scaffold deck: `init [path]` — check for existing slides/, assets/, templates/, kalide.yaml (the check is independent of `path`); with no path, write the minimal unbranded seed (deck + local `templates/`) from the scaffold's embedded seed; with a path, validate the external library at `path` fail-fast BEFORE writing anything (templates-dir-validation), then write the deck (`slides/`, `assets/`, `kalide.yaml` with `templates: <path>`) and no local `templates/`.",
   "properties": {},
   "out": [
     {
