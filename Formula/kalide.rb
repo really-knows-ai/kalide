@@ -42,10 +42,10 @@ class Kalide < Formula
   # the regeneration contract above.
   if Hardware::CPU.intel?
     url "https://github.com/really-knows-ai/kalide/releases/download/v0.5.0/kalide-darwin-amd64"
-    sha256 "c021f968450e98ad7f7bf6fdb5ee60751fb113161fdb60616a37bc8b2dffeac3"
+    sha256 "6a9fbb860e8989b7f71d9d763bb611ae790b8767c076dd87923201b45c2d6ee1"
   else
     url "https://github.com/really-knows-ai/kalide/releases/download/v0.5.0/kalide-darwin-arm64"
-    sha256 "0b2f6f657766c16ad88dfaa270c0b642735721a09e0b1c2c8334f5577aa1fdd0"
+    sha256 "75ac3339477a0e52c024488e25fdbbc5b810b6cbf7f6443a675918591f8fd4bf"
   end
 
   def install

@@ -11,11 +11,11 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.5.0/kalide-windows-amd64.exe#/kalide.exe",
-      "hash": "6297a5a7df7187b84c3a7770a731a85ab34166d995d283163405037417db6654"
+      "hash": "1e28c34219110899fe2e56cce922344125162fabdcf859aaed0e768c5f00fb5f"
     },
     "arm64": {
       "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.5.0/kalide-windows-arm64.exe#/kalide.exe",
-      "hash": "d771d0bad07fc7dee6f98403fd65f0f342f71a607a11341b4e708e2e955888fa"
+      "hash": "8622de4c67f5043a94f75ce7567853706eef2104ce5c7dcb9a714ff9febf2eda"
     }
   },
   "bin": "kalide.exe",
