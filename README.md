@@ -133,6 +133,7 @@ save — the browser refreshes by itself. Press **Ctrl+C** in the terminal to st
 Creates a starter deck in the **current folder**:
 
 ```
+AGENTS.md
 kalide.yaml
 slides/1-hello.md
 templates/library.yaml
@@ -142,6 +143,12 @@ templates/slides/hello/example.md
 templates/themes/default/theme.css
 assets/
 ```
+
+`AGENTS.md` is a plain-text guide for coding agents that documents the deck
+and template format, so an agent can help author slides without guessing. It
+is written only when no `AGENTS.md` already exists: a pre-existing one is left
+untouched, and the file is inert — it is not part of the deck and does not
+affect `kalide start`.
 
 The `templates/` folder it creates is a minimal, unbranded starter
 library — one `hello` slide template and one `default` theme — not a

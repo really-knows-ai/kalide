@@ -22,7 +22,9 @@
 package scaffold
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -60,6 +62,11 @@ type externalConfig struct {
 // externalPath and confirms the deck's theme (default `default`) resolves in
 // it. A missing or invalid library, or an unresolvable theme, aborts with a
 // non-zero error naming the path and writes nothing.
+//
+// It also writes the deck-root AGENTS.md agent guide (agent-authoring)
+// verbatim from the embedded deck seed, but only when no AGENTS.md already
+// exists at dir: a pre-existing guide is left byte-for-byte untouched and
+// never blocks init.
 //
 // dir may be relative or absolute and need not exist yet; it is created as
 // needed. InitExternal is deterministic and uses only the local filesystem: it
@@ -113,6 +120,19 @@ func InitExternal(dir, externalPath string) error {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 			return fmt.Errorf("init: create %s/: %w", name, err)
 		}
+	}
+
+	// Write the deck-root agent guide (agent-authoring) verbatim from the
+	// embedded deck seed, only when no AGENTS.md exists at the target. A
+	// pre-existing one is left byte-for-byte untouched and never blocks init:
+	// AGENTS.md is not one of the deck-owned blockPaths.
+	guide := filepath.Join(dir, "AGENTS.md")
+	if _, statErr := os.Lstat(guide); errors.Is(statErr, fs.ErrNotExist) {
+		if err := os.WriteFile(guide, mustReadSeed("AGENTS.md"), 0o644); err != nil {
+			return fmt.Errorf("init: write AGENTS.md: %w", err)
+		}
+	} else if statErr != nil {
+		return fmt.Errorf("init: inspect AGENTS.md: %w", statErr)
 	}
 	return nil
 }

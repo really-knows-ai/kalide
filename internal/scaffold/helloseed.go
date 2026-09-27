@@ -14,6 +14,7 @@ package scaffold
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -40,6 +41,11 @@ var seedRoot = mustSeedSub(seedEmbed, "seed")
 // seed tree's layout is exactly the layout of a deck directory (kalide.yaml,
 // slides/, templates/), so the relative path of each embedded file is its
 // destination path.
+//
+// The one special case is the deck-root AGENTS.md agent guide
+// (agent-authoring): it is written only when no AGENTS.md exists at the
+// target. A pre-existing guide is left byte-for-byte untouched and never
+// blocks init; every other seed file is copied as usual.
 func writeHelloSeed(dir string) error {
 	return fs.WalkDir(seedRoot, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -55,6 +61,18 @@ func writeHelloSeed(dir string) error {
 				return fmt.Errorf("init: create %s: %w", filepath.ToSlash(path), err)
 			}
 			return nil
+		}
+
+		// The deck-root agent guide (agent-authoring) is copied like every
+		// other seed file, but only when no AGENTS.md already exists at the
+		// target: a pre-existing one is left byte-for-byte untouched and
+		// never blocks init.
+		if path == "AGENTS.md" {
+			if _, statErr := os.Lstat(target); statErr == nil {
+				return nil
+			} else if !errors.Is(statErr, fs.ErrNotExist) {
+				return fmt.Errorf("init: inspect %s: %w", filepath.ToSlash(path), statErr)
+			}
 		}
 
 		data, err := fs.ReadFile(seedRoot, path)
