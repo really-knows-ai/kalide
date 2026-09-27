@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "requirements.requirement.install-docs",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.linux-install",
+      "properties": {}
     }
   ],
   "in": []
