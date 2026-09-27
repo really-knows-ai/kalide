@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "brand-identity",
-  "body": "kalide's own visual identity: the user-supplied faceted-hexagon mark with an orange triangular facet, as dark and light tiles (`brand/logo_dark.svg`, `brand/logo_light.svg`); the name \"kalide\" as lowercase Helvetica text; palette `#0F1115` / `#F8F9FA` / `#FF5722`. Repository/documentation collateral only — distinct from any deck template/theme branding, and never part of the binary.",
+  "body": "kalide's own visual identity: the user-supplied faceted-hexagon mark with an orange facet, as dark and light tiles (`brand/logo_dark.svg`, `brand/logo_light.svg`); the name \"kalide\" as lowercase Helvetica text; palette `#0F1115` / `#F8F9FA` / `#FF5722`. Repository/documentation collateral only — distinct from any deck template/theme branding, and never part of the binary.",
   "properties": {},
   "out": [],
   "in": [
