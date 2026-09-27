@@ -10,11 +10,11 @@ DIST    := dist
 VERSION ?= dev
 
 # Binaries are CGO-free per global.constraint.go-static-embedded-binary. All
-# six supported targets are built: darwin/arm64, darwin/amd64,
-# windows/amd64, windows/arm64, linux/amd64 and linux/arm64. Each is built
-# and released only while its CI runner is available (native-e2e.yml is the
-# runner-gated source of truth); a target degrades gracefully out of the
-# release if its runner disappears.
+# six supported targets are built unconditionally: darwin/arm64,
+# darwin/amd64, windows/amd64, windows/arm64, linux/amd64 and linux/arm64.
+# There is no runner-availability gating here — that lives in native-e2e.yml
+# and release.yml. Dropping a target means removing its line from this
+# Makefile AND from native-e2e.yml AND from release.yml.
 
 .PHONY: all fmt vet build test cross release clean
 
@@ -47,9 +47,10 @@ cross:
 # Release build: static (CGO_ENABLED=0) binaries with a reproducible -trimpath
 # and the version stamped in via -ldflags, for all six supported targets:
 # darwin/arm64, darwin/amd64, windows/amd64 (kalide.exe), windows/arm64
-# (kalide.exe), linux/amd64 and linux/arm64. Each target is built and
-# released only while its native CI runner exists; this is the target the
-# phase-8 gate cross-compile and the phase-9 release.yml build job invoke.
+# (kalide.exe), linux/amd64 and linux/arm64 — built unconditionally; this
+# Makefile does not gate on runner availability (see native-e2e.yml and
+# release.yml for that). This is the target the phase-8 gate cross-compile
+# and the phase-9 release.yml build job invoke.
 release:
 	mkdir -p $(DIST)
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build -trimpath -ldflags "-X main.version=$(VERSION)" -o $(DIST)/$(BINARY)-darwin-arm64 ./cmd/kalide
