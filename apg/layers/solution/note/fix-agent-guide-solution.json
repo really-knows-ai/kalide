@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
     }
   ],
   "in": []
