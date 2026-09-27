@@ -41,6 +41,7 @@ import (
 	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/assets"
+	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/render"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -255,7 +256,12 @@ func gallerySlideExample(t *template.Template, reg *template.Registry, funcMap h
 	if err != nil {
 		return "", err
 	}
-	return render.RenderSlide(parsed, t.Name, reg, funcMap)
+	// The gallery preview has no served deck: RenderSlide is given a nil deck
+	// config and zero-value slide metadata, which it turns into a well-formed
+	// but empty `.deck`/`.slide` context (template-context), so a preview
+	// layout reading `.deck.title`/`.deck.properties`/`.slide.number` executes
+	// instead of failing on a required-but-absent context.
+	return render.RenderSlide(parsed, t.Name, nil, deck.Slide{}, 0, reg, funcMap)
 }
 
 // gallerySectionExample renders a section-usage template's example fragment in
@@ -311,7 +317,12 @@ func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap
 	if err != nil {
 		return "", err
 	}
-	return render.RenderSlide(parsed, t.Name, rebuilt, funcMap)
+	// As in gallerySlideExample, there is no served deck for a gallery
+	// preview: a nil deck config and zero-value slide metadata give
+	// RenderSlide a well-formed but empty `.deck`/`.slide` context, present at
+	// every depth including the wrapped section instance itself
+	// (section-template-context).
+	return render.RenderSlide(parsed, t.Name, nil, deck.Slide{}, 0, rebuilt, funcMap)
 }
 
 // registryWithTemplate returns a copy of reg with extra registered, so the

@@ -519,6 +519,11 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 		return nil, err
 	}
 	doc, err := render.RenderDeck(cfg, d, parsed, reg, themes, funcMap)
+	// render.RenderDeck threads cfg and each slide's deck.Slide metadata
+	// (plus d's slide-file total) through to render.RenderSlide itself, so
+	// every served slide layout and every section instance at every depth
+	// executes with the reserved `.deck`/`.slide` context
+	// (requirement.template-context, requirement.section-template-context).
 	if err != nil {
 		return nil, err
 	}

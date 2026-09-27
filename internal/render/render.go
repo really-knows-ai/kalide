@@ -174,11 +174,13 @@ type renderer struct {
 // slideData builds the LAYOUT execution context for one slide: its converted
 // field values, its rendered body, its sections grouped by declared name, and
 // the reserved `deck` and `slide` entries (template-context). cfg, meta and
-// total are threaded from RenderSlide/RenderDeck. Only the layout map receives
-// the reserved entries; the section-instance maps are wired separately in a
-// later phase.
+// total are threaded from RenderSlide/RenderDeck. The layout map's `deck`/
+// `slide` entries are set directly below; each section-instance map (and any
+// nested section-template-as-type value or list item within it) carries the
+// same reserved entries via the secCtx threaded into values/fieldValue
+// (section-template-context).
 func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.Config, meta deck.Slide, total int) (map[string]any, error) {
-	data, err := r.values(s.Frontmatter, tmpl)
+	data, err := r.values(s.Frontmatter, tmpl, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +194,11 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 
 	// Section instances are grouped by their declared name, preserving source
 	// order, so a layout ranges over them in the order the author wrote them.
+	// Each instance is built with the reserved `.deck`/`.slide` context
+	// (template-context, section-template-context): a section instance
+	// carries the same deck-wide and slide-position data a layout does, at
+	// every composition depth.
+	secCtx := &sectionCtx{cfg: cfg, meta: meta, total: total}
 	groups := make(map[string][]map[string]any)
 	for i := range s.Sections {
 		sec := &s.Sections[i]
@@ -202,7 +209,7 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 		if !ok || secTmpl == nil {
 			continue
 		}
-		inst, err := r.values(sec.Frontmatter, secTmpl)
+		inst, err := r.values(sec.Frontmatter, secTmpl, secCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -220,8 +227,10 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	}
 
 	// The reserved `deck` and `slide` entries are injected into the layout map
-	// only (template-context). A declared field or section named deck or slide
-	// is rejected at load time, so neither can collide with a field value.
+	// here. Each section-instance map (top-level via secCtx above, nested
+	// through fieldValue/values) carries its own copy, set by values
+	// (template-context). A declared field or section named deck or slide is
+	// rejected at load time, so neither can collide with a field value.
 	data["deck"] = deckContext(cfg)
 	data["slide"] = slideContext(meta, total)
 	return data, nil
@@ -265,13 +274,32 @@ func slideContext(s deck.Slide, total int) map[string]any {
 	}
 }
 
+// sectionCtx carries the reserved `.deck`/`.slide` context (template-context,
+// section-template-context) threaded into values/fieldValue when they are
+// constructing a SECTION INSTANCE — top-level (slideData), nested through a
+// section-template-as-type field, or a list item of that type. A nil sectionCtx
+// means the map under construction is the slide LAYOUT map, which already
+// carries its own `deck`/`slide` entries (slideData) and must not gain a
+// second, redundant pair here.
+type sectionCtx struct {
+	cfg   *deck.Config
+	meta  deck.Slide
+	total int
+}
+
 // values converts one map of validated field data against t's field schema,
 // returning the layout-ready map. It is used for a slide's frontmatter, a
 // section instance's frontmatter, and a nested section-template-as-type value,
 // so the same rules apply at every depth. The reserved `template:` selector and
 // any unknown key are simply absent from the field schema and are ignored here;
 // validation already rejected an unknown key.
-func (r *renderer) values(data map[string]any, t *template.Template) (map[string]any, error) {
+//
+// secCtx is non-nil exactly when out is a SECTION INSTANCE map (top-level or
+// nested): the reserved `deck`/`slide` entries are merged into it
+// (template-context, section-template-context). The slide-frontmatter call
+// passes nil, since that map is the slide LAYOUT map and phase-03's slideData
+// already sets `deck`/`slide` on it directly.
+func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sectionCtx) (map[string]any, error) {
 	out := make(map[string]any, len(t.Fields))
 	for i := range t.Fields {
 		f := &t.Fields[i]
@@ -282,11 +310,15 @@ func (r *renderer) values(data map[string]any, t *template.Template) (map[string
 			}
 			raw = f.Default
 		}
-		v, err := r.fieldValue(f, raw, data)
+		v, err := r.fieldValue(f, raw, data, secCtx)
 		if err != nil {
 			return nil, fmt.Errorf("field %q: %w", f.Name, err)
 		}
 		out[f.Name] = v
+	}
+	if secCtx != nil {
+		out["deck"] = deckContext(secCtx.cfg)
+		out["slide"] = slideContext(secCtx.meta, secCtx.total)
 	}
 	return out, nil
 }
@@ -294,8 +326,12 @@ func (r *renderer) values(data map[string]any, t *template.Template) (map[string
 // fieldValue converts one validated field value to its layout representation.
 // data is the mapping the value came from, so a number or date field can find
 // its `<field>_format` sibling; it may be nil for a list element, which carries
-// no selector of its own.
-func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any) (any, error) {
+// no selector of its own. secCtx carries the reserved `.deck`/`.slide` context
+// through a section-template-as-type field's nested construction and a list
+// item's recursion, so a nested section instance (and each item of a list of
+// that type) is built with the same context as the section instance it lives
+// in, at every composition depth (section-template-context).
+func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, secCtx *sectionCtx) (any, error) {
 	switch f.Type {
 	case template.FieldText:
 		s, ok := raw.(string)
@@ -322,7 +358,7 @@ func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any) (
 		}
 		out := make([]any, len(items))
 		for i, elem := range items {
-			v, err := r.fieldValue(f.Item, elem, nil)
+			v, err := r.fieldValue(f.Item, elem, nil, secCtx)
 			if err != nil {
 				return nil, err
 			}
@@ -339,7 +375,7 @@ func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any) (
 		if !ok {
 			return raw, nil
 		}
-		return r.values(m, nested)
+		return r.values(m, nested, secCtx)
 
 	default:
 		// boolean, enum, link and image values render as written.
