@@ -56,17 +56,16 @@ An example probe slide.
 // integer total) context through the library→parser→render pipeline: a real
 // deck directory on disk, whose context-reading layout is written to disk as a
 // template library, is loaded by internal/deck (LoadConfig, LoadSlides), its
-// registry built over the library by template.NewRegistryFromLibrary, parsed by
-// internal/slide.Parse and rendered by RenderDeck. It reads the real filesystem,
-// so it is skipped under -short.
+// registry built over the library by template.LoadLibrary followed by
+// template.NewRegistryFromLibrary — the same load path kalide start uses —
+// parsed by internal/slide.Parse and rendered by RenderDeck. It reads the
+// real filesystem, so it is skipped under -short.
 //
-// The registry is built with NewRegistryFromLibrary rather than LoadLibrary
-// because LoadLibrary's templates-dir-validation step 7 executes each example
-// layout before any deck exists, against an example context with no reserved
-// `deck`/`slide` entries; a layout reading `{{index .deck.properties …}}` cannot
-// load there (index of untyped nil). NewRegistryFromLibrary builds the same
-// library registry without that example-execution step, so the render-time
-// context is what this test exercises.
+// template.LoadLibrary's templates-dir-validation step 7 executes each
+// template's example layout against a well-formed but empty stand-in `.deck`/
+// `.slide` context (checkLibraryExample), so the context-probe layout's
+// `{{index .deck.properties …}}` reads execute cleanly there too, against an
+// empty properties map, before any real deck exists.
 //
 // It also pins the typing/escaping clause (deck-properties): a string property
 // containing `<`, `<b>` or `**` executes through html/template as escaped or
@@ -190,9 +189,10 @@ func writeContextProbeDeck(t *testing.T, kalideYAML string, slides map[string]st
 
 // renderContextProbeDeck loads and renders one temporary deck directory through
 // the library→parser→render pipeline: theme.LoadDir, then a registry built over
-// the on-disk context-probe library with template.NewRegistryFromLibrary,
-// deck.LoadConfig, deck.LoadSlides, slide.Parse and RenderDeck. It returns the
-// page HTML, failing the test on any error.
+// the on-disk context-probe library with template.LoadLibrary followed by
+// template.NewRegistryFromLibrary, deck.LoadConfig, deck.LoadSlides,
+// slide.Parse and RenderDeck. It returns the page HTML, failing the test on
+// any error.
 func renderContextProbeDeck(t *testing.T, dir string) string {
 	t.Helper()
 	fsys := os.DirFS(dir)
@@ -238,38 +238,14 @@ func renderContextProbeDeck(t *testing.T, dir string) string {
 }
 
 // contextProbeRegistry builds the library registry over the on-disk context
-// probe template. The three template files are read from disk so the library is
-// the real one, but the registry comes from NewRegistryFromLibrary rather than
-// LoadLibrary, whose templates-dir-validation step 7 has no reserved context to
-// execute the example layout with (see the test doc).
+// probe library using template.LoadLibrary — the same load path kalide start
+// uses — followed by template.NewRegistryFromLibrary.
 func contextProbeRegistry(t *testing.T, fsys fs.FS) *template.Registry {
 	t.Helper()
-	dir := "slides/contextprobe"
-	read := func(file string) []byte {
-		t.Helper()
-		p := template.TemplatesDir + "/" + dir + "/" + file
-		data, err := fs.ReadFile(fsys, p)
-		if err != nil {
-			t.Fatalf("read %s: %v", p, err)
-		}
-		return data
-	}
 
-	lib := &template.Library{
-		RootPath: template.TemplatesDir,
-		Slides: map[string]*template.LibraryTemplate{
-			"contextprobe": {
-				Name:          "contextprobe",
-				Kind:          template.KindSlide,
-				Dir:           dir,
-				ManifestPath:  template.TemplatesDir + "/" + dir + "/" + template.ManifestFile,
-				ManifestBytes: read(template.ManifestFile),
-				LayoutPath:    template.TemplatesDir + "/" + dir + "/" + template.LayoutFile,
-				LayoutText:    string(read(template.LayoutFile)),
-				ExamplePath:   template.TemplatesDir + "/" + dir + "/" + template.ExampleFile,
-				ExampleBytes:  read(template.ExampleFile),
-			},
-		},
+	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
 	}
 
 	reg, err := template.NewRegistryFromLibrary(lib)
