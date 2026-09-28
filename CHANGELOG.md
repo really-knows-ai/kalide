@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-28
+
+### Added
+
+- Agent guides: every scaffolding command now writes an `AGENTS.md` — a static,
+  unbranded Markdown reference to the deck and template format for coding
+  agents. `kalide init` and `kalide init <path>` write a deck-author guide at
+  the project root, and `kalide init-library <path>` writes a
+  library/template-author guide at the library root. A guide is written only
+  when none exists: a pre-existing `AGENTS.md` is never overwritten and never
+  blocks scaffolding.
+- A build/test-time self-test keeps each embedded guide in step with the
+  implemented format, so the vocabulary a guide documents cannot drift from
+  what `kalide` accepts.
+
+### Changed
+
+- The resolved template-library layout now permits a single inert `AGENTS.md`
+  at its root (ignored by loading, validation, rendering and serving). Every
+  other unknown top-level entry remains an error.
+
 ## [0.6.0] - 2026-09-27
 
 ### Added
@@ -68,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/really-knows-ai/kalide/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/really-knows-ai/kalide/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/really-knows-ai/kalide/releases/tag/v0.5.0
