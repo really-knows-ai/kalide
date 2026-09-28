@@ -220,6 +220,21 @@ func checkLibraryBuild(lib *Library) error {
 	return nil
 }
 
+// libraryMetaKeys is the complete set of library.yaml keys loadLibraryMeta
+// handles, in declaration order. It is both the accepted-key set and the
+// candidate list for closest-match suggestions.
+var libraryMetaKeys = []string{"name", "description", "format"}
+
+// LibraryMetaKeys returns the sorted accepted library.yaml keys loadLibraryMeta
+// handles — description, format and name. It is the single source of truth for
+// the library metadata vocabulary. The returned slice is a fresh allocation.
+func LibraryMetaKeys() []string {
+	out := make([]string, len(libraryMetaKeys))
+	copy(out, libraryMetaKeys)
+	sort.Strings(out)
+	return out
+}
+
 // loadLibraryMeta reads and parses root/library.yaml (step 1): name must
 // match the library naming convention, description is optional, and format
 // is a required integer whose only currently accepted value is 1.
@@ -280,7 +295,7 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 
 		default:
 			e := libraryErrorf(metaPath, line, "unknown key %q", key.Value)
-			return e.withSuggestion(key.Value, []string{"name", "description", "format"})
+			return e.withSuggestion(key.Value, libraryMetaKeys)
 		}
 	}
 

@@ -1,6 +1,7 @@
 package template
 
 import (
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -45,6 +46,54 @@ var manifestBodyModes = map[string]BodyMode{
 	"required":   BodyRequired,
 	"optional":   BodyOptional,
 	"disallowed": BodyDisallowed,
+}
+
+// manifestTopLevelKeys is the complete set of top-level template.yaml schema
+// keys parseManifest decodes and dispatches (template-manifest), in
+// declaration order. It deliberately excludes the tolerated-and-ignored `name`
+// key: a template's name is always its directory name, never a manifest value.
+var manifestTopLevelKeys = []string{"description", "fields", "sections", "body"}
+
+// ManifestFieldTypes returns the sorted field-type names a template.yaml
+// `type:` may take — the keys of manifestFieldTypes (field-types). It is the
+// single source of truth for the field-type vocabulary: callers that must
+// enumerate the implemented types (notably the agent-guide drift self-test)
+// derive them from here rather than duplicating the list. The returned slice
+// is a fresh allocation.
+func ManifestFieldTypes() []string {
+	out := make([]string, 0, len(manifestFieldTypes))
+	for name := range manifestFieldTypes {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// BodyModes returns the sorted body-mode names a template.yaml `body.mode:`
+// may take — the keys of manifestBodyModes (body-rules). It is the single
+// source of truth for the body-mode vocabulary. The returned slice is a fresh
+// allocation.
+func BodyModes() []string {
+	out := make([]string, 0, len(manifestBodyModes))
+	for name := range manifestBodyModes {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ManifestTopLevelKeys returns the sorted accepted top-level template.yaml
+// schema keys parseManifest decodes and dispatches — body, description, fields
+// and sections (template-manifest). It does not include the
+// tolerated-and-ignored `name` key: a template's name is always its directory
+// name, never a manifest value. It is the single source of truth for the
+// template.yaml top-level key vocabulary. The returned slice is a fresh
+// allocation.
+func ManifestTopLevelKeys() []string {
+	out := make([]string, len(manifestTopLevelKeys))
+	copy(out, manifestTopLevelKeys)
+	sort.Strings(out)
+	return out
 }
 
 // parseManifest decodes t's template.yaml (t.ManifestBytes) into a *Template
@@ -108,7 +157,7 @@ func parseManifest(t *LibraryTemplate) (*Template, error) {
 			def.Body = body
 		default:
 			e := libraryErrorf(t.ManifestPath, line, "unknown key %q", key.Value)
-			return nil, e.withSuggestion(key.Value, []string{"description", "fields", "sections", "body"})
+			return nil, e.withSuggestion(key.Value, manifestTopLevelKeys)
 		}
 	}
 

@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -384,6 +385,27 @@ func emptyExampleSlideContext() map[string]any {
 		"number": "",
 		"total":  0,
 	}
+}
+
+// ContextKeys returns the sorted reserved render-context keys a library example
+// layout may read, as dotted paths: the `.deck` keys from
+// emptyExampleDeckContext as deck.title/deck.author/deck.date/deck.properties,
+// and the `.slide` keys from emptyExampleSlideContext as
+// slide.number/slide.total (template-context, deck-data-in-templates). It
+// derives them from those two functions, which stay the single source of truth
+// for the reserved render context, so callers that must enumerate the context
+// vocabulary (notably the agent-guide drift self-test) do not duplicate the
+// list. The returned slice is a fresh allocation.
+func ContextKeys() []string {
+	out := make([]string, 0, len(emptyExampleDeckContext())+len(emptyExampleSlideContext()))
+	for key := range emptyExampleDeckContext() {
+		out = append(out, "deck."+key)
+	}
+	for key := range emptyExampleSlideContext() {
+		out = append(out, "slide."+key)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // withPath re-positions err (from decodeFrontmatter, which carries no path)

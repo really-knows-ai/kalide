@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,18 @@ const (
 // declaration order. It is both the unknown-key whitelist and the candidate
 // list for closest-match suggestions.
 var configKeys = []string{"title", "author", "date", "theme", "navigation", "properties", "templates"}
+
+// ConfigKeys returns a fresh copy of configKeys — the complete set of keys
+// kalide.yaml may contain (deck-config) — sorted. It is the single source of
+// truth for the deck configuration vocabulary, so callers that must enumerate
+// the implemented keys (notably the agent-guide drift self-test) derive them
+// from here rather than duplicating the list.
+func ConfigKeys() []string {
+	out := make([]string, len(configKeys))
+	copy(out, configKeys)
+	sort.Strings(out)
+	return out
+}
 
 // dateLayout is the only accepted date form: an ISO calendar date, no time and
 // no zone.

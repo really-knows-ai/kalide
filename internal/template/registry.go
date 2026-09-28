@@ -349,6 +349,31 @@ func checkFieldVariants(tmpl string, f *Field) error {
 	return nil
 }
 
+// reservedDeclaredNames are the exact field/section names checkDeclaredName
+// rejects: `body` the implied body field, `notes` the parser's speaker-notes
+// section, and `deck` and `slide` the reserved top-level template-context
+// names.
+var reservedDeclaredNames = []string{"body", "notes", "deck", "slide"}
+
+// reservedDeclaredNameSuffix is the reserved suffix of a field's
+// format-selection sibling: a declared field or section name ending in it
+// (such as `foo_format`) is rejected.
+const reservedDeclaredNameSuffix = "_format"
+
+// ReservedNames returns the sorted reserved declared-name tokens enforced by
+// checkDeclaredName: the exact names `body`, `notes`, `deck` and `slide`, plus
+// the reserved `_format` suffix token. It is the single source of truth for the
+// reserved-name vocabulary, deriving from the same declarations
+// checkDeclaredName enforces (the `_format` entry is a suffix, not an exact
+// name). The returned slice is a fresh allocation.
+func ReservedNames() []string {
+	out := make([]string, 0, len(reservedDeclaredNames)+1)
+	out = append(out, reservedDeclaredNames...)
+	out = append(out, reservedDeclaredNameSuffix)
+	sort.Strings(out)
+	return out
+}
+
 // checkDeclaredName rejects a field or section name that is empty or reserved.
 // `body` is the implied body field, `notes` the parser's speaker-notes section,
 // `deck` and `slide` the reserved top-level template-context names, and a
@@ -365,11 +390,11 @@ func checkDeclaredName(kind, tmpl, name string) error {
 	if name == "" {
 		return fmt.Errorf("template %q: %s name must not be empty", tmpl, kind)
 	}
-	if name == "body" || name == "notes" || name == "deck" || name == "slide" {
+	if containsString(reservedDeclaredNames, name) {
 		return fmt.Errorf("template %q: %s name %q is reserved and cannot be declared", tmpl, kind, name)
 	}
-	if strings.HasSuffix(name, "_format") {
-		return fmt.Errorf("template %q: %s name %q uses the reserved _format suffix", tmpl, kind, name)
+	if strings.HasSuffix(name, reservedDeclaredNameSuffix) {
+		return fmt.Errorf("template %q: %s name %q uses the reserved %s suffix", tmpl, kind, name, reservedDeclaredNameSuffix)
 	}
 	return nil
 }
