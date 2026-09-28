@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "live-reload",
-  "body": "While `kalide start` runs, changes to `slides/`, `assets/` or `kalide.yaml`, or anywhere under the resolved library root (the configured `templates:` path when set, otherwise the local `templates/`; see external-template-library), are detected; the resolved library and the deck are re-validated and re-rendered, and the open browser reloads automatically (see templates-live-reload). Carve-out: a change to the configured `templates:` value in `kalide.yaml` is detected but is NOT live-applied — the server stops serving the deck and shows the full-page restart-required error (see template-retarget-requires-restart) — while every other `kalide.yaml` change still live-reloads.",
+  "body": "While `kalide start` runs, changes to `slides/`, `assets/` or `kalide.yaml`, or under the resolved library's structure (its `library.yaml` and its `slides/`, `sections/`, `themes/` and `media/` subtrees; the configured `templates:` path when set, otherwise the local `templates/`; see external-template-library, templates-dir-layout), are detected; the resolved library and the deck are re-validated and re-rendered, and the open browser reloads automatically (see templates-live-reload). Carve-out: a change to the configured `templates:` value in `kalide.yaml` is detected but is NOT live-applied — the server stops serving the deck and shows the full-page restart-required error (see template-retarget-requires-restart) — while every other `kalide.yaml` change still live-reloads.",
   "properties": {
     "feature": "presenting"
   },
