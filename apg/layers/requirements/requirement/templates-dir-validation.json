@@ -68,6 +68,11 @@
       "kind": "details",
       "source": "requirements.note.fix-library-extra-top-level-entries",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.theme-media-references",
+      "properties": {}
     }
   ]
 }
