@@ -68,6 +68,11 @@
       "kind": "details",
       "source": "requirements.note.theme-media-references-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.theme-media-serving",
+      "properties": {}
     }
   ]
 }

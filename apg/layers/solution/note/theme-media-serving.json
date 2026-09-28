@@ -4,6 +4,12 @@
   "name": "theme-media-serving",
   "body": "source: the theme-media-references feature (requirements.note.theme-media-references-decisions); the reserved `media:` reference must work on BOTH the validation path (internal/template) and the serving path (internal/theme + internal/server), verified against the code graph.\n\nDUAL PATH, verified: validation uses internal/template (loadLibraryTheme 413, checkThemeURLs 461, cssURLPattern 456); serving uses a SEPARATE internal/theme.Registry (theme.LoadDir, load.go:42) and internal/server.themeFileHandler (media.go:89) serves theme files RAW. theme.css is linked by internal/render.themeStylesheet (deck.go:182) as /assets/templates/themes/<name>/theme.css. So a `media:` ref reaches the browser unrewritten unless the SERVING path rewrites it. DECISION: rewrite at serve time in the HTTP server's theme route (solution.component.http-server → internal/server.themeFileHandler), covering theme.css and any CSS @import-ed from the theme directory; the served URL is the same media URL space the layout `media` helper returns (server.MediaPath = /assets/templates/media/).\n\nAMENDED solution: template-library-loader (step 6 follows @import and validates theme CSS media: refs), theme-registry (theme CSS may carry media: refs; raw theme files served), http-server (rewrites media: refs in served theme CSS). RENDERER deliberately NOT amended: render.RenderDeck only builds the <link> href via themeStylesheet and does not read theme CSS bytes — verified with apg_callers: theme.Theme.CSS has NO non-test callers and render.themeStylesheet is called only by RenderDeck — so the renderer does not participate in reference resolution or rewriting; the rewrite is load/validate + serve, not render.\n\nCONSTRAINT: global.constraint.template-library-shareable amended — a theme may reference only its own theme dir and the library's media/ tree; the `media:` target is inside the library, so relocatability/self-containment holds. global.constraint.theme-tokens-only, global.constraint.no-per-slide-styling, global.constraint.no-embedded-template-assets and global.constraint.never-serve-broken-deck are UNAFFECTED: this is a theme-level asset reference (not layout or per-slide styling), no assets are embedded, and validation stays fail-fast. [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.theme-media-references",
+      "properties": {}
+    }
+  ],
   "in": []
 }
