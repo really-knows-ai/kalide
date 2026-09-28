@@ -59,6 +59,18 @@ permission:
     "apg/.worktrees/*/internal/**": deny
     ".opencode/**": deny
     "apg/.worktrees/*/.opencode/**": deny
+  apg_rm:
+    "*": deny
+    "apg/.worktrees/*/e2e/**": allow
+    "apg/.worktrees/*/examples/**": allow
+  apg_mv:
+    "*": deny
+    "apg/.worktrees/*/e2e/**": allow
+    "apg/.worktrees/*/examples/**": allow
+  apg_cp:
+    "*": deny
+    "apg/.worktrees/*/e2e/**": allow
+    "apg/.worktrees/*/examples/**": allow
   bash:
     "*": deny
     "cd *": allow
@@ -109,9 +121,11 @@ change to be testable, stop and report it.
 
 ## Worktree-only writes
 Every path you may write is granted only under `apg/.worktrees/*/…`; the same
-paths on the main checkout are denied. You hold no file delete/move tools (the
-old bash `rm` grant is gone) — if an e2e/example file must be removed or
-renamed, stop and report it.
+paths on the main checkout are denied. Delete/move/copy e2e and example files
+with `apg_rm` / `apg_mv` / `apg_cp` (scope-enforced: last matching allow/deny
+entry wins, unmatched paths refused, any main-checkout path refused;
+`apg_mv`/`apg_cp` check both source and destination). There is no bash
+`rm`/`mv`/`cp`/`git mv`.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing
