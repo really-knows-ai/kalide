@@ -1,6 +1,7 @@
 # Release for kalide.
 #
-# Trigger: ONLY a human-pushed version tag vX.Y.Z. There is deliberately no
+# Trigger: ONLY a version tag vX.Y.Z, created by a human — or by an agent acting
+# under explicit, per-action human consent. There is deliberately no
 # workflow_dispatch and no scheduled/other trigger. This workflow never creates
 # or moves a tag; the manifest commit (updating Formula/ and bucket/) is the one
 # CI push allowed by global.constraint.humans-push-and-tag, and lives in the
@@ -139,7 +140,8 @@ jobs:
 
       # Create the GitHub Release vX.Y.Z with the binaries
       # and checksums.txt. `--verify-tag` guarantees the tag already exists
-      # (the human pushed it); gh must never create one. This job has no
+      # (created by a human, or by an agent acting under explicit per-action
+      # human consent); gh must never create one. This job has no
       # checkout, so `--repo` is required: gh cannot infer the repository from
       # a working tree that isn't there.
       - name: Create GitHub Release

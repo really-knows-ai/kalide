@@ -263,8 +263,10 @@ If none of these helps, open an issue at
 
 This section is background only — you never need it to install or use `kalide`.
 
-- **People push tags.** A release starts when a human pushes a tag named
-  `vX.Y.Z` (for example `v1.2.0`). Nothing else creates tags.
+- **Pushing and tagging need explicit human consent.** A release starts when a
+  version tag named `vX.Y.Z` (for example `v1.2.0`) is created. A human may push
+  or tag directly; an agent may push or tag only with explicit, per-action human
+  consent for that specific action — consent is never standing or assumed.
 - **CI builds and checks.** The release workflow builds the binaries for the
   supported targets, runs the native end-to-end checks on each target's own
   build machine, and only then publishes the GitHub Release with the binaries
@@ -281,5 +283,7 @@ This section is background only — you never need it to install or use `kalide`
   after publishing, so it flags a broken public install rather than blocking
   the release.
 
-In short: humans push `vX.Y.Z` tags, and CI publishes the release, pushes
-only the package-manifest commit, and then verifies the anonymous install.
+In short: pushing and tagging need explicit, per-action human consent — from a
+human, or from an agent acting under that consent — and CI publishes the
+release, pushes only the package-manifest commit, and then verifies the
+anonymous install.

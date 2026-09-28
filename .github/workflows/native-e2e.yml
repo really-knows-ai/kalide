@@ -1,6 +1,7 @@
 # Reusable native end-to-end verification.
 #
-# Called by ci.yml (push/PR) and by release.yml (a human-pushed vX.Y.Z tag). One
+# Called by ci.yml (push/PR) and by release.yml (a version tag vX.Y.Z created by
+# a human, or by an agent acting under explicit, per-action human consent). One
 # GitHub-hosted native runner per supported target; there is no self-hosted or
 # manual fallback.
 #
