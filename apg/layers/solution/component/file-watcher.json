@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "file-watcher",
-  "body": "File watcher + live reload: cross-platform file watching (slides/, assets/, kalide.yaml, and recursively the RESOLVED library root — the configured `templates:` path when set, else the local `templates/`; library.yaml, slides/, sections/, themes/, media/) with debounce; on a change triggers template reload, re-validation/re-render and emits the deck-rebuilt notification (rendered deck or first error) to the http-server's live-reload endpoint. A change to the configured `templates:` value is surfaced as restart-required (not a live retarget): the watcher reports it so the server publishes the full-page restart-required error, while changes under the resolved root still reload normally (see template-retarget-requires-restart).",
+  "body": "File watcher + live reload: cross-platform file watching (slides/, assets/, kalide.yaml, and the RESOLVED library's structure — the configured `templates:` path when set, else the local `templates/`; its library.yaml and its slides/, sections/, themes/ and media/ subtrees only, every other top-level entry in the library root being ignored) with debounce; on a change triggers template reload, re-validation/re-render and emits the deck-rebuilt notification (rendered deck or first error) to the http-server's live-reload endpoint. A change to the configured `templates:` value is surfaced as restart-required (not a live retarget): the watcher reports it so the server publishes the full-page restart-required error, while changes under the resolved root still reload normally (see template-retarget-requires-restart).",
   "properties": {},
   "out": [
     {
