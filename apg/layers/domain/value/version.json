@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "version",
-  "body": "A kalide version string: `vX.Y.Z` taken from the human-pushed release tag and stamped into the binary at build time (`-ldflags -X main.version=...`); `dev` for unstamped/source builds. Immutable; one per release.",
+  "body": "A kalide version string: `vX.Y.Z` taken from the consented release tag (human-created, or agent-created under explicit per-action consent) and stamped into the binary at build time (`-ldflags -X main.version=...`); `dev` for unstamped/source builds. Immutable; one per release.",
   "properties": {},
   "out": [],
   "in": [
