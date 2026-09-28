@@ -53,6 +53,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.theme-media-references",
+      "properties": {}
     }
   ]
 }
