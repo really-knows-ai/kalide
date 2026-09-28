@@ -133,6 +133,11 @@
       "kind": "details",
       "source": "requirements.note.fix-library-extra-top-level-entries",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.theme-media-references-decisions",
+      "properties": {}
     }
   ]
 }
