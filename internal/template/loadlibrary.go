@@ -455,6 +455,22 @@ func loadLibraryTheme(sub fs.FS, root, name string) (*LibraryTheme, error) {
 // cssURLPattern matches a CSS url(...) reference, capturing its argument.
 var cssURLPattern = regexp.MustCompile(`url\(\s*['"]?([^'")]+)['"]?\s*\)`)
 
+// cssLineAt returns the 1-based line number containing the byte at offset in
+// css, by counting the newlines before it. A negative or out-of-range offset
+// is clamped to line 1.
+func cssLineAt(css []byte, offset int) int {
+	if offset < 0 || offset > len(css) {
+		return 1
+	}
+	line := 1
+	for _, b := range css[:offset] {
+		if b == '\n' {
+			line++
+		}
+	}
+	return line
+}
+
 // checkThemeURLs rejects a theme.css url(...) reference that is not a
 // relative path staying inside its own theme directory (step 6): an absolute
 // path, a scheme (http:, data:, //) or a `..` escape is rejected.
