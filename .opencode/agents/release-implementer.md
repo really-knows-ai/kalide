@@ -1,5 +1,5 @@
 ---
-description: Release implementer for kalide — .github/workflows (ci, native-e2e, release), Formula/ (Homebrew + custom download strategy), bucket/ (Scoop), INSTALL.md.
+description: Release implementer for kalide — all of .github/ (workflows ci/native-e2e/release plus any other repo GitHub config), Formula/ (Homebrew + custom download strategy), bucket/ (Scoop), INSTALL.md.
 mode: subagent
 hidden: true
 generated: true
@@ -51,7 +51,7 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/.github/**": allow
     "apg/.worktrees/*/Formula/**": allow
     "apg/.worktrees/*/bucket/**": allow
     "apg/.worktrees/*/INSTALL.md": allow
@@ -63,22 +63,25 @@ permission:
     "apg/.worktrees/*/.opencode/**": deny
   apg_rm:
     "*": deny
-    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/.github/**": allow
     "apg/.worktrees/*/Formula/**": allow
     "apg/.worktrees/*/bucket/**": allow
     "apg/.worktrees/*/INSTALL.md": allow
+    ".github/**": deny
   apg_mv:
     "*": deny
-    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/.github/**": allow
     "apg/.worktrees/*/Formula/**": allow
     "apg/.worktrees/*/bucket/**": allow
     "apg/.worktrees/*/INSTALL.md": allow
+    ".github/**": deny
   apg_cp:
     "*": deny
-    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/.github/**": allow
     "apg/.worktrees/*/Formula/**": allow
     "apg/.worktrees/*/bucket/**": allow
     "apg/.worktrees/*/INSTALL.md": allow
+    ".github/**": deny
   bash:
     "*": deny
     "cd *": allow
@@ -116,7 +119,9 @@ windows/amd64, windows/arm64 via the Makefile). You work with cwd inside the
 project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 
 ## You own
-`.github/workflows/**` (`ci.yml`, `native-e2e.yml`, `release.yml`),
+All of `.github/**` — the workflows (`ci.yml`, `native-e2e.yml`,
+`release.yml`) and any other GitHub config under `.github/` (worktree only;
+no other agent owns `.github/`),
 `Formula/**` (`kalide.rb` + its custom download strategy), `bucket/**`
 (`kalide.json`), `INSTALL.md`. Not yours: any Go source or tests, `Makefile`/
 `README.md`/go.mod (implementer), `e2e/**` (e2e-test-implementer),

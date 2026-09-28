@@ -6,6 +6,18 @@
     "e2e-test-implementer": {
       "model": "opencode-go/deepseek-v4.1-flash"
     },
+    "content-implementer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "web-implementer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "release-implementer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "test-implementer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
     "release-agent": {
       "model": "github-copilot/claude-opus-5.5"
     },

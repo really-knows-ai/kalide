@@ -68,6 +68,10 @@ permission:
     "git remote -v": allow
     "git remote show *": allow
     "git ls-files *": allow
+    "git fetch": allow
+    "git fetch *": allow
+    "git pull": allow
+    "git pull *": allow
     "git add *": allow
     "git commit *": allow
     "git tag *": ask
@@ -98,11 +102,17 @@ would refuse any path resolving into the main checkout.
 2. Confirm with the coordinator that everything intended for this release is
    merged and the CHANGELOG entry is correct.
 3. `git add`, `git commit` the CHANGELOG update.
-4. `git tag vX.Y.Z` — **ask-gated**: this prompts for explicit human approval
+4. **Sync main with origin before tagging.** Run `git fetch origin`, then
+   `git pull --ff-only` (one call each, never chained). If the fast-forward
+   is refused — local main and `origin/main` have diverged — or `git status`
+   shows main is not up to date with origin afterwards, **STOP and report**
+   the exact output to the coordinator. Never merge, rebase or force anything
+   to resolve a divergence; never tag an out-of-date main.
+5. `git tag vX.Y.Z` — **ask-gated**: this prompts for explicit human approval
    before it runs.
-5. `git push` and `git push --tags` (or `git push origin vX.Y.Z`) — also
+6. `git push` and `git push --tags` (or `git push origin vX.Y.Z`) — also
    **ask-gated**.
-6. From here, CI (`.github/workflows/release.yml`) does the rest: it builds
+7. From here, CI (`.github/workflows/release.yml`) does the rest: it builds
    the six supported-target binaries via `make release`, runs native e2e,
    publishes the GitHub Release, and its own `manifest` job (as the
    `github-actions[bot]`, not you) regenerates `Formula/kalide.rb` and
