@@ -1,0 +1,31 @@
+{
+  "agent": {
+    "implementer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "e2e-test-implementer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "release-agent": {
+      "model": "github-copilot/claude-opus-5.5"
+    },
+    "spec-writer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "plan-writer": {
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "spec-review": {
+      "model": "github-copilot/claude-opus-5.5"
+    },
+    "plan-review": {
+      "model": "github-copilot/claude-opus-5.5"
+    },
+    "agent-builder": {
+      "model": "github-copilot/claude-opus-5.5"
+    },
+    "implementation-phase-reviewer": {
+      "model": "github-copilot/claude-opus-5.5"
+    }
+  }
+}
