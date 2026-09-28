@@ -25,10 +25,12 @@ permission:
   apg_plan_tasks: allow
   apg_plan_done: allow
   apg_plan_undone: allow
+  apg_plan_note: allow
   apg_review: allow
   external_directory:
     "*": deny
     "/tmp/**": allow
+    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -49,16 +51,40 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "apg/.worktrees/*/cmd/**/*_test.go": allow
-    "apg/.worktrees/*/internal/**/*_test.go": allow
-    "apg/.worktrees/*/cmd/**/testdata/**": allow
-    "apg/.worktrees/*/internal/**/testdata/**": allow
+    "apg/.worktrees/*/**/*_test.go": allow
+    "apg/.worktrees/*/**/testdata/**": allow
     "cmd/**": deny
     "internal/**": deny
     "e2e/**": deny
     "apg/.worktrees/*/e2e/**": deny
+    "apg/.worktrees/*/examples/**": deny
     ".opencode/**": deny
     "apg/.worktrees/*/.opencode/**": deny
+    "apg/.worktrees/*/apg/**": deny
+  apg_rm:
+    "*": deny
+    "apg/.worktrees/*/**/*_test.go": allow
+    "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/e2e/**": deny
+    "apg/.worktrees/*/examples/**": deny
+    "apg/.worktrees/*/.opencode/**": deny
+    "apg/.worktrees/*/apg/**": deny
+  apg_mv:
+    "*": deny
+    "apg/.worktrees/*/**/*_test.go": allow
+    "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/e2e/**": deny
+    "apg/.worktrees/*/examples/**": deny
+    "apg/.worktrees/*/.opencode/**": deny
+    "apg/.worktrees/*/apg/**": deny
+  apg_cp:
+    "*": deny
+    "apg/.worktrees/*/**/*_test.go": allow
+    "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/e2e/**": deny
+    "apg/.worktrees/*/examples/**": deny
+    "apg/.worktrees/*/.opencode/**": deny
+    "apg/.worktrees/*/apg/**": deny
   bash:
     "*": deny
     "cd *": allow
@@ -83,6 +109,7 @@ permission:
     "go vet ./...": allow
     "go vet *": allow
     "go build ./...": allow
+    "go build *": allow
     "go test ./...": allow
     "go test -short ./...": allow
     "go test *": allow
@@ -95,7 +122,8 @@ inside the project worktree (`apg/.worktrees/<project>/`); main is never a
 mutation place.
 
 ## You own
-`cmd/**/*_test.go`, `internal/**/*_test.go`, and their `testdata/` dirs. Unit
+Every `**/*_test.go` and `**/testdata/**` outside `e2e/**` (in practice
+`cmd/**` and `internal/**`). Unit
 and int tests share files, so one agent owns both tiers:
 - **unit** — in-process, `testdata`, fake FS; must run under `-short`.
 - **int** — real FS / ports / fsnotify watcher; guard with
@@ -106,8 +134,13 @@ change (a seam, an exported hook), stop and report it.
 
 ## Worktree-only writes
 Every path you may write is granted only under `apg/.worktrees/*/…`; the same
-paths on the main checkout are denied. You hold no file delete/move tools —
-if a test file must be removed or renamed, stop and report it.
+paths on the main checkout are denied. Delete/rename/copy test files and
+testdata with `apg_rm` / `apg_mv` / `apg_cp`, scoped to worktree
+`**/*_test.go` and `**/testdata/**` with `e2e/**` excluded. The tools are
+scope-enforced: the last matching allow/deny entry wins, unmatched paths are
+refused, and any main-checkout path is refused. `apg_mv`/`apg_cp` check both
+source and destination, so a test can never be moved into source. There is
+no bash `rm`/`mv`/`cp`/`git mv`.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing
@@ -122,7 +155,10 @@ project branch. **Never push or tag** — humans only.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with
-`apg_plan_done` (`apg_plan_undone` to revert). Read Feedback with `apg_review`
+`apg_plan_done` plus the task note via `apg_plan_note` (`apg_plan_undone` to
+revert) — normally when the coordinator resumes your session after verifying
+and scanning. You never run plan authoring/verification, review actioning,
+node/edge, scan or project tools. Read Feedback with `apg_review`
 (read-only). You never action Feedback: return a claim (fixed / wont-fix +
 reason) to the coordinator, who checks and actions it. Plan/task state is
 transient; spec node mutations belong to the spec-writer.

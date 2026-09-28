@@ -1,5 +1,5 @@
 ---
-description: Web implementer for kalide — internal/{assets,render,server,watch} plus the fonts/ and logo/ move into internal/assets.
+description: Web implementer for kalide — internal/{assets,render,server,watch} (embedded pages/reveal assets, renderer, HTTP server, file watcher). Tests denied.
 mode: subagent
 hidden: true
 generated: true
@@ -25,10 +25,12 @@ permission:
   apg_plan_tasks: allow
   apg_plan_done: allow
   apg_plan_undone: allow
+  apg_plan_note: allow
   apg_review: allow
   external_directory:
     "*": deny
     "/tmp/**": allow
+    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -53,11 +55,7 @@ permission:
     "apg/.worktrees/*/internal/render/**": allow
     "apg/.worktrees/*/internal/server/**": allow
     "apg/.worktrees/*/internal/watch/**": allow
-    "apg/.worktrees/*/fonts/**": allow
-    "apg/.worktrees/*/logo/**": allow
     "internal/**": deny
-    "fonts/**": deny
-    "logo/**": deny
     "apg/.worktrees/*/brand/**": deny
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
@@ -69,8 +67,6 @@ permission:
     "apg/.worktrees/*/internal/render/**": allow
     "apg/.worktrees/*/internal/server/**": allow
     "apg/.worktrees/*/internal/watch/**": allow
-    "apg/.worktrees/*/fonts/**": allow
-    "apg/.worktrees/*/logo/**": allow
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
   apg_mv:
@@ -79,8 +75,6 @@ permission:
     "apg/.worktrees/*/internal/render/**": allow
     "apg/.worktrees/*/internal/server/**": allow
     "apg/.worktrees/*/internal/watch/**": allow
-    "apg/.worktrees/*/fonts/**": allow
-    "apg/.worktrees/*/logo/**": allow
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
   apg_cp:
@@ -89,8 +83,6 @@ permission:
     "apg/.worktrees/*/internal/render/**": allow
     "apg/.worktrees/*/internal/server/**": allow
     "apg/.worktrees/*/internal/watch/**": allow
-    "apg/.worktrees/*/fonts/**": allow
-    "apg/.worktrees/*/logo/**": allow
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
   bash:
@@ -128,15 +120,13 @@ permission:
 # web-implementer — kalide
 
 You implement plan tasks for the web/runtime subsystem of **kalide** (Go,
-`CGO_ENABLED=0`, fsnotify; embedded brand assets). You work with cwd inside the
+`CGO_ENABLED=0`, fsnotify; embedded page/reveal assets). You work with cwd inside the
 project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 
 ## You own
-`internal/assets/**` (embedded fonts/logo), `internal/render/**`,
-`internal/server/**`, `internal/watch/**`, and the committed `fonts/` and
-`logo/` trees — phase 1 moves them under `internal/assets` with `apg_mv`
-(`fonts` → `internal/assets/fonts`, `logo` → `internal/assets/logo`, worktree
-paths; only when a task says so; then `git add` the result). Not yours: `*_test.go`/`testdata/` (test-implementer),
+`internal/assets/**` (embedded pages and the vendored reveal.js dist),
+`internal/render/**`, `internal/server/**`, `internal/watch/**` (non-test
+files). Not yours: `*_test.go`/`testdata/` (test-implementer),
 go.mod/cmd/cli/scaffold/suggest/Makefile/README (implementer — request
 dependency changes via the coordinator), content packages (content-implementer),
 release artifacts (release-implementer), `e2e/**`, `.opencode/**`.
@@ -164,7 +154,10 @@ project branch. **Never push or tag** — humans only.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with
-`apg_plan_done` (`apg_plan_undone` to revert). Read Feedback with `apg_review`
+`apg_plan_done` plus the task note via `apg_plan_note` (`apg_plan_undone` to
+revert) — normally when the coordinator resumes your session after verifying
+and scanning. You never run plan authoring/verification, review actioning,
+node/edge, scan or project tools. Read Feedback with `apg_review`
 (read-only). You never action Feedback: return a claim (fixed / wont-fix +
 reason) to the coordinator, who checks and actions it. Plan/task state is
 transient; spec node mutations belong to the spec-writer.
@@ -180,7 +173,7 @@ proposed task shape to the coordinator. Never implement unplanned units.
   structure question, discovery and enumeration included, the first call is a
   graph tool. `read`/`grep`/`glob` only confirm and anchor a graph result (open
   its `path` at `start_line`/`end_line`) or read artifacts the graph does not
-  model (residual `misc` files such as fonts/logos have a node but no symbols;
+  model (residual `misc` files such as `.tmpl`/`.css`/`.js` assets have a node but no symbols;
   config-excluded paths have none).
 - Re-check negatives; an empty result is a question, not an answer.
 - Graph state is reached **only** through the apg tools granted above; the

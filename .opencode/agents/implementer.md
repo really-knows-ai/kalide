@@ -25,10 +25,12 @@ permission:
   apg_plan_tasks: allow
   apg_plan_done: allow
   apg_plan_undone: allow
+  apg_plan_note: allow
   apg_review: allow
   external_directory:
     "*": deny
     "/tmp/**": allow
+    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -154,6 +156,8 @@ permission:
     "go env *": allow
     "go list *": allow
     "go mod tidy": allow
+    "go mod verify": allow
+    "go mod download": allow
     "go get *": allow
     "gofmt -l *": allow
     "gofmt -d *": allow
@@ -213,7 +217,10 @@ humans only.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with
-`apg_plan_done` (`apg_plan_undone` to revert). Read Feedback with `apg_review`
+`apg_plan_done` plus the task note via `apg_plan_note` (`apg_plan_undone` to
+revert) — normally when the coordinator resumes your session after verifying
+and scanning. You never run plan authoring/verification, review actioning,
+node/edge, scan or project tools. Read Feedback with `apg_review`
 (read-only). You never action Feedback: return a claim (fixed / wont-fix +
 reason) to the coordinator, who checks and actions it. Plan/task state is
 transient; spec node mutations belong to the spec-writer, never you.

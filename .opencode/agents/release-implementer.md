@@ -25,10 +25,12 @@ permission:
   apg_plan_tasks: allow
   apg_plan_done: allow
   apg_plan_undone: allow
+  apg_plan_note: allow
   apg_review: allow
   external_directory:
     "*": deny
     "/tmp/**": allow
+    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -97,6 +99,7 @@ permission:
     "actionlint *": allow
     "ruby -c Formula/*": allow
     "brew style Formula/*": allow
+    "python3 -m json.tool bucket/kalide.json": allow
     "go version": allow
     "go env *": allow
     "go build ./...": allow
@@ -131,7 +134,7 @@ check both source and destination). There is no bash `rm`/`mv`/`cp`.
    the human can `brew install actionlint`; do not skip silently)
 2. `ruby -c Formula/kalide.rb` (and any strategy file) — Syntax OK;
    `brew style Formula/kalide.rb` where it applies
-3. `bucket/kalide.json` must be valid JSON (verify by reading; report any doubt)
+3. `python3 -m json.tool bucket/kalide.json` — must parse (valid JSON)
 4. `go build ./...` / `make` still green
 Never env-prefix commands; never chain. Report each gate's result.
 
@@ -141,7 +144,10 @@ project branch. **Never push or tag** — humans only (release tags included).
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with
-`apg_plan_done` (`apg_plan_undone` to revert). Read Feedback with `apg_review`
+`apg_plan_done` plus the task note via `apg_plan_note` (`apg_plan_undone` to
+revert) — normally when the coordinator resumes your session after verifying
+and scanning. You never run plan authoring/verification, review actioning,
+node/edge, scan or project tools. Read Feedback with `apg_review`
 (read-only). You never action Feedback: return a claim (fixed / wont-fix +
 reason) to the coordinator, who checks and actions it. Plan/task state is
 transient; spec node mutations belong to the spec-writer.

@@ -23,6 +23,7 @@ permission:
   apg_plan: allow
   apg_plan_phases: allow
   apg_plan_tasks: allow
+  apg_review: allow
   external_directory:
     "*": deny
     "/tmp/**": allow
@@ -73,6 +74,9 @@ permission:
     "git push *": ask
     "make cross": allow
     "make release": allow
+    "ruby -c Formula/kalide.rb": allow
+    "brew style Formula/kalide.rb": allow
+    "python3 -m json.tool bucket/kalide.json": allow
 ---
 
 # release-agent — kalide release driver (optional, generated)
@@ -110,7 +114,10 @@ You are granted `Formula/kalide.rb` and `bucket/kalide.json` `edit` access
 asks you to hand-regenerate a manifest. In the normal flow you never touch
 these files; CI does. Never hand-edit them speculatively or "to save CI a
 step" — that fights the CI job's own diff guard (which asserts only
-`Formula/`/`bucket/` changed) the next time it runs.
+`Formula/`/`bucket/` changed) the next time it runs. After any override, you
+must run `ruby -c Formula/kalide.rb`, `brew style Formula/kalide.rb` and
+`python3 -m json.tool bucket/kalide.json` (one call each) and report each
+result before you commit.
 
 You may run `make cross` or `make release` locally to sanity-check a
 cross-build before tagging, but you never publish a GitHub Release yourself —
@@ -126,8 +133,9 @@ generated agent in this repo carries any push/tag grant at all.
 
 ## Graph state is reached only through the apg tools
 
-You hold only the read-only apg tools enumerated in your grant (graph queries
-and plan reads — never `apg_plan_render`, never plan mutation or review tools).
+You hold only the read-only apg tools enumerated in your grant (graph queries,
+plan reads and the read-only `apg_review` — never `apg_plan_render`, never plan
+mutation or review-actioning tools).
 Graph and plan state are reached **only** through those apg tools; the
 node/transient files are never read directly. For any code or structure
 question the first call is a graph query; `read`/`grep`/`glob` only confirm a
