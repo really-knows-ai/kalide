@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "domain.value.media-asset",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.load-template-library",
+      "properties": {}
     }
   ],
   "in": []
