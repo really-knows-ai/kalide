@@ -15,6 +15,18 @@ import (
 // renderer as template.HTML) and plain data values, which html/template
 // auto-escapes on its own.
 
+// MediaURLPrefix returns the reserved URL prefix a theme stylesheet uses to
+// reference the library's shared media tree, e.g. "media:fonts/x.woff2". It
+// is the exact literal "media:" — the scheme-like token including the colon
+// that precedes the path. This is the ONE canonical source of truth for the
+// reserved prefix: the theme-CSS reference scanner, the serve-time CSS
+// rewriter and the agent-guide drift test all read it from here, so the token
+// must never be hardcoded elsewhere. It is valid only for a url() reference
+// in theme CSS, never for an @import target.
+func MediaURLPrefix() string {
+	return "media:"
+}
+
 // MediaFunc returns the `media` layout func: it resolves p relative to the
 // library's templates/media directory only, rejects an absolute path or a
 // path containing a `..` segment, and requires the file to exist — a missing
