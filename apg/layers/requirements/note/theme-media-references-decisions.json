@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.theme",
+      "properties": {}
     }
   ],
   "in": []
