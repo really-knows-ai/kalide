@@ -163,6 +163,11 @@
       "kind": "details",
       "source": "requirements.note.agent-authoring-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.theme-media-references-decisions",
+      "properties": {}
     }
   ]
 }
