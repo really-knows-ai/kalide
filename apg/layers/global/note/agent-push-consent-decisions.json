@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "requirements.note.distribution-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.fix-ci-manifest-push",
+      "properties": {}
     }
   ],
   "in": []
