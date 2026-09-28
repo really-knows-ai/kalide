@@ -19,7 +19,6 @@ below and in the [README](README.md#install).
 - [Check the installed version](#check-the-installed-version)
 - [License, changes and trademarks](#license-changes-and-trademarks)
 - [If something goes wrong](#if-something-goes-wrong)
-- [For maintainers: how a release is published](#for-maintainers-how-a-release-is-published)
 
 ## Before you start
 
