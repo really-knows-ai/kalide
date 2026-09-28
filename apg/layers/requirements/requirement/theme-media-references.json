@@ -36,6 +36,11 @@
       "kind": "drives",
       "target": "domain.value.media-asset",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": [

@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "requirements.note.reconcile-kind-directories",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.theme-media-references",
+      "properties": {}
     }
   ]
 }
