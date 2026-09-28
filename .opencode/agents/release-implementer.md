@@ -73,8 +73,8 @@ permission:
     "git branch": allow
     "git add *": allow
     "git commit *": allow
-    "git push *": ask
-    "git tag *": ask
+    "git push *": deny
+    "git tag *": deny
     "actionlint": allow
     "actionlint *": allow
     "ruby -c Formula/*": allow
@@ -115,11 +115,7 @@ Never env-prefix commands; never chain. Report each gate's result.
 
 ## Git
 At phase end: `git add` + `git commit -m "<short imperative>"` on the
-project branch. Pushing and creating tags require **explicit, per-action
-human consent**; absent that consent you never push or tag; with explicit
-per-action consent you may perform the requested push/tag, including force-push
-and moving/overwriting/deleting a tag; consent is never standing. Release tags
-are treated the same.
+project branch. **Never push or tag** — humans only (release tags included).
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with
