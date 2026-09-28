@@ -63,6 +63,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.theme-media-references-decisions",
+      "properties": {}
     }
   ]
 }
