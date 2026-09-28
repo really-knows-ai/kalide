@@ -16,6 +16,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.templates-dir-validation",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.templates-dir-layout",
+      "properties": {}
     }
   ],
   "in": [
