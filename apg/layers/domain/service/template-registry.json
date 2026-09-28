@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "template-registry",
-  "body": "Template registry: hold the project's loaded templates (kind by directory: slides/ or sections/), run the load-time checks (cycles, directory-kind checks, cross-kind name uniqueness, reserved names, references, examples), own the central layout function set (v1: `media`), look up templates, describe them for CLI/gallery.",
+  "body": "Template registry: hold the project's loaded templates (kind by directory: slides/ or sections/), run the load-time checks (cycles, directory-kind checks, cross-kind name uniqueness, reserved names, references — including theme CSS references: relative theme `url()` and the reserved `media:` prefix resolving under the library's `media/`, theme-media-references — and examples), own the central layout function set (v1: `media`), look up templates, describe them for CLI/gallery.",
   "properties": {},
   "out": [
     {
