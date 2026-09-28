@@ -44,6 +44,11 @@
       "kind": "details",
       "target": "domain.value.version",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.changelog",
+      "properties": {}
     }
   ],
   "in": []
