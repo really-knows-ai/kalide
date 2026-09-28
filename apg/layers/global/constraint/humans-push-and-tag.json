@@ -15,6 +15,11 @@
       "kind": "details",
       "source": "requirements.note.fix-ci-manifest-push",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.agent-push-consent-decisions",
+      "properties": {}
     }
   ]
 }
