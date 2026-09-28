@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "solution.component.http-server",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": []
