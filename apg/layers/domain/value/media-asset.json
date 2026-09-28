@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "media-asset",
-  "body": "Media asset: any file (font, logo, image, video, …) in the template library, addressed by its relative path within the resolved library root (`templates/media/` for a local library); type-agnostic.",
+  "body": "Media asset: any file (font, logo, image, video, …) in the template library, addressed by its relative path within the resolved library root (`templates/media/` for a local library); type-agnostic. A layout addresses it with `{{ media \"path\" }}`; a theme's `theme.css` (and any CSS it imports from its own theme dir) addresses a shared asset with the reserved `media:` URL prefix, validated the same way and rewritten to the served media URL (theme-media-references).",
   "properties": {},
   "out": [],
   "in": [
