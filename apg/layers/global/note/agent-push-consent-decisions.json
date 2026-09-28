@@ -39,6 +39,11 @@
       "kind": "details",
       "target": "domain.entity.release",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.version",
+      "properties": {}
     }
   ],
   "in": []
