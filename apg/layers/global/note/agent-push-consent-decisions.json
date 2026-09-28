@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "solution.component.changelog",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.note.distribution-decisions",
+      "properties": {}
     }
   ],
   "in": []
