@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "global.constraint.humans-push-and-tag",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.release-workflow",
+      "properties": {}
     }
   ],
   "in": []
