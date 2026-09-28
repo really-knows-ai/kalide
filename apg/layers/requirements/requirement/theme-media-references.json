@@ -26,6 +26,11 @@
       "kind": "drives",
       "target": "domain.entity.theme",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
     }
   ],
   "in": [
