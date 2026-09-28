@@ -75,8 +75,8 @@ permission:
     "git branch": allow
     "git add *": allow
     "git commit *": allow
-    "git push *": deny
-    "git tag *": deny
+    "git push *": ask
+    "git tag *": ask
     "go version": allow
     "go env *": allow
     "go list *": allow
@@ -115,7 +115,10 @@ Never env-prefix commands; never chain. Report each gate's result.
 
 ## Git
 At phase end: `git add` + `git commit -m "<short imperative>"` on the
-project branch. **Never push or tag** — humans only.
+project branch. Pushing and creating tags require **explicit, per-action
+human consent**; absent that consent you never push or tag; with explicit
+per-action consent you may perform the requested push/tag, including force-push
+and moving/overwriting/deleting a tag; consent is never standing.
 
 ## Plan & feedback
 Read tasks via `apg_plan`, `apg_plan_phases`, `apg_plan_tasks`; mark done with

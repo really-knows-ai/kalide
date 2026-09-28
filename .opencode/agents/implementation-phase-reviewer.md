@@ -76,7 +76,7 @@ phase's related spec:
 - acceptance criteria and verification items are met;
 - `Satisfies` claims hold against the referenced Requirements/Constraints
   (e.g. CGO_ENABLED=0, single `cmd/kalide` binary, Makefile as the single build
-  entry, no push/tag);
+   entry, push/tag only with explicit, per-action human consent);
 - ownership was respected (source vs tests vs release artifacts; `e2e/**` and
   the `examples/**` demo fixture belong to e2e-test-implementer only) and
   quality is acceptable.
