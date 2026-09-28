@@ -71,6 +71,11 @@
       "kind": "details",
       "source": "solution.note.fix-loader-extra-top-level-entries",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.theme-media-serving",
+      "properties": {}
     }
   ]
 }
