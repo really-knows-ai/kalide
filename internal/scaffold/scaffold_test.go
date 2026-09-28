@@ -26,7 +26,10 @@ import (
 // block; and the scaffolded deck passes the deck loaders and whole-deck
 // validation with zero errors, using the registry built from the seed's own
 // templates/ library (template.LoadLibrary + template.NewRegistryFromLibrary)
-// rather than the Go-builtins registry, which has no "hello" template.
+// rather than the Go-builtins registry, which has no "hello" template. The seed
+// includes the deck-root AGENTS.md guide (agent-authoring), written verbatim
+// and byte-for-byte; a pre-existing AGENTS.md never blocks and is left
+// untouched.
 func TestInit(t *testing.T) {
 	t.Run("clean directory creates the starter deck", testInitClean)
 	t.Run("existing block path refuses and writes nothing", testInitRefuses)
@@ -34,6 +37,7 @@ func TestInit(t *testing.T) {
 	t.Run("unrelated entries do not block", testInitUnrelated)
 	t.Run("existing eypres.yaml does not block init and init never writes eypres.yaml", testInitExistingEypresYAML)
 	t.Run("scaffolded deck passes load and whole-deck validation", testInitScaffoldValidates)
+	t.Run("pre-existing AGENTS.md is left untouched", testInitPreservesExistingAgentsGuide)
 	t.Run("seed carries no EY branding", testSeedHasNoEYReferences)
 }
 
@@ -41,6 +45,7 @@ func TestInit(t *testing.T) {
 // directories) a clean Init must produce: the embedded hello seed's tree
 // plus the empty assets/ directory Init creates itself.
 var wantSeedTree = []string{
+	"AGENTS.md",
 	"assets",
 	"kalide.yaml",
 	"slides",
@@ -60,6 +65,7 @@ var wantSeedTree = []string{
 // wantSeedFiles are the embedded seed's files, checked byte-for-byte against
 // what Init writes.
 var wantSeedFiles = []string{
+	"AGENTS.md",
 	"kalide.yaml",
 	"slides/1-hello.md",
 	"templates/library.yaml",
@@ -235,6 +241,49 @@ func testInitExistingEypresYAML(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cleanDir, "eypres.yaml")); err == nil {
 		t.Errorf("Init unexpectedly created eypres.yaml in clean dir")
+	}
+}
+
+// testInitPreservesExistingAgentsGuide asserts a pre-existing deck-root
+// AGENTS.md never blocks the no-arg seed form — neither Init(dir) nor
+// Init(dir, "") — and is left byte-for-byte untouched, while the rest of the
+// starter deck is still written (agent-authoring).
+func testInitPreservesExistingAgentsGuide(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"Init(dir)", nil},
+		{`Init(dir, "")`, []string{""}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			const sentinel = "# my own deck guide\n\nkeep me exactly as I am.\n"
+			writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
+
+			if err := Init(dir, tc.args...); err != nil {
+				t.Fatalf("Init(dir, %v) error = %v, want nil (a pre-existing AGENTS.md must not block)", tc.args, err)
+			}
+
+			if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
+				t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
+			}
+
+			// The rest of the seed is still written around the kept guide.
+			for _, name := range wantSeedFiles {
+				if name == "AGENTS.md" {
+					continue
+				}
+				if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+					t.Errorf("expected %s after Init: %v", name, err)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dir, "assets")); err != nil {
+				t.Errorf("expected assets/ after Init: %v", err)
+			}
+		})
 	}
 }
 
@@ -441,6 +490,7 @@ func readString(t *testing.T, path string) string {
 // deliberately no local templates/ and no starter slide. It is the external
 // counterpart of wantSeedTree.
 var externalDeckTree = []string{
+	"AGENTS.md",
 	"assets",
 	"kalide.yaml",
 	"slides",
@@ -457,8 +507,9 @@ var externalDeckTree = []string{
 // refusal matrix still blocks slides/, assets/ and kalide.yaml while a
 // pre-existing local templates/ is exempt and left untouched; an invalid or
 // missing library, or one whose default theme does not resolve, aborts with
-// nothing written; and the no-arg hello-seed path is unchanged, including the
-// empty-string path.
+// nothing written; the no-arg hello-seed path is unchanged, including the
+// empty-string path; and a pre-existing deck-root AGENTS.md never blocks and is
+// left byte-for-byte untouched (agent-authoring).
 func TestInitExternal(t *testing.T) {
 	t.Run("valid external library writes an external deck", testInitExternalWrites)
 	t.Run("absolute external path is written as given", testInitExternalAbsolutePath)
@@ -467,6 +518,7 @@ func TestInitExternal(t *testing.T) {
 	t.Run("unresolvable default theme aborts with nothing written", testInitExternalUnresolvableTheme)
 	t.Run("refusal matrix blocks deck paths", testInitExternalRefusalMatrix)
 	t.Run("pre-existing local templates is exempt and left untouched", testInitExternalTemplatesExempt)
+	t.Run("pre-existing AGENTS.md is left untouched", testInitExternalPreservesExistingAgentsGuide)
 	t.Run("more than one external path is rejected", testInitExternalRejectsExtraPath)
 	t.Run("empty external path is rejected by InitExternal", testInitExternalEmptyPath)
 	t.Run("no-arg hello-seed path is unchanged", testInitNoArgSeed)
@@ -496,6 +548,9 @@ func testInitExternalWrites(t *testing.T) {
 	if got := listTree(t, dir); !reflect.DeepEqual(got, externalDeckTree) {
 		t.Fatalf("external deck tree = %v, want %v (no local templates/, no starter slide)", got, externalDeckTree)
 	}
+	// Both init forms write the identical deck-root agent guide, verbatim
+	// from the embedded seed (agent-authoring).
+	assertFileEqualsSeed(t, dir, "AGENTS.md")
 	for _, name := range []string{"slides", "assets"} {
 		entries, err := os.ReadDir(filepath.Join(dir, name))
 		if err != nil {
@@ -700,6 +755,50 @@ func testInitExternalTemplatesExempt(t *testing.T) {
 	}
 	if after := snapshot(t, noArg); !reflect.DeepEqual(after, before) {
 		t.Errorf("no-arg Init modified the directory on refusal:\n before %v\n after  %v", before, after)
+	}
+}
+
+// testInitExternalPreservesExistingAgentsGuide asserts a pre-existing deck-root
+// AGENTS.md never blocks either external form — Init(dir, lib) and
+// InitExternal(dir, lib) — and is left byte-for-byte untouched, while the
+// external deck is still written (agent-authoring). AGENTS.md is not a
+// deck-owned blockPath, so this is not a relaxation of the refusal matrix.
+func testInitExternalPreservesExistingAgentsGuide(t *testing.T) {
+	lib := filepath.Join(t.TempDir(), "shared-lib")
+	writeExternalLibrary(t, lib, "shared-lib")
+
+	cases := []struct {
+		name string
+		init func(dir string) error
+	}{
+		{"Init(dir, lib)", func(dir string) error { return Init(dir, lib) }},
+		{"InitExternal(dir, lib)", func(dir string) error { return InitExternal(dir, lib) }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "deck")
+			mkdir(t, dir)
+			const sentinel = "# my own deck guide\n\nkeep me exactly as I am.\n"
+			writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
+
+			if err := tc.init(dir); err != nil {
+				t.Fatalf("%s error = %v, want nil (a pre-existing AGENTS.md must not block)", tc.name, err)
+			}
+
+			if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
+				t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
+			}
+
+			for _, name := range []string{"kalide.yaml", "slides", "assets"} {
+				if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+					t.Errorf("expected %s after %s: %v", name, tc.name, err)
+				}
+			}
+			if _, templates := externalConfigOf(t, dir); templates != lib {
+				t.Errorf("kalide.yaml templates = %q, want %q", templates, lib)
+			}
+		})
 	}
 }
 

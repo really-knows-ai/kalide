@@ -70,6 +70,10 @@ func asLibraryError(t *testing.T, err error) *LibraryError {
 
 func TestLoadLibraryValid(t *testing.T) {
 	fsys := baseLibraryFS()
+	// A fully-valid library also carries the inert library-root AGENTS.md
+	// guide (library-guide-layout): the loader must still reach success, and
+	// it must not expose the guide as a template.
+	fsys["AGENTS.md"] = &fstest.MapFile{Data: []byte("# library/template-author guide\n\nAuthor templates.\n")}
 	lib, err := LoadLibrary(fsys, "templates_dir")
 	// Root is under a non-standard name here to prove root is a parameter,
 	// not hardcoded; LoadLibrary is rooted at whatever root names.
@@ -114,18 +118,37 @@ func rootedFS(fsys fstest.MapFS) fstest.MapFS {
 }
 
 // TestLoadLibraryStep2UnknownTopLevelEntry proves step 2 rejects a top-level
-// templates/ entry that is not one of the five documented names.
+// templates/ entry that is not one of the five documented names, while the
+// single permitted inert entry AGENTS.md (library-guide-layout) is accepted.
 func TestLoadLibraryStep2UnknownTopLevelEntry(t *testing.T) {
-	fsys := baseLibraryFS()
-	fsys["bogus/file.txt"] = &fstest.MapFile{Data: []byte("x")}
-	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
-	libErr := asLibraryError(t, err)
-	if libErr.Path != TemplatesDir+"/bogus" {
-		t.Errorf("Path = %q, want %q", libErr.Path, TemplatesDir+"/bogus")
-	}
-	if !strings.Contains(libErr.Message, "bogus") {
-		t.Errorf("Message = %q, want it to name the unexpected entry", libErr.Message)
-	}
+	t.Run("AGENTS.md is accepted alongside another unknown entry", func(t *testing.T) {
+		fsys := baseLibraryFS()
+		fsys["AGENTS.md"] = &fstest.MapFile{Data: []byte("# library guide\n")}
+		fsys["bogus/file.txt"] = &fstest.MapFile{Data: []byte("x")}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if libErr.Path != TemplatesDir+"/bogus" {
+			t.Errorf("Path = %q, want %q", libErr.Path, TemplatesDir+"/bogus")
+		}
+		if !strings.Contains(libErr.Message, "bogus") {
+			t.Errorf("Message = %q, want it to name the unexpected entry", libErr.Message)
+		}
+		// The error targets bogus, not AGENTS.md: the permitted inert
+		// AGENTS.md entry was accepted while the other unknown entry was
+		// rejected.
+	})
+
+	t.Run("AGENTS.md alone is the single inert entry and loads", func(t *testing.T) {
+		fsys := baseLibraryFS()
+		fsys["AGENTS.md"] = &fstest.MapFile{Data: []byte("# library guide\n")}
+		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil (AGENTS.md is permitted and inert)", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadLibrary() returned nil Library with nil error")
+		}
+	})
 }
 
 // TestLoadLibraryStep3UsageKey proves step 3 rejects a template.yaml

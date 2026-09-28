@@ -6,14 +6,18 @@ package scaffold
 // It exercises scaffold.InitLibrary and DefaultThemeCSS on real temporary
 // directories: a fresh target receives the deck-ready layout — library.yaml
 // whose name is the target's base name and whose format is 1, the empty
-// slides/, sections/ and media/ directories and themes/default/theme.css;
-// an invalid base name is a hard error writing nothing; a pre-existing
-// library.yaml or layout entry refuses and writes nothing; a non-directory
-// target is an error leaving it untouched; unrelated pre-existing entries
-// never block and are left untouched; and the created library loads cleanly
-// through the template loader (template.LoadLibrary / template.LoadDeckLibrary)
-// so a deck whose theme defaults to `default` resolves in it. Every case runs
-// in a t.TempDir, so the package directory is never written to.
+// slides/, sections/ and media/ directories, themes/default/theme.css and the
+// library-root AGENTS.md library/template-author guide written verbatim from
+// the embedded guide (library-agent-guide); an invalid base name is a hard
+// error writing nothing; a pre-existing library.yaml or layout entry refuses
+// and writes nothing; a pre-existing AGENTS.md is not a blocking entry — it is
+// left byte-for-byte untouched while the library is still created; a
+// non-directory target is an error leaving it untouched; unrelated pre-existing
+// entries never block and are left untouched; and the created library (with its
+// guide) loads cleanly through the template loader (template.LoadLibrary /
+// template.LoadDeckLibrary) so a deck whose theme defaults to `default`
+// resolves in it. Every case runs in a t.TempDir, so the package directory is
+// never written to.
 
 import (
 	"io/fs"
@@ -36,6 +40,7 @@ import (
 // minimal — no starter template, no section, no media file, and no nested
 // templates/ entry (a library's root IS the templates directory).
 var libraryTree = []string{
+	"AGENTS.md",
 	"library.yaml",
 	"media",
 	"sections",
@@ -56,6 +61,7 @@ func TestInitLibrary(t *testing.T) {
 	t.Run("multiple blocking entries are all named in order", testInitLibraryNamesAllConflicts)
 	t.Run("non-directory target is an error leaving it untouched", testInitLibraryNonDirectory)
 	t.Run("unrelated pre-existing entries are left untouched", testInitLibraryUnrelated)
+	t.Run("pre-existing AGENTS.md is left untouched", testInitLibraryPreservesExistingAgentsGuide)
 	t.Run("created library loads cleanly through the template loader", testInitLibraryLoads)
 	t.Run("DefaultThemeCSS is the embedded default theme", testDefaultThemeCSS)
 }
@@ -93,6 +99,16 @@ func testInitLibraryFresh(t *testing.T) {
 	}
 	if DefaultThemeCSS() == "" {
 		t.Error("DefaultThemeCSS is empty, want the minimal default theme")
+	}
+
+	// The library-root AGENTS.md guide (library-agent-guide) is written
+	// verbatim from the embedded guide.
+	wantGuide := string(mustReadLibraryGuide())
+	if wantGuide == "" {
+		t.Fatal("mustReadLibraryGuide() is empty, want the embedded library guide")
+	}
+	if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != wantGuide {
+		t.Errorf("AGENTS.md differs from the embedded library guide:\n got %q\nwant %q", got, wantGuide)
 	}
 
 	if got := listTree(t, dir); !reflect.DeepEqual(got, libraryTree) {
@@ -289,6 +305,38 @@ func testInitLibraryUnrelated(t *testing.T) {
 	}
 }
 
+// testInitLibraryPreservesExistingAgentsGuide asserts a pre-existing
+// library-root AGENTS.md never blocks InitLibrary — it is not one of
+// libraryBlockPaths — and is left byte-for-byte untouched, while the library is
+// still created around it and loads cleanly (library-agent-guide,
+// library-guide-layout).
+func testInitLibraryPreservesExistingAgentsGuide(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "my-lib")
+	mkdir(t, dir)
+	const sentinel = "# my own library guide\n\nkeep me exactly as I am.\n"
+	writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
+
+	if err := InitLibrary(dir); err != nil {
+		t.Fatalf("InitLibrary(%s) error = %v, want nil (a pre-existing AGENTS.md must not block)", dir, err)
+	}
+
+	if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
+		t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
+	}
+
+	for _, rel := range []string{template.LibraryFile, template.SlidesDir, template.SectionsDir, template.ThemesDir, template.MediaDir} {
+		if _, err := os.Lstat(filepath.Join(dir, rel)); err != nil {
+			t.Errorf("expected %s after InitLibrary: %v", rel, err)
+		}
+	}
+
+	// The kept guide is the single permitted inert root entry, so the created
+	// library still loads cleanly with the pre-existing content.
+	if _, err := template.LoadLibrary(os.DirFS(dir), "."); err != nil {
+		t.Errorf("template.LoadLibrary() error = %v, want the created library to load cleanly", err)
+	}
+}
+
 // testInitLibraryLoads asserts the freshly created library passes the loader:
 // template.LoadLibrary validates an empty library cleanly and exposes the base
 // name, format 1, the single default theme and media/, and the deck-level
@@ -298,6 +346,13 @@ func testInitLibraryLoads(t *testing.T) {
 	dir := filepath.Join(parent, "my-lib")
 	if err := InitLibrary(dir); err != nil {
 		t.Fatalf("InitLibrary(%s) error = %v", dir, err)
+	}
+
+	// The created library carries the inert library-root AGENTS.md guide
+	// (library-agent-guide); the loader must still reach success
+	// (library-guide-layout).
+	if got, want := readString(t, filepath.Join(dir, "AGENTS.md")), string(mustReadLibraryGuide()); got != want {
+		t.Fatalf("AGENTS.md differs from the embedded library guide:\n got %q\nwant %q", got, want)
 	}
 
 	lib, err := template.LoadLibrary(os.DirFS(dir), ".")
