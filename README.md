@@ -260,6 +260,7 @@ piece of media — comes from this library; the binary supplies none of it.
 ```
 templates/
   library.yaml               library metadata (name, description, format)
+  AGENTS.md                  agent guide for library/template authors (inert)
   slides/
     <name>/
       template.yaml           the template's manifest (fields, sections, body rule)
@@ -279,6 +280,11 @@ templates/
 
 - **`library.yaml`** is required at the root of `templates/` and carries the
   library's `name`, a short `description`, and a `format` version number.
+- **`AGENTS.md`** is the library/template-author agent guide: a plain-text
+  reference to the library and template format that `kalide init-library`
+  writes, so a coding agent can author new templates and themes without
+  guessing. It is the only permitted non-layout entry at the library root and
+  is inert — the loader ignores it, and no template may rely on it.
 - **`slides/<name>/`** and **`sections/<name>/`** each hold exactly three
   files: `template.yaml`, `layout.html.tmpl` and `example.md`. A template's
   name is always its directory name.

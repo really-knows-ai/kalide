@@ -31,6 +31,7 @@ import (
 // creates; the empty directories are spelled with a trailing slash.
 const initLibraryCreatedMessage = `Created a template library at %s:
   library.yaml
+  AGENTS.md
   slides/
   sections/
   media/
