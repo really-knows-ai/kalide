@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "theme",
-  "body": "A theme: a project-defined (one directory per theme under the resolved library's `themes/<name>/`) named set of CSS variable tokens (colours, fonts, spacing) in `theme.css`, plus theme-owned files (fonts, logos) in its directory that theme.css references by relative url() (served from the theme dir; not reachable via the layout `media` helper, which resolves only under the resolved library's `media/`). No built-in themes; deck-wide; omitted selection resolves to the project's `default`.",
+  "body": "A theme: a project-defined (one directory per theme under the resolved library's `themes/<name>/`) named set of CSS variable tokens (colours, fonts, spacing) in `theme.css`, plus theme-owned files (fonts, logos) in its directory that theme.css references by relative url() (served from the theme dir; not reachable via the layout `media` helper, which resolves only under the resolved library's `media/`). `theme.css` — and any CSS it `@import`s from its own theme directory — may also reference the resolved library's shared `media/` tree using the reserved `media:` URL prefix, validated at load time and rewritten to the served media URL at serve time (theme-media-references), so several themes share one copy of fonts/logos; it still cannot reference another theme's directory or anything outside the library. No built-in themes; deck-wide; omitted selection resolves to the project's `default`.",
   "properties": {
     "kind": "entity"
   },
