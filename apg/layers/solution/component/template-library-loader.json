@@ -66,6 +66,11 @@
       "kind": "details",
       "source": "solution.note.fix-loader-agents-md",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-loader-extra-top-level-entries",
+      "properties": {}
     }
   ]
 }
