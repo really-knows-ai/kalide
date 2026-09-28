@@ -59,6 +59,11 @@
       "kind": "details",
       "target": "requirements.note.fix-ci-manifest-push",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.person.maintainer",
+      "properties": {}
     }
   ],
   "in": []
