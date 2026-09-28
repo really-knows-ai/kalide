@@ -3,8 +3,10 @@
 //
 // It is the file-watching half of live reload (domain.service.watch-deck): the
 // watched paths are the deck's slides/ subtree, its assets/ subtree, its
-// resolved template-library root (the configured `templates:` path, else the
-// local templates/; see external-template-library) and its kalide.yaml. The
+// resolved template-library root's structure — the root itself, its
+// library.yaml and the slides/, sections/, themes/ and media/ subtrees, but no
+// other top-level entry in the root (the configured `templates:` path, else the
+// local templates/; see external-template-library) — and its kalide.yaml. The
 // watcher never reads, validates or renders a deck; it only reports that
 // something under those paths changed. internal/server consumes the events to
 // re-validate and re-render the deck and to push a reload to the open browser
@@ -45,6 +47,20 @@ const AssetsDir = "assets"
 // it up if it is created later.
 const TemplatesDir = template.TemplatesDir
 
+// libraryWatchDirs are the template-library top-level directories whose
+// contents the watcher follows: slides/, sections/, themes/ and media/
+// (templates-dir-layout). Together with the library root's library.yaml file
+// they are the library structure; every other top-level entry in the library
+// root — a `.git/` directory, a README, the root AGENTS.md, an editor lockfile
+// — is not part of the library and is ignored, so a git operation in a
+// git-hosted library never triggers a reload.
+var libraryWatchDirs = []string{
+	template.SlidesDir,
+	template.SectionsDir,
+	template.ThemesDir,
+	template.MediaDir,
+}
+
 // mutate is the set of fsnotify operations that count as a change to the deck.
 // A pure Chmod (the only remaining operation) does not change served content
 // and is ignored so attribute-only events cannot cause a spurious reload.
@@ -76,20 +92,22 @@ type Event struct {
 //
 //   - the slides/ subtree (deck.SlidesDir) recursively;
 //   - the assets/ subtree (AssetsDir) recursively;
-//   - the resolved template-library root recursively — the configured
+//   - the resolved template-library root's structure — the configured
 //     `templates:` path in kalide.yaml (relative to root, or absolute; it may
-//     lie outside root), else the local templates/ (TemplatesDir) — covering
-//     slides/, sections/, themes/<name>/, media/ and the top-level
-//     library.yaml; and
+//     lie outside root), else the local templates/ (TemplatesDir) — namely the
+//     root itself (non-recursively), the top-level library.yaml and the
+//     slides/, sections/, themes/ and media/ subtrees; every other top-level
+//     entry in the root (e.g. .git/, README.md, AGENTS.md) is ignored; and
 //   - the kalide.yaml file (deck.ConfigFile) at the root.
 //
-// fsnotify is not recursive, so Watch walks slides/, assets/ and the resolved
-// library root at startup and registers every directory it finds. A directory
-// created later is picked up from the create event that the parent's watch
-// reports and has its subtree added; a directory removed or renamed has its
-// watch (and its descendants') dropped. A missing slides/, assets/ or library
-// directory is not an error: the root watch sees a local one if it is created
-// later.
+// fsnotify is not recursive, so Watch walks slides/, assets/ and each of the
+// library structure directories at startup and registers every directory it
+// finds; the library root itself is watched non-recursively so no unrelated
+// entry is followed. A directory created later is picked up from the create
+// event that the parent's watch reports and has its subtree added; a directory
+// removed or renamed has its watch (and its descendants') dropped. A missing
+// slides/, assets/ or library directory is not an error: the root watch sees a
+// local one if it is created later.
 //
 // Debounce: each relevant event resets a timer, and a single Event is sent only
 // after no relevant event has arrived for debounce (one event per burst). No
@@ -155,7 +173,15 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 	w.addTree(filepath.Join(root, deck.SlidesDir))
 	w.addTree(filepath.Join(root, AssetsDir))
 	if library != "" {
-		w.addTree(library)
+		// Only the library's own structure is followed: the root itself
+		// (non-recursively) and its slides/, sections/, themes/ and media/
+		// subtrees. Every other top-level entry in the library root — a .git/
+		// directory, a README, the root AGENTS.md, an editor lockfile — is
+		// not part of the library and is ignored.
+		_ = w.add(library)
+		for _, dir := range libraryWatchDirs {
+			w.addTree(filepath.Join(library, dir))
+		}
 	}
 
 	go w.loop()
@@ -183,7 +209,9 @@ type watcher struct {
 	// library): the configured `templates:` path resolved against root, or the
 	// local templates/ when the key is absent. It may be outside root (begins
 	// with ".." relative to it). It is "" when no root could be resolved; a
-	// change at or beneath it is a deck change even when it lies outside root.
+	// change to its structure (the root, its library.yaml, or anything at or
+	// beneath slides/, sections/, themes/ or media/) is a deck change even when
+	// it lies outside root.
 	library string
 
 	fsw      *fsnotify.Watcher
@@ -226,6 +254,22 @@ func (w *watcher) addTree(dir string) {
 	})
 }
 
+// addRelevantTree registers a newly created directory subtree. For the resolved
+// library root itself it registers only the library's structure — the root
+// (non-recursively) and its slides/, sections/, themes/ and media/ subtrees —
+// never an unrelated entry such as .git/ (templates-dir-layout). Any other
+// relevant directory is registered recursively.
+func (w *watcher) addRelevantTree(dir string) {
+	if w.library != "" && filepath.Clean(dir) == w.library {
+		_ = w.add(dir)
+		for _, d := range libraryWatchDirs {
+			w.addTree(filepath.Join(dir, d))
+		}
+		return
+	}
+	w.addTree(dir)
+}
+
 // dropTree forgets every watched directory at or beneath dir and removes the
 // underlying watches. fsnotify may already have dropped a deleted directory;
 // the resulting Remove error is safe to ignore.
@@ -241,11 +285,12 @@ func (w *watcher) dropTree(dir string) {
 
 // rel reports whether ev is relevant to the deck and, if so, its path relative
 // to the root as a slash-separated string. Relevant paths are kalide.yaml at
-// the root, anything at or beneath slides/ or assets/, and anything at or
-// beneath the resolved library root (external-template-library) — including an
-// external root outside the deck, whose reported path then begins with "../".
-// A path outside both the root's watched subtrees and the resolved library is
-// ignored.
+// the root, anything at or beneath slides/ or assets/, and the resolved
+// library's structure (external-template-library) — the root, its library.yaml
+// or anything at or beneath slides/, sections/, themes/ or media/ — including
+// an external root outside the deck, whose reported path then begins with
+// "../". A path outside the root's watched subtrees and the library's
+// structure is ignored.
 func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	r, err := filepath.Rel(w.root, ev.Name)
 	if err != nil {
@@ -258,7 +303,7 @@ func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	// The resolved library root may sit outside the deck root (e.g.
 	// `templates: ../shared-lib`), where r is "../shared-lib/…": treat it as a
 	// deck change and report the same stable deck-relative path.
-	if w.library != "" && atOrUnder(w.library, ev.Name) {
+	if w.libraryRelevant(ev.Name) {
 		return r, true
 	}
 	if r == ".." || strings.HasPrefix(r, "../") {
@@ -274,6 +319,31 @@ func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// libraryRelevant reports whether name is part of the resolved template
+// library's structure: the library root itself, its library.yaml, or anything
+// at or beneath slides/, sections/, themes/ or media/. Every other top-level
+// entry in the library root (e.g. .git/, README.md, AGENTS.md) is not part of
+// the library and is ignored, so it never triggers a reload. It is false when
+// no library root was resolved.
+func (w *watcher) libraryRelevant(name string) bool {
+	if w.library == "" {
+		return false
+	}
+	name = filepath.Clean(name)
+	if name == w.library {
+		return true
+	}
+	if name == filepath.Join(w.library, template.LibraryFile) {
+		return true
+	}
+	for _, dir := range libraryWatchDirs {
+		if atOrUnder(filepath.Join(w.library, dir), name) {
+			return true
+		}
+	}
+	return false
 }
 
 // atOrUnder reports whether name is dir itself or a path beneath dir. Both are
@@ -390,7 +460,7 @@ func (w *watcher) loop() {
 			}
 			if ev.Op&fsnotify.Create != 0 {
 				if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-					w.addTree(ev.Name)
+					w.addRelevantTree(ev.Name)
 				}
 			}
 			if ev.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {

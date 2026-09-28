@@ -175,9 +175,12 @@ templates/
 - `themes/<name>/` holds `theme.css` plus any fonts, logos or other files the
   theme owns.
 - `media/` is optional shared media of any type.
-- A root-level `AGENTS.md` (a library and template-author guide) is the one
-  permitted non-layout entry; the loader ignores it. Every other unknown
-  top-level entry is an error.
+- A root-level `AGENTS.md` (a library and template-author guide) is ignored, as
+  is any other top-level entry that is not part of the library (`library.yaml`,
+  `slides/`, `sections/`, `themes/`, `media/`) — for example a `.git/`
+  directory or a `README.md`. A library that is also a git repo therefore still
+  loads; ignored entries are never parsed, validated, rendered, listed or
+  served.
 
 ## template.yaml
 

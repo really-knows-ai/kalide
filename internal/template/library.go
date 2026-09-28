@@ -28,9 +28,10 @@ const TemplatesDir = "templates"
 const LibraryFile = "library.yaml"
 
 // SlidesDir, SectionsDir, ThemesDir and MediaDir are the fixed top-level
-// entries a templates/ directory may contain besides LibraryFile and the
-// single permitted inert root entry AGENTS.md (templates-dir-layout,
-// library-guide-layout). Any other top-level entry is rejected.
+// entries a templates/ directory may contain besides LibraryFile
+// (templates-dir-layout). They are the library structure the loader validates;
+// any other top-level entry — .git/, README.md, AGENTS.md, an editor lockfile —
+// is not part of the library and is ignored.
 const (
 	SlidesDir   = "slides"
 	SectionsDir = "sections"

@@ -117,38 +117,29 @@ func rootedFS(fsys fstest.MapFS) fstest.MapFS {
 	return out
 }
 
-// TestLoadLibraryStep2UnknownTopLevelEntry proves step 2 rejects a top-level
-// templates/ entry that is not one of the five documented names, while the
-// single permitted inert entry AGENTS.md (library-guide-layout) is accepted.
-func TestLoadLibraryStep2UnknownTopLevelEntry(t *testing.T) {
-	t.Run("AGENTS.md is accepted alongside another unknown entry", func(t *testing.T) {
-		fsys := baseLibraryFS()
-		fsys["AGENTS.md"] = &fstest.MapFile{Data: []byte("# library guide\n")}
-		fsys["bogus/file.txt"] = &fstest.MapFile{Data: []byte("x")}
-		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
-		libErr := asLibraryError(t, err)
-		if libErr.Path != TemplatesDir+"/bogus" {
-			t.Errorf("Path = %q, want %q", libErr.Path, TemplatesDir+"/bogus")
-		}
-		if !strings.Contains(libErr.Message, "bogus") {
-			t.Errorf("Message = %q, want it to name the unexpected entry", libErr.Message)
-		}
-		// The error targets bogus, not AGENTS.md: the permitted inert
-		// AGENTS.md entry was accepted while the other unknown entry was
-		// rejected.
-	})
+// TestLoadLibraryIgnoresOtherTopLevelEntries proves step 2 validates only the
+// library structure: a top-level entry that is not part of the library —
+// .git/, .gitignore, README.md, an arbitrary directory, the inert AGENTS.md —
+// is ignored and never blocks the load. This is what lets a git-hosted
+// template library load.
+func TestLoadLibraryIgnoresOtherTopLevelEntries(t *testing.T) {
+	fsys := baseLibraryFS()
+	fsys["AGENTS.md"] = &fstest.MapFile{Data: []byte("# library guide\n")}
+	fsys["README.md"] = &fstest.MapFile{Data: []byte("# notes\n")}
+	fsys[".gitignore"] = &fstest.MapFile{Data: []byte("*.tmp\n")}
+	fsys[".git/config"] = &fstest.MapFile{Data: []byte("[core]\n")}
+	fsys["bogus/file.txt"] = &fstest.MapFile{Data: []byte("x")}
 
-	t.Run("AGENTS.md alone is the single inert entry and loads", func(t *testing.T) {
-		fsys := baseLibraryFS()
-		fsys["AGENTS.md"] = &fstest.MapFile{Data: []byte("# library guide\n")}
-		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
-		if err != nil {
-			t.Fatalf("LoadLibrary() error = %v, want nil (AGENTS.md is permitted and inert)", err)
-		}
-		if lib == nil {
-			t.Fatal("LoadLibrary() returned nil Library with nil error")
-		}
-	})
+	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+	if err != nil {
+		t.Fatalf("LoadLibrary() error = %v, want nil (non-library top-level entries are ignored)", err)
+	}
+	if lib == nil {
+		t.Fatal("LoadLibrary() returned nil Library with nil error")
+	}
+	if _, _, ok := lib.TemplateByName("hello"); !ok {
+		t.Error("TemplateByName(hello) not found in loaded library")
+	}
 }
 
 // TestLoadLibraryStep3UsageKey proves step 3 rejects a template.yaml
@@ -330,16 +321,16 @@ func TestLoadLibraryStep6MediaAbsolute(t *testing.T) {
 
 // TestLoadLibraryFailFastOrdering proves LoadLibrary reports the earliest
 // step's error even when a later step would also fail: a fixture broken at
-// both step 2 (unknown top-level entry) and step 5 (missing theme.css) must
-// report the step-2 error.
+// both step 1 (invalid library.yaml) and step 5 (missing theme.css) must
+// report the step-1 error.
 func TestLoadLibraryFailFastOrdering(t *testing.T) {
 	fsys := baseLibraryFS()
-	fsys["bogus/file.txt"] = &fstest.MapFile{Data: []byte("x")}
+	fsys["library.yaml"] = &fstest.MapFile{Data: []byte("name: demo\nformat: 2\n")}
 	fsys["themes/plain/other.txt"] = &fstest.MapFile{Data: []byte("x")}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	if !strings.Contains(libErr.Message, "bogus") {
-		t.Errorf("Message = %q, want the step-2 (unknown top-level entry) error, not a later step's", libErr.Message)
+	if !strings.Contains(libErr.Message, "unsupported library format") {
+		t.Errorf("Message = %q, want the step-1 (bad format) error, not a later step's", libErr.Message)
 	}
 }
 

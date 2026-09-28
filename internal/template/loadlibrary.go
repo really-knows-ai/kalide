@@ -18,9 +18,10 @@ import (
 // number, matching the plan's ordering:
 //
 //  1. library.yaml present and valid;
-//  2. layout: only the documented top-level entries plus the single inert
-//     root entry AGENTS.md (library-guide-layout), and slide/section names
-//     unique across kinds;
+//  2. slide/section names unique across kinds; any top-level entry other
+//     than the documented library structure is ignored — only the library
+//     itself is validated, so a library that is also a git repo (or carries
+//     a README, editor files, …) still loads;
 //  3. per template, kind then name: the three required files present,
 //     template.yaml well-formed with no `usage:` key, and the layout parses
 //     as html/template with only the documented func set;
@@ -90,16 +91,11 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 		return nil, err
 	}
 
-	// Step 2: layout — only the documented top-level entries, and slide vs
-	// section names unique across kinds.
-	entries, err := fs.ReadDir(sub, ".")
-	if err != nil {
-		return nil, libraryErrorf(displayRoot, 0, "read directory: %v", err)
-	}
-	if err := checkTopLevelLayout(displayRoot, entries); err != nil {
-		return nil, err
-	}
-
+	// Step 2: slide vs section names unique across kinds. Top-level entries
+	// other than the documented library structure (library.yaml, slides/,
+	// sections/, themes/, media/) are ignored: only the library itself is
+	// validated, so an extra entry such as .git/, README.md or an editor
+	// lockfile never blocks the load.
 	slideNames, err := templateDirNames(sub, displayRoot, SlidesDir)
 	if err != nil {
 		return nil, err
@@ -304,26 +300,6 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	}
 	if !haveFormat {
 		return libraryErrorf(metaPath, nodeLineOr(mapping, 1), `missing required key "format"`)
-	}
-	return nil
-}
-
-// checkTopLevelLayout rejects a templates/ entry that is not one of the
-// documented top-level names (step 2): library.yaml, slides/, sections/,
-// themes/ and media/, plus the single permitted inert top-level entry
-// AGENTS.md (library-guide-layout).
-func checkTopLevelLayout(root string, entries []fs.DirEntry) error {
-	// AGENTS.md is the one permitted inert non-template top-level entry
-	// (library-guide-layout): the loader never parses, validates, renders,
-	// lists or serves it, but a library root carrying it must still load.
-	allowed := []string{LibraryFile, SlidesDir, SectionsDir, ThemesDir, MediaDir, "AGENTS.md"}
-	for _, entry := range entries {
-		if containsString(allowed, entry.Name()) {
-			continue
-		}
-		e := libraryErrorf(path.Join(root, entry.Name()), 0,
-			"unexpected entry %q in %s (expected only %s)", entry.Name(), root, strings.Join(allowed, ", "))
-		return e.withSuggestion(entry.Name(), allowed)
 	}
 	return nil
 }

@@ -44,9 +44,11 @@ library intended to **host a deck** must provide the deck's theme (the deck's
 `theme` defaults to `default`, so a `themes/default/` directory is normally
 required).
 
-A root-level `AGENTS.md` (this guide) is the one permitted non-layout entry at
-the library root; the loader ignores it. Every other unknown top-level entry is
-an error naming the offending entry.
+A root-level `AGENTS.md` (this guide) is ignored by the loader, as is any other
+top-level entry that is not part of the library (`library.yaml`, `slides/`,
+`sections/`, `themes/`, `media/`) — for example a `.git/` directory or a
+`README.md`. A library that is also a git repo therefore still loads; ignored
+entries are never parsed, validated, rendered, listed or served.
 
 ## Slides and sections
 

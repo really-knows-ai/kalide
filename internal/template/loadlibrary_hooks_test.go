@@ -117,8 +117,8 @@ func TestLoadLibraryExamplesFirstError(t *testing.T) {
 
 	t.Run("an earlier-step failure suppresses step 7", func(t *testing.T) {
 		fsys := stepFixture()
-		// Step 2: an unexpected top-level entry.
-		fsys["bogus/file.txt"] = &fstest.MapFile{Data: []byte("x")}
+		// Step 3: a template directory missing its required example.md.
+		delete(fsys, "slides/hello/example.md")
 		// Step 7: a layout that would fail to execute, if reached.
 		fsys["slides/hello/layout.html.tmpl"] = &fstest.MapFile{
 			Data: []byte(`<section>{{index .Missing 0}}</section>`),
@@ -126,8 +126,8 @@ func TestLoadLibraryExamplesFirstError(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		if !strings.Contains(libErr.Message, "bogus") {
-			t.Errorf("Message = %q, want the step-2 error, not step 7's execute failure", libErr.Message)
+		if !strings.Contains(libErr.Message, ExampleFile) {
+			t.Errorf("Message = %q, want the step-3 missing-example error, not step 7's execute failure", libErr.Message)
 		}
 	})
 }

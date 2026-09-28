@@ -84,6 +84,44 @@ func TestWatchExternalLibraryIntegration(t *testing.T) {
 
 		assertQuiet(t, events)
 	})
+
+	t.Run("a change to the library.yaml under the resolved root is reported", func(t *testing.T) {
+		_, libRoot, events := newExternalLibraryWatchDeck(t)
+
+		// library.yaml is part of the library structure at the root of the
+		// resolved external root, so an edit to it must be reported.
+		mustWrite(t, filepath.Join(libRoot, "library.yaml"),
+			"name: shared-lib\nformat: 1\nupdated: true\n")
+
+		ev := waitEvent(t, events)
+		expectPath(t, ev, externalLibraryEventPrefix+"/library.yaml")
+		assertQuiet(t, events)
+	})
+
+	t.Run("a non-library top-level entry in the resolved root is ignored", func(t *testing.T) {
+		_, libRoot, events := newExternalLibraryWatchDeck(t)
+
+		// A git repository and a README at the top level of the resolved
+		// library root are not part of the library structure: the watcher
+		// follows only library.yaml and the slides/, sections/, themes/ and
+		// media/ subtrees, so neither may produce an event.
+		mustMkdir(t, filepath.Join(libRoot, ".git"))
+		mustWrite(t, filepath.Join(libRoot, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n")
+		mustWrite(t, filepath.Join(libRoot, "README.md"), "# shared-lib\n")
+
+		assertQuiet(t, events)
+	})
+
+	t.Run("a plain file directly in the resolved root is ignored", func(t *testing.T) {
+		_, libRoot, events := newExternalLibraryWatchDeck(t)
+
+		// Relevance is not a blanket "anything under the root": a plain file
+		// sitting directly in the library root, neither library.yaml nor a
+		// structure directory, is not part of the library and is ignored.
+		mustWrite(t, filepath.Join(libRoot, "notes.txt"), "scratch\n")
+
+		assertQuiet(t, events)
+	})
 }
 
 // newExternalLibraryWatchDeck builds a real temporary deck at <parent>/deck

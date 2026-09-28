@@ -283,8 +283,10 @@ templates/
 - **`AGENTS.md`** is the library/template-author agent guide: a plain-text
   reference to the library and template format that `kalide init-library`
   writes, so a coding agent can author new templates and themes without
-  guessing. It is the only permitted non-layout entry at the library root and
-  is inert — the loader ignores it, and no template may rely on it.
+  guessing. It is inert — the loader ignores it, and no template may rely on
+  it. The loader likewise ignores any other top-level entry that is not part of
+  the library (for example a `.git/` directory or a `README.md`), so a library
+  that is also a git repository loads normally.
 - **`slides/<name>/`** and **`sections/<name>/`** each hold exactly three
   files: `template.yaml`, `layout.html.tmpl` and `example.md`. A template's
   name is always its directory name.

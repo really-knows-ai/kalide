@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The template-library loader now validates only the library itself: every
+  top-level entry that is not part of the library structure (`library.yaml`,
+  `slides/`, `sections/`, `themes/`, `media/`) is ignored. This generalizes the
+  previous `AGENTS.md`-only exception, so a library that is a git repository
+  (`.git/`) or carries a `README.md` or other unrelated files loads normally.
+
 ## [0.7.0] - 2026-09-28
 
 ### Added
