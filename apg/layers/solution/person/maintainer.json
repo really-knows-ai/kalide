@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "person",
   "name": "maintainer",
-  "body": "Maintainer (C4 person): develops kalide, pushes and tags releases by hand; the release pipeline reacts to the tag.",
+  "body": "Maintainer (C4 person): develops kalide and pushes/tags releases; pushing and tagging require explicit, per-action human consent — the maintainer may do it directly, or authorise an agent to perform a specific push/tag under that consent. The release pipeline reacts to a consented tag.",
   "properties": {},
   "out": [
     {
