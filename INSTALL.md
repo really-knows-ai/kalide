@@ -258,32 +258,3 @@ updates by itself.
 
 If none of these helps, open an issue at
 <https://github.com/really-knows-ai/kalide/issues>.
-
-## For maintainers: how a release is published
-
-This section is background only — you never need it to install or use `kalide`.
-
-- **Pushing and tagging need explicit human consent.** A release starts when a
-  version tag named `vX.Y.Z` (for example `v1.2.0`) is created. A human may push
-  or tag directly; an agent may push or tag only with explicit, per-action human
-  consent for that specific action — consent is never standing or assumed.
-- **CI builds and checks.** The release workflow builds the binaries for the
-  supported targets, runs the native end-to-end checks on each target's own
-  build machine, and only then publishes the GitHub Release with the binaries
-  and a `checksums.txt`.
-- **CI pushes only the manifest commit.** After publishing, CI updates
-  `Formula/kalide.rb` and `bucket/kalide.json` (new version, download URLs and
-  checksums) and pushes a single commit containing **only** files under
-  `Formula/` and `bucket/`. The workflow fails if anything else is in that
-  commit. It never creates tags and never pushes other code.
-- **CI checks the public install.** After the manifest commit is pushed, the
-  `package-install-e2e` job installs the new release anonymously (no token)
-  with Homebrew on macOS (Apple silicon and Intel) and Scoop on Windows (64-bit
-  and ARM), and checks that `kalide version` reports the pushed tag. It runs
-  after publishing, so it flags a broken public install rather than blocking
-  the release.
-
-In short: pushing and tagging need explicit, per-action human consent — from a
-human, or from an agent acting under that consent — and CI publishes the
-release, pushes only the package-manifest commit, and then verifies the
-anonymous install.
