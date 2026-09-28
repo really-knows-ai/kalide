@@ -21,6 +21,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.templates-dir-layout",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.theme",
+      "properties": {}
     }
   ],
   "in": [
