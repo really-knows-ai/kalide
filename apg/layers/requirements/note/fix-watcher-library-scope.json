@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.file-watcher",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.watch-deck",
+      "properties": {}
     }
   ],
   "in": []
