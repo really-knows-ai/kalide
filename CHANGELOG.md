@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.7.1] - 2026-09-28
 
-- The template-library loader now validates only the library itself: every
-  top-level entry that is not part of the library structure (`library.yaml`,
-  `slides/`, `sections/`, `themes/`, `media/`) is ignored. This generalizes the
-  previous `AGENTS.md`-only exception, so a library that is a git repository
-  (`.git/`) or carries a `README.md` or other unrelated files loads normally.
+### Fixed
+
+- A template library that is also a git repository now loads: the loader
+  validates only the library structure (`library.yaml`, `slides/`, `sections/`,
+  `themes/`, `media/`) and ignores every other top-level entry — a `.git/`
+  directory, a `README.md`, an editor lockfile — instead of erroring on
+  anything outside the documented layout. This generalizes the previous
+  `AGENTS.md`-only exception.
+- The file watcher follows only the resolved library's structure — its
+  `library.yaml` and its `slides/`, `sections/`, `themes/` and `media/`
+  subtrees — rather than the whole resolved root, so a `git` operation inside a
+  git-hosted library no longer triggers a deck reload.
 
 ## [0.7.0] - 2026-09-28
 
@@ -97,7 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/really-knows-ai/kalide/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/really-knows-ai/kalide/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/really-knows-ai/kalide/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/really-knows-ai/kalide/releases/tag/v0.5.0
