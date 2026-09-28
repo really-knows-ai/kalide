@@ -49,20 +49,6 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "go.mod": allow
-    "go.sum": allow
-    "Makefile": allow
-    "README.md": allow
-    ".gitignore": allow
-    "cmd/**": allow
-    "internal/cli/**": allow
-    "internal/scaffold/**": allow
-    "internal/suggest/**": allow
-    "LICENSE": allow
-    "NOTICE": allow
-    "TRADEMARKS.md": allow
-    "CHANGELOG.md": allow
-    "brand/**": allow
     "apg/.worktrees/*/go.mod": allow
     "apg/.worktrees/*/go.sum": allow
     "apg/.worktrees/*/Makefile": allow
@@ -77,14 +63,77 @@ permission:
     "apg/.worktrees/*/TRADEMARKS.md": allow
     "apg/.worktrees/*/CHANGELOG.md": allow
     "apg/.worktrees/*/brand/**": allow
-    "**/*_test.go": deny
-    "**/testdata/**": deny
-    "e2e/**": deny
+    "go.mod": deny
+    "go.sum": deny
+    "Makefile": deny
+    "README.md": deny
+    ".gitignore": deny
+    "cmd/**": deny
+    "internal/**": deny
+    "LICENSE": deny
+    "NOTICE": deny
+    "TRADEMARKS.md": deny
+    "CHANGELOG.md": deny
+    "brand/**": deny
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
     "apg/.worktrees/*/e2e/**": deny
     ".opencode/**": deny
     "apg/.worktrees/*/.opencode/**": deny
+  apg_rm:
+    "*": deny
+    "apg/.worktrees/*/go.mod": allow
+    "apg/.worktrees/*/go.sum": allow
+    "apg/.worktrees/*/Makefile": allow
+    "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/.gitignore": allow
+    "apg/.worktrees/*/cmd/**": allow
+    "apg/.worktrees/*/internal/cli/**": allow
+    "apg/.worktrees/*/internal/scaffold/**": allow
+    "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/LICENSE": allow
+    "apg/.worktrees/*/NOTICE": allow
+    "apg/.worktrees/*/TRADEMARKS.md": allow
+    "apg/.worktrees/*/CHANGELOG.md": allow
+    "apg/.worktrees/*/brand/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
+  apg_mv:
+    "*": deny
+    "apg/.worktrees/*/go.mod": allow
+    "apg/.worktrees/*/go.sum": allow
+    "apg/.worktrees/*/Makefile": allow
+    "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/.gitignore": allow
+    "apg/.worktrees/*/cmd/**": allow
+    "apg/.worktrees/*/internal/cli/**": allow
+    "apg/.worktrees/*/internal/scaffold/**": allow
+    "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/LICENSE": allow
+    "apg/.worktrees/*/NOTICE": allow
+    "apg/.worktrees/*/TRADEMARKS.md": allow
+    "apg/.worktrees/*/CHANGELOG.md": allow
+    "apg/.worktrees/*/brand/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
+  apg_cp:
+    "*": deny
+    "apg/.worktrees/*/go.mod": allow
+    "apg/.worktrees/*/go.sum": allow
+    "apg/.worktrees/*/Makefile": allow
+    "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/.gitignore": allow
+    "apg/.worktrees/*/cmd/**": allow
+    "apg/.worktrees/*/internal/cli/**": allow
+    "apg/.worktrees/*/internal/scaffold/**": allow
+    "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/LICENSE": allow
+    "apg/.worktrees/*/NOTICE": allow
+    "apg/.worktrees/*/TRADEMARKS.md": allow
+    "apg/.worktrees/*/CHANGELOG.md": allow
+    "apg/.worktrees/*/brand/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
   bash:
     "*": deny
     "cd *": allow
@@ -117,10 +166,6 @@ permission:
     "go test *": allow
     "make": allow
     "make *": allow
-    "rm cmd/*": allow
-    "rm internal/cli/*": allow
-    "rm internal/scaffold/*": allow
-    "rm internal/suggest/*": allow
 ---
 
 # implementer (core) — kalide
@@ -143,6 +188,13 @@ through you. Not yours: `*_test.go`/`testdata/` (test-implementer), `e2e/**`
 (e2e-test-implementer), deck/theme/slide/mdcheck/template/validate
 (content-implementer), assets/render/server/watch (web-implementer),
 workflows/Formula/bucket/INSTALL.md (release-implementer), `.opencode/**`.
+
+## Worktree-only writes & file operations
+Every path you may write is granted only under `apg/.worktrees/*/…`; the same
+paths on the main checkout are denied. Deletes, renames and moves go through
+`apg_rm` / `apg_mv` / `apg_cp` (scope-enforced: last matching allow/deny entry
+wins, unmatched paths refused, any main-checkout path refused; `apg_mv`/`apg_cp`
+check both source and destination). There is no bash `rm`/`mv`/`cp`.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing

@@ -49,24 +49,47 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "internal/deck/**": allow
-    "internal/theme/**": allow
-    "internal/slide/**": allow
-    "internal/mdcheck/**": allow
-    "internal/template/**": allow
-    "internal/validate/**": allow
     "apg/.worktrees/*/internal/deck/**": allow
     "apg/.worktrees/*/internal/theme/**": allow
     "apg/.worktrees/*/internal/slide/**": allow
     "apg/.worktrees/*/internal/mdcheck/**": allow
     "apg/.worktrees/*/internal/template/**": allow
     "apg/.worktrees/*/internal/validate/**": allow
-    "**/*_test.go": deny
-    "**/testdata/**": deny
+    "internal/**": deny
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
     ".opencode/**": deny
     "apg/.worktrees/*/.opencode/**": deny
+  apg_rm:
+    "*": deny
+    "apg/.worktrees/*/internal/deck/**": allow
+    "apg/.worktrees/*/internal/theme/**": allow
+    "apg/.worktrees/*/internal/slide/**": allow
+    "apg/.worktrees/*/internal/mdcheck/**": allow
+    "apg/.worktrees/*/internal/template/**": allow
+    "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
+  apg_mv:
+    "*": deny
+    "apg/.worktrees/*/internal/deck/**": allow
+    "apg/.worktrees/*/internal/theme/**": allow
+    "apg/.worktrees/*/internal/slide/**": allow
+    "apg/.worktrees/*/internal/mdcheck/**": allow
+    "apg/.worktrees/*/internal/template/**": allow
+    "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
+  apg_cp:
+    "*": deny
+    "apg/.worktrees/*/internal/deck/**": allow
+    "apg/.worktrees/*/internal/theme/**": allow
+    "apg/.worktrees/*/internal/slide/**": allow
+    "apg/.worktrees/*/internal/mdcheck/**": allow
+    "apg/.worktrees/*/internal/template/**": allow
+    "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
   bash:
     "*": deny
     "cd *": allow
@@ -97,12 +120,6 @@ permission:
     "go test *": allow
     "make": allow
     "make *": allow
-    "rm internal/deck/*": allow
-    "rm internal/theme/*": allow
-    "rm internal/slide/*": allow
-    "rm internal/mdcheck/*": allow
-    "rm internal/template/*": allow
-    "rm internal/validate/*": allow
 ---
 
 # content-implementer — kalide
@@ -118,6 +135,13 @@ files). Not yours: `*_test.go`/`testdata/` (test-implementer), go.mod/cmd/cli/
 scaffold/suggest/Makefile/README (implementer — ask via the coordinator for
 dependency changes), assets/render/server/watch (web-implementer), release
 artifacts (release-implementer), `e2e/**`, `.opencode/**`.
+
+## Worktree-only writes & file operations
+Every path you may write is granted only under `apg/.worktrees/*/…`; the same
+paths on the main checkout are denied. Deletes, renames and moves go through
+`apg_rm` / `apg_mv` / `apg_cp` (scope-enforced: last matching allow/deny entry
+wins, unmatched paths refused, any main-checkout path refused; `apg_mv`/`apg_cp`
+check both source and destination). There is no bash `rm`/`mv`/`cp`.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing

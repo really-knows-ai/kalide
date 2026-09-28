@@ -49,10 +49,10 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "e2e/**": allow
     "apg/.worktrees/*/e2e/**": allow
-    "examples/**": allow
     "apg/.worktrees/*/examples/**": allow
+    "e2e/**": deny
+    "examples/**": deny
     "cmd/**": deny
     "internal/**": deny
     "apg/.worktrees/*/cmd/**": deny
@@ -90,8 +90,6 @@ permission:
     "go test -run * ./e2e": allow
     "make": allow
     "make *": allow
-    "rm e2e/*": allow
-    "rm examples/*": allow
 ---
 
 # e2e-test-implementer — kalide
@@ -108,6 +106,12 @@ e2e/integration fixture. No other agent owns `examples/**`. Source (`cmd/**`, `i
 tests belong to test-implementer; `.opencode/**` is denied. The CI wiring for
 e2e (`native-e2e.yml`) belongs to release-implementer. If the binary needs a
 change to be testable, stop and report it.
+
+## Worktree-only writes
+Every path you may write is granted only under `apg/.worktrees/*/…`; the same
+paths on the main checkout are denied. You hold no file delete/move tools (the
+old bash `rm` grant is gone) — if an e2e/example file must be removed or
+renamed, stop and report it.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing

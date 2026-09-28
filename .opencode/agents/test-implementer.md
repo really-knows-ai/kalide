@@ -49,14 +49,12 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "cmd/**/*_test.go": allow
-    "internal/**/*_test.go": allow
-    "cmd/**/testdata/**": allow
-    "internal/**/testdata/**": allow
     "apg/.worktrees/*/cmd/**/*_test.go": allow
     "apg/.worktrees/*/internal/**/*_test.go": allow
     "apg/.worktrees/*/cmd/**/testdata/**": allow
     "apg/.worktrees/*/internal/**/testdata/**": allow
+    "cmd/**": deny
+    "internal/**": deny
     "e2e/**": deny
     "apg/.worktrees/*/e2e/**": deny
     ".opencode/**": deny
@@ -105,6 +103,11 @@ and int tests share files, so one agent owns both tiers:
 Source (non-test `.go`) is denied — the implementers own it. `e2e/**` belongs
 to e2e-test-implementer; `.opencode/**` is denied. If a test needs a source
 change (a seam, an exported hook), stop and report it.
+
+## Worktree-only writes
+Every path you may write is granted only under `apg/.worktrees/*/…`; the same
+paths on the main checkout are denied. You hold no file delete/move tools —
+if a test file must be removed or renamed, stop and report it.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing

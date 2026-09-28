@@ -49,24 +49,50 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    "internal/assets/**": allow
-    "internal/render/**": allow
-    "internal/server/**": allow
-    "internal/watch/**": allow
-    "fonts/**": allow
-    "logo/**": allow
     "apg/.worktrees/*/internal/assets/**": allow
     "apg/.worktrees/*/internal/render/**": allow
     "apg/.worktrees/*/internal/server/**": allow
     "apg/.worktrees/*/internal/watch/**": allow
     "apg/.worktrees/*/fonts/**": allow
     "apg/.worktrees/*/logo/**": allow
-    "**/*_test.go": deny
-    "**/testdata/**": deny
+    "internal/**": deny
+    "fonts/**": deny
+    "logo/**": deny
+    "apg/.worktrees/*/brand/**": deny
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
     ".opencode/**": deny
     "apg/.worktrees/*/.opencode/**": deny
+  apg_rm:
+    "*": deny
+    "apg/.worktrees/*/internal/assets/**": allow
+    "apg/.worktrees/*/internal/render/**": allow
+    "apg/.worktrees/*/internal/server/**": allow
+    "apg/.worktrees/*/internal/watch/**": allow
+    "apg/.worktrees/*/fonts/**": allow
+    "apg/.worktrees/*/logo/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
+  apg_mv:
+    "*": deny
+    "apg/.worktrees/*/internal/assets/**": allow
+    "apg/.worktrees/*/internal/render/**": allow
+    "apg/.worktrees/*/internal/server/**": allow
+    "apg/.worktrees/*/internal/watch/**": allow
+    "apg/.worktrees/*/fonts/**": allow
+    "apg/.worktrees/*/logo/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
+  apg_cp:
+    "*": deny
+    "apg/.worktrees/*/internal/assets/**": allow
+    "apg/.worktrees/*/internal/render/**": allow
+    "apg/.worktrees/*/internal/server/**": allow
+    "apg/.worktrees/*/internal/watch/**": allow
+    "apg/.worktrees/*/fonts/**": allow
+    "apg/.worktrees/*/logo/**": allow
+    "apg/.worktrees/*/**/*_test.go": deny
+    "apg/.worktrees/*/**/testdata/**": deny
   bash:
     "*": deny
     "cd *": allow
@@ -81,8 +107,6 @@ permission:
     "git branch": allow
     "git add *": allow
     "git commit *": allow
-    "git mv fonts internal/assets/fonts": allow
-    "git mv logo internal/assets/logo": allow
     "git push *": deny
     "git tag *": deny
     "go version": allow
@@ -99,12 +123,6 @@ permission:
     "go test *": allow
     "make": allow
     "make *": allow
-    "rm internal/assets/*": allow
-    "rm internal/render/*": allow
-    "rm internal/server/*": allow
-    "rm internal/watch/*": allow
-    "rm fonts/*": allow
-    "rm logo/*": allow
 ---
 
 # web-implementer — kalide
@@ -116,14 +134,21 @@ project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 ## You own
 `internal/assets/**` (embedded fonts/logo), `internal/render/**`,
 `internal/server/**`, `internal/watch/**`, and the committed `fonts/` and
-`logo/` trees — phase 1 moves them under `internal/assets` via
-`git mv fonts internal/assets/fonts` / `git mv logo internal/assets/logo` (only
-when a task says so). Not yours: `*_test.go`/`testdata/` (test-implementer),
+`logo/` trees — phase 1 moves them under `internal/assets` with `apg_mv`
+(`fonts` → `internal/assets/fonts`, `logo` → `internal/assets/logo`, worktree
+paths; only when a task says so; then `git add` the result). Not yours: `*_test.go`/`testdata/` (test-implementer),
 go.mod/cmd/cli/scaffold/suggest/Makefile/README (implementer — request
 dependency changes via the coordinator), content packages (content-implementer),
 release artifacts (release-implementer), `e2e/**`, `.opencode/**`.
 Not yours: `brand/**` (implementer) — never embed or copy it into
 `internal/assets`.
+
+## Worktree-only writes & file operations
+Every path you may write is granted only under `apg/.worktrees/*/…`; the same
+paths on the main checkout are denied. Deletes, renames and moves go through
+`apg_rm` / `apg_mv` / `apg_cp` (scope-enforced: last matching allow/deny entry
+wins, unmatched paths refused, any main-checkout path refused; `apg_mv`/`apg_cp`
+check both source and destination). There is no bash `rm`/`mv`/`cp`/`git mv`.
 
 ## Gates (done-contract — each a separate call, all must pass)
 1. `gofmt -l .` — must print nothing

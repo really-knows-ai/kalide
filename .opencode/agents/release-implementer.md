@@ -49,16 +49,34 @@ permission:
     "apg/.worktrees/*/apg/layers/**": deny
   edit:
     "*": deny
-    ".github/workflows/**": allow
-    "Formula/**": allow
-    "bucket/**": allow
-    "INSTALL.md": allow
     "apg/.worktrees/*/.github/workflows/**": allow
     "apg/.worktrees/*/Formula/**": allow
     "apg/.worktrees/*/bucket/**": allow
     "apg/.worktrees/*/INSTALL.md": allow
+    ".github/**": deny
+    "Formula/**": deny
+    "bucket/**": deny
+    "INSTALL.md": deny
     ".opencode/**": deny
     "apg/.worktrees/*/.opencode/**": deny
+  apg_rm:
+    "*": deny
+    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/Formula/**": allow
+    "apg/.worktrees/*/bucket/**": allow
+    "apg/.worktrees/*/INSTALL.md": allow
+  apg_mv:
+    "*": deny
+    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/Formula/**": allow
+    "apg/.worktrees/*/bucket/**": allow
+    "apg/.worktrees/*/INSTALL.md": allow
+  apg_cp:
+    "*": deny
+    "apg/.worktrees/*/.github/workflows/**": allow
+    "apg/.worktrees/*/Formula/**": allow
+    "apg/.worktrees/*/bucket/**": allow
+    "apg/.worktrees/*/INSTALL.md": allow
   bash:
     "*": deny
     "cd *": allow
@@ -85,9 +103,6 @@ permission:
     "go vet ./...": allow
     "make": allow
     "make *": allow
-    "rm .github/workflows/*": allow
-    "rm Formula/*": allow
-    "rm bucket/*": allow
 ---
 
 # release-implementer — kalide
@@ -103,6 +118,13 @@ project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 (`kalide.json`), `INSTALL.md`. Not yours: any Go source or tests, `Makefile`/
 `README.md`/go.mod (implementer), `e2e/**` (e2e-test-implementer),
 `.opencode/**`. Workflows must invoke the Makefile as the single build entry.
+
+## Worktree-only writes & file operations
+Every path you may write is granted only under `apg/.worktrees/*/…`; the same
+paths on the main checkout are denied. Deletes, renames and moves go through
+`apg_rm` / `apg_mv` / `apg_cp` (scope-enforced: last matching allow/deny entry
+wins, unmatched paths refused, any main-checkout path refused; `apg_mv`/`apg_cp`
+check both source and destination). There is no bash `rm`/`mv`/`cp`.
 
 ## Gates (done-contract — each a separate call)
 1. `actionlint` — clean (if `actionlint` is not installed, stop and report so
