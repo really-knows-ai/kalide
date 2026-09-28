@@ -10,6 +10,11 @@
       "kind": "details",
       "source": "requirements.note.external-template-library-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.theme-media-serving",
+      "properties": {}
     }
   ]
 }

@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "solution.component.renderer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.template-library-shareable",
+      "properties": {}
     }
   ],
   "in": []
