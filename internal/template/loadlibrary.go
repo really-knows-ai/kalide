@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	htmltemplate "html/template"
 	"io/fs"
 	"path"
@@ -494,6 +495,253 @@ func checkThemeURLs(root string, th *LibraryTheme) error {
 		}
 	}
 	return nil
+}
+
+// maxThemeCSSImports bounds how many distinct stylesheets a theme may pull in
+// through @import. A chain or fan-out longer than this is reported as a
+// templates error rather than making loading do unbounded work; an actual
+// import cycle is detected separately and reported as a cycle.
+const maxThemeCSSImports = 64
+
+// cssImportPattern matches an @import rule in both its quoted-string form
+// (@import "x.css";) and its url() form (@import url("x.css");), capturing
+// the import target. The target may be in any of the five alternatives: the
+// url() form single-quoted, double-quoted or unquoted, or the bare
+// single-quoted or double-quoted string. firstCSSGroup extracts whichever one
+// matched.
+var cssImportPattern = regexp.MustCompile(`@import\s+(?:url\(\s*(?:'([^']*)'|"([^"]*)"|([^'")\s]+))\s*\)|'([^']*)'|"([^"]*)")`)
+
+// themeCSSRefKind distinguishes the two kinds of reference the step-6 scanner
+// follows in a theme stylesheet.
+type themeCSSRefKind int
+
+const (
+	// themeCSSImport is an @import target.
+	themeCSSImport themeCSSRefKind = iota
+	// themeCSSURL is a url() reference that is not an @import target.
+	themeCSSURL
+)
+
+// themeCSSRef is one reference found in a theme CSS file: an @import target or
+// a url() target, with the byte offset of the target within the file so an
+// error can be located with cssLineAt.
+type themeCSSRef struct {
+	kind   themeCSSRefKind
+	value  string
+	offset int
+}
+
+// themeCSSRefs returns every @import and non-@import url() reference in css,
+// sorted by source offset. A url() that appears as an @import target (the
+// url() form of @import) is reported once, as an import, and is not also
+// returned as a url() reference.
+func themeCSSRefs(css []byte) []themeCSSRef {
+	var refs []themeCSSRef
+	var importSpans [][2]int
+	for _, m := range cssImportPattern.FindAllSubmatchIndex(css, -1) {
+		value, offset := firstCSSGroup(css, m)
+		if value == "" {
+			continue
+		}
+		importSpans = append(importSpans, [2]int{m[0], m[1]})
+		refs = append(refs, themeCSSRef{kind: themeCSSImport, value: value, offset: offset})
+	}
+	for _, m := range cssURLPattern.FindAllSubmatchIndex(css, -1) {
+		if insideSpans(importSpans, m[0]) {
+			continue
+		}
+		refs = append(refs, themeCSSRef{kind: themeCSSURL, value: string(css[m[2]:m[3]]), offset: m[2]})
+	}
+	sort.Slice(refs, func(i, j int) bool { return refs[i].offset < refs[j].offset })
+	return refs
+}
+
+// firstCSSGroup returns the first non-empty capture group in the submatch
+// index slice m (in group order) and the byte offset of that capture's start.
+// It returns "", m[0] when no group matched.
+func firstCSSGroup(css []byte, m []int) (string, int) {
+	for g := 2; g+1 < len(m); g += 2 {
+		if m[g] < 0 {
+			continue
+		}
+		return string(css[m[g]:m[g+1]]), m[g]
+	}
+	return "", m[0]
+}
+
+// insideSpans reports whether offset falls inside any [start, end) span.
+func insideSpans(spans [][2]int, offset int) bool {
+	for _, s := range spans {
+		if offset >= s[0] && offset < s[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// themeCSSScanner walks a theme's stylesheets exactly once each: theme.css
+// plus every CSS file it @imports from the theme's own directory. visiting
+// holds the files on the current recursion stack (so an import cycle is
+// detected), and scanned holds files already fully validated (so a diamond
+// import is validated once, not re-followed).
+type themeCSSScanner struct {
+	root     string
+	th       *LibraryTheme
+	mediaFS  fs.FS
+	visiting map[string]bool
+	scanned  map[string]bool
+}
+
+// checkThemeCSSReferences validates a theme's CSS references (templates-dir-
+// validation step 6): every relative url() reference and every @import target
+// must resolve to an existing file inside the theme's own directory, and a
+// url() carrying the reserved media: prefix must resolve like a layout
+// `media "path"` argument against mediaFS. An absolute path, a `..` escape, a
+// scheme (http:, https:, data:, //) and an @import target carrying the
+// reserved prefix (or any scheme) are rejected. @imports are followed in both
+// the quoted-string and url() forms, bounded and cycle-safe. Every error is a
+// *LibraryError qualified with the offending CSS file and its 1-based line.
+//
+// root is the templates/ root the display paths are built under. th.Dir is
+// the theme's directory within that root; th.StylesheetBytes is theme.css and
+// th.Files holds every other file the theme directory owns. mediaFS is the
+// theme library's resolved media/ sub-filesystem (Library.Media); a nil
+// mediaFS makes every media: reference fail, since there is nowhere to
+// resolve it.
+func checkThemeCSSReferences(root string, th *LibraryTheme, mediaFS fs.FS) error {
+	if th == nil {
+		return nil
+	}
+	s := &themeCSSScanner{
+		root:     root,
+		th:       th,
+		mediaFS:  mediaFS,
+		visiting: map[string]bool{ThemeStylesheet: true},
+		scanned:  map[string]bool{},
+	}
+	if err := s.scanFile(th.StylesheetBytes, th.StylesheetPath, ThemeStylesheet); err != nil {
+		return err
+	}
+	s.scanned[ThemeStylesheet] = true
+	return nil
+}
+
+// scanFile validates every reference in one CSS file, in source order. css is
+// the file's bytes, displayPath is its project-root-relative path for errors,
+// and rel is its path within the theme directory (which its relative
+// references resolve against).
+func (s *themeCSSScanner) scanFile(css []byte, displayPath, rel string) error {
+	for _, ref := range themeCSSRefs(css) {
+		line := cssLineAt(css, ref.offset)
+		if ref.kind == themeCSSImport {
+			if err := s.checkImport(displayPath, rel, ref, line); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.checkURL(displayPath, rel, ref, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkImport validates one @import target and, when it is a valid
+// theme-owned CSS file, follows it. A target carrying the reserved media:
+// prefix or any other scheme is rejected and never followed.
+func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, line int) error {
+	target := ref.value
+	if strings.HasPrefix(target, MediaURLPrefix()) {
+		return libraryErrorf(displayPath, line,
+			"@import %q: the reserved %q prefix is valid only for a url() reference, never for an @import target",
+			target, MediaURLPrefix())
+	}
+	if isExternalRef(target) {
+		return libraryErrorf(displayPath, line,
+			"@import %q must be a relative path inside its theme directory", target)
+	}
+	importRel := path.Clean(path.Join(path.Dir(rel), target))
+	if importRel == ".." || strings.HasPrefix(importRel, "../") || path.IsAbs(importRel) {
+		return libraryErrorf(displayPath, line,
+			"@import %q escapes its theme directory %s", target, path.Join(s.root, s.th.Dir))
+	}
+	if s.visiting[importRel] {
+		return libraryErrorf(displayPath, line, "@import %q: import cycle", target)
+	}
+	data, ok := s.th.Files[importRel]
+	if !ok {
+		return libraryErrorf(displayPath, line,
+			"@import %q: file not found inside theme directory %s", target, path.Join(s.root, s.th.Dir))
+	}
+	if len(s.scanned)+len(s.visiting) >= maxThemeCSSImports {
+		return libraryErrorf(displayPath, line,
+			"@import %q: too many imported stylesheets (limit %d)", target, maxThemeCSSImports)
+	}
+	s.visiting[importRel] = true
+	err := s.scanFile(data, path.Join(s.root, s.th.Dir, importRel), importRel)
+	delete(s.visiting, importRel)
+	if err != nil {
+		return err
+	}
+	s.scanned[importRel] = true
+	return nil
+}
+
+// checkURL validates one url() reference that is not an @import target: a
+// media:-prefixed target resolves against mediaFS like a layout `media`
+// argument, and any other target must be a relative path naming an existing
+// file inside the theme directory.
+func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, line int) error {
+	target := ref.value
+	if target == "" {
+		return nil
+	}
+	if mediaPath := strings.TrimPrefix(target, MediaURLPrefix()); mediaPath != target {
+		clean, err := cleanMediaPath(mediaPath)
+		if err != nil {
+			return positionThemeCSSError(err, displayPath, line)
+		}
+		if s.mediaFS == nil {
+			return libraryErrorf(displayPath, line,
+				"url(%q): media file not found: no templates/media directory", target)
+		}
+		if _, statErr := fs.Stat(s.mediaFS, clean); statErr != nil {
+			return libraryErrorf(displayPath, line,
+				"url(%q): media file not found: %v", target, statErr)
+		}
+		return nil
+	}
+	if isExternalRef(target) {
+		return libraryErrorf(displayPath, line,
+			"url(%q) must be a relative path inside its theme directory", target)
+	}
+	themeRel := path.Clean(path.Join(path.Dir(rel), target))
+	if themeRel == ".." || strings.HasPrefix(themeRel, "../") || path.IsAbs(themeRel) {
+		return libraryErrorf(displayPath, line,
+			"url(%q) escapes its theme directory %s", target, path.Join(s.root, s.th.Dir))
+	}
+	if themeRel != ThemeStylesheet {
+		if _, ok := s.th.Files[themeRel]; !ok {
+			return libraryErrorf(displayPath, line,
+				"url(%q): file not found inside theme directory %s", target, path.Join(s.root, s.th.Dir))
+		}
+	}
+	return nil
+}
+
+// positionThemeCSSError re-points a *LibraryError that names a media path
+// (from cleanMediaPath) at the offending CSS file and line, so a bad media:
+// reference reads as a file:line-qualified templates error. A non-
+// *LibraryError is wrapped into one at the same position.
+func positionThemeCSSError(err error, displayPath string, line int) error {
+	var libErr *LibraryError
+	if errors.As(err, &libErr) {
+		c := *libErr
+		c.Path = displayPath
+		c.Line = line
+		return &c
+	}
+	return libraryErrorf(displayPath, line, "%v", err)
 }
 
 // htmlRefPattern matches a literal src="..." or href="..." attribute in a
