@@ -9,6 +9,7 @@ package e2e
 //   - `kalide init` writes the embedded hello seed, prints the paths it
 //     created and exits 0;
 //   - every printed path exists on disk, byte-for-byte the embedded seed:
+//     the deck-root AGENTS.md deck-author guide (agent-authoring),
 //     kalide.yaml, slides/1-hello.md, templates/library.yaml, the hello
 //     slide template's three files, the default theme's stylesheet, and an
 //     empty assets/ directory;
@@ -17,7 +18,8 @@ package e2e
 //     `kalide start` would load it;
 //   - a second `kalide init` in the same directory refuses with a
 //     non-zero exit, prints the refusal, and leaves every file
-//     byte-for-byte unchanged.
+//     byte-for-byte unchanged — in particular the AGENTS.md the first init
+//     wrote is never overwritten (the guide is written only when absent).
 //
 // `kalide start` serving the hello seed IS in scope here (phase 5 deferred
 // it; phase 3 wires template-backed rendering through it, so it lands in
@@ -33,6 +35,7 @@ package e2e
 // It builds a binary, so it is skipped under -short.
 
 import (
+	"bytes"
 	"io"
 	"io/fs"
 	"net/http"
@@ -51,6 +54,7 @@ import (
 // in internal/scaffold/seed. They are asserted against both the command
 // output and the filesystem.
 var initCreatedPaths = []string{
+	"AGENTS.md",
 	"kalide.yaml",
 	"slides/1-hello.md",
 	"templates/library.yaml",
@@ -101,6 +105,17 @@ func TestInitStart(t *testing.T) {
 		t.Errorf("kalide init created eypres.yaml, want only kalide.yaml")
 	}
 	assertDirEmpty(t, h.Path("assets"))
+
+	// The deck-root AGENTS.md deck-author guide (agent-authoring) is present
+	// and non-empty: init wrote it from the embedded static guide. It is not a
+	// template asset and is inert to the loader checked below.
+	agentsGuide, err := os.Stat(h.Path("AGENTS.md"))
+	if err != nil {
+		t.Fatalf("kalide init did not create AGENTS.md: %v", err)
+	}
+	if agentsGuide.IsDir() || agentsGuide.Size() == 0 {
+		t.Errorf("kalide init wrote AGENTS.md as an empty file or directory, want the embedded deck-author guide")
+	}
 
 	// The written seed loads and validates cleanly through the same path
 	// `kalide start` uses: template.LoadLibrary and, inside it,
@@ -169,6 +184,16 @@ func TestInitStart(t *testing.T) {
 	// touched it.
 	before := snapshotTree(t, h.WorkDir())
 
+	// The first init wrote AGENTS.md (absent-only). A pre-existing guide is not
+	// one of the blocking paths and init never overwrites it, so the refused
+	// second init must leave it byte-for-byte unchanged. The whole-tree
+	// snapshot below already covers this byte-for-byte; this explicit capture
+	// and comparison state the AGENTS.md intent directly.
+	agentsBefore, err := os.ReadFile(h.Path("AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md after first init: %v", err)
+	}
+
 	// A second `kalide init` in the same directory refuses: non-zero exit, the
 	// refusal message naming the blocking paths, and nothing written.
 	stdout, stderr, code = h.Run("init")
@@ -187,6 +212,14 @@ func TestInitStart(t *testing.T) {
 	after := snapshotTree(t, h.WorkDir())
 	if !reflect.DeepEqual(before, after) {
 		t.Errorf("second kalide init modified the directory:\nbefore = %v\nafter  = %v", before, after)
+	}
+
+	agentsAfter, err := os.ReadFile(h.Path("AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md after refused second init: %v", err)
+	}
+	if !bytes.Equal(agentsBefore, agentsAfter) {
+		t.Errorf("second kalide init modified the pre-existing AGENTS.md:\nbefore = %q\nafter  = %q", agentsBefore, agentsAfter)
 	}
 }
 
