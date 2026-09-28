@@ -30,9 +30,11 @@ import (
 //     running the template-build-checks; phase 1 leaves this a no-op,
 //     phase-2 task-11 fills it in;
 //  5. each theme has theme.css;
-//  6. theme.css's relative url() references stay inside the theme
-//     directory, a layout's literal src/href references stay inside
-//     templates/, and every `media` call argument is valid and exists;
+//  6. a theme's CSS references — theme.css and any CSS it @imports — stay
+//     inside the theme directory (or reach the library media/ tree via the
+//     reserved media: prefix), a layout's literal src/href references stay
+//     inside templates/, and every `media` call argument is valid and
+//     exists;
 //  7. (hook) checkLibraryExamples — each example.md validates against its
 //     definition and its layout executes; phase 1 leaves this a no-op,
 //     phase-2 task-12 fills it in.
@@ -156,11 +158,14 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 		lib.Themes[name] = th
 	}
 
-	// Step 6: theme.css url() references stay inside their theme directory,
-	// a layout's literal src/href references stay inside templates/, and
+	// Step 6: every theme CSS reference — in theme.css or any CSS it
+	// @imports — must be a relative path inside its theme directory, or a
+	// url() carrying the reserved media: prefix resolving against the
+	// library's media/ tree (validated like a layout `media` argument). A
+	// layout's literal src/href references stay inside templates/, and
 	// every `media` call argument is valid and exists.
 	for _, name := range themeNames {
-		if err := checkThemeURLs(displayRoot, lib.Themes[name]); err != nil {
+		if err := checkThemeCSSReferences(displayRoot, lib.Themes[name], lib.Media); err != nil {
 			return nil, err
 		}
 	}
@@ -470,31 +475,6 @@ func cssLineAt(css []byte, offset int) int {
 		}
 	}
 	return line
-}
-
-// checkThemeURLs rejects a theme.css url(...) reference that is not a
-// relative path staying inside its own theme directory (step 6): an absolute
-// path, a scheme (http:, data:, //) or a `..` escape is rejected.
-func checkThemeURLs(root string, th *LibraryTheme) error {
-	if th == nil {
-		return nil
-	}
-	for _, m := range cssURLPattern.FindAllSubmatch(th.StylesheetBytes, -1) {
-		ref := string(m[1])
-		if ref == "" {
-			continue
-		}
-		if isExternalRef(ref) {
-			return libraryErrorf(th.StylesheetPath, 0,
-				"%s: url(%q) must be a relative path inside its theme directory", ThemeStylesheet, ref)
-		}
-		clean := path.Clean(ref)
-		if clean == ".." || strings.HasPrefix(clean, "../") || path.IsAbs(clean) {
-			return libraryErrorf(th.StylesheetPath, 0,
-				"%s: url(%q) escapes its theme directory %s", ThemeStylesheet, ref, path.Join(root, th.Dir))
-		}
-	}
-	return nil
 }
 
 // maxThemeCSSImports bounds how many distinct stylesheets a theme may pull in
