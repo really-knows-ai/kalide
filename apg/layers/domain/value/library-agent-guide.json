@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "library-agent-guide",
-  "body": "Agent guide (library) value: the library-root `AGENTS.md` written verbatim by `kalide init-library` for template/library authors — a single unbranded, text-only, offline Markdown reference to the current library/template format, permitted as the one inert non-template root entry (library-guide-layout), not a template asset and inert to loading. It is a descriptor of the templating domain (like domain.value.library-manifest), so it carries no realised-by of its own and realises through its containing domain.group.templating.",
+  "body": "Agent guide (library) value: the library-root `AGENTS.md` written verbatim by `kalide init-library` for template/library authors — a single unbranded, text-only, offline Markdown reference to the current library/template format, an inert non-library root entry the loader ignores (library-guide-layout), not a template asset and inert to loading. It is a descriptor of the templating domain (like domain.value.library-manifest), so it carries no realised-by of its own and realises through its containing domain.group.templating.",
   "properties": {},
   "out": [],
   "in": [
