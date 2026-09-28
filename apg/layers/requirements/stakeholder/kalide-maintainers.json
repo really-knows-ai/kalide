@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "stakeholder",
   "name": "kalide-maintainers",
-  "body": "kalide maintainers: develop kalide in the public repo really-knows-ai/kalide, cut releases (humans push and tag), and keep the Homebrew/Scoop install channels working for EY employees and any other users.",
+  "body": "kalide maintainers: develop kalide in the public repo really-knows-ai/kalide, cut releases (pushing to the remote and creating tags require explicit, per-action human consent; absent that consent agents never push or tag), and keep the Homebrew/Scoop install channels working for EY employees and any other users.",
   "properties": {},
   "out": [
     {
