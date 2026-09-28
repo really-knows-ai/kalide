@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.templates-live-reload",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.live-reload",
+      "properties": {}
     }
   ],
   "in": []
