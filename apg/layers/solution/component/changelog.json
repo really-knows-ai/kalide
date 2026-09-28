@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "changelog",
-  "body": "Changelog: repo-root `CHANGELOG.md` (Keep-a-Changelog format, `Unreleased` section, `0.5.0` entry added before the human pushes `v0.5.0`). Maintained by hand alongside the release workflow. implemented-by deferred: `CHANGELOG.md` does not exist yet — the plan declares it as a planned file node and links it (see solution.note.spine-values-and-tier4 convention).",
+  "body": "Changelog: repo-root `CHANGELOG.md` (Keep-a-Changelog format, `Unreleased` section, `0.5.0` entry added before the `v0.5.0` tag is pushed — by a human, or by an agent under explicit per-action consent). Maintained by hand alongside the release workflow. implemented-by deferred: `CHANGELOG.md` does not exist yet — the plan declares it as a planned file node and links it (see solution.note.spine-values-and-tier4 convention).",
   "properties": {},
   "out": [],
   "in": [
