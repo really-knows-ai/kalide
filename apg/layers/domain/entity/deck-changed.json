@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.template-retarget-restart-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.fix-watcher-library-scope",
+      "properties": {}
     }
   ]
 }

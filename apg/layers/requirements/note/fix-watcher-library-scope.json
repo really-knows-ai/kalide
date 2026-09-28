@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "domain.service.watch-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.deck-changed",
+      "properties": {}
     }
   ],
   "in": []
