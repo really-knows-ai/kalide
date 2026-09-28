@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.note.distribution-solution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.stakeholder.kalide-maintainers",
+      "properties": {}
     }
   ],
   "in": []
