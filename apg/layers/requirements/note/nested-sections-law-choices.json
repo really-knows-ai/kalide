@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "nested-sections-law-choices",
+  "body": "source spec decisions 2, 3 and 4 were written as local constraint nodes rather than left as prose in the changed requirements. Resolution: requirements.constraint.section-depth-limit (attaches-to requirements.requirement.template-composition) records \"no composition chain deeper than six heading levels, bounded by the syntax not a setting\"; requirements.constraint.section-cycle-error-chain (attaches-to requirements.requirement.template-build-checks) records \"cycles rejected at load, error names the chain sections/a → sections/b → sections/a\"; `item` added to requirements.constraint.reserved-template-names. Depth-limit wording judgment: the source says both \"Depth is limited by the syntax\" and \"no template chain may be deeper than 6 heading levels\"; the constraint states both, tying the six-level bound to the six Markdown heading levels [autonomous — wording judgment].",
+  "properties": {},
+  "out": [],
+  "in": []
+}
