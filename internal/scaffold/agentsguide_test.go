@@ -42,6 +42,15 @@ package scaffold
 // `theme` in `themes/` or `theme.css`) does not count. The negative self-check
 // subtest pins that behaviour.
 //
+// A reserved URL prefix (`media:`, `theme:`, feedback-8) is special-cased: the
+// token is a prefix that ends in `:`, so it is inherently ambiguous with a YAML
+// mapping key (`theme: default`) and with ordinary prose. It therefore counts
+// only where the format actually uses it: inside an inline backtick code span,
+// or as a `url()`/`@import` argument (immediately preceded, allowing whitespace
+// and one optional opening quote, by `url(` or `@import`). In particular the
+// deck guide's `theme: default` config example no longer satisfies `theme:`,
+// while the `media:` checks keep passing.
+//
 // Fenced snippets are validated, not ignored (feedback-18): the ```-fenced
 // blocks in each guide are extracted and the standalone ones are run through
 // the real parsers — a kalide.yaml snippet through deck.LoadConfig, a slide
@@ -170,6 +179,8 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 			{"Templates live under templates/.", "templates"},
 			{"`{{ media \"logo.svg\" }}`", "media:"},
 			{"the media layout helper renders a file", "media:"},
+			{"theme: default", "theme:"},
+			{"theme:", "theme:"},
 		}
 		for _, tc := range absent {
 			if agentGuideContainsToken(tc.text, tc.token) {
@@ -189,6 +200,8 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 			{"```\nmode: optional\n```", "optional"},
 			{"`media:`", "media:"},
 			{"```\nurl('media:fonts/x.woff2')\n```", "media:"},
+			{"`theme:<name>/`", "theme:"},
+			{"@import 'theme:default/theme.css'\nurl('theme:default/bg.png')", "theme:"},
 		}
 		for _, tc := range present {
 			if !agentGuideContainsToken(tc.text, tc.token) {
@@ -254,7 +267,7 @@ func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "context key", tokens: template.ContextKeys()},
 		{name: "template.yaml top-level key", tokens: template.ManifestTopLevelKeys()},
 		{name: "library.yaml key", tokens: template.LibraryMetaKeys()},
-		{name: "media URL prefix", tokens: []string{template.MediaURLPrefix()}},
+		{name: "reserved URL prefix", tokens: []string{template.MediaURLPrefix(), template.ThemeURLPrefix()}},
 	}
 }
 
@@ -309,7 +322,7 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "layout helper", tokens: agentGuideLayoutHelpers(t)},
 		{name: "context key", tokens: template.ContextKeys()},
 		{name: "field type", tokens: template.ManifestFieldTypes()},
-		{name: "themes/media rule token", tokens: []string{template.ThemeStylesheet, template.MediaURLPrefix(), "url()", "media \""}},
+		{name: "themes/media rule token", tokens: []string{template.ThemeStylesheet, template.MediaURLPrefix(), template.ThemeURLPrefix(), "url()", "media \""}},
 	}
 }
 
@@ -350,9 +363,17 @@ func agentGuideTokenSet(groups []agentGuideTokenGroup) map[string]bool {
 // longer identifier (`init` in `init-library`, `theme` in `themes/`) does not
 // count. Context keys (`deck.title`) are also accepted with their canonical
 // leading dot (`.deck.title`).
+//
+// A reserved URL prefix (`media:`, `theme:`) is matched by a stricter,
+// dedicated rule (agentGuideContainsReservedPrefix): because the token itself
+// ends in `:`, the ordinary YAML-mapping-key and fenced-word paths would accept
+// a bare `theme:` mapping key or prose, so those paths are bypassed for it.
 func agentGuideContainsToken(guide, token string) bool {
 	if token == "" {
 		return false
+	}
+	if strings.HasSuffix(token, ":") {
+		return agentGuideContainsReservedPrefix(guide, token)
 	}
 	for _, candidate := range agentGuideTokenCandidates(token) {
 		if agentGuideCodeRegionsContain(guide, candidate) {
@@ -367,6 +388,38 @@ func agentGuideContainsToken(guide, token string) bool {
 		}
 	}
 	return false
+}
+
+// agentGuideContainsReservedPrefix reports whether guide carries a reserved URL
+// prefix token (`media:`, `theme:`) in a context that actually declares it.
+// Such a token is a prefix ending in `:`, so it is inherently ambiguous with a
+// YAML mapping key (`theme: default`) and with ordinary prose; an ordinary
+// code-region match would accept the deck guide's `theme: default` config
+// example. It therefore counts only inside an inline backtick code span, or as
+// a `url()`/`@import` argument (agentGuideReservedPrefixArg).
+func agentGuideContainsReservedPrefix(guide, token string) bool {
+	for _, span := range agentGuideInlineCodeSpans(guide) {
+		if agentGuideTextHasToken(span, token) {
+			return true
+		}
+	}
+	return agentGuideReservedPrefixArg(guide, token)
+}
+
+// agentGuideReservedPrefixArg reports whether text carries a reserved URL
+// prefix as the argument of a `url()` reference or an `@import` target: the
+// token must be immediately preceded by `url(` or `@import`, allowing only
+// whitespace and one optional opening quote in between. That context is what
+// distinguishes a real prefix use — `url('theme:default/theme.css')`,
+// `@import 'theme:default/theme.css'` — from the bare YAML mapping key
+// `theme: default`, which has no `url(`/`@import` before it and so can no
+// longer satisfy the `theme:` token.
+func agentGuideReservedPrefixArg(text, token string) bool {
+	if token == "" {
+		return false
+	}
+	re := regexp.MustCompile(`(?:url\(|@import)[ \t]*['"]?` + regexp.QuoteMeta(token))
+	return re.MatchString(text)
 }
 
 // agentGuideTokenCandidates returns the spellings of token that count. A
