@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "upgrade",
+  "body": "Upgrade: bringing an existing kalide project — a deck directory or a template library directory — forward to the format and scaffold content of the running kalide, once and in place. The capability spans both authoring scaffold (the deck root: kalide.yaml, slides/, assets/ and the deck `AGENTS.md`) and templating (the library root: library.yaml, templates, themes, media and the library `AGENTS.md`), and is driven only by the current project's own files plus the running binary's version — never the network. It exists because kalide writes its scaffold content once (scaffold-deck, scaffold-template-library) and the format evolves: agent-guide-drift-check guards the guides at build time inside the repo but nothing refreshes a deployed project, so a project scaffolded by an older kalide can carry a stale guide or an old format. Conservative by construction: it recognizes what is still kalide's, rewrites only that, and reports the rest.",
+  "properties": {
+    "attribute": "supporting"
+  },
+  "out": [],
+  "in": []
+}
