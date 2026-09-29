@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "theme-tokens-only",
-  "body": "Template layouts and CSS must use only theme tokens (CSS variables) for colours, fonts and spacing — never hard-coded values.",
+  "body": "Template layouts and CSS express every colour, font and spacing value through theme tokens (CSS variables); all visual values come from the active theme.",
   "properties": {},
   "out": [],
   "in": []
