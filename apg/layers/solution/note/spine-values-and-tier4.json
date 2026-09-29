@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "note",
   "name": "spine-values-and-tier4",
-  "body": "Domain `value` nodes (deck-config, slide-position, body, link-target, field, field-type, format, body-rule, validation-error) cannot carry realised-by edges (schema: group|entity|service only). They are realised through their containing group/entity: authoring→cli-binary, templating→template-registry, validation→deck-validator. Tier-4 implemented-by edges are deferred: greenfield repo, no code yet; plan-writer declares planned FQNs. [autonomous]",
+  "body": "Spine convention: domain `value` nodes cannot carry `realised-by` edges (the schema allows group/entity/service only); a value is realised through its containing group or entity. Tier-4 `implemented-by` edges target code FQNs that resolve in the scanned graph or are declared planned by the plan-writer.",
   "properties": {},
   "out": [
     {
