@@ -33,11 +33,6 @@
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-init-library-agents-md",
-      "properties": {}
     }
   ]
 }
