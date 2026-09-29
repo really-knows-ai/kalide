@@ -10,11 +10,6 @@
       "kind": "details",
       "source": "requirements.note.reconcile-ey-content-removal",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "global.note.fix-agent-guide-global-constraints",
-      "properties": {}
     }
   ]
 }
