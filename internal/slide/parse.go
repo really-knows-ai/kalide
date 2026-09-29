@@ -578,11 +578,13 @@ func checkNoFence(file string, lines []string, from, to int) error {
 	return nil
 }
 
-// nextHeading returns the index of the first top-level heading at or after
-// from, or -1 when there is none.
+// nextHeading returns the index of the first heading at any depth 1-6 at or
+// after from, or -1 when there is none. Any depth counts: a deeper heading may
+// open a child section or stay a Markdown subheading depending on its enclosing
+// template (slide-sections, markdown-allowed-subset).
 func nextHeading(lines []string, from int) int {
 	for i := from; i < len(lines); i++ {
-		if isSectionHeading(lines[i]) {
+		if _, _, ok := headingLevel(lines[i]); ok {
 			return i
 		}
 	}
