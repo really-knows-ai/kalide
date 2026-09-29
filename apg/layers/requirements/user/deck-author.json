@@ -46,11 +46,5 @@
       "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-user-stakeholder-containment",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

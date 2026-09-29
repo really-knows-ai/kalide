@@ -19,11 +19,6 @@
   "in": [
     {
       "kind": "details",
-      "source": "requirements.note.fix-user-stakeholder-containment",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.reconcile-ey-content-removal",
       "properties": {}
     }
