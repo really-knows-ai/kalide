@@ -83,6 +83,7 @@ var deckGuideCLI = []string{
 	"start",
 	"templates",
 	"templates <name>",
+	"upgrade",
 	"version",
 }
 
