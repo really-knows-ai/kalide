@@ -78,6 +78,11 @@
       "kind": "details",
       "source": "requirements.note.theme-media-references-feedback-1",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.theme-media-references-feedback-3",
+      "properties": {}
     }
   ]
 }
