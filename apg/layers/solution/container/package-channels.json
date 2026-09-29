@@ -41,11 +41,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.tap-bucket-location-open",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "solution.note.distribution-solution",
       "properties": {}
     },

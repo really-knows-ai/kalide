@@ -28,11 +28,6 @@
       "kind": "depends-on",
       "source": "requirements.requirement.scoop-install",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.tap-bucket-location-open",
-      "properties": {}
     }
   ]
 }
