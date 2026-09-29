@@ -211,6 +211,14 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 // (checkLibraryExamples, step 7) can validate against it without
 // re-registering. A failure is reported as a *LibraryError positioned at the
 // offending template's template.yaml.
+//
+// Because a section template may declare sections of its own
+// (template-composition), a container template's example.md may contain nested
+// instances (template-build-checks, nested-section-validation). Every template
+// a definition's declared sections accept must therefore have its own attached
+// Definition, or step 7 could not resolve that nested child. This is checked
+// here so the build fails fast, positioned at the offending container's
+// template.yaml, rather than surfacing mid-recursion later.
 func checkLibraryBuild(lib *Library) error {
 	reg, err := NewRegistryFromLibrary(lib)
 	if err != nil {
@@ -231,6 +239,53 @@ func checkLibraryBuild(lib *Library) error {
 	for _, lt := range lib.Sections {
 		def, _ := reg.Lookup(lt.Name)
 		lt.Definition = def
+	}
+	if err := checkLibraryBuildNested(lib); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkLibraryBuildNested verifies that every section template a loaded
+// definition declares as an accepted child also has an attached Definition, so
+// recursive example.md validation (step 7) can resolve nested container
+// instances. It walks the composition from each loaded definition at every
+// depth; a missing child is reported as a *LibraryError positioned at the
+// declaring template's template.yaml.
+func checkLibraryBuildNested(lib *Library) error {
+	checked := map[string]bool{}
+	var walk func(owner *LibraryTemplate, def *Template) error
+	walk = func(owner *LibraryTemplate, def *Template) error {
+		if def == nil || checked[def.Name] {
+			return nil
+		}
+		checked[def.Name] = true
+		for i := range def.Sections {
+			for _, name := range def.Sections[i].Accepted {
+				lt, _, ok := lib.TemplateByName(name)
+				if !ok || lt == nil || lt.Definition == nil {
+					return libraryErrorf(owner.ManifestPath, 0,
+						"section %q accepts template %q, which has no parsed definition for example validation",
+						def.Sections[i].Name, name)
+				}
+				if err := walk(lt, lt.Definition); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	for _, name := range sortedLibraryTemplateNames(lib.Slides) {
+		lt := lib.Slides[name]
+		if err := walk(lt, lt.Definition); err != nil {
+			return err
+		}
+	}
+	for _, name := range sortedLibraryTemplateNames(lib.Sections) {
+		lt := lib.Sections[name]
+		if err := walk(lt, lt.Definition); err != nil {
+			return err
+		}
 	}
 	return nil
 }
