@@ -70,6 +70,17 @@ type Options struct {
 	// bodies after a section heading, so callers pass the known offset to get
 	// file-absolute positions. It defaults to 1 when unset.
 	StartLine int
+
+	// TemplateDeclaresChildSections says whether the template enclosing this
+	// body declares child sections (template-composition, slide-sections).
+	// When true, every heading at any depth 1-6 is a section marker rather
+	// than a Markdown subheading, so no heading is accepted as a subheading
+	// (the parser consumes them as nested section instances). When false,
+	// `##` and `###` subheadings are accepted (subject to the template's
+	// body.subheadings rule, enforced by template.CheckBody) and depths 4-6
+	// are refused in subheading position. `#` is always reserved for section
+	// markers (markdown-allowed-subset).
+	TemplateDeclaresChildSections bool
 }
 
 // Check parses src as the Markdown subset and returns every Issue it finds, in
@@ -88,11 +99,12 @@ func Check(file string, src []byte, opts Options) []Issue {
 		opts.StartLine = 1
 	}
 	ctx := &walkContext{
-		file:      file,
-		source:    src,
-		lines:     newLineIndex(src),
-		mode:      opts.Mode,
-		startLine: opts.StartLine,
+		file:                          file,
+		source:                        src,
+		lines:                         newLineIndex(src),
+		mode:                          opts.Mode,
+		startLine:                     opts.StartLine,
+		templateDeclaresChildSections: opts.TemplateDeclaresChildSections,
 	}
 
 	// goldmark.New() with no options is the CommonMark core specification: no

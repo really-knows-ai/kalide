@@ -104,6 +104,13 @@ type walkContext struct {
 	// shifted by startLine-1 to become file lines.
 	startLine int
 
+	// templateDeclaresChildSections says whether the template enclosing this
+	// body declares child sections. When true, every heading at any depth 1-6
+	// is a section marker and none is accepted as a subheading; when false,
+	// `##`/`###` subheadings are accepted and depths 4-6 are refused in
+	// subheading position (markdown-allowed-subset).
+	templateDeclaresChildSections bool
+
 	// listDepth is the nesting level of the list currently being visited: 0
 	// for a top-level list, 1 inside its items, and so on.
 	listDepth int
@@ -184,10 +191,13 @@ func visit(ctx *walkContext, node ast.Node) []Issue {
 //
 // Implemented here:
 //
-//   - headings: ATX `##` / `###` only. `#` (reserved for slide sections) and
-//     `####`+ are rejected by level. Setext headings are rejected by inspecting
-//     the heading's source line, because goldmark's AST records only the level
-//     (*ast.Heading.Level) and not which form was used.
+//   - headings: ATX only. The accepting depth depends on the enclosing
+//     template (markdown-allowed-subset): when it declares child sections,
+//     every depth 1-6 is a section marker and no heading is accepted here;
+//     otherwise `##` and `###` are accepted subheadings and `#` and
+//     `####`+ are rejected by level. Setext headings are rejected by
+//     inspecting the heading's source line, because goldmark's AST records
+//     only the level (*ast.Heading.Level) and not which form was used.
 //   - lists: at most one nesting level (maxListNesting).
 //   - emphasis: only level 1 (italic) and level 2 (bold).
 //   - images, block quotes, fenced and indented code, thematic breaks, block
@@ -208,10 +218,22 @@ func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 				"setext headings are not allowed",
 				"use ATX headings instead: ## or ### at the start of the line")}
 		}
-		if n.Level != 2 && n.Level != 3 {
+		if ctx.templateDeclaresChildSections {
+			// Every heading at any depth is a section marker in this
+			// template, consumed by the parser as a nested section instance,
+			// never a Markdown subheading.
 			return []Issue{ctx.newIssue(node, KindUnsupportedConstruct,
 				fmt.Sprintf("heading level %d is not allowed", n.Level),
-				"use ## or ###; # is reserved for slide sections and ####+ is not supported")}
+				"headings at any depth are section markers inside a template that declares child sections; move the text into the section's own body or a field")}
+		}
+		if n.Level != 2 && n.Level != 3 {
+			msg := "use ## or ###; # is reserved for slide sections and ####+ is not supported"
+			if n.Level >= 4 {
+				msg = "use ## or ###; #### and deeper are not part of the slide typography"
+			}
+			return []Issue{ctx.newIssue(node, KindUnsupportedConstruct,
+				fmt.Sprintf("heading level %d is not allowed", n.Level),
+				msg)}
 		}
 	case *ast.List:
 		if ctx.listDepth > maxListNesting {
