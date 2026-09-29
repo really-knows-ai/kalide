@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "solution.component.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.serve-deck",
+      "properties": {}
     }
   ],
   "in": []
