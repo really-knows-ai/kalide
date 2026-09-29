@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "media-paths-library-relative",
+  "body": "Every media reference in a template or theme resolves inside the resolved library's `media/` tree. The layout `{{media \"path\"}}` helper takes a path relative to the resolved library's `media/`; a theme's `theme.css` (and any CSS it `@import`s from its own theme directory) reaches that same tree through the reserved `media:` URL prefix. In both forms the path is relative to `media/`, stays within it, and names an existing file; an absolute path, a path containing a `..` segment, or a path resolving outside the `media/` tree is a templates error qualified with the layout's or CSS file:line. `media` resolves only within the `media/` tree — never into a `themes/` directory — and within the library this preserves the self-contained/relocatable property (global.constraint.template-library-shareable).",
+  "properties": {
+    "attaches-to": "requirements.requirement.template-media"
+  },
+  "out": [],
+  "in": []
+}
