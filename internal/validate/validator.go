@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/mdcheck"
@@ -340,12 +341,21 @@ func adaptDeckError(err error) ValidationError {
 	return New("", 0, nil, msg, "")
 }
 
-// adaptParseError adapts a *slide.ParseError, carrying its file, line and
-// message across. Any other error falls back to adaptDeckError.
+// adaptParseError adapts a *slide.ParseError, carrying its file, line,
+// containment path and message across. The path is the rendered containment
+// chain (`columns[2] › blocks[1]`) the parser builds for a nested section
+// instance, or empty at the slide's top level; it becomes the ValidationError
+// path so the canonical ` › ` notation is uniform at any depth
+// (nested-section-validation, error-reporting). Any other error falls back to
+// adaptDeckError.
 func adaptParseError(err error) ValidationError {
 	var pe *slide.ParseError
 	if errors.As(err, &pe) {
-		return New(pe.File, pe.Line, nil, pe.Msg, "")
+		var path []string
+		if pe.Path != "" {
+			path = strings.Split(pe.Path, segmentSeparator)
+		}
+		return New(pe.File, pe.Line, path, pe.Msg, "")
 	}
 	return adaptDeckError(err)
 }

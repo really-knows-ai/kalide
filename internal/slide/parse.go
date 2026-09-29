@@ -339,6 +339,12 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				"%q section must be the last section on the slide", NotesSection)
 		}
 		if depth == 1 && name == NotesSection {
+			// The reserved notes name is never a declared section: a slide
+			// template that declares it is an author error (speaker-notes).
+			if containsStr(cat.SectionNames(slideTemplate), NotesSection) {
+				return nil, nil, parseError(file, headingLine,
+					"%q is reserved and cannot be declared as a section name", NotesSection)
+			}
 			// A notes section may only be followed by end of file; any later
 			// heading is caught at the top of the next iteration.
 			notesStart := i + 1
@@ -377,8 +383,9 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 		parentTmpl := slideTemplate
 		childDecls := map[string]sectionDecl{}
 		var childNames []string
+		topLevel := len(stack) == 0
 		switch {
-		case len(stack) == 0:
+		case topLevel:
 			// Top-level: the slide template declares this section.
 			if !containsStr(cat.SectionNames(slideTemplate), name) {
 				return nil, nil, unknownName(file, headingLine, "", "section", name, sortedCopy(cat.SectionNames(slideTemplate)))
@@ -386,6 +393,10 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 			topCounts[name]++
 			accepted, minRep, maxRep, _ := cat.SectionDecl(slideTemplate, name)
 			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}
+			if d.max > 0 && topCounts[name] > d.max {
+				return nil, nil, parseError(file, headingLine,
+					"section %q: at most %d allowed, found %d", name, d.max, topCounts[name])
+			}
 			parentTmpl = slideTemplate
 			childNames = cat.SectionNames(slideTemplate)
 			for _, n := range childNames {
@@ -416,7 +427,7 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 			}
 		}
 		siblingIndex := topCounts[name] - 1
-		if len(stack) > 0 {
+		if !topLevel {
 			siblingIndex = childCounts[depth][parentPath][name] - 1
 		}
 		path := chainPath(parentPath, name, siblingIndex)
@@ -502,7 +513,7 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 		section.BodyLine = contentStart + 1
 		section.Body = strings.Join(lines[contentStart:bodyEnd], "\n")
 
-		if len(stack) == 0 {
+		if topLevel {
 			roots = append(roots, section)
 			stack = append(stack, frame{
 				section:     &roots[len(roots)-1],
@@ -571,22 +582,18 @@ func checkTopMin(file string, names []string, cat Catalogue, slideTemplate strin
 // template's declared minimums over the child instances its instances actually
 // contain, reporting the parent instance's containment path.
 func checkMinChildren(file string, lines []string, roots []Section, cat Catalogue) error {
-	var walk func(s *Section, path string)
+	_ = lines
 	var err error
+	var walk func(s *Section, path string)
 	walk = func(s *Section, path string) {
 		if err != nil {
 			return
 		}
-		if s.Template != "" {
-			_, minRep, _, ok := cat.SectionDecl(s.Template, "")
-			_ = minRep
-			_ = ok
-		}
-		seen := map[string]int{}
 		childDecls := map[string]sectionDecl{}
 		if s.Template != "" {
 			childDecls = declsFor(cat, s.Template)
 		}
+		seen := map[string]int{}
 		for k := range s.Children {
 			seen[s.Children[k].Name]++
 		}
@@ -602,16 +609,12 @@ func checkMinChildren(file string, lines []string, roots []Section, cat Catalogu
 			}
 		}
 		for k := range s.Children {
-			// A child's template declares its own required children.
-			_ = lines
-			if s.Children[k].Level > 0 {
-				walk(&s.Children[k], pathFor(file, "", s, &s.Children[k]))
-			}
+			child := &s.Children[k]
+			walk(child, chainPath(path, child.Name, child.Index))
 		}
 	}
 	for r := range roots {
-		rootPath := containmentPath([]string{roots[r].Name}, []int{roots[r].Index})
-		walk(&roots[r], rootPath)
+		walk(&roots[r], containmentPath([]string{roots[r].Name}, []int{roots[r].Index}))
 	}
 	return err
 }
@@ -699,12 +702,9 @@ func instanceNames(path string) []string { return parseChain(path).names }
 // instanceIndexes returns the instance indexes of a rendered containment path.
 func instanceIndexes(path string) []int { return parseChain(path).indexes }
 
-// pathSegments returns the indexes of a rendered containment path as segment
-// indexes for containmentPath (the same as instanceIndexes).
+// pathSegments returns the indexes of a rendered containment path (the same as
+// instanceIndexes), named for the containmentPath call sites.
 func pathSegments(path string) []int { return parseChain(path).indexes }
-
-// pathFor is a placeholder used only to keep the recursive walk readable.
-func pathFor(_ string, parent string, _ *Section, _ *Section) string { return parent }
 
 // sectionDecl mirrors a Catalogue SectionDecl result.
 type sectionDecl struct {
