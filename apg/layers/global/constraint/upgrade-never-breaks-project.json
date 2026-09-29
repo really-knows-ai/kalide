@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "upgrade-never-breaks-project",
+  "body": "An upgrade never leaves a project partially migrated or broken. The result of a migration is validated before it is kept — a library re-loads through the template library loader and a deck through the deck loader — and a multi-file migration is all-or-nothing: if any step fails, every file it would have written is left as it was. Upgrade never brings a project to a state that `kalide start` would refuse (global.constraint.never-serve-broken-deck): a project that cannot be upgraded safely is reported and left unchanged.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
