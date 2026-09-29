@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "markdown-yaml-content-only",
-  "body": "Deck content must always be Markdown (restricted subset) and YAML only; kalide is not a developer tool — every author-facing message must be plain-language with a fix hint.",
+  "body": "Deck content is always Markdown (restricted subset) and YAML; kalide is not a developer tool, so every author-facing message is plain-language and carries a fix hint.",
   "properties": {},
   "out": [],
   "in": []
