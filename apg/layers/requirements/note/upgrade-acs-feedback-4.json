@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "upgrade-acs-feedback-4",
+  "body": "source: upgrade/feedback-4 — requirements.requirement.deck-library-upgrade's AC block was missing several testable behaviours and one AC was not objectively testable. Resolution [autonomous]: (1) idempotence added — run `kalide upgrade` twice in a row and the second run finds every refreshable file already current, writes nothing and exits 0; (2) skipping author-edited files is now stated to exit 0, with the report naming every skipped path — skipping is expected, not an error (the non-zero exits remain the detection error and the unknown/newer library format); (3) an external-library deck — one that configures `templates:` — is stated not to read or write anything under that library: it is a separate directory, possibly outside the deck, and only the deck's own kalide-owned files are in scope (requirements.constraint.upgrade-owned-scaffold-scope); (4) the offline AC is restated as the objectively testable \"performs no network and no git operations\" (global.constraint.upgrade-offline), replacing the vaguer \"runs identically offline on all six supported targets\"; (5) a file already matching the running kalide's version is stated to be a no-op, not re-written. Coherence edit to global.constraint.upgrade-never-clobbers: it now says a file already byte-identical to the running kalide's version of that same file is already current — a no-op, left as-is and not re-written — so the global law matches the AC. global.constraint.upgrade-offline already states the offline behaviour on all six targets and is left unchanged.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
