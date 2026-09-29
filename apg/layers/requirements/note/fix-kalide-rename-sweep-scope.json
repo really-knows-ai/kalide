@@ -1,9 +1,0 @@
-{
-  "layer": "requirements",
-  "type": "note",
-  "name": "fix-kalide-rename-sweep-scope",
-  "body": "source: kalide-rename AC 'a case-insensitive search of the source tree … finds no eypres, ey-present or EYPRES_'; inconsistency: the same requirement's negative checks need tests that mention eypres.yaml/EYPRES_, and the apg/ spec store keeps intentional legacy mentions, so the AC could never pass (feedback-1); resolution: scoped the sweep — excludes git history, vendored third-party code and apg/; allowed matches only in the negative-check tests proving the hard cut and, optionally, one short \"formerly ey-present\" line in README/INSTALL [with user, per reviewer feedback]",
-  "properties": {},
-  "out": [],
-  "in": []
-}
