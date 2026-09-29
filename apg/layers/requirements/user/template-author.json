@@ -16,11 +16,5 @@
       "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-ey-content-removal",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

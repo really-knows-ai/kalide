@@ -14,11 +14,6 @@
   "in": [
     {
       "kind": "details",
-      "source": "requirements.note.reconcile-ey-content-removal",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.rename-brand-owner-stakeholder",
       "properties": {}
     }

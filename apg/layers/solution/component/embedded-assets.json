@@ -23,11 +23,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-ey-content-removal",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.service.serve-deck",
       "properties": {}
