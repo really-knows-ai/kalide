@@ -34,6 +34,11 @@
       "kind": "details",
       "target": "requirements.requirement.agent-authoring",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.library-agent-guide",
+      "properties": {}
     }
   ],
   "in": []
