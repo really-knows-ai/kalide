@@ -51,11 +51,6 @@
       "kind": "drives",
       "source": "requirements.requirement.templates-gallery",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.fix-embedded-assets-realiser",
-      "properties": {}
     }
   ]
 }
