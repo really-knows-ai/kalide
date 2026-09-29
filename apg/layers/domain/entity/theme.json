@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.theme-media-references-decisions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.fix-embedded-assets-realiser",
+      "properties": {}
     }
   ]
 }
