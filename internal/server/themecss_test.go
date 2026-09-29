@@ -10,22 +10,34 @@ import (
 // TestRewriteThemeCSS covers rewriteThemeCSS (theme-shared-media) purely over
 // stylesheet bytes — no filesystem, no server — so it runs under -short.
 //
-// The prefix under test is read from the canonical accessor
-// internal/template.MediaURLPrefix rather than hardcoded: it is the same token
-// phase-01's load-time validation reads, so this test cannot drift from the
-// validation path. The expected served URL is built from server.MediaPath, the
-// prefix the media route actually serves under, so the rewriter's output is
-// pinned to the route it must match.
+// Both reserved prefixes under test are read from the canonical accessors
+// internal/template.MediaURLPrefix and internal/template.ThemeURLPrefix rather
+// than hardcoded: they are the same tokens phase-01's load-time validation
+// reads, so this test cannot drift from the validation path. The expected
+// served URLs are built from server.MediaPath and server.ThemesPath, the
+// prefixes the media and theme routes actually serve under, so the rewriter's
+// output is pinned to the routes it must match.
 func TestRewriteThemeCSS(t *testing.T) {
 	prefix := template.MediaURLPrefix()
+	themePrefix := template.ThemeURLPrefix()
 	if !strings.HasSuffix(MediaPath, "/") {
 		t.Fatalf("MediaPath = %q, want a trailing slash so MediaPath + p is the served URL", MediaPath)
+	}
+	if !strings.HasSuffix(ThemesPath, "/") {
+		t.Fatalf("ThemesPath = %q, want a trailing slash so ThemesPath + name + \"/\" + p is the served URL", ThemesPath)
 	}
 
 	// mediaURL is the expected rewritten form: double-quoted, standardised,
 	// and rooted at MediaPath — the same URL the layout `media` helper returns.
 	mediaURL := func(clean string) string {
 		return `url("` + MediaPath + clean + `")`
+	}
+
+	// themeURL is the expected rewritten form for a reserved theme:<name>/
+	// reference: double-quoted and rooted at ThemesPath, the route
+	// themeFileHandler serves under.
+	themeURL := func(name, clean string) string {
+		return `url("` + ThemesPath + name + "/" + clean + `")`
 	}
 
 	// Every case states the exact bytes expected; a case that must not be
@@ -62,24 +74,69 @@ func TestRewriteThemeCSS(t *testing.T) {
 			want: "a { background: " + mediaURL("img/logo.svg") + "; }",
 		},
 		{
+			name: "single-quoted theme url rewrites",
+			in:   "a { background: url('" + themePrefix + "default/fonts/x.woff2'); }",
+			want: "a { background: " + themeURL("default", "fonts/x.woff2") + "; }",
+		},
+		{
+			name: "double-quoted theme url rewrites",
+			in:   "a { background: url(\"" + themePrefix + "default/fonts/x.woff2\"); }",
+			want: "a { background: " + themeURL("default", "fonts/x.woff2") + "; }",
+		},
+		{
+			name: "unquoted theme url rewrites",
+			in:   "a { background: url(" + themePrefix + "default/fonts/x.woff2); }",
+			want: "a { background: " + themeURL("default", "fonts/x.woff2") + "; }",
+		},
+		{
+			name: "whitespace-padded theme url rewrites",
+			in:   "a { background: url(  '" + themePrefix + "default/fonts/x.woff2'  ); }",
+			want: "a { background: " + themeURL("default", "fonts/x.woff2") + "; }",
+		},
+		{
+			name: "theme url path is cleaned before joining ThemesPath",
+			in:   "a { background: url('" + themePrefix + "default/fonts/../img/logo.svg'); }",
+			want: "a { background: " + themeURL("default", "img/logo.svg") + "; }",
+		},
+		{
 			name: "media reference inside an @imported stylesheet body rewrites identically",
 			in:   "@import url('base.css');\n.logo { background: url('" + prefix + "img/logo.svg'); }\n",
 			want: "@import url('base.css');\n.logo { background: " + mediaURL("img/logo.svg") + "; }\n",
 		},
 		{
-			name: "@import url with single-quoted media target is never rewritten",
-			in:   "@import url('" + prefix + "x');\n",
-			want: "@import url('" + prefix + "x');\n",
+			name: "theme reference inside an @imported stylesheet body rewrites identically",
+			in:   "@import url('base.css');\n.logo { background: url('" + themePrefix + "default/img/logo.svg'); }\n",
+			want: "@import url('base.css');\n.logo { background: " + themeURL("default", "img/logo.svg") + "; }\n",
 		},
 		{
-			name: "@import url with double-quoted media target is never rewritten",
-			in:   "@import url(\"" + prefix + "x\");\n",
-			want: "@import url(\"" + prefix + "x\");\n",
+			name: "@import url with single-quoted media target is rewritten",
+			in:   "@import url('" + prefix + "x.css');\n",
+			want: "@import url(\"" + MediaPath + "x.css\");\n",
 		},
 		{
-			name: "@import url with unquoted media target is never rewritten",
-			in:   "@import url(" + prefix + "x);\n",
-			want: "@import url(" + prefix + "x);\n",
+			name: "@import url with double-quoted media target is rewritten",
+			in:   "@import url(\"" + prefix + "x.css\");\n",
+			want: "@import url(\"" + MediaPath + "x.css\");\n",
+		},
+		{
+			name: "@import url with unquoted media target is rewritten",
+			in:   "@import url(" + prefix + "x.css);\n",
+			want: "@import url(\"" + MediaPath + "x.css\");\n",
+		},
+		{
+			name: "@import url with theme target is rewritten",
+			in:   "@import url('" + themePrefix + "default/theme.css');\n",
+			want: "@import " + themeURL("default", "theme.css") + ";\n",
+		},
+		{
+			name: "bare double-quoted @import with media target is canonicalised to url()",
+			in:   "@import \"" + prefix + "x.css\";\n",
+			want: "@import url(\"" + MediaPath + "x.css\");\n",
+		},
+		{
+			name: "bare single-quoted @import with theme target is canonicalised to url()",
+			in:   "@import '" + themePrefix + "default/x.css';\n",
+			want: "@import " + themeURL("default", "x.css") + ";\n",
 		},
 		{
 			name: "theme-owned relative url stays byte-for-byte",
@@ -151,6 +208,36 @@ func TestRewriteThemeCSS(t *testing.T) {
 			in:   "a { background: url('" + prefix + "../x'); }",
 			want: "a { background: url('" + prefix + "../x'); }",
 		},
+		{
+			name: "theme prefix with empty name stays byte-for-byte",
+			in:   "a { background: url('" + themePrefix + "/x'); }",
+			want: "a { background: url('" + themePrefix + "/x'); }",
+		},
+		{
+			name: "theme prefix with empty path stays byte-for-byte",
+			in:   "a { background: url('" + themePrefix + "default/'); }",
+			want: "a { background: url('" + themePrefix + "default/'); }",
+		},
+		{
+			name: "theme path cleaning to dot stays byte-for-byte",
+			in:   "a { background: url('" + themePrefix + "default/.'); }",
+			want: "a { background: url('" + themePrefix + "default/.'); }",
+		},
+		{
+			name: "theme path cleaning to dot-dot stays byte-for-byte",
+			in:   "a { background: url('" + themePrefix + "default/..'); }",
+			want: "a { background: url('" + themePrefix + "default/..'); }",
+		},
+		{
+			name: "theme path escaping with dot-dot stays byte-for-byte",
+			in:   "a { background: url('" + themePrefix + "default/../x'); }",
+			want: "a { background: url('" + themePrefix + "default/../x'); }",
+		},
+		{
+			name: "theme path absolute stays byte-for-byte",
+			in:   "a { background: url('" + themePrefix + "default//abs'); }",
+			want: "a { background: url('" + themePrefix + "default//abs'); }",
+		},
 	}
 
 	for _, tt := range tests {
@@ -165,10 +252,14 @@ func TestRewriteThemeCSS(t *testing.T) {
 	// A rewritten reference has no reserved prefix left, so rewriting the
 	// output again must be a no-op: the rewrite is idempotent.
 	t.Run("rewrite is idempotent", func(t *testing.T) {
-		in := "a { background: url('" + prefix + "fonts/x.woff2'); }"
+		in := "a { background: url('" + prefix + "fonts/x.woff2'); }\n" +
+			"b { background: url('" + themePrefix + "default/bg.png'); }\n"
 		once := rewriteThemeCSS([]byte(in))
 		if !strings.Contains(string(once), mediaURL("fonts/x.woff2")) {
 			t.Fatalf("first rewrite = %q, want it to contain %q", once, mediaURL("fonts/x.woff2"))
+		}
+		if !strings.Contains(string(once), themeURL("default", "bg.png")) {
+			t.Fatalf("first rewrite = %q, want it to contain %q", once, themeURL("default", "bg.png"))
 		}
 		twice := rewriteThemeCSS(once)
 		if string(twice) != string(once) {

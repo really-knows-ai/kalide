@@ -41,6 +41,11 @@ func TestMediaHandler(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
+	prefix := template.MediaURLPrefix()
+	themePrefix := template.ThemeURLPrefix()
+	mediaURL := func(clean string) string { return `url("` + MediaPath + clean + `")` }
+	themeURL := func(name, clean string) string { return `url("` + ThemesPath + name + "/" + clean + `")` }
+
 	t.Run("media file served with extension Content-Type", func(t *testing.T) {
 		resp, err := http.Get(ts.URL + MediaPath + "logo.svg")
 		if err != nil {
@@ -52,6 +57,13 @@ func TestMediaHandler(t *testing.T) {
 		}
 		if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "svg") {
 			t.Errorf("Content-Type = %q, want it to mention svg", ct)
+		}
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if got, want := string(raw), "<svg></svg>"; got != want {
+			t.Errorf("non-CSS media body = %q, want raw %q", got, want)
 		}
 	})
 
@@ -66,6 +78,66 @@ func TestMediaHandler(t *testing.T) {
 		}
 		if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "css") {
 			t.Errorf("Content-Type = %q, want it to mention css", ct)
+		}
+	})
+
+	t.Run("media stylesheet is served text/css with reserved-prefix references rewritten", func(t *testing.T) {
+		resp, err := http.Get(ts.URL + MediaPath + "style.css")
+		if err != nil {
+			t.Fatalf("GET: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/css") {
+			t.Errorf("Content-Type = %q, want it to start with text/css", ct)
+		}
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		body := string(raw)
+
+		// The media: reference becomes the media route URL and the theme:<name>/
+		// reference the theme route URL, in both the url() and the @import form;
+		// the relative url('logo.svg') stays byte-for-byte.
+		if want := mediaURL("fonts/x.woff2"); !strings.Contains(body, want) {
+			t.Errorf("body missing rewritten %s:\n%s", want, body)
+		}
+		if want := themeURL("plain", "logo.svg"); !strings.Contains(body, want) {
+			t.Errorf("body missing rewritten %s:\n%s", want, body)
+		}
+		if want := `@import url("` + ThemesPath + `plain/theme.css")`; !strings.Contains(body, want) {
+			t.Errorf("body missing canonicalised %s:\n%s", want, body)
+		}
+		if !strings.Contains(body, "url('logo.svg')") {
+			t.Errorf("media-owned relative url('logo.svg') was not left unchanged:\n%s", body)
+		}
+		if strings.Contains(body, prefix) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", prefix, body)
+		}
+		if strings.Contains(body, themePrefix) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", themePrefix, body)
+		}
+		assertRewrittenURLsResolve(t, ts.URL, body)
+	})
+
+	t.Run("non-CSS media file is served raw", func(t *testing.T) {
+		resp, err := http.Get(ts.URL + MediaPath + "notes.txt")
+		if err != nil {
+			t.Fatalf("GET: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if got, want := string(raw), "url('media:fonts/x.woff2')\n"; got != want {
+			t.Errorf("non-CSS media body = %q, want raw %q", got, want)
 		}
 	})
 
@@ -136,8 +208,10 @@ func TestMediaHandler(t *testing.T) {
 }
 
 // writeMediaFixture writes a minimal real templates/ library to dir: one
-// slide template (so template.LoadLibrary succeeds), one theme and one
-// media file.
+// slide template (so template.LoadLibrary succeeds), one theme and a media
+// tree owning a raw SVG, a raw non-CSS text file, and a stylesheet reaching
+// both reserved prefixes (media: and theme:<name>/) in the url() and @import
+// forms.
 func writeMediaFixture(t *testing.T, dir string) {
 	t.Helper()
 	files := map[string]string{
@@ -146,7 +220,15 @@ func writeMediaFixture(t *testing.T, dir string) {
 		"templates/slides/hello/layout.html.tmpl": "<section><h1>{{.title}}</h1></section>",
 		"templates/slides/hello/example.md":       "---\ntitle: Hi\n---\n",
 		"templates/themes/plain/theme.css":        "body { margin: 0; }\n",
+		"templates/themes/plain/logo.svg":         "<svg>plain</svg>",
 		"templates/media/logo.svg":                "<svg></svg>",
+		"templates/media/fonts/x.woff2":           "woff",
+		"templates/media/notes.txt":               "url('media:fonts/x.woff2')\n",
+		"templates/media/style.css": "/* media css */\n" +
+			"@import url('theme:plain/theme.css');\n" +
+			".a { background: url('logo.svg'); }\n" +
+			".b { background: url('media:fonts/x.woff2'); }\n" +
+			".c { background: url('theme:plain/logo.svg'); }\n",
 	}
 	for name, data := range files {
 		p := filepath.Join(dir, filepath.FromSlash(name))
@@ -160,17 +242,20 @@ func writeMediaFixture(t *testing.T, dir string) {
 }
 
 // TestThemeRouteIntMediaRewrite is the end-to-end integration proof of the
-// theme route's serve-time media: rewrite (theme-shared-media): a real
+// theme route's serve-time reserved-prefix rewrite (theme-shared-media): a real
 // on-disk library is loaded through template.LoadLibrary and theme.LoadDir,
 // mediaHandler is mounted behind a real HTTP server, and the bytes a client
-// receives for a theme stylesheet have every reserved-prefix media: url()
-// rewritten to the served templates/media/ URL.
+// receives for a theme stylesheet have every reserved-prefix reference — both
+// media: (shared media/) and theme:<name>/ (a sibling theme) — rewritten to the
+// URL the corresponding route serves, in the url() form and in both @import
+// forms.
 //
-// It covers theme.css itself and a second stylesheet in the same theme
-// directory (the kind theme.css reaches via @import), proves a theme-owned
-// relative url() survives byte-for-byte, and fetches the rewritten URL at the
-// media route so the rewrite is known to resolve rather than merely look
-// right. It reads a real filesystem, so it is guarded with -short.
+// It covers theme.css itself, a stylesheet the theme imports from its own
+// directory, and a stylesheet it imports from another theme reached through
+// theme:<name>/; proves a theme-owned relative url() and a relative @import
+// survive byte-for-byte; and fetches every rewritten URL at the route it names
+// so each rewrite is known to resolve rather than merely look right. It reads
+// a real filesystem, so it is guarded with -short.
 func TestThemeRouteIntMediaRewrite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test reads a real templates/ library from disk")
@@ -193,9 +278,12 @@ func TestThemeRouteIntMediaRewrite(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	prefix := template.MediaURLPrefix()
-	// mediaURL is the served form the rewriter emits for a reserved-prefix
-	// reference, built from the route's own prefix rather than hardcoded.
+	themePrefix := template.ThemeURLPrefix()
+	// mediaURL and themeURL are the served forms the rewriter emits for a
+	// reserved-prefix reference, built from each route's own prefix rather than
+	// hardcoded.
 	mediaURL := func(clean string) string { return `url("` + MediaPath + clean + `")` }
+	themeURL := func(name, clean string) string { return `url("` + ThemesPath + name + "/" + clean + `")` }
 
 	get := func(t *testing.T, url string) (string, http.Header, int) {
 		t.Helper()
@@ -211,7 +299,7 @@ func TestThemeRouteIntMediaRewrite(t *testing.T) {
 		return string(body), resp.Header, resp.StatusCode
 	}
 
-	t.Run("theme.css media: url rewritten and theme-owned relative url kept", func(t *testing.T) {
+	t.Run("theme.css reserved-prefix refs and both @import forms rewritten, relative kept", func(t *testing.T) {
 		body, header, status := get(t, ts.URL+ThemesPath+"shared/theme.css")
 		if status != http.StatusOK {
 			t.Fatalf("status = %d, want 200", status)
@@ -222,15 +310,29 @@ func TestThemeRouteIntMediaRewrite(t *testing.T) {
 		if want := mediaURL("fonts/X.woff2"); !strings.Contains(body, want) {
 			t.Errorf("body missing rewritten %s:\n%s", want, body)
 		}
-		if strings.Contains(body, prefix) {
-			t.Errorf("body still contains reserved prefix %q:\n%s", prefix, body)
+		if want := themeURL("other", "logo.svg"); !strings.Contains(body, want) {
+			t.Errorf("body missing rewritten %s:\n%s", want, body)
+		}
+		// The cross-theme @import target is canonicalised to the url() form
+		// rooted at the themes route.
+		if want := "@import url(\"" + ThemesPath + "other/other.css\")"; !strings.Contains(body, want) {
+			t.Errorf("body missing canonicalised %s:\n%s", want, body)
 		}
 		if !strings.Contains(body, "url('fonts/theme.woff2')") {
 			t.Errorf("theme-owned url('fonts/theme.woff2') was not left unchanged:\n%s", body)
 		}
+		if !strings.Contains(body, "@import url('more.css')") {
+			t.Errorf("relative @import url('more.css') was not left unchanged:\n%s", body)
+		}
+		if strings.Contains(body, prefix) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", prefix, body)
+		}
+		if strings.Contains(body, themePrefix) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", themePrefix, body)
+		}
 	})
 
-	t.Run("imported stylesheet served through the same route is rewritten too", func(t *testing.T) {
+	t.Run("stylesheet imported from the theme's own directory is rewritten too", func(t *testing.T) {
 		body, _, status := get(t, ts.URL+ThemesPath+"shared/more.css")
 		if status != http.StatusOK {
 			t.Fatalf("status = %d, want 200", status)
@@ -240,6 +342,35 @@ func TestThemeRouteIntMediaRewrite(t *testing.T) {
 		}
 		if strings.Contains(body, prefix) {
 			t.Errorf("body still contains reserved prefix %q:\n%s", prefix, body)
+		}
+	})
+
+	t.Run("stylesheet imported from another theme is rewritten in turn", func(t *testing.T) {
+		body, _, status := get(t, ts.URL+ThemesPath+"other/other.css")
+		if status != http.StatusOK {
+			t.Fatalf("status = %d, want 200", status)
+		}
+		if want := themeURL("shared", "fonts/theme.woff2"); !strings.Contains(body, want) {
+			t.Errorf("body missing rewritten %s:\n%s", want, body)
+		}
+		if want := mediaURL("extra.css"); !strings.Contains(body, want) {
+			t.Errorf("body missing rewritten %s:\n%s", want, body)
+		}
+		if strings.Contains(body, prefix) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", prefix, body)
+		}
+		if strings.Contains(body, themePrefix) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", themePrefix, body)
+		}
+	})
+
+	t.Run("every rewritten URL resolves at the route it names", func(t *testing.T) {
+		for _, stylesheet := range []string{"shared/theme.css", "shared/more.css", "other/other.css"} {
+			body, _, status := get(t, ts.URL+ThemesPath+stylesheet)
+			if status != http.StatusOK {
+				t.Fatalf("GET %s status = %d, want 200", stylesheet, status)
+			}
+			assertRewrittenURLsResolve(t, ts.URL, body)
 		}
 	})
 
@@ -268,23 +399,55 @@ func TestThemeRouteIntMediaRewrite(t *testing.T) {
 
 // writeThemeMediaFixture writes a real, load-valid templates/ library to dir:
 // one theme ("shared") whose theme.css reaches the library's shared media tree
-// through a reserved-prefix media: url() and its own tree through a relative
-// url(), imports a second stylesheet in the same theme directory, and a
-// templates/media/ tree owning both the font theme.css references and the CSS
-// file the imported stylesheet references.
+// through a reserved-prefix media: url() and a sibling theme ("other") through
+// a reserved-prefix theme:<name>/ url(), keeps its own tree through a relative
+// url(), imports a stylesheet from its own directory via a relative @import and
+// one from the sibling theme via a theme:<name>/ @import. The sibling theme's
+// stylesheet reaches back into shared/ and into media/. The templates/media/
+// tree owns the font theme.css references and the CSS file the imported
+// stylesheets reference.
 func writeThemeMediaFixture(t *testing.T, dir string) {
 	t.Helper()
 	files := map[string]string{
 		"templates/library.yaml": "name: theme-media-fixture\nformat: 1\n",
-		"templates/themes/shared/theme.css": "@import url('more.css');\n\n" +
+		"templates/themes/shared/theme.css": "@import url('more.css');\n" +
+			"@import url('theme:other/other.css');\n\n" +
 			"body { background: url('media:fonts/X.woff2'); }\n" +
+			".logo { background: url('theme:other/logo.svg'); }\n" +
 			".f { src: url('fonts/theme.woff2'); }\n",
 		"templates/themes/shared/more.css":          ".m { background: url('media:extra.css'); }\n",
 		"templates/themes/shared/fonts/theme.woff2": "theme-font",
-		"templates/media/fonts/X.woff2":             "woff",
-		"templates/media/extra.css":                 "/* shared media css */\n",
+		"templates/themes/other/theme.css":          "/* other theme */\n",
+		"templates/themes/other/other.css": ".o { background: url('theme:shared/fonts/theme.woff2'); }\n" +
+			".o2 { background: url('media:extra.css'); }\n",
+		"templates/themes/other/logo.svg": "<svg>other</svg>",
+		"templates/media/fonts/X.woff2":   "woff",
+		"templates/media/extra.css":       "/* shared media css */\n",
 	}
 	for name, data := range files {
 		writeFile(t, filepath.Join(dir, filepath.FromSlash(name)), data)
+	}
+}
+
+// assertRewrittenURLsResolve fetches every absolute url(...) target appearing
+// in body — the double-quoted shape rewriteThemeCSS emits — and requires each
+// to be served 200 at the route it names (themes/ for a theme:<name>/ rewrite,
+// media/ for a media: one). Relative targets — an untouched relative reference
+// left byte-for-byte — are skipped.
+func assertRewrittenURLsResolve(t *testing.T, baseURL, body string) {
+	t.Helper()
+	for _, m := range themeCSSURLPattern.FindAllStringSubmatch(body, -1) {
+		target := m[1]
+		if !strings.HasPrefix(target, "/") {
+			continue
+		}
+		resp, err := http.Get(baseURL + target)
+		if err != nil {
+			t.Fatalf("GET %s: %v", target, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("rewritten URL %s status = %d, want 200", target, resp.StatusCode)
+		}
 	}
 }
