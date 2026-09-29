@@ -45,11 +45,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.fix-media-helper-base",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
