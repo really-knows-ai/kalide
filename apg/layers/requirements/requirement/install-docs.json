@@ -38,11 +38,6 @@
       "kind": "depends-on",
       "source": "requirements.requirement.readme-install-front-loading",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.homebrew-trust-required",
-      "properties": {}
     }
   ]
 }

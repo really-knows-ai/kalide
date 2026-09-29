@@ -23,11 +23,6 @@
       "kind": "contains",
       "source": "requirements.requirement.distribution",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.homebrew-trust-required",
-      "properties": {}
     }
   ]
 }

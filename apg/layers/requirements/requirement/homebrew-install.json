@@ -43,11 +43,6 @@
       "kind": "depends-on",
       "source": "requirements.requirement.license",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.homebrew-trust-required",
-      "properties": {}
     }
   ]
 }
