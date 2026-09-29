@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "templates-gallery",
-  "body": "Templates gallery page (/templates): renders each template's example and documentation, and shows a template's nesting — its declared child sections and, for a section template, the child sections it can hold (a tree view of the composition), each with what it accepts (cli-templates-show).",
+  "body": "Templates gallery page (/templates): renders each template's example and documentation, and documents a template's declared child sections — and, for a section template, the child sections it can hold — each with what it accepts (cli-templates-show). A tree view of a template's nesting (its composed child sections, recursively) is a nice-to-have, not a required behaviour.",
   "properties": {},
   "out": [
     {
