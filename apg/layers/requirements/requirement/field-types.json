@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "field-types",
-  "body": "Field types: `text` (inline Markdown following the same inline rules as bodies — bold, italic, inline code, `[]()` links, hard breaks; `[]()` links inside text are validated exactly like body links, so a `#label` must exist; `plain` flag strips styles silently), `number` (written as a plain YAML number, e.g. `1250000`, `0.12`; a quoted/string value = type error), `date` (written as `YYYY-MM-DD`; any other form = error), `boolean`, `enum`, `image` (path under assets/, existence checked), `link` (#label checked or http(s) URL), `list` (exactly one item type), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, of: person}`). No separate record types.",
+  "body": "Field types: `text` (inline Markdown following the same inline rules as bodies — bold, italic, inline code, `[]()` links, hard breaks; `[]()` links inside text are validated exactly like body links, so a `#label` must exist; `plain` flag strips styles silently), `number` (written as a plain YAML number, e.g. `1250000`, `0.12`; a quoted/string value = type error), `date` (written as `YYYY-MM-DD`; any other form = error), `boolean`, `enum`, `image` (path under assets/, existence checked), `link` (#label checked or http(s) URL), `list` (exactly one item type), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, of: person}`). Structured data comes from a section template used as a field type; there are no separate record types.",
   "properties": {
     "feature": "templates"
   },
