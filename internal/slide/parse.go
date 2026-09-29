@@ -623,9 +623,14 @@ func matchFence(line string) (isFence bool, lang string) {
 	return true, strings.TrimSpace(t[len(SectionFence):])
 }
 
-// isSectionHeading reports whether line is a top-level `# name` heading.
+// isSectionHeading reports whether line is an ATX heading of any depth 1-6. Any
+// depth is a potential section marker: heading depth is nesting depth, and the
+// enclosing template's declarations decide whether a heading opens a child
+// section or stays an ordinary Markdown subheading (slide-sections,
+// markdown-allowed-subset).
 func isSectionHeading(line string) bool {
-	return headingRe.MatchString(line)
+	_, _, ok := headingLevel(line)
+	return ok
 }
 
 // headingName returns the section name of a heading line, or "" when the
