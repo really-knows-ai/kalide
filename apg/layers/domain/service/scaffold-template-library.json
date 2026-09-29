@@ -33,11 +33,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.init-library-decisions",
-      "properties": {}
-    },
-    {
       "kind": "drives",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}

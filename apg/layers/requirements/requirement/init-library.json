@@ -25,11 +25,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.init-library-decisions",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
