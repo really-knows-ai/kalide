@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "domain.service.upgrade-project",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.kalide-owned-scaffold",
+      "properties": {}
     }
   ],
   "in": []

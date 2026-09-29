@@ -5,5 +5,11 @@
   "body": "Kalide-owned scaffold: the content kalide itself writes into a project and still owns — the two embedded `AGENTS.md` author guides (the deck guide, domain.value.agent-guide, and the library guide, domain.value.library-agent-guide) and the minimal `kalide init` seed tree (the seed `templates/library.yaml`, the `hello` slide template with its `example.md`, the default theme and the starter slide `slides/1-hello.md`; cli-init-minimal-seed). It is the only content upgrade may refresh; every other project file is author content and is never written. It is scoped per project kind and scaffold form rather than applied globally: a no-arg seed deck owns the whole seed tree; an external-library deck (`templates:` configured) owns only its deck-root guide and never a local `templates/` or starter slide; a library owns its library-root guide and its seeded default theme, never templates or media. `kalide.yaml` is the deck config the author edits and is not whole-file scaffold — its structure is migration territory. A member is refreshed only when absent or byte-identical to a known released kalide version; otherwise it is author content (global.constraint.upgrade-never-clobbers). It is a descriptor of the upgrade domain, realising through its containing domain.group.upgrade rather than carrying its own `realised-by` edge.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.upgrade",
+      "properties": {}
+    }
+  ]
 }
