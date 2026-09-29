@@ -638,7 +638,7 @@ func checkThemeCSSReferences(root string, th *LibraryTheme, lib *Library) error 
 		scanned:  map[string]bool{},
 		tree:     th.Dir,
 	}
-	if err := s.scanFile(th.StylesheetBytes, th.StylesheetPath, ThemeStylesheet); err != nil {
+	if err := s.scanFile(th.StylesheetBytes, th.StylesheetPath, th.Dir, ThemeStylesheet); err != nil {
 		return err
 	}
 	s.scanned[themeKey] = true
@@ -647,9 +647,18 @@ func checkThemeCSSReferences(root string, th *LibraryTheme, lib *Library) error 
 
 // scanFile validates every reference in one CSS file, in source order. css is
 // the file's bytes, displayPath is its project-root-relative path for errors,
-// and rel is its path within the theme directory (which its relative
-// references resolve against).
-func (s *themeCSSScanner) scanFile(css []byte, displayPath, rel string) error {
+// tree is the tree that owns the stylesheet (a theme directory such as
+// "themes/default", or MediaDir "media" when the stylesheet was reached
+// through the reserved media: prefix), and rel is the stylesheet's path within
+// tree, which its relative references resolve against. scanFile sets s.tree to
+// tree for the duration of the file's scan — restoring the caller's tree on
+// return — so an unprefixed relative reference is confined to the stylesheet's
+// own tree rather than the theme the scan was entered from.
+func (s *themeCSSScanner) scanFile(css []byte, displayPath, tree, rel string) error {
+	prevTree := s.tree
+	s.tree = tree
+	defer func() { s.tree = prevTree }()
+
 	for _, ref := range themeCSSRefs(css) {
 		line := cssLineAt(css, ref.offset)
 		if ref.kind == themeCSSImport {
@@ -682,27 +691,31 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 	importRel := path.Clean(path.Join(path.Dir(rel), target))
 	if importRel == ".." || strings.HasPrefix(importRel, "../") || path.IsAbs(importRel) {
 		return libraryErrorf(displayPath, line,
-			"@import %q escapes its theme directory %s", target, path.Join(s.root, s.th.Dir))
+			"@import %q escapes its theme directory %s", target, path.Join(s.root, s.tree))
 	}
-	if s.visiting[importRel] {
+	// A stylesheet is identified by its owning tree joined with its path
+	// within that tree, matching the entry key checkThemeCSSReferences
+	// registers; s.tree is the importing file's own tree.
+	key := path.Join(s.tree, importRel)
+	if s.visiting[key] {
 		return libraryErrorf(displayPath, line, "@import %q: import cycle", target)
 	}
 	data, ok := s.th.Files[importRel]
 	if !ok {
 		return libraryErrorf(displayPath, line,
-			"@import %q: file not found inside theme directory %s", target, path.Join(s.root, s.th.Dir))
+			"@import %q: file not found inside theme directory %s", target, path.Join(s.root, s.tree))
 	}
 	if len(s.scanned)+len(s.visiting) >= maxThemeCSSImports {
 		return libraryErrorf(displayPath, line,
 			"@import %q: too many imported stylesheets (limit %d)", target, maxThemeCSSImports)
 	}
-	s.visiting[importRel] = true
-	err := s.scanFile(data, path.Join(s.root, s.th.Dir, importRel), importRel)
-	delete(s.visiting, importRel)
+	s.visiting[key] = true
+	err := s.scanFile(data, path.Join(s.root, s.tree, importRel), s.tree, importRel)
+	delete(s.visiting, key)
 	if err != nil {
 		return err
 	}
-	s.scanned[importRel] = true
+	s.scanned[key] = true
 	return nil
 }
 
@@ -737,12 +750,12 @@ func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, lin
 	themeRel := path.Clean(path.Join(path.Dir(rel), target))
 	if themeRel == ".." || strings.HasPrefix(themeRel, "../") || path.IsAbs(themeRel) {
 		return libraryErrorf(displayPath, line,
-			"url(%q) escapes its theme directory %s", target, path.Join(s.root, s.th.Dir))
+			"url(%q) escapes its theme directory %s", target, path.Join(s.root, s.tree))
 	}
 	if themeRel != ThemeStylesheet {
 		if _, ok := s.th.Files[themeRel]; !ok {
 			return libraryErrorf(displayPath, line,
-				"url(%q): file not found inside theme directory %s", target, path.Join(s.root, s.th.Dir))
+				"url(%q): file not found inside theme directory %s", target, path.Join(s.root, s.tree))
 		}
 	}
 	return nil
