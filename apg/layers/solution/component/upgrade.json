@@ -20,6 +20,11 @@
       "kind": "realised-by",
       "source": "domain.service.upgrade-project",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.format-migration",
+      "properties": {}
     }
   ]
 }
