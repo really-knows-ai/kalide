@@ -31,11 +31,6 @@
       "kind": "details",
       "source": "requirements.note.fix-supported-targets-runners",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-public-install",
-      "properties": {}
     }
   ]
 }

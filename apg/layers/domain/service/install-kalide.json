@@ -66,11 +66,6 @@
       "kind": "drives",
       "source": "requirements.requirement.readme-install-front-loading",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-public-install",
-      "properties": {}
     }
   ]
 }

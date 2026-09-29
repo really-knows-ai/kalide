@@ -58,11 +58,6 @@
       "kind": "details",
       "source": "requirements.note.fix-e2e-seed-expectations",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-public-install",
-      "properties": {}
     }
   ]
 }

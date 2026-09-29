@@ -43,11 +43,6 @@
       "kind": "details",
       "source": "requirements.note.fix-platform-expansion-six-targets",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-public-install",
-      "properties": {}
     }
   ]
 }
