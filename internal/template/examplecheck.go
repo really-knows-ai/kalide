@@ -48,6 +48,17 @@ func checkLibraryExamples(lib *Library) error {
 
 // checkLibraryExample validates lt's example.md against lt.Definition and
 // executes lt.Layout against the render context that example produces.
+//
+// A container template's example.md may declare nested instances (template-
+// build-checks, nested-section-validation): validateExampleBlock parses the
+// example by heading depth and validates every instance recursively against
+// its own resolved template, reporting a violation with the full containment
+// path (`columns[2] › blocks[1]`). Each block's body is checked against its own
+// enclosing template — including whether that template declares child sections
+// and its body.subheadings rule — so a container's headings are consumed as
+// nested instances, never treated as subheadings, and a no-children template's
+// `##`/`###` are governed by its body.subheadings. This keeps example
+// validation in agreement with deck validation.
 func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 	if lt == nil || lt.Definition == nil {
 		return nil
