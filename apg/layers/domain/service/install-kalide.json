@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "install-kalide",
-  "body": "Install kalide: a user adds the tap `really-knows-ai/kalide` (macOS) or the bucket `kalide` (Windows) — the primary channels — and the package manager anonymously fetches the matching `kalide-<os>-<arch>` binary from the public release and installs it (global.constraint.anonymous-install). Linux, which has no package-manager channel, and the fallback route elsewhere, use a direct anonymous download of the matching release asset, which the user marks executable and runs.",
+  "body": "Install kalide: a user adds the tap `really-knows-ai/kalide` (macOS) or the bucket `kalide` (Windows) — the primary channels — and the package manager anonymously fetches the matching `kalide-<os>-<arch>` binary from the public release and installs it (global.constraint.anonymous-install). For Linux, whose channel is the direct release download, and for the fallback route elsewhere, the user downloads the matching release asset directly, marks it executable, and runs it.",
   "properties": {},
   "out": [
     {
