@@ -51,11 +51,6 @@
       "kind": "realised-by",
       "source": "domain.group.templating",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.theme-media-serving",
-      "properties": {}
     }
   ]
 }
