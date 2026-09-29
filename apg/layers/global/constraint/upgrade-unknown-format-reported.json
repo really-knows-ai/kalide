@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "upgrade-unknown-format-reported",
+  "body": "A format version upgrade does not recognize is reported, never guessed or silently migrated. A template library whose `library.yaml` `format:` is unknown or newer than the running kalide is left byte-for-byte untouched and the command exits non-zero with an error naming the format found and the format supported. A deck, which carries no version field, is never assumed to be at any version: a version-sensitive deck migration runs only when it can be proven from the deck's own content, otherwise the migration is skipped and the fact is reported. Upgrade never fabricates a migration and never upgrades a project past the version the running binary implements.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
