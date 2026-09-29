@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "reserved-template-names",
+  "body": "`deck`, `slide`, `notes` and `body` are reserved template names, and `_format` is a reserved field-name suffix. A `template.yaml` that declares a field or a section named `deck`, `slide`, `notes` or `body`, or a field whose name uses the `_format` suffix beyond the documented number/date format mechanism, is a templates error. The reserved names carry framework data and are unavailable to template authors.",
+  "properties": {
+    "attaches-to": "requirements.requirement.template-context"
+  },
+  "out": [],
+  "in": []
+}
