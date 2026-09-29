@@ -40,10 +40,13 @@
 // (global.constraint.upgrade-never-breaks-project,
 // global.constraint.never-serve-broken-deck). The migration half already owns
 // per-migration validation and its own all-or-nothing rollback; Upgrade adds
-// only the post-refresh+migrate end-to-end pass and the refresh half's undo: it
-// records the original bytes of every file it refreshes or writes and, when the
-// end-to-end validation fails, restores those bytes and removes the files it
-// created, leaving the project exactly as it was.
+// the post-refresh+migrate end-to-end pass and an undo that covers both halves.
+// For a library it snapshots the whole project before either half runs and
+// restores that snapshot when the end-to-end validation fails, so a migration
+// that already committed is undone together with the refresh writes. For a deck
+// — whose migration half is a no-op — it records the original bytes of every
+// file the refresh half writes and, on failure, restores those bytes and removes
+// the files it created. In both forms the project is left exactly as it was.
 //
 // Upgrade takes no command-line path and there is no --force: the conservative
 // default is the only behaviour. It reads and writes only the project's own
@@ -166,8 +169,8 @@ func (k projectKind) String() string {
 // library.yaml for a library. The command surface passes the current directory;
 // Upgrade itself takes no path argument and there is no --force.
 //
-// The order is conservative and the run is all-or-nothing with respect to the
-// refresh half:
+// The order is conservative and the run is all-or-nothing: a failure after a
+// half began undoes that work and leaves the project exactly as it was.
 //
 //  1. detectProject classifies the project. A directory holding both manifests,
 //     or neither, is the single both/neither error and nothing is written.
@@ -177,26 +180,42 @@ func (k projectKind) String() string {
 //     write is left on disk — the refusal happens before the refresh engine
 //     runs (global.constraint.upgrade-unknown-format-reported). A deck has no
 //     version field, so there is nothing to check.
-//  3. The refresh half's original bytes are recorded (newRefreshUndo) before it
+//  3. For a library, a snapshot of the whole project (snapshotTree) is taken
+//     BEFORE either half runs, so a failure of the end-to-end validation can
+//     restore the migration half's committed changes as well as the refresh
+//     half's writes. A deck's migration half is a no-op, so its refresh undo
+//     alone is sufficient and no tree snapshot is taken.
+//  4. The refresh half's original bytes are recorded (newRefreshUndo) before it
 //     runs, so every file it rewrites or writes — including a newly written
-//     AGENTS.md — can be put back exactly as it was.
-//  4. refreshScaffold then migrateLibrary run, refresh first.
-//  5. The result is validated end-to-end AFTER both halves through the loaders
+//     AGENTS.md — can be put back exactly as it was. A member's path is
+//     recorded before its write is attempted, so a member truncated by a
+//     mid-write failure is restored too.
+//  5. refreshScaffold then migrateLibrary run, refresh first.
+//  6. The result is validated end-to-end AFTER both halves through the loaders
 //     `kalide start` uses: a library through the template library loader, a deck
 //     through the template library loader, its theme registry and the whole-deck
 //     validator (deck.LoadConfig included). This is distinct from phase 3's
 //     per-migration validation, which the migration half already owns.
-//  6. On any failure after the refresh half began, the refresh half's writes are
-//     undone — original bytes, mode and mtime restored, created files removed —
-//     and the project is left exactly as it was
+//  7. On any failure after a half began, that half's work is undone and the
+//     project is left exactly as it was
 //     (global.constraint.upgrade-never-breaks-project,
-//     global.constraint.never-serve-broken-deck). A failure before the refresh
-//     half began (detection, the format refusal) has nothing to undo.
+//     global.constraint.never-serve-broken-deck): a library's end-to-end
+//     validation failure restores the pre-run tree snapshot (covering both
+//     halves); the refresh half's own failure, or a deck's end-to-end failure,
+//     restores the recorded original bytes, mode and mtime and removes created
+//     files. A failure before either half began (detection, the format refusal)
+//     has nothing to undo.
 //
 // It reads and writes only the project's own local files and the content the
 // running binary already carries: no network, no git. End-to-end validation of
 // an external-library deck loads its configured `templates:` library (read-only)
 // exactly as `kalide start` does, but the refresh half never opens it.
+//
+// upgradeMigrate and upgradeValidate are the two package-level seams through
+// which Upgrade reaches the migration half and the end-to-end validation.
+// Production only ever uses their defaults (migrateLibrary and
+// validateUpgradedProject); only test files replace them, and they never change
+// what a production `kalide upgrade` does.
 func Upgrade(dir string) (*UpgradeReport, error) {
 	kind, err := detectProject(dir)
 	if err != nil {
@@ -217,18 +236,57 @@ func Upgrade(dir string) (*UpgradeReport, error) {
 		return nil, err
 	}
 
+	// A library's migration half can commit changes the refresh half's undo does
+	// not cover: runMigrations' snapshot is internal to migrateLibraryWith and is
+	// discarded once a migration is kept. Snapshot the whole project before
+	// either half runs so a failure of the end-to-end validation can restore
+	// both halves together, never leaving a partially migrated library
+	// (global.constraint.upgrade-never-breaks-project). A deck's migration half
+	// is a no-op, so the refresh undo alone restores it.
+	var before *treeSnapshot
+	if kind == projectKindLibrary {
+		before, err = snapshotTree(dir)
+		if err != nil {
+			return nil, fmt.Errorf("upgrade: snapshot %s before upgrading: %w", dir, err)
+		}
+	}
+
 	report, err := refreshScaffold(dir, kind, nil)
 	if err != nil {
 		return nil, undo.revert(report.refreshed, err)
 	}
-	if err := migrateLibrary(dir); err != nil {
+	if err := upgradeMigrate(dir); err != nil {
 		return nil, undo.revert(report.refreshed, err)
 	}
-	if err := validateUpgradedProject(dir, kind); err != nil {
+	if err := upgradeValidate(dir, kind); err != nil {
+		if before != nil {
+			if restoreErr := before.restore(dir); restoreErr != nil {
+				return nil, fmt.Errorf("%w (upgrade could not restore the project exactly: %v)", err, restoreErr)
+			}
+			return nil, err
+		}
 		return nil, undo.revert(report.refreshed, err)
 	}
 	return newUpgradeReport(kind, report), nil
 }
+
+// upgradeMigrate is the migration half Upgrade runs for a project. Production
+// always runs migrateLibrary (the ordered registeredMigrations set). It is a
+// seam so test files can drive migrateLibraryWith with synthetic migrations and
+// a raised migrationTargetFormat, exercising Upgrade's end-to-end undo for a
+// library whose migration half actually commits a change. Only test files
+// replace it, and no fake migration is ever added to registeredMigrations()
+// (TestRegisteredMigrationsStaysEmpty guards that).
+var upgradeMigrate = migrateLibrary
+
+// upgradeValidate is Upgrade's end-to-end validation (validateUpgradedProject).
+// It is the validation seam for Upgrade's end-to-end undo: a library's
+// per-migration validation (validateMigratedLibrary) already runs the same
+// template library loader the end-to-end pass runs, so a genuinely migrated
+// library cannot be newly unloadable through the real loader. Test files replace
+// it to force the post-migration failure whose undo must restore both halves;
+// production always runs validateUpgradedProject.
+var upgradeValidate = validateUpgradedProject
 
 // checkSupportedLibraryFormat is the read-only format guard Upgrade runs before
 // refreshing a library. It reads the raw library.yaml `format:` tolerantly

@@ -367,10 +367,16 @@ func (r *refreshReport) refreshMember(root string, member ownedMember) error {
 		// Present: fall through to the decision below.
 	case errors.Is(err, fs.ErrNotExist):
 		if isAuthorGuide(member.identity) {
+			// Record the path BEFORE the write: os.WriteFile truncates and
+			// then writes, so a failure part-way through leaves a partial file.
+			// Marking first keeps the path in the undo (report.refreshed), so
+			// the truncated member is restored or removed by undo.revert even
+			// though writeMember returned an error
+			// (global.constraint.upgrade-never-breaks-project).
+			r.markRefreshed(member.path)
 			if err := writeMember(target, desiredMemberBytes(member)); err != nil {
 				return err
 			}
-			r.markRefreshed(member.path)
 			return nil
 		}
 		r.markSkipped(member.path)
@@ -387,10 +393,13 @@ func (r *refreshReport) refreshMember(root string, member ownedMember) error {
 		return nil
 	}
 	if catalogLookup(member.identity, data) {
+		// Record the path BEFORE the write for the same reason as the absent
+		// guide above: a mid-write failure must still be undone
+		// (global.constraint.upgrade-never-breaks-project).
+		r.markRefreshed(member.path)
 		if err := writeMember(target, desired); err != nil {
 			return err
 		}
-		r.markRefreshed(member.path)
 		return nil
 	}
 	r.markSkipped(member.path)
