@@ -15,6 +15,11 @@
       "kind": "drives",
       "source": "requirements.requirement.upgrade-refresh-owned-scaffold",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.upgrade-refresh-rule-feedback-7",
+      "properties": {}
     }
   ]
 }

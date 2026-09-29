@@ -4,6 +4,12 @@
   "name": "upgrade-refresh-rule-feedback-7",
   "body": "source: upgrade/feedback-7 (target domain.value.kalide-owned-scaffold) — the value still said a member \"is refreshed only when absent or byte-identical to a known released kalide version\", the un-narrowed wording feedback-2/feedback-6 had already removed from requirements.requirement.upgrade-refresh-owned-scaffold and global.constraint.upgrade-never-clobbers. Read literally it allowed upgrade to re-create a deleted seed starter file (templates/library.yaml, templates/slides/hello/*, templates/themes/default/theme.css, slides/1-hello.md, a library's seeded themes/default/theme.css), clobbering the author's deliberate deletion.\n\nResolution [autonomous]: reworded the sentence to match the requirement and the never-clobbers constraint — a member is rewritten only when present and byte-identical to a known released version of that same file; the two `AGENTS.md` author guides are the one exception and are also written when absent; a deleted seed starter file is never re-created; a present file matching no known released version is author content, left untouched and reported. Unaffected text preserved. The two historical notes that carry the same phrase — solution.note.upgrade-embedded-catalog (catalog rationale) and global.note.embedded-catalog-law-amendment (feedback-1 record) — were left as written: they quote the user's rule and document earlier reviewed states, and the reviewer marked them non-blocking.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "domain.value.kalide-owned-scaffold",
+      "properties": {}
+    }
+  ],
   "in": []
 }
