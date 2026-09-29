@@ -56,6 +56,12 @@ Usage:
 //     slides//sections//media/, a minimal default theme), refusing non-zero
 //     when the target already holds one; a missing or extra argument is a
 //     usage error;
+//   - `upgrade` routes to runUpgrade, which brings the project in the current
+//     directory forward to the running binary's scaffold content and library
+//     format. It takes no path and no --force (any argument is a usage error)
+//     and always works on the current directory, printing every refreshed and
+//     every left-alone/skipped path and returning 0 even when author-edited
+//     files were deliberately skipped;
 //   - an unknown command or malformed arguments print usage and return 2.
 //
 // Both `start` and `templates` operate on decks whose reserved deck-wide
@@ -83,6 +89,8 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 		return runInit(args[2:], stdout, stderr)
 	case "init-library":
 		return runInitLibrary(args[2:], stdout, stderr)
+	case "upgrade":
+		return runUpgrade(args[2:], stdout, stderr)
 	case "start":
 		return runStart(args[2:], stdout, stderr)
 	case "templates":
