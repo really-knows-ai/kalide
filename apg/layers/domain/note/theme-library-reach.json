@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "domain.service.load-template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": []
