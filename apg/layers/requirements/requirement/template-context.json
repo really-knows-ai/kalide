@@ -58,6 +58,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.positive-phrasing-refactor",
+      "properties": {}
     }
   ]
 }
