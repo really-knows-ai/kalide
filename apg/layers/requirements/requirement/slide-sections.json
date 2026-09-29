@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.template-composition",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.nested-section-validation",
+      "properties": {}
     }
   ],
   "in": [
