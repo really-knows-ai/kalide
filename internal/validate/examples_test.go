@@ -85,7 +85,9 @@ func brokenExampleCases() []exampleCase {
 		},
 
 		// A bad section fence: a language tag on a section's frontmatter fence.
-		// The parser reports it at the fence line, 5.
+		// The parser reports it at the fence line, 5, and now carries the
+		// offending top-level instance's indexed containment path (`block[0]`)
+		// in the canonical ` › ` form (nested-section-validation).
 		{
 			tmpl: &template.Template{
 				Name:  "fence",
@@ -99,7 +101,7 @@ func brokenExampleCases() []exampleCase {
 					Markdown: "---\ntemplate: fence\n---\n# block\n```yaml\ntitle: x\n```\n",
 				},
 			},
-			want: `slides/1-example.md:5: section frontmatter fence must not have a language tag ("yaml")`,
+			want: `slides/1-example.md:5 › block[0]: section frontmatter fence must not have a language tag ("yaml")`,
 		},
 
 		// A field rule violation: the required `heading` field is absent. Field
