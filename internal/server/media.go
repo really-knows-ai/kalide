@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"io/fs"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -86,6 +88,13 @@ func mediaFileHandler(mediaFS fs.FS) http.Handler {
 // own Assets filesystem (theme.Theme.Assets, as built by theme.LoadDir) with
 // the same path-cleaning assetHandler uses. An unknown theme name, a missing
 // file or a path escaping the theme's root all 404.
+//
+// A .css theme asset is served through rewriteThemeCSS (theme-shared-media):
+// url() references carrying the reserved media: prefix are rewritten to their
+// served templates/media URL before the bytes reach the client. Every other
+// theme file is served raw, exactly as before. This applies to any .css file
+// in the theme tree, including one reached by an @import from theme.css, so
+// the media: rewrite is applied wherever a stylesheet is served.
 func themeFileHandler(themes *theme.Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -113,6 +122,30 @@ func themeFileHandler(themes *theme.Registry) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		serveFileFS(w, r, t.Assets, name)
+		if !strings.HasSuffix(name, ".css") {
+			serveFileFS(w, r, t.Assets, name)
+			return
+		}
+
+		// A stylesheet may reach the library's shared media tree through the
+		// reserved media: prefix; rewrite those url() references to the
+		// served templates/media URL before writing the bytes. The MIME type
+		// is derived from the .css extension exactly as serveFileFS derives
+		// it (via ServeContent's name), but set explicitly so the rewritten
+		// bytes are served as CSS rather than content-sniffed.
+		info, err := fs.Stat(t.Assets, name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		css, err := fs.ReadFile(t.Assets, name)
+		if err != nil {
+			// The file stat'd as a regular file but could not be read; this
+			// is a server-side failure, not a missing resource.
+			http.Error(w, "read theme stylesheet", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		http.ServeContent(w, r, path.Base(name), info.ModTime(), bytes.NewReader(rewriteThemeCSS(css)))
 	})
 }
