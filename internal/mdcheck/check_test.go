@@ -62,6 +62,35 @@ func TestCheckAllowed(t *testing.T) {
 			}
 		})
 	}
+
+	// The subheading gate: `##` and `###` are accepted as ordinary Markdown
+	// subheadings where the enclosing template declares no child sections;
+	// where it does declare child sections every heading at any depth is a
+	// section marker the parser consumes, so none is accepted; and `#`
+	// (reserved for section markers) and depths 4-6 stay refused in subheading
+	// position either way (markdown-allowed-subset).
+	t.Run("subheading policy", func(t *testing.T) {
+		for _, s := range []string{
+			"## Heading\n",
+			"### Heading\n",
+			"## H\n\n### H3\n",
+			"intro text\n\n## Heading\n\n### Deeper\n",
+		} {
+			if got := Check(testFile, []byte(s), Options{Mode: BodyMode, TemplateDeclaresChildSections: false}); len(got) != 0 {
+				t.Errorf("Check(%q) with no declared child sections = %v issues, want none", s, got)
+			}
+		}
+
+		if got := Check(testFile, []byte("## Heading\n"), Options{Mode: BodyMode, TemplateDeclaresChildSections: true}); len(got) == 0 {
+			t.Error("Check(## Heading) with declared child sections = no issues, want the subheading refused")
+		}
+
+		for _, s := range []string{"# H1\n", "#### H4\n", "##### H5\n", "###### H6\n"} {
+			if got := Check(testFile, []byte(s), Options{Mode: BodyMode, TemplateDeclaresChildSections: false}); len(got) == 0 {
+				t.Errorf("Check(%q) = no issues, want the heading refused in subheading position", s)
+			}
+		}
+	})
 }
 
 // TestCheckDisallowed is the reject side: one case per disallowed construct,
