@@ -58,11 +58,6 @@
       "kind": "contains",
       "source": "requirements.requirement.project-templates",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-media-references-decisions",
-      "properties": {}
     }
   ]
 }
