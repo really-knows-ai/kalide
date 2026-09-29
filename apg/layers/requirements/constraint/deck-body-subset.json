@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "deck-body-subset",
+  "body": "Deck bodies use exactly the allowed Markdown subset (markdown-allowed-subset): paragraphs, `##` and `###` subheadings, single-level bulleted and numbered lists, and the inline set (bold, italic, inline code, `[]()` links, hard line breaks). Every construct outside that subset is refused with file/line and guidance: images, tables, blockquotes, fenced or indented code (except the section-frontmatter fence), horizontal rules, raw HTML, angle-bracket autolinks, GFM/other extensions (strikethrough, highlight, sup/sub, emoji shortcodes), `####`+ headings, and lists nested deeper than one level.",
+  "properties": {
+    "attaches-to": "requirements.requirement.markdown-allowed-subset"
+  },
+  "out": [],
+  "in": []
+}
