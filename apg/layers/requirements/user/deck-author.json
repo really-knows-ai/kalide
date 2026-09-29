@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "user",
   "name": "deck-author",
-  "body": "EY employee who writes slide content in Markdown/YAML and presents it live. Not a developer.",
+  "body": "Deck author who writes slide content in Markdown/YAML and presents it live. Not a developer.",
   "properties": {},
   "out": [
     {
