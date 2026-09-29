@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "constraint",
   "name": "deck-properties-unknown-keys",
-  "body": "`properties` and `templates` must be the only additional allowed top-level `kalide.yaml` keys; every other unknown top-level key must still error with a closest-match suggestion, while inside `properties` arbitrary author keys are accepted without an unknown-key error.",
+  "body": "`properties` and `templates` are the only additional allowed top-level `kalide.yaml` keys; a top-level key outside the documented set (title, author, date, theme, navigation, properties, templates) is an error with a closest-match suggestion, while inside `properties` arbitrary author keys are accepted.",
   "properties": {
     "attaches-to": "requirements.requirement.deck-properties"
   },
