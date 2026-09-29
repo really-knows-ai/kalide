@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "constraint",
   "name": "deck-body-subset",
-  "body": "Deck bodies use exactly the allowed Markdown subset (markdown-allowed-subset): paragraphs, `##` and `###` subheadings, single-level bulleted and numbered lists, and the inline set (bold, italic, inline code, `[]()` links, hard line breaks). Every construct outside that subset is refused with file/line and guidance: images, tables, blockquotes, fenced or indented code (except the section-frontmatter fence), horizontal rules, raw HTML, angle-bracket autolinks, GFM/other extensions (strikethrough, highlight, sup/sub, emoji shortcodes), `####`+ headings, and lists nested deeper than one level.",
+  "body": "Deck bodies use exactly the allowed Markdown subset (markdown-allowed-subset): paragraphs; `##` and `###` subheadings, but only where the enclosing template declares no child sections — a heading at any depth 1–6 is a nested section marker when the enclosing template declares child sections (slide-sections, template-composition); single-level bulleted and numbered lists; and the inline set (bold, italic, inline code, `[]()` links, hard line breaks). Every construct outside that subset is refused with file/line and guidance: images, tables, blockquotes, fenced or indented code (except the section-frontmatter fence), horizontal rules, raw HTML, angle-bracket autolinks, GFM/other extensions (strikethrough, highlight, sup/sub, emoji shortcodes), `####`+ headings used as subheadings (they are valid only as nested section markers), and lists nested deeper than one level.",
   "properties": {
     "attaches-to": "requirements.requirement.markdown-allowed-subset"
   },
