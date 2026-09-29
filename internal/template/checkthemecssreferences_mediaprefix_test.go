@@ -8,20 +8,22 @@ import (
 	"testing/fstest"
 )
 
-// This file is the unit-test deliverable for plan.phase-01.task-9: it proves
-// checkThemeCSSReferences treats a url() carrying the reserved MediaURLPrefix()
-// ("media:") differently from every other reference. Such a url() resolves
-// against the library's shared media/ sub-filesystem (mediaFS) exactly like a
-// layout `media "path"` argument: an existing file passes, while a missing
-// file, an absolute path, a `..` escape and a nil mediaFS each fail as a
-// *LibraryError naming the CSS file and a non-zero line. An @import target
-// carrying media: (or any other scheme) is a templates error naming the CSS
-// file and line and is NEVER followed: it is rejected before the target is
-// looked up, so it fails even when mediaFS happens to contain the file.
+// This file is the unit-test deliverable for plan.phase-01 task-11: it proves
+// checkThemeCSSReferences treats a reference carrying the reserved
+// MediaURLPrefix() ("media:") as a pointer into the library's shared media/
+// tree, for BOTH a url() and an @import target. A url() resolves against
+// mediaFS exactly like a layout `media "path"` argument (an existing file
+// passes; a missing file, an absolute path, a `..` escape and a nil mediaFS
+// each fail as a *LibraryError naming the CSS file and line). An @import
+// carrying media: is followed into mediaFS and the imported stylesheet's OWN
+// relative references are then checked with media/ as its tree: a relative
+// sibling inside media/ resolves, while a relative url() or @import that
+// leaves media/ (e.g. '../themes/a/x.woff2', '../library.yaml') is rejected
+// with the MEDIA CSS file's display path and line.
 //
 // Everything is in-memory: the *LibraryTheme is hand-built by
-// importTestThemeFixture (task-7) and mediaFS is a fstest.MapFS (or nil), so no
-// real filesystem is touched. The prefix under test is read through
+// importTestThemeFixture and mediaFS is a fstest.MapFS (or nil), so no real
+// filesystem is touched. The prefix under test is read through
 // MediaURLPrefix(), never hardcoded, so this can never drift from the source.
 
 // TestCheckThemeCSSReferencesMediaPrefix is table-driven over the reserved
@@ -32,11 +34,11 @@ func TestCheckThemeCSSReferencesMediaPrefix(t *testing.T) {
 	themeDir := path.Join("templates", ThemesDir, "default")
 	themeCSSPath := path.Join(themeDir, ThemeStylesheet)
 	importedPath := path.Join(themeDir, "x.css")
+	mediaCSSPath := path.Join("templates", MediaDir, "x.css")
 
 	// mediaWithFont is the library's shared media/ tree: it owns exactly one
-	// font. It also owns the CSS file that a media:-prefixed @import below
-	// names, so an @import rejection that still fires proves the target was
-	// never resolved against mediaFS.
+	// font plus a CSS file, so an @import carrying media: has a stylesheet to
+	// follow.
 	mediaWithFont := fstest.MapFS{
 		"fonts/x.woff2": &fstest.MapFile{Data: []byte("woff")},
 		"x.css":         &fstest.MapFile{Data: []byte("/* shared media css */")},
@@ -107,43 +109,73 @@ func TestCheckThemeCSSReferencesMediaPrefix(t *testing.T) {
 			wantSubstr: "no templates/media directory",
 		},
 		{
-			name:       "url() form @import carrying media: is rejected and never followed",
+			name:       "url() form @import carrying media: is followed",
 			stylesheet: `@import url('media:x.css');`,
-			// mediaFS owns x.css: had the import been followed, the
-			// stylesheet would resolve; the reserved-prefix error shows it
-			// was rejected before any lookup.
 			mediaFS:    mediaWithFont,
-			wantErr:    true,
-			wantPath:   themeCSSPath,
-			wantLine:   1,
-			wantSubstr: "reserved",
+			wantErr:    false,
 		},
 		{
-			name:       "double-quoted url() @import carrying media: is rejected and never followed",
+			name:       "double-quoted url() @import carrying media: is followed",
 			stylesheet: `@import url("media:x.css");`,
 			mediaFS:    mediaWithFont,
-			wantErr:    true,
-			wantPath:   themeCSSPath,
-			wantLine:   1,
-			wantSubstr: "reserved",
+			wantErr:    false,
 		},
 		{
-			name:       "bare quoted-string @import carrying media: is rejected and never followed",
+			name:       "bare quoted-string @import carrying media: is followed",
 			stylesheet: `@import 'media:x.css';`,
 			mediaFS:    mediaWithFont,
-			wantErr:    true,
-			wantPath:   themeCSSPath,
-			wantLine:   1,
-			wantSubstr: "reserved",
+			wantErr:    false,
 		},
 		{
-			name:       "bare quoted-string @import carrying media: fails even with no media dir",
+			name:       "bare quoted-string @import carrying media: fails with no media dir",
 			stylesheet: `@import 'media:x.css';`,
 			mediaFS:    nil,
 			wantErr:    true,
 			wantPath:   themeCSSPath,
 			wantLine:   1,
-			wantSubstr: "reserved",
+			wantSubstr: "no templates/media directory",
+		},
+		{
+			name:       "media: @import's clean relative sibling resolves inside media/",
+			stylesheet: `@import 'media:x.css';`,
+			mediaFS: fstest.MapFS{
+				"x.css":         &fstest.MapFile{Data: []byte("a{background:url('fonts/x.woff2');}\n")},
+				"fonts/x.woff2": &fstest.MapFile{Data: []byte("woff")},
+			},
+			wantErr: false,
+		},
+		{
+			name:       "media: @import's own broken relative ref is located in the media CSS",
+			stylesheet: `@import 'media:x.css';`,
+			mediaFS: fstest.MapFS{
+				"x.css": &fstest.MapFile{Data: []byte("/* intro */\na{background:url('fonts/missing.woff2');}\n")},
+			},
+			wantErr:    true,
+			wantPath:   mediaCSSPath,
+			wantLine:   2,
+			wantSubstr: "media file not found",
+		},
+		{
+			name:       "media: @import's own relative url() leaving media/ is rejected",
+			stylesheet: `@import 'media:x.css';`,
+			mediaFS: fstest.MapFS{
+				"x.css": &fstest.MapFile{Data: []byte("a{background:url('../themes/a/x.woff2');}\n")},
+			},
+			wantErr:    true,
+			wantPath:   mediaCSSPath,
+			wantLine:   1,
+			wantSubstr: "escapes media/",
+		},
+		{
+			name:       "media: @import's own relative @import leaving media/ is rejected",
+			stylesheet: `@import 'media:x.css';`,
+			mediaFS: fstest.MapFS{
+				"x.css": &fstest.MapFile{Data: []byte("@import '../library.yaml';\n")},
+			},
+			wantErr:    true,
+			wantPath:   mediaCSSPath,
+			wantLine:   1,
+			wantSubstr: "escapes media/",
 		},
 		{
 			name:       "@import url() carrying an http scheme is rejected",
@@ -186,8 +218,8 @@ func TestCheckThemeCSSReferencesMediaPrefix(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			th := importTestThemeFixture(tc.stylesheet, tc.files)
-			err := checkThemeCSSReferences(root, th, tc.mediaFS)
+			th, lib := importTestThemeFixture(tc.stylesheet, tc.files, tc.mediaFS)
+			err := checkThemeCSSReferences(root, th, lib)
 			if !tc.wantErr {
 				if err != nil {
 					t.Fatalf("checkThemeCSSReferences() error = %v, want nil", err)

@@ -8,16 +8,17 @@ import (
 	"testing"
 )
 
-// This file is the integration-test deliverable for plan.phase-01.task-10:
+// This file is the integration-test deliverable for plan.phase-01 tasks 13-14:
 // LoadLibrary's step 6 (checkThemeCSSReferences) exercised against a real
 // library on disk (os.DirFS over a t.TempDir()), not a hand-built
-// *LibraryTheme. It proves the whole load path — loadLibraryTheme walking the
+// *LibraryTheme. It proves the whole load path — loadLibraryTheme walking each
 // theme directory into th.Files, and the scanner following theme.css's
-// @imports in both forms — loads a library whose theme CSS reaches both the
-// theme's own files (a relative url('fonts/…')) and the library's shared
-// media/ tree (url('media:…'), including a CSS file media/ owns), and that a
-// broken reference anywhere in that walk fails step 6 with a *LibraryError
-// qualified with the offending CSS file and its 1-based line.
+// @imports in both forms — loads a library whose theme CSS reaches the theme's
+// own files (a relative url('fonts/…')), the library's shared media/ tree
+// (url('media:…'), including a CSS file media/ owns), and a sibling theme
+// (theme:<name>/, both a url() and an @import), and that a broken reference
+// anywhere in that walk fails step 6 with a *LibraryError qualified with the
+// offending CSS file and its 1-based line.
 //
 // These tests touch the real filesystem, so they are guarded with
 // testing.Short(): they are skipped under `go test -short`.
@@ -53,10 +54,18 @@ const intThemeImportB = `/* theme b */
 .b { background: url('../fonts/theme.woff2'); }
 `
 
+// intSiblingThemeCSS is the sibling theme accent's stylesheet: it owns a
+// relative url() resolving against its own directory, so the sibling theme is
+// itself load-valid and can be referenced cross-theme.
+const intSiblingThemeCSS = `/* accent theme */
+body { background: url('fonts/accent.woff2'); }
+`
+
 // writeThemeCSSIntLibrary builds a real on-disk library under a fresh temp dir:
 // library.yaml, the given theme.css plus themeFiles (keyed by their path
-// relative to the theme directory), and a shared media/ tree owning a font and
-// a CSS file. It returns the project root to pass to os.DirFS.
+// relative to the theme directory) under the plain theme, a sibling theme
+// accent (its theme.css plus an owned font), and a shared media/ tree owning a
+// font and a CSS file. It returns the project root to pass to os.DirFS.
 func writeThemeCSSIntLibrary(t *testing.T, themeCSS string, themeFiles map[string]string) string {
 	t.Helper()
 	projectDir := t.TempDir()
@@ -71,6 +80,11 @@ func writeThemeCSSIntLibrary(t *testing.T, themeCSS string, themeFiles map[strin
 		writeFile(t, filepath.Join(root, ThemesDir, "plain", filepath.FromSlash(rel)), []byte(data))
 	}
 
+	// The sibling theme accent, so a theme:accent/ reference has a loaded
+	// theme (and an owned file) to resolve against.
+	writeFile(t, filepath.Join(root, ThemesDir, "accent", ThemeStylesheet), []byte(intSiblingThemeCSS))
+	writeFile(t, filepath.Join(root, ThemesDir, "accent", "fonts", "accent.woff2"), []byte("woff"))
+
 	// The library's shared media/ tree: a font reached via url('media:…') and
 	// the CSS file the library's media/ directory owns.
 	writeFile(t, filepath.Join(root, MediaDir, "fonts", "shared.woff2"), []byte("woff"))
@@ -80,11 +94,12 @@ func writeThemeCSSIntLibrary(t *testing.T, themeCSS string, themeFiles map[strin
 }
 
 // TestLoadLibraryIntThemeCSSReferences is table-driven over a real on-disk
-// library: one valid case (both @import forms followed; theme-owned relative
-// and media:-prefixed url()s resolving) and broken-reference cases, each of
-// which must fail with a *LibraryError whose Path is the offending CSS file
-// and whose Line is the correct 1-based line — including when the broken
-// reference sits in an @imported stylesheet rather than theme.css itself.
+// library: valid cases (both @import forms followed; theme-owned relative,
+// media:-prefixed and theme:<name>/-prefixed references resolving, including a
+// cross-theme @import) and broken-reference cases, each of which must fail
+// with a *LibraryError whose Path is the offending CSS file and whose Line is
+// the correct 1-based line — including when the broken reference sits in an
+// @imported stylesheet rather than theme.css itself.
 func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -118,6 +133,16 @@ func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 			wantErr:    false,
 		},
 		{
+			name:     "valid theme:<name>/ @import and url() resolve into a sibling theme",
+			themeCSS: "@import 'theme:accent/theme.css';\n\nbody { background: url('theme:accent/fonts/accent.woff2'); }\n",
+			wantErr:  false,
+		},
+		{
+			name:     "valid media: @import is followed into the shared media tree",
+			themeCSS: "@import 'media:extra.css';\n",
+			wantErr:  false,
+		},
+		{
 			name:       "missing media: url() fails at the theme.css line",
 			themeCSS:   "@import 'imports/a.css';\n\nbody { background: url('media:missing.woff2'); }\n",
 			themeFiles: validImports,
@@ -127,13 +152,49 @@ func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 			wantSubstr: "media file not found",
 		},
 		{
-			name:       "@import url() carrying media: is rejected at the theme.css line",
-			themeCSS:   "@import 'imports/a.css';\n@import url('media:x.css');\n",
+			name:       "media: @import naming a missing file fails at the theme.css line",
+			themeCSS:   "@import 'imports/a.css';\n@import 'media:missing.css';\n",
 			themeFiles: validImports,
 			wantErr:    true,
 			wantPath:   themeCSSPath,
 			wantLine:   2,
-			wantSubstr: "reserved",
+			wantSubstr: "media file not found",
+		},
+		{
+			name:       "url() naming an unknown theme fails at the theme.css line",
+			themeCSS:   "@import 'imports/a.css';\n\nbody { background: url('theme:ghost/fonts/x.woff2'); }\n",
+			themeFiles: validImports,
+			wantErr:    true,
+			wantPath:   themeCSSPath,
+			wantLine:   3,
+			wantSubstr: "unknown theme",
+		},
+		{
+			name:       "@import naming an unknown theme fails at the theme.css line",
+			themeCSS:   "@import 'imports/a.css';\n@import 'theme:ghost/theme.css';\n",
+			themeFiles: validImports,
+			wantErr:    true,
+			wantPath:   themeCSSPath,
+			wantLine:   2,
+			wantSubstr: "unknown theme",
+		},
+		{
+			name:       "url() naming a missing file in a sibling theme fails at the theme.css line",
+			themeCSS:   "@import 'imports/a.css';\n\nbody { background: url('theme:accent/fonts/missing.woff2'); }\n",
+			themeFiles: validImports,
+			wantErr:    true,
+			wantPath:   themeCSSPath,
+			wantLine:   3,
+			wantSubstr: "file not found inside theme directory",
+		},
+		{
+			name:       "@import naming a missing file in a sibling theme fails at the theme.css line",
+			themeCSS:   "@import 'imports/a.css';\n@import 'theme:accent/missing.css';\n",
+			themeFiles: validImports,
+			wantErr:    true,
+			wantPath:   themeCSSPath,
+			wantLine:   2,
+			wantSubstr: "file not found inside theme directory",
 		},
 		{
 			name:       "url() escaping the theme directory fails at the theme.css line",
@@ -143,6 +204,15 @@ func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 			wantPath:   themeCSSPath,
 			wantLine:   3,
 			wantSubstr: "escapes its theme directory",
+		},
+		{
+			name:       "url() escaping the named theme directory fails at the theme.css line",
+			themeCSS:   "@import 'imports/a.css';\n\nbody { background: url('theme:accent/../plain/fonts/theme.woff2'); }\n",
+			themeFiles: validImports,
+			wantErr:    true,
+			wantPath:   themeCSSPath,
+			wantLine:   3,
+			wantSubstr: "must not escape theme directory",
 		},
 		{
 			name:       "missing theme-owned relative url() fails at the theme.css line",
@@ -195,6 +265,9 @@ func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 				}
 				if _, ok := lib.Themes["plain"]; !ok {
 					t.Fatalf("theme plain not loaded: %v", lib.Themes)
+				}
+				if _, ok := lib.Themes["accent"]; !ok {
+					t.Fatalf("sibling theme accent not loaded: %v", lib.Themes)
 				}
 				if !lib.HasMedia {
 					t.Error("HasMedia = false, want true: fixture has templates/media")
