@@ -28,11 +28,6 @@
       "kind": "contains",
       "source": "requirements.requirement.project-templates",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-demo-project",
-      "properties": {}
     }
   ]
 }
