@@ -23,11 +23,6 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.kalide-rename",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
       "source": "requirements.requirement.deck-properties",
       "properties": {}
     }

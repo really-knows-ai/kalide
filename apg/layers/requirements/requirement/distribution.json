@@ -59,11 +59,6 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.kalide-rename",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.version-command",
       "properties": {}
     },
