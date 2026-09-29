@@ -36,6 +36,11 @@
       "kind": "contains",
       "source": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.theme-library-reach",
+      "properties": {}
     }
   ]
 }
