@@ -18,11 +18,6 @@
       "kind": "contains",
       "source": "requirements.requirement.deck-config",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.reconcile-failfast-theme-navigation",
-      "properties": {}
     }
   ]
 }

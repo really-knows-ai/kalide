@@ -36,11 +36,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.reconcile-failfast-theme-navigation",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.template-retarget-restart-decisions",
       "properties": {}
     },

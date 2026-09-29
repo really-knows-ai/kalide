@@ -25,11 +25,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-failfast-theme-navigation",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.templates-dir-validation",
       "properties": {}
