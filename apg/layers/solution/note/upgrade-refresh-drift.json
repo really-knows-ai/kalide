@@ -4,6 +4,12 @@
   "name": "upgrade-refresh-drift",
   "body": "The staleness this feature fixes. Every scaffold writer writes the `AGENTS.md` guide only when none exists and never refreshes it: writeHelloSeed (internal/scaffold/helloseed.go) skips an existing `AGENTS.md`, InitExternal (external.go) writes it only when absent, and InitLibrary (library.go) likewise. The library's `library.yaml` is written once as `format: 1` and nothing ever migrates it. So a project scaffolded by an older kalide keeps that release's guide and format even after the binary is upgraded — the guides already went stale when the format evolved (the 0.8.0 reserved `media:` theme-CSS prefix, theme-media-references, had to be added to both guides). agent-guide-drift-check only guards the guides at build time inside the repo; nothing reaches a deployed project. `kalide upgrade` is the runtime counterpart of that build-time check [autonomous].",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
+      "properties": {}
+    }
+  ],
   "in": []
 }
