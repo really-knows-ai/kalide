@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-composition",
-  "body": "Slide templates declare named sections, the section templates each accepts, and repeat limits (min/max, e.g. columns 2–4). Section templates may declare their own sections / use other section templates, with no depth limit (composition inside templates, not author Markdown). Sections accept only section templates (those under `templates/sections/`), never slide templates (those under `templates/slides/`; requirements.constraint.template-registry-integrity).",
+  "body": "Slide templates declare named sections, the section templates each accepts, and repeat limits (min/max, e.g. columns 2–4). A section template's `template.yaml` may declare `sections:` with exactly the schema slides use, so a section can hold sections of its own and composition nests. Nesting depth is bounded by the content syntax — heading depth is nesting depth — so no template composition chain may exceed six heading levels (`#`…`######`); this is checked at load, not configured (requirements.constraint.section-depth-limit). Reference cycles are rejected at load with the chain in the error (requirements.constraint.section-cycle-error-chain). Sections accept only section templates (those under `templates/sections/`), never slide templates (those under `templates/slides/`; requirements.constraint.template-registry-integrity).",
   "properties": {
     "feature": "templates"
   },
