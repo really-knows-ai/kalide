@@ -4,6 +4,12 @@
   "name": "upgrade-implementation-pending",
   "body": "Tier-4 for this feature is not authored yet. No upgrade code exists on this branch: there is no `upgrade` symbol in the scanned graph, internal/cli.Run dispatches exactly init, init-library, start, templates, version and help, and internal/scaffold has no upgrade entry point. The plan-writer declares the planned Implementation nodes at plan time (an `internal/cli.runUpgrade` and a new `internal/scaffold` upgrade entry point); the single `implemented-by` edge attached to solution.component.upgrade targets the existing `internal/cli.Run` dispatch the command is registered in, and is intentionally the only existing-code edge [autonomous].",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.upgrade",
+      "properties": {}
+    }
+  ],
   "in": []
 }
