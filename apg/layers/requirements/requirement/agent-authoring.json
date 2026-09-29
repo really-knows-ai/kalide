@@ -158,6 +158,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.upgrade-refresh-owned-scaffold",
+      "properties": {}
     }
   ]
 }
