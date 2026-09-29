@@ -44,20 +44,23 @@
 // carries: it never reaches the network and never runs git
 // (global.constraint.upgrade-offline).
 //
-// The rest of phase 3 fills in the pieces declared here:
+// The pieces are declared here:
 //
 //   - registeredMigrations kalide's ordered migration set (empty today).
 //   - readLibraryFormat reads a library's raw `format:` integer tolerantly.
 //   - implementedFormat reports the highest format the binary implements.
 //   - unsupportedFormatError the unknown/newer refusal.
 //   - migrateLibrary the orchestrator, delegating to the testable seam
-//     migrateLibraryWith. TODO(upgrade/plan.phase-03.task-7)
+//     migrateLibraryWith.
 package scaffold
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -228,8 +231,21 @@ func (e *unsupportedFormatError) Error() string {
 	return fmt.Sprintf("scaffold: unsupported library format: found format %d, supported format %d", e.found, e.supported)
 }
 
+// migrationTargetFormat reports the upper bound migrateLibraryWith applies the
+// migration chain to — the highest format the running binary implements
+// (implementedFormat). It is the var-shaped companion of the migrateLibraryWith
+// seam: the registered set is empty and implementedFormat is 1, so a test can
+// raise the target to drive more than the single step a format-1 binary
+// affords and exercise multi-step ordering, idempotence, rollback and
+// per-migration validation through that seam. Production only ever uses the
+// default, set here once; only test files replace it, and they restore it
+// afterwards. It never changes what the binary implements: implementedFormat is
+// still the single source of truth for the running format and the "newer"
+// comparison.
+var migrationTargetFormat = implementedFormat
+
 // migrateLibrary is the migration-half orchestrator: it applies kalide's
-// registered migrations to the library in dir, from the library's current
+// registered migrations to the project in dir, from the project's current
 // format to implementedFormat, in order, each at most once. It preserves the
 // author's values and changes only the format/structure a migration governs,
 // and validates each result before it is kept; a format the binary does not
@@ -242,9 +258,8 @@ func (e *unsupportedFormatError) Error() string {
 // global.constraint.upgrade-unknown-format-reported). It is local-filesystem
 // only: no network and no git (global.constraint.upgrade-offline).
 //
-// TODO(upgrade/plan.phase-03.task-7): implement the orchestrator. It delegates
-// to migrateLibraryWith(dir, registeredMigrations()); production may only ever
-// pass registeredMigrations(), which stays empty.
+// It delegates to migrateLibraryWith(dir, registeredMigrations()); production
+// may only ever pass registeredMigrations(), which stays empty.
 func migrateLibrary(dir string) error {
 	return migrateLibraryWith(dir, registeredMigrations())
 }
@@ -255,11 +270,273 @@ func migrateLibrary(dir string) error {
 // failure with synthetic migrations (none exist today, because the registered
 // set is empty). Production may only ever pass registeredMigrations(); only
 // test files may use this seam, and no fake step is ever added to
-// registeredMigrations() to make a test pass.
+// registeredMigrations() to make a test pass. Tests may also raise
+// migrationTargetFormat to run a chain longer than implementedFormat affords.
 //
-// TODO(upgrade/plan.phase-03.task-7): apply migs in order, each at most once,
-// validating each result and rolling a failing multi-file migration back so
-// every affected file is left as it was.
+// It first establishes the project form through detectProject, the single
+// owner of deck/library detection. A deck's kalide.yaml has no version field,
+// so the migration half is a no-op for a deck: no format is read, nothing is
+// written, and no deck version is inferred
+// (requirements.note.upgrade-deck-vs-library). For a template library it reads
+// the raw format (readLibraryFormat) and applies the ordered chain of
+// migrations from that format to migrationTargetFormat(), each validated
+// through the template library loader before it is kept. A migration that
+// fails — in its own apply or in validation — rolls the whole run back so
+// every affected file is byte-for-byte as it was
+// (requirements.constraint.upgrade-migrations-ordered-atomic,
+// global.constraint.upgrade-never-breaks-project).
 func migrateLibraryWith(dir string, migs []formatMigration) error {
-	return fmt.Errorf("scaffold: migrateLibrary: not implemented yet (dir %s, %d migrations)", dir, len(migs))
+	kind, err := detectProject(dir)
+	if err != nil {
+		return err
+	}
+	if kind != projectKindLibrary {
+		// A deck has no version field: the migration half is a no-op. It
+		// reads no format and writes nothing, and no deck version is
+		// inferred from the deck's content. Per-migration result validation
+		// through deck.LoadConfig therefore never runs for a deck: no deck
+		// migration can exist to produce a result to validate until a deck
+		// carries a version anchor.
+		return nil
+	}
+
+	current, err := readLibraryFormat(dir)
+	if err != nil {
+		return err
+	}
+	target := migrationTargetFormat()
+
+	// Newer than the running binary: never guessed, never migrated.
+	if current > target {
+		return &unsupportedFormatError{found: current, supported: target}
+	}
+	// Already current (today, format 1): a byte-for-byte no-op.
+	if current == target {
+		return nil
+	}
+
+	// The ordered chain from current to target. A gap — an unknown format
+	// with no registered migration — is an unrecognized format.
+	steps, ok := migrationChain(current, target, migs)
+	if !ok {
+		return &unsupportedFormatError{found: current, supported: target}
+	}
+	return runMigrations(dir, steps)
+}
+
+// runMigrations applies steps in order, each at most once, validating each
+// result through the template library loader before it is kept. The whole run
+// is all-or-nothing: the tree is recorded first and restored byte-for-byte if
+// any step's apply or validation fails, so a failed run leaves every affected
+// file exactly as it was and never leaves a project partially migrated
+// (requirements.constraint.upgrade-migrations-ordered-atomic,
+// global.constraint.upgrade-never-breaks-project). It is local-filesystem
+// only.
+func runMigrations(dir string, steps []formatMigration) error {
+	before, err := snapshotTree(dir)
+	if err != nil {
+		return fmt.Errorf("scaffold: migrate library at %s: snapshot before migrating: %w", dir, err)
+	}
+	for _, step := range steps {
+		if err := step.apply(dir); err != nil {
+			return rollbackMigration(dir, before, step.sourceFormat, err)
+		}
+		if err := validateMigratedLibrary(dir); err != nil {
+			return rollbackMigration(dir, before, step.sourceFormat, err)
+		}
+	}
+	return nil
+}
+
+// migrationChain returns the migrations to apply, in format order, to carry a
+// library from current to target: one registered step per format, each applied
+// at most once. A registered migration carries the format it upgrades FROM and,
+// by construction, carries the project to the next format, so the chain walks
+// current, current+1, …, target-1 in that order regardless of the order the
+// registry lists them in. ok is false when a format in that range has no
+// registered migration (an unknown format that cannot reach target) or the
+// registry declares two steps for the same source format (ambiguous, so
+// neither is applied).
+func migrationChain(current, target int, migs []formatMigration) ([]formatMigration, bool) {
+	bySource := make(map[int]formatMigration, len(migs))
+	for _, m := range migs {
+		if _, dup := bySource[m.sourceFormat]; dup {
+			return nil, false
+		}
+		bySource[m.sourceFormat] = m
+	}
+	steps := make([]formatMigration, 0, target-current)
+	for f := current; f < target; f++ {
+		m, ok := bySource[f]
+		if !ok {
+			return nil, false
+		}
+		steps = append(steps, m)
+	}
+	return steps, true
+}
+
+// validateMigratedLibrary validates a migrated library's result before it is
+// kept: the library re-loads through the template library loader, resolving
+// the library root as dir itself. loadLibraryMeta must accept every format the
+// migrator reads, so a migration whose result the loader cannot load aborts the
+// run rather than being kept
+// (requirements.requirement.upgrade-migrate-format). The deck form is not
+// validated here: a deck has no version anchor, so no deck migration runs and
+// no deck result exists to validate.
+func validateMigratedLibrary(dir string) error {
+	if _, err := template.LoadDeckLibrary(dir, "."); err != nil {
+		return fmt.Errorf("migrated library at %s does not load: %w", dir, err)
+	}
+	return nil
+}
+
+// rollbackMigration restores the pre-run tree after a migration step failed,
+// wrapping the failure so the caller learns which source format failed and
+// whether the rollback itself succeeded. A rollback failure is reported
+// together with the original failure rather than swallowed.
+func rollbackMigration(dir string, before *treeSnapshot, sourceFormat int, cause error) error {
+	if err := before.restore(dir); err != nil {
+		return fmt.Errorf("scaffold: migrate library from format %d: %w (restoring the project failed: %v)",
+			sourceFormat, cause, err)
+	}
+	return fmt.Errorf("scaffold: migrate library from format %d: %w", sourceFormat, cause)
+}
+
+// treeSnapshot is the in-memory record of every entry under a project root,
+// taken before a migration runs. It is the undo for the migration half: on any
+// failure the run is restored byte-for-byte, so a failed migration leaves every
+// file it would have written exactly as it was and never leaves a project
+// partially migrated (global.constraint.upgrade-never-breaks-project).
+//
+// Directories and regular files carry their permission bits; a symlink carries
+// its target. The root directory itself is not recorded: a migration governs
+// the project's files and structure, never the permissions of the project root.
+type treeSnapshot struct {
+	dirs  map[string]fs.FileMode
+	files map[string]snapshotFile
+}
+
+// snapshotFile is one recorded non-directory entry: a regular file's bytes and
+// mode, or a symlink's target and mode.
+type snapshotFile struct {
+	data []byte
+	mode fs.FileMode
+	link string
+}
+
+// snapshotTree records every entry under root, keyed by its path relative to
+// root. It reads only the local filesystem.
+func snapshotTree(root string) (*treeSnapshot, error) {
+	s := &treeSnapshot{
+		dirs:  make(map[string]fs.FileMode),
+		files: make(map[string]snapshotFile),
+	}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if p == root {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case d.IsDir():
+			s.dirs[rel] = info.Mode()
+		case info.Mode()&fs.ModeSymlink != 0:
+			link, err := os.Readlink(p)
+			if err != nil {
+				return err
+			}
+			s.files[rel] = snapshotFile{mode: info.Mode(), link: link}
+		case info.Mode().IsRegular():
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			s.files[rel] = snapshotFile{mode: info.Mode(), data: data}
+		default:
+			s.files[rel] = snapshotFile{mode: info.Mode()}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// restore returns the tree under root to the recorded state: everything a
+// migration created is removed, then every recorded directory and file is
+// written back with its original permission bits and symlinks are re-linked. It
+// writes only the local filesystem.
+func (s *treeSnapshot) restore(root string) error {
+	// Drop everything currently under root; the snapshot is then the only
+	// record and can be replayed cleanly. The root directory is kept.
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(root, e.Name())); err != nil {
+			return err
+		}
+	}
+
+	// Directories first, parents before children.
+	for _, rel := range shallowestFirst(s.dirs) {
+		dir := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(dir, s.dirs[rel].Perm()); err != nil {
+			return err
+		}
+		if err := os.Chmod(dir, s.dirs[rel].Perm()); err != nil {
+			return err
+		}
+	}
+
+	// Then every recorded file.
+	for rel, f := range s.files {
+		target := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if f.mode&fs.ModeSymlink != 0 {
+			if err := os.Symlink(f.link, target); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.WriteFile(target, f.data, f.mode.Perm()); err != nil {
+			return err
+		}
+		if err := os.Chmod(target, f.mode.Perm()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// shallowestFirst returns the recorded directory paths with fewer path elements
+// before those with more, so a parent is always created before its children.
+func shallowestFirst(dirs map[string]fs.FileMode) []string {
+	rels := make([]string, 0, len(dirs))
+	for rel := range dirs {
+		rels = append(rels, rel)
+	}
+	sort.Slice(rels, func(i, j int) bool {
+		di := strings.Count(rels[i], string(filepath.Separator))
+		dj := strings.Count(rels[j], string(filepath.Separator))
+		if di != dj {
+			return di < dj
+		}
+		return rels[i] < rels[j]
+	})
+	return rels
 }
