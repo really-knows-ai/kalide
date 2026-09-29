@@ -474,3 +474,141 @@ func TestMigrateLibraryRollback(t *testing.T) {
 		migrateAssertSameTree(t, dir, before)
 	})
 }
+
+// TestMigrateLibrary is the integration aggregate for the migration half
+// (upgrade/plan.phase-03.task-9). It runs on real on-disk projects — a real
+// format-1 library and a real no-arg seed deck built with scaffold.InitLibrary
+// and scaffold.Init — and re-validates the result through the real loaders:
+// template.LoadDeckLibrary for a library (and a deck's template root) and
+// deck.LoadConfig for a deck. It is int tier: guarded with testing.Short, it
+// reaches no network, no server and no git and exposes no command surface
+// (global.constraint.upgrade-offline,
+// global.constraint.upgrade-never-breaks-project).
+//
+// Three claims:
+//
+//   - a format-1 library and a deck are byte-for-byte no-ops of the migration
+//     half and still load/validate cleanly;
+//   - a refused format (0, 2) leaves a real library byte-for-byte untouched;
+//   - the loader↔migrator tie
+//     (requirements.requirement.upgrade-migrate-format, AC "loadLibraryMeta
+//     accepts every format the migrator reads — today that is exactly {1}"): a
+//     library at implementedFormat() — and, for every source format in
+//     registeredMigrations() (none today, so that loop covers zero cases) — a
+//     library at that migration's source format loads through
+//     template.LoadDeckLibrary, while implementedFormat()+1 is refused. The
+//     test-only tie fails if the implemented format or the loader's accepted
+//     set drifts (e.g. a migration registered without loader support) rather
+//     than passing vacuously. No production loader change is made here.
+func TestMigrateLibrary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: builds real libraries and decks on disk and re-validates them through the loaders")
+	}
+
+	t.Run("a format-1 library is a byte-for-byte no-op and still loads", func(t *testing.T) {
+		dir := migrateLibraryFixture(t)
+		before := refreshFingerprint(t, dir)
+
+		if err := migrateLibrary(dir); err != nil {
+			t.Fatalf("migrateLibrary(%s) error = %v, want a no-op for a format-1 library", dir, err)
+		}
+		refreshAssertTreeUntouched(t, dir, before)
+
+		// The migration half leaves the library loadable through the real
+		// loader: a library is a template root itself.
+		migrateLoadLibrary(t, dir)
+	})
+
+	t.Run("a deck is a byte-for-byte no-op and still loads and validates", func(t *testing.T) {
+		dir := migrateDeckFixture(t)
+		before := refreshFingerprint(t, dir)
+
+		if err := migrateLibrary(dir); err != nil {
+			t.Fatalf("migrateLibrary(%s) error = %v, want a no-op for a deck", dir, err)
+		}
+		refreshAssertTreeUntouched(t, dir, before)
+
+		// The deck's config validates through deck.LoadConfig and its template
+		// root through template.LoadDeckLibrary.
+		refreshLoadDeck(t, dir, filepath.Join(dir, template.TemplatesDir), "")
+	})
+
+	t.Run("a refused format leaves a real library byte-for-byte untouched", func(t *testing.T) {
+		for _, format := range []int{firstLibraryFormat - 1, implementedFormat() + 1} {
+			t.Run(fmt.Sprintf("format %d", format), func(t *testing.T) {
+				dir := migrateLibraryAt(t, format)
+				before := refreshFingerprint(t, dir)
+
+				err := migrateLibrary(dir)
+				migrateAssertRefused(t, err, format, implementedFormat())
+				refreshAssertTreeUntouched(t, dir, before)
+			})
+		}
+	})
+
+	t.Run("the loader accepts every format the migrator reads and refuses the next", func(t *testing.T) {
+		current := implementedFormat()
+
+		// (a) A library at implementedFormat() loads cleanly through the real
+		// loader.
+		t.Run(fmt.Sprintf("a library at implementedFormat() = %d loads", current), func(t *testing.T) {
+			dir := migrateLibraryAt(t, current)
+			migrateLoadLibrary(t, dir)
+		})
+
+		// (a) For every source format in registeredMigrations() (none today,
+		// so this loop covers zero cases), a library at that migration's
+		// source format likewise loads. Registering a migration whose source
+		// format the loader does not accept fails this test rather than
+		// shipping an unmigratable format.
+		for _, m := range registeredMigrations() {
+			t.Run(fmt.Sprintf("a library at registered source format %d loads", m.sourceFormat), func(t *testing.T) {
+				dir := migrateLibraryAt(t, m.sourceFormat)
+				migrateLoadLibrary(t, dir)
+			})
+		}
+
+		// (b) implementedFormat()+1 is refused by the real loader.
+		next := current + 1
+		t.Run(fmt.Sprintf("a library at implementedFormat()+1 = %d is refused", next), func(t *testing.T) {
+			dir := migrateLibraryAt(t, next)
+
+			_, err := template.LoadDeckLibrary(dir, ".")
+			if err == nil {
+				t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = nil, want format %d refused", dir, next)
+			}
+			var libErr *template.LibraryError
+			if !errors.As(err, &libErr) {
+				t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = %v, want *template.LibraryError", dir, err)
+			}
+			if !strings.Contains(libErr.Message, "unsupported library format") {
+				t.Errorf("LoadDeckLibrary error message = %q, want it to report an unsupported library format", libErr.Message)
+			}
+		})
+	})
+}
+
+// migrateLibraryAt builds a fresh valid library with InitLibrary and rewrites
+// its library.yaml to declare format, so the loader↔migrator tie can present a
+// library built at any format integer. Everything but the format integer is the
+// real InitLibrary layout, so a format the loader accepts still loads for the
+// right reason and a format it rejects fails for the right reason.
+func migrateLibraryAt(t *testing.T, format int) string {
+	t.Helper()
+
+	dir := migrateLibraryFixture(t)
+	writeFile(t, filepath.Join(dir, template.LibraryFile),
+		fmt.Sprintf("name: shared-lib\nformat: %d\n", format))
+	return dir
+}
+
+// migrateLoadLibrary loads a real library root through the real loader and fails
+// the test on any error. A library is a template root itself, so it is loaded as
+// a deck would load a configured library: "." resolves against the library root.
+func migrateLoadLibrary(t *testing.T, libraryRoot string) {
+	t.Helper()
+
+	if _, err := template.LoadDeckLibrary(libraryRoot, "."); err != nil {
+		t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = %v, want the library to load after the migration half", libraryRoot, err)
+	}
+}
