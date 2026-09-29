@@ -26,11 +26,6 @@
       "kind": "realised-by",
       "source": "domain.service.publish-release",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-supported-targets-runners",
-      "properties": {}
     }
   ]
 }

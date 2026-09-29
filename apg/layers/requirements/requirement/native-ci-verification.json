@@ -38,11 +38,6 @@
       "kind": "depends-on",
       "source": "requirements.requirement.github-releases",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-supported-targets-runners",
-      "properties": {}
     }
   ]
 }

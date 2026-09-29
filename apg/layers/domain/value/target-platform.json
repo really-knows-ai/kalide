@@ -15,11 +15,6 @@
       "kind": "drives",
       "source": "requirements.requirement.supported-platforms",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-supported-targets-runners",
-      "properties": {}
     }
   ]
 }

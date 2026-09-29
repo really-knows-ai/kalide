@@ -40,11 +40,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.fix-supported-targets-runners",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.license",
       "properties": {}
