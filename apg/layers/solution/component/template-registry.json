@@ -51,11 +51,6 @@
       "kind": "details",
       "source": "requirements.note.reconcile-template-language",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.reconcile-implemented-by-reusable-templates",
-      "properties": {}
     }
   ]
 }

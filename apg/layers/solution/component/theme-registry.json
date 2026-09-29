@@ -29,11 +29,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.reconcile-implemented-by-reusable-templates",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "solution.note.theme-media-serving",
       "properties": {}
     }

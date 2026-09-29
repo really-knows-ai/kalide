@@ -49,11 +49,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.reconcile-implemented-by-reusable-templates",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.template-retarget-restart-decisions",
       "properties": {}
     },
