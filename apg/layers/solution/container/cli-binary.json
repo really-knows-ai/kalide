@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "container",
   "name": "cli-binary",
-  "body": "The `kalide` CLI binary (built from `cmd/kalide`; Go module `github.com/really-knows-ai/kalide`, static, embedded assets; released as `kalide-<os>-<arch>` for darwin/arm64 and windows/amd64, plus windows/arm64 when its native runner is available): commands, loader, validator, renderer, HTTP server, watcher.",
+  "body": "The `kalide` CLI binary (built from `cmd/kalide`; Go module `github.com/really-knows-ai/kalide`, static, embedded assets; released as `kalide-<os>-<arch>` for each supported target — darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64 — each while its GitHub-hosted native runner is available; see requirements.requirement.supported-platforms): commands, loader, validator, renderer, HTTP server, watcher.",
   "properties": {
     "kind": "app"
   },
