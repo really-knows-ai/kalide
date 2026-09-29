@@ -133,8 +133,11 @@ type Notes struct {
 }
 
 // ParseError is a positioned parse error: the file, the 1-based line when
-// known (0 otherwise), and the message. Error renders as `file:line: message`,
-// matching the deck package's convention.
+// known (0 otherwise), the containment path when the error belongs to a nested
+// section instance, and the message. Error renders as `file:line: message`, or
+// `file:line › path: message` when a containment path is present, matching the
+// deck package's canonical ` › ` (U+203A) notation
+// (nested-section-validation, error-reporting).
 type ParseError struct {
 	// File is the file the error belongs to.
 	File string
@@ -142,16 +145,25 @@ type ParseError struct {
 	// Line is the 1-based line, or 0 when there is no meaningful line.
 	Line int
 
+	// Path is the rendered containment path of the section instance the error
+	// belongs to, for example `columns[2] › blocks[1]`, or "" at the slide's
+	// top level. Segments are already in their final `name[i]` display form.
+	Path string
+
 	// Msg is the human-readable message.
 	Msg string
 }
 
 // Error renders the positioned message.
 func (e *ParseError) Error() string {
+	pos := e.File
 	if e.Line > 0 {
-		return fmt.Sprintf("%s:%d: %s", e.File, e.Line, e.Msg)
+		pos = fmt.Sprintf("%s:%d", pos, e.Line)
 	}
-	return fmt.Sprintf("%s: %s", e.File, e.Msg)
+	if e.Path != "" {
+		return fmt.Sprintf("%s › %s: %s", pos, e.Path, e.Msg)
+	}
+	return fmt.Sprintf("%s: %s", pos, e.Msg)
 }
 
 // catalogueBlock is a decoded YAML frontmatter block: its mapping node (for
@@ -214,7 +226,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, tmplLine, hasTmpl, err := templateInBlock(file, fm)
+	tmpl, tmplLine, hasTmpl, err := templateInBlock(file, fm, "")
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +235,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	}
 	usage, ok := cat.LookupSlideTemplate(tmpl)
 	if !ok {
-		return nil, unknownName(file, tmplLine, "template", tmpl, cat.TemplateNames())
+		return nil, unknownName(file, tmplLine, "", "template", tmpl, cat.TemplateNames())
 	}
 	if usage != "slide" {
 		return nil, parseError(file, tmplLine,
@@ -317,7 +329,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 		}
 
 		if !declared[name] {
-			return nil, unknownName(file, headingLine, "section", name, names)
+			return nil, unknownName(file, headingLine, "", "section", name, names)
 		}
 		counts[name]++
 		// max <= 0 means unbounded (the Go zero value is the natural "no
@@ -361,7 +373,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 				section.FenceLine = contentStart + 1
 				section.Frontmatter = blk.values
 				if err := resolveSectionTemplate(file, cat, name,
-					decls[name], blk, section.FenceLine, &section); err != nil {
+					decls[name], blk, section.FenceLine, headingLine, &section, containmentPath([]string{name}, []int{-1})); err != nil {
 					return nil, err
 				}
 				contentStart = close + 1
@@ -435,51 +447,67 @@ type sectionDecl struct {
 	ok       bool
 }
 
-// resolveSectionTemplate resolves a declared section's template from its
-// frontmatter block and records it in out. fenceLine is the line of the
-// opening ``` fence, where a required-but-missing template: is reported.
+// resolveSectionTemplate is the parent-level `template:` resolution entry
+// point. Given one section instance's frontmatter block (nil when the section
+// has none) and the parent-scoped sectionDecl d it must resolve against
+// (from the slide template for a top-level section, from resolveChildTemplate
+// for a child), it resolves the instance's `template:` into out: required when
+// the parent declares more than one accepted template, resolved automatically
+// when exactly one is accepted, refused for the reserved `notes` name, checked
+// to be a section-usage template, and checked for membership in the accepted
+// set. It never derives declarations.
+//
+// fenceLine is the line of the opening ``` fence (0 when there is no
+// frontmatter), headingLine the section heading line, and path the instance's
+// containment path, so a required-but-missing template: is reported at the
+// fence when there is one and at the heading otherwise, and every error carries
+// the containment path (nested-section-validation).
 func resolveSectionTemplate(file string, cat Catalogue, section string,
-	d sectionDecl, blk *catalogueBlock, fenceLine int, out *Section) error {
+	d sectionDecl, blk *catalogueBlock, fenceLine, headingLine int, out *Section, path string) error {
 
-	tmplName, tmplLine, hasTmpl, err := templateInBlock(file, blk)
+	perr := func(line int, format string, args ...any) error {
+		return &ParseError{File: file, Line: line, Path: path, Msg: fmt.Sprintf(format, args...)}
+	}
+
+	tmplName, tmplLine, hasTmpl, err := templateInBlock(file, blk, path)
 	if err != nil {
 		return err
 	}
 	if len(d.accepted) == 0 {
 		if hasTmpl {
-			return parseError(file, positionOr(tmplLine, fenceLine),
+			return perr(positionOr(tmplLine, fenceLine),
 				"section %q does not accept a template:", section)
 		}
 		return nil
 	}
 	if !hasTmpl {
 		if len(d.accepted) > 1 {
-			return parseError(file, fenceLine,
+			return perr(positionOr(fenceLine, headingLine),
 				"section %q: a template: is required when the section accepts more than one template", section)
 		}
 		out.Template = d.accepted[0]
 		return nil
 	}
 
-	line := positionOr(tmplLine, fenceLine)
+	line := positionOr(tmplLine, positionOr(fenceLine, headingLine))
 	if strings.TrimSpace(tmplName) == "" {
-		return parseError(file, line,
+		return perr(line,
 			"section %q: key %q must name a template", section, "template")
 	}
 	if tmplName == NotesSection {
-		return parseError(file, line,
+		return perr(line,
 			"%q is reserved and cannot be used as a section template", NotesSection)
 	}
 	usage, ok := cat.LookupSlideTemplate(tmplName)
 	if !ok {
-		return unknownName(file, line, "template", tmplName, cat.TemplateNames())
+		return unknownName(file, line, path, "template", tmplName, cat.TemplateNames())
 	}
 	if usage != "section" {
-		return parseError(file, line,
+		return perr(line,
 			"template %q is a %s template, not a section template", tmplName, usage)
 	}
 	if !contains(d.accepted, tmplName) {
-		return unknownName(file, line,
+		return unknownName(file, line, path,
 			"template for section "+section, tmplName, d.accepted)
 	}
 	out.Template = tmplName
@@ -488,25 +516,30 @@ func resolveSectionTemplate(file string, cat Catalogue, section string,
 }
 
 // unknownName reports an unknown template or section name, adding a
-// closest-match suggestion from candidates when one exists.
-func unknownName(file string, line int, what, name string, candidates []string) error {
+// closest-match suggestion from candidates when one exists. path is the
+// offender's containment path, or "" at the slide's top level.
+func unknownName(file string, line int, path, what, name string, candidates []string) error {
 	if s := suggest.Closest(name, candidates); s != "" {
-		return parseError(file, line, "unknown %s %q: did you mean %q?", what, name, s)
+		return &ParseError{File: file, Line: line, Path: path,
+			Msg: fmt.Sprintf("unknown %s %q: did you mean %q?", what, name, s)}
 	}
-	return parseError(file, line, "unknown %s %q", what, name)
+	return &ParseError{File: file, Line: line, Path: path,
+		Msg: fmt.Sprintf("unknown %s %q", what, name)}
 }
 
 // templateInBlock finds the `template:` key in a frontmatter block. The block's
 // YAML node lines are absolute (parseBlock pads the source), so they can be
-// reported directly. has is false when the key is absent.
-func templateInBlock(file string, b *catalogueBlock) (name string, line int, has bool, err error) {
+// reported directly. has is false when the key is absent. path is the
+// containment path of the section the block belongs to, or "" for the slide
+// frontmatter.
+func templateInBlock(file string, b *catalogueBlock, path string) (name string, line int, has bool, err error) {
 	if b == nil || b.mapping == nil {
 		return "", 0, false, nil
 	}
 	m := b.mapping
 	if m.Kind != yaml.MappingNode {
-		return "", 0, false, parseError(file, nodeLine(m),
-			"expected a mapping of frontmatter keys, got %s", kindWord(m))
+		return "", 0, false, &ParseError{File: file, Line: nodeLine(m), Path: path,
+			Msg: fmt.Sprintf("expected a mapping of frontmatter keys, got %s", kindWord(m))}
 	}
 	for i := 0; i+1 < len(m.Content); i += 2 {
 		key, val := m.Content[i], m.Content[i+1]
@@ -515,8 +548,8 @@ func templateInBlock(file string, b *catalogueBlock) (name string, line int, has
 		}
 		keyLine := nodeLine(key)
 		if !isString(val) {
-			return "", keyLine, true, parseError(file, keyLine,
-				"key %q: expected a string, got %s", "template", kindWord(val))
+			return "", keyLine, true, &ParseError{File: file, Line: keyLine, Path: path,
+				Msg: fmt.Sprintf("key %q: expected a string, got %s", "template", kindWord(val))}
 		}
 		return val.Value, keyLine, true, nil
 	}
