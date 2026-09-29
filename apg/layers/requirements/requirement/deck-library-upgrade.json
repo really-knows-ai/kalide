@@ -26,6 +26,11 @@
       "kind": "drives",
       "target": "domain.service.upgrade-project",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.cli-init-minimal-seed",
+      "properties": {}
     }
   ],
   "in": [
