@@ -28,11 +28,6 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.entity.format-migration",
-      "properties": {}
-    },
-    {
       "kind": "details",
       "source": "solution.note.upgrade-implementation-pending",
       "properties": {}

@@ -9,11 +9,6 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.entity.format-migration",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
       "target": "domain.value.library-manifest",
       "properties": {}
     },
