@@ -5,5 +5,11 @@
   "body": "The kalide binary's embedded content is exactly the core of the tool: the vendored reveal.js runtime, the deck/error/gallery page shells, the minimal `kalide init` seed tree (written to disk by the no-arg `kalide init` and refreshable in place by `kalide upgrade`, requirements.requirement.upgrade-refresh-owned-scaffold), the static, text-only `AGENTS.md` scaffold guide files (requirements.requirement.agent-authoring) — the shared deck-author guide written by `kalide init` and `kalide init <path>`, and the library/template-author guide written by `kalide init-library` — and the scaffold-version digest catalog (global.constraint.upgrade-known-version-catalog): the identity/version metadata and content digests of the released kalide-owned scaffold files, core upgrade metadata that carries no file contents and no presentation assets. Every template, theme and media file used for validating, rendering, listing or serving a deck is read at run time from the resolved library root — the configured `templates:` path in `kalide.yaml` when set, otherwise the local `templates/` directory (see external-template-library). The binary holds no templates, themes, fonts, logos or other presentation media (images, video, …), and there is no built-in fallback: a resolved library that lacks something is an error. The vendored runtime and page shells are core, not template assets; the scaffold guide files are scaffold content, not template assets, and are never referenced as one. The seed tree and the guide files are written to disk by the scaffolding commands and may be rewritten in place by `kalide upgrade` only when the target file is absent or byte-identical to a catalogued released version (global.constraint.upgrade-never-clobbers); the catalog is core upgrade metadata — digests and version metadata, never historical file contents and never presentation assets. None of the embedded content carries a brand (global.constraint.core-unbranded).",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "global.note.embedded-catalog-law-amendment",
+      "properties": {}
+    }
+  ]
 }

@@ -4,6 +4,12 @@
   "name": "embedded-catalog-law-amendment",
   "body": "Amendment to global.constraint.no-embedded-template-assets and global.constraint.upgrade-known-version-catalog, from spec review upgrade/feedback-1 (target global.constraint.upgrade-known-version-catalog).\n\nSource: the review found the embedding law's \"exactly\" list of embedded content did not name the scaffold-version digest catalog, so the letter of the law was broken by global.constraint.upgrade-known-version-catalog; and the same law's clauses that the init seed tree is \"written to disk once by no-arg init\" and \"only the init seed tree is ever written to disk\" contradicted upgrade refreshing or recreating kalide-owned seed/guide files (global.constraint.upgrade-never-clobbers, requirements.constraint.upgrade-owned-scaffold-scope). The review also noted the catalog constraint asserted embedding-law compliance without saying what the catalog covers or how it is kept honest.\n\nResolution [with user]: global.constraint.no-embedded-template-assets now names the scaffold-version digest catalog (global.constraint.upgrade-known-version-catalog) as a fourth category of embedded content — core upgrade metadata carrying identity/version metadata and content digests only, no file contents and no presentation assets — and now says the seed tree and guide files are written by the scaffolding commands and may be rewritten in place by `kalide upgrade` only for a file that is absent or byte-identical to a catalogued released version (global.constraint.upgrade-never-clobbers); the \"written to disk once\"/\"only the init seed tree is ever written\" wording is gone. global.constraint.upgrade-known-version-catalog now states its coverage (every released version of every kalide-owned scaffold file, from the first tagged release that shipped it up to the running release — every tagged release, not merely since the guides) and its build/test-time drift self-test modeled on requirements.requirement.agent-guide-drift-check (fails when a shipped scaffold file's bytes are not a catalogued digest), and its previous bare assertion that the embedding laws still hold was removed — the amended embedding law now owns that fact. The narrative note solution.note.upgrade-embedded-catalog remains consistent (it already describes the catalog as core upgrade metadata) and is left unchanged.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "global.constraint.no-embedded-template-assets",
+      "properties": {}
+    }
+  ],
   "in": []
 }
