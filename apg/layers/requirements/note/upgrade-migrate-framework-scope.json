@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.constraint.upgrade-migrations-ordered-atomic",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.upgrade-unknown-format-reported",
+      "properties": {}
     }
   ],
   "in": []

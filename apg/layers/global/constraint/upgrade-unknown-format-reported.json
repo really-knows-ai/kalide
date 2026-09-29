@@ -5,5 +5,11 @@
   "body": "A format version upgrade does not recognize is reported, never guessed or silently migrated. A template library whose `library.yaml` `format:` is unknown or newer than the running kalide is left byte-for-byte untouched and the command exits non-zero with an error naming the format found and the format supported. \"Newer\" is defined on the format integer, not on any version string: the running binary's format is the highest `library.yaml` format it implements (today `1`), and a `dev`/unstamped build implements the same format as the source it was built from, so `dev` never means newer. A deck, which carries no version field, is never assumed to be at any version: no deck format migration is registered today (the registered migration set is empty), so the deck migration path is a no-op and nothing is inferred from the deck's content. Upgrade never fabricates a migration and never upgrades a project past the format the running binary implements.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-migrate-framework-scope",
+      "properties": {}
+    }
+  ]
 }
