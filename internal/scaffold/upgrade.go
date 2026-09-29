@@ -55,8 +55,18 @@
 package scaffold
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
 // UpgradeReport is the outcome of an Upgrade run: the detected project form
@@ -156,22 +166,263 @@ func (k projectKind) String() string {
 // library.yaml for a library. The command surface passes the current directory;
 // Upgrade itself takes no path argument and there is no --force.
 //
-// TODO(upgrade/plan.phase-04.task-3): implement the orchestration — run
-// refreshScaffold then migrateLibrary, end-to-end validate the result after
-// both halves (deck through kalide start's loader, library through the template
-// loader), return the UpgradeReport, and, on a validation failure, restore every
-// file the refresh half wrote (including removing a newly written AGENTS.md) so
-// the project is left exactly as it was
-// (global.constraint.upgrade-never-breaks-project,
-// global.constraint.never-serve-broken-deck). The format check must run before
-// refreshing — or the refresh half must be rolled back — so an
-// unsupportedFormatError leaves no refresh write on disk
-// (global.constraint.upgrade-unknown-format-reported). This skeleton only
-// establishes detection.
+// The order is conservative and the run is all-or-nothing with respect to the
+// refresh half:
+//
+//  1. detectProject classifies the project. A directory holding both manifests,
+//     or neither, is the single both/neither error and nothing is written.
+//  2. For a library, the format is checked BEFORE refreshing
+//     (checkSupportedLibraryFormat): an unknown or newer format is refused with
+//     phase 3's unsupportedFormatError, returned unchanged, and NO refresh-half
+//     write is left on disk — the refusal happens before the refresh engine
+//     runs (global.constraint.upgrade-unknown-format-reported). A deck has no
+//     version field, so there is nothing to check.
+//  3. The refresh half's original bytes are recorded (newRefreshUndo) before it
+//     runs, so every file it rewrites or writes — including a newly written
+//     AGENTS.md — can be put back exactly as it was.
+//  4. refreshScaffold then migrateLibrary run, refresh first.
+//  5. The result is validated end-to-end AFTER both halves through the loaders
+//     `kalide start` uses: a library through the template library loader, a deck
+//     through the template library loader, its theme registry and the whole-deck
+//     validator (deck.LoadConfig included). This is distinct from phase 3's
+//     per-migration validation, which the migration half already owns.
+//  6. On any failure after the refresh half began, the refresh half's writes are
+//     undone — original bytes, mode and mtime restored, created files removed —
+//     and the project is left exactly as it was
+//     (global.constraint.upgrade-never-breaks-project,
+//     global.constraint.never-serve-broken-deck). A failure before the refresh
+//     half began (detection, the format refusal) has nothing to undo.
+//
+// It reads and writes only the project's own local files and the content the
+// running binary already carries: no network, no git. End-to-end validation of
+// an external-library deck loads its configured `templates:` library (read-only)
+// exactly as `kalide start` does, but the refresh half never opens it.
 func Upgrade(dir string) (*UpgradeReport, error) {
 	kind, err := detectProject(dir)
 	if err != nil {
 		return nil, err
 	}
-	return newUpgradeReport(kind, nil), nil
+
+	// The format check runs before the refresh half: an unsupported format is
+	// refused with nothing written, so no refresh-half write can be left on
+	// disk, and the refusal is returned unchanged.
+	if kind == projectKindLibrary {
+		if err := checkSupportedLibraryFormat(dir); err != nil {
+			return nil, err
+		}
+	}
+
+	undo, err := newRefreshUndo(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	report, err := refreshScaffold(dir, kind, nil)
+	if err != nil {
+		return nil, undo.revert(report.refreshed, err)
+	}
+	if err := migrateLibrary(dir); err != nil {
+		return nil, undo.revert(report.refreshed, err)
+	}
+	if err := validateUpgradedProject(dir, kind); err != nil {
+		return nil, undo.revert(report.refreshed, err)
+	}
+	return newUpgradeReport(kind, report), nil
+}
+
+// checkSupportedLibraryFormat is the read-only format guard Upgrade runs before
+// refreshing a library. It reads the raw library.yaml `format:` tolerantly
+// (readLibraryFormat) and compares it against the format the running binary
+// implements (implementedFormat), using the same registered migrations the
+// migration half would: a format greater than the implemented format, or one
+// with no registered migration chain up to it, is an unknown format and is
+// refused with phase 3's unsupportedFormatError naming the format found and the
+// format supported (global.constraint.upgrade-unknown-format-reported). It
+// writes nothing — it only reads library.yaml — so a refusal leaves the library
+// byte-for-byte untouched and no refresh write behind.
+func checkSupportedLibraryFormat(dir string) error {
+	current, err := readLibraryFormat(dir)
+	if err != nil {
+		return err
+	}
+	supported := implementedFormat()
+	if current > supported {
+		return &unsupportedFormatError{found: current, supported: supported}
+	}
+	if _, ok := migrationChain(current, supported, registeredMigrations()); !ok {
+		return &unsupportedFormatError{found: current, supported: supported}
+	}
+	return nil
+}
+
+// refreshUndo records, before the refresh half runs, the original state of every
+// file the refresh half may rewrite or write, so a later failure can put the
+// project back exactly as it was. It is the refresh half's undo, complementing
+// the migration half's own tree snapshot and rollback: phase 3 restores its
+// migrations all-or-nothing, and Upgrade restores the refresh writes on top.
+//
+// It records only the kalide-owned member paths the refresh engine can touch
+// (the deck and library owned sets), not the whole tree, so author content
+// outside those paths is never read or rewritten by the undo.
+type refreshUndo struct {
+	// root is the project root the member paths are relative to.
+	root string
+	// originals maps each candidate member path (slash-separated, relative to
+	// root) to its pre-refresh state. A path absent from the map did not exist
+	// and was not written before the refresh; a refreshed path with no entry
+	// and no file on disk is a created file.
+	originals map[string]undoOriginal
+}
+
+// undoOriginal is the recorded pre-refresh state of one member path: whether it
+// existed, and, when it did, its bytes, permission bits and modification time.
+type undoOriginal struct {
+	existed bool
+	data    []byte
+	mode    fs.FileMode
+	modTime time.Time
+}
+
+// newRefreshUndo records the pre-refresh state of every member path the refresh
+// engine may write, for both project forms (a deck owns the seed set plus the
+// deck guide, a library the guide and its seeded theme). Recording the union is
+// cheap and harmless: a candidate the refresh half does not write is simply
+// never asked to be restored (revert walks the refreshed paths). It reads only
+// the local filesystem.
+func newRefreshUndo(root string) (*refreshUndo, error) {
+	undo := &refreshUndo{root: root, originals: make(map[string]undoOriginal)}
+	for _, member := range append(append([]ownedMember{}, deckOwnedMembers...), libraryOwnedMembers...) {
+		if _, seen := undo.originals[member.path]; seen {
+			continue
+		}
+		target := filepath.Join(root, filepath.FromSlash(member.path))
+		info, err := os.Stat(target)
+		if errors.Is(err, fs.ErrNotExist) {
+			undo.originals[member.path] = undoOriginal{}
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("upgrade: inspect %s before refreshing: %w", member.path, err)
+		}
+		data, err := os.ReadFile(target)
+		if err != nil {
+			return nil, fmt.Errorf("upgrade: record %s before refreshing: %w", member.path, err)
+		}
+		undo.originals[member.path] = undoOriginal{
+			existed: true,
+			data:    data,
+			mode:    info.Mode(),
+			modTime: info.ModTime(),
+		}
+	}
+	return undo, nil
+}
+
+// revert restores the original state of every path the refresh half reported as
+// refreshed and returns cause unchanged when the restore succeeded: a file the
+// refresh rewrote is put back byte-for-byte with its permission bits and
+// modification time, and a file the refresh created (a newly written AGENTS.md)
+// is removed. A failure to restore is reported together with cause rather than
+// swallowed, so the caller never believes the project was restored when it was
+// not. It writes only the local filesystem.
+func (u *refreshUndo) revert(refreshed []string, cause error) error {
+	var failures []string
+	for _, path := range refreshed {
+		original, ok := u.originals[path]
+		if !ok {
+			// The refresh wrote a path outside the owned set it may touch.
+			// Nothing was recorded for it; report rather than silently leave
+			// the write behind.
+			failures = append(failures, fmt.Sprintf("%s (not recorded before the refresh)", path))
+			continue
+		}
+		target := filepath.Join(u.root, filepath.FromSlash(path))
+		if !original.existed {
+			if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				failures = append(failures, fmt.Sprintf("remove %s: %v", path, err))
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			failures = append(failures, fmt.Sprintf("create %s: %v", filepath.ToSlash(filepath.Dir(target)), err))
+			continue
+		}
+		if err := os.WriteFile(target, original.data, original.mode.Perm()); err != nil {
+			failures = append(failures, fmt.Sprintf("write %s: %v", path, err))
+			continue
+		}
+		if err := os.Chmod(target, original.mode.Perm()); err != nil {
+			failures = append(failures, fmt.Sprintf("chmod %s: %v", path, err))
+			continue
+		}
+		if err := os.Chtimes(target, original.modTime, original.modTime); err != nil {
+			failures = append(failures, fmt.Sprintf("restore mtime of %s: %v", path, err))
+		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("%w (upgrade could not restore the project exactly: %s)", cause, strings.Join(failures, "; "))
+	}
+	return cause
+}
+
+// validateUpgradedProject is Upgrade's end-to-end validation, run AFTER both
+// halves: it reloads the resulting project through the same loaders `kalide
+// start` uses, so a project that would not serve is never reported as upgraded
+// (global.constraint.never-serve-broken-deck,
+// global.constraint.upgrade-never-breaks-project). It is distinct from phase 3's
+// per-migration validation, which the migration half owns and Upgrade does not
+// repeat.
+//
+// A library is a template root itself, so it is validated through the template
+// library loader (template.LoadDeckLibrary at "."). A deck is validated exactly
+// as `kalide start` validates before serving: its template library resolves and
+// loads, its theme registry builds, and the whole deck validates through
+// validate.Validate (which loads kalide.yaml through deck.LoadConfig). Loading
+// an external-library deck's configured `templates:` library is read-only and
+// mirrors start; the refresh half never opens it.
+func validateUpgradedProject(dir string, kind projectKind) error {
+	switch kind {
+	case projectKindLibrary:
+		if _, err := template.LoadDeckLibrary(dir, "."); err != nil {
+			return fmt.Errorf("upgrade: validation failed: upgraded library %s does not load: %w", dir, err)
+		}
+		return nil
+	case projectKindDeck:
+		if err := validateUpgradedDeck(dir); err != nil {
+			return fmt.Errorf("upgrade: validation failed: upgraded deck %s: %w", dir, err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("upgrade: validation failed: %s: no project form was detected", dir)
+	}
+}
+
+// validateUpgradedDeck reloads a refreshed deck through the same pipeline
+// `kalide start` runs before serving: resolve and load the deck's template
+// library (template.LoadDeckLibrary, honouring a configured `templates:` path),
+// build the theme registry from the resolved library (theme.LoadDir), build the
+// template registry (template.NewRegistryFromLibrary), and validate the whole
+// deck (validate.Validate, including deck.LoadConfig). It reads the local files
+// and, for an external-library deck, the configured library read-only.
+func validateUpgradedDeck(dir string) error {
+	cfg, err := refreshDeckConfig(dir, nil)
+	if err != nil {
+		return err
+	}
+	library, err := template.LoadDeckLibrary(dir, deck.TemplatesPath(cfg))
+	if err != nil {
+		return err
+	}
+	themes, err := theme.LoadDir(os.DirFS(library.RootPath), template.ThemesDir)
+	if err != nil {
+		return err
+	}
+	registry, err := template.NewRegistryFromLibrary(library)
+	if err != nil {
+		return err
+	}
+	if verr, invalid := validate.Validate(os.DirFS(dir), registry, themes); invalid {
+		return fmt.Errorf("deck does not validate: %s", validate.Format(verr))
+	}
+	return nil
 }
