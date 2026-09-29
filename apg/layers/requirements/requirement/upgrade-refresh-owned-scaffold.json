@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "solution.note.upgrade-refresh-drift",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-refresh-absent-rule",
+      "properties": {}
     }
   ]
 }

@@ -4,6 +4,12 @@
   "name": "upgrade-refresh-absent-rule",
   "body": "source: upgrade/feedback-2 — the \"(a) absent\" refresh rule would re-create seed content an author deliberately deleted after `kalide init`, clobbering author intent and (for `slides/1-hello.md`) adding a slide to the rendered deck, contradicting never-clobber and the \"author slides byte-for-byte identical\" AC. It also left undefined how upgrade tells a no-arg seed deck apart from an `init <path>` deck, which carries no marker. Resolution [autonomous]: the absent-write is narrowed to the `AGENTS.md` author guides only; every other refresh member is refreshed only while present and byte-identical to a known released version, so a deleted seed starter file (starter slide, `hello` template, seed default theme) is never re-created, and the requirement's AC now covers a deleted starter slide. The no-arg-seed-deck predicate is written into the requirement body and the scope constraint: a deck is a no-arg seed deck exactly when `kalide.yaml` has no non-empty `templates:` key and a local `templates/` directory exists (template.ResolveLibraryRoot's local branch); a non-empty `templates:` key makes it external even with a leftover local `templates/` (the `existingBlockPaths(dir, true)` exemption in `kalide init <path>`). The seed-owned paths are named in both: `templates/library.yaml`, `templates/slides/hello/*`, `templates/themes/default/theme.css`, `slides/1-hello.md`.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
+      "properties": {}
+    }
+  ],
   "in": []
 }
