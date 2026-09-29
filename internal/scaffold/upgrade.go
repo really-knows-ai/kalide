@@ -9,7 +9,8 @@
 //
 //   - UpgradeReport records the detected project form together with every path
 //     Upgrade refreshed and every path it left alone (skipped), so the author
-//     sees both rather than only the writes.
+//     sees both rather than only the writes, and renders the report the
+//     `kalide upgrade` command prints.
 //   - Upgrade orchestrates the two halves and validates the result.
 //
 // Upgrade composes, and does not duplicate, the machinery the earlier phases
@@ -53,20 +54,30 @@
 // requirements.constraint.upgrade-owned-scaffold-scope).
 package scaffold
 
+import (
+	"fmt"
+	"strings"
+)
+
 // UpgradeReport is the outcome of an Upgrade run: the detected project form
 // (a deck or a template library) together with every project-root path Upgrade
 // refreshed and every path it left alone (skipped). Both lists are reported so
 // an author-edited file that was deliberately not overwritten is visible rather
 // than silent (global.constraint.upgrade-never-clobbers).
 //
-// TODO(upgrade/plan.phase-04.task-2): define the report fully — the detected
-// project kind, the refreshed/skipped path lists and the rendering the CLI
-// prints. This skeleton only establishes the fields the orchestration below
-// populates so the file compiles.
+// The path lists are the refresh half's outcome — refreshReport.refreshed and
+// refreshReport.skipped, copied here in visit order (newUpgradeReport). The
+// migration half is structural and reports no per-path results of its own
+// (migrateLibrary returns only an error), so a run that migrates a library
+// still reports the same refreshed/skipped paths; the detected Kind names the
+// form the run worked on.
+//
+// String renders the report exactly as the `kalide upgrade` command prints it.
 type UpgradeReport struct {
-	// kind is the project form detectProject found (projectKindDeck or
-	// projectKindLibrary).
-	kind projectKind
+	// Kind names the project form detectProject found: "deck" for a
+	// directory holding kalide.yaml, "library" for one holding library.yaml
+	// (projectKind.String).
+	Kind string
 	// Refreshed names every project-root path Upgrade rewrote or wrote, in
 	// visit order.
 	Refreshed []string
@@ -74,6 +85,63 @@ type UpgradeReport struct {
 	// (already current, author content, or a deleted starter never
 	// re-created), in visit order.
 	Skipped []string
+}
+
+// newUpgradeReport assembles the report for a detected project from the refresh
+// half's outcome: the kind detectProject found plus every path refreshScaffold
+// refreshed and every path it left alone (refreshReport). The paths are copied
+// in visit order, so the returned report owns its slices; a nil refresh report
+// (detection only, nothing refreshed yet) yields a report with no paths.
+func newUpgradeReport(kind projectKind, refresh *refreshReport) *UpgradeReport {
+	report := &UpgradeReport{Kind: kind.String()}
+	if refresh != nil {
+		report.Refreshed = append(report.Refreshed, refresh.refreshed...)
+		report.Skipped = append(report.Skipped, refresh.skipped...)
+	}
+	return report
+}
+
+// String renders the report as the `kalide upgrade` command prints it: a header
+// naming the detected project form, then the refreshed paths and the left-alone
+// (skipped) paths, one per line under a labelled heading. Both lists always
+// render — an empty list shows "(none)" — so a file the refresh deliberately
+// left untouched, in particular an author-edited one, is reported rather than
+// silent (global.constraint.upgrade-never-clobbers). The returned text has no
+// trailing newline.
+func (r *UpgradeReport) String() string {
+	lines := []string{fmt.Sprintf("kalide upgrade: %s", r.Kind)}
+	lines = append(lines, "", fmt.Sprintf("refreshed (%d):", len(r.Refreshed)))
+	lines = appendPathLines(lines, r.Refreshed)
+	lines = append(lines, "", fmt.Sprintf("skipped (left alone) (%d):", len(r.Skipped)))
+	lines = appendPathLines(lines, r.Skipped)
+	return strings.Join(lines, "\n")
+}
+
+// appendPathLines appends one two-space-indented line per path, or a "(none)"
+// placeholder when the list is empty, so a heading is never left bare.
+func appendPathLines(lines, paths []string) []string {
+	if len(paths) == 0 {
+		return append(lines, "  (none)")
+	}
+	for _, path := range paths {
+		lines = append(lines, "  "+path)
+	}
+	return lines
+}
+
+// String names the project form detectProject classified: "deck" for a
+// directory holding kalide.yaml, "library" for one holding library.yaml, and
+// "unknown" for the zero value — which detectProject reports as an error rather
+// than as a project. It is how UpgradeReport renders the detected kind.
+func (k projectKind) String() string {
+	switch k {
+	case projectKindDeck:
+		return "deck"
+	case projectKindLibrary:
+		return "library"
+	default:
+		return "unknown"
+	}
 }
 
 // Upgrade brings the project in dir forward to the running binary's scaffold
@@ -105,5 +173,5 @@ func Upgrade(dir string) (*UpgradeReport, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &UpgradeReport{kind: kind}, nil
+	return newUpgradeReport(kind, nil), nil
 }
