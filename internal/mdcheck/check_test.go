@@ -16,6 +16,11 @@ func issue(line, col int, kind Kind, message, guidance string) Issue {
 	return Issue{File: testFile, Line: line, Col: col, Kind: kind, Message: message, Guidance: guidance}
 }
 
+// sectionMarkerGuidance is the guidance Check reports for a heading inside a
+// template that declares child sections: every heading at any depth is a
+// section marker there (markdown-allowed-subset).
+const sectionMarkerGuidance = "headings at any depth are section markers inside a template that declares child sections; move the text into the section's own body or a field"
+
 // TestCheckAllowed is the accept side of the allow-list: every block and inline
 // construct the Markdown subset permits must produce no Issue at all.
 func TestCheckAllowed(t *testing.T) {
@@ -63,10 +68,11 @@ func TestCheckAllowed(t *testing.T) {
 // asserting the exact file, line, column, kind, message and guidance.
 func TestCheckDisallowed(t *testing.T) {
 	tests := []struct {
-		name string
-		mode Mode
-		src  string
-		want []Issue
+		name     string
+		mode     Mode
+		src      string
+		declares bool
+		want     []Issue
 	}{
 		{
 			name: "image",
@@ -238,6 +244,59 @@ func TestCheckDisallowed(t *testing.T) {
 				"heading level 4 is not allowed",
 				"use ## or ###; # is reserved for slide sections and ####+ is not supported")},
 		},
+		{
+			name: "level-5 heading in subheading position",
+			mode: BodyMode,
+			src:  "##### H5\n",
+			want: []Issue{issue(1, 7, KindUnsupportedConstruct,
+				"heading level 5 is not allowed",
+				"use ## or ###; # is reserved for slide sections and ####+ is not supported")},
+		},
+		{
+			name: "level-6 heading in subheading position",
+			mode: BodyMode,
+			src:  "###### H6\n",
+			want: []Issue{issue(1, 8, KindUnsupportedConstruct,
+				"heading level 6 is not allowed",
+				"use ## or ###; # is reserved for slide sections and ####+ is not supported")},
+		},
+
+		// The subheading gate: when the enclosing template declares child
+		// sections, every heading at any depth is a section marker the parser
+		// consumes as a nested section instance, so no heading is accepted as
+		// a Markdown subheading (markdown-allowed-subset).
+		{
+			name:     "level-1 heading when the template declares child sections",
+			mode:     BodyMode,
+			declares: true,
+			src:      "# H1\n",
+			want: []Issue{issue(1, 3, KindUnsupportedConstruct,
+				"heading level 1 is not allowed", sectionMarkerGuidance)},
+		},
+		{
+			name:     "level-2 heading when the template declares child sections",
+			mode:     BodyMode,
+			declares: true,
+			src:      "## H2\n",
+			want: []Issue{issue(1, 4, KindUnsupportedConstruct,
+				"heading level 2 is not allowed", sectionMarkerGuidance)},
+		},
+		{
+			name:     "level-3 heading when the template declares child sections",
+			mode:     BodyMode,
+			declares: true,
+			src:      "### H3\n",
+			want: []Issue{issue(1, 5, KindUnsupportedConstruct,
+				"heading level 3 is not allowed", sectionMarkerGuidance)},
+		},
+		{
+			name:     "level-6 heading when the template declares child sections",
+			mode:     BodyMode,
+			declares: true,
+			src:      "###### H6\n",
+			want: []Issue{issue(1, 8, KindUnsupportedConstruct,
+				"heading level 6 is not allowed", sectionMarkerGuidance)},
+		},
 
 		// Extension-syntax heuristics in body text.
 		{
@@ -350,7 +409,7 @@ func TestCheckDisallowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Check(testFile, []byte(tt.src), Options{Mode: tt.mode})
+			got := Check(testFile, []byte(tt.src), Options{Mode: tt.mode, TemplateDeclaresChildSections: tt.declares})
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("Check(%q, mode %s)\n got: %#v\nwant: %#v", tt.src, tt.mode, got, tt.want)
 			}
