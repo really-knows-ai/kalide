@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "upgrade-migrations-ordered-atomic",
+  "body": "Migrations are defined by kalide, keyed by the format/version anchors (a library's `library.yaml` `format:`; the running binary's version), ordered from the project's current version to the running kalide's version, and each is applied at most once. A migration preserves author values (a library's `name`/`description`, a deck's title/author/date/properties) and changes only the format/structure it governs. A migration's result is validated before it is kept, and a multi-file migration is all-or-nothing on failure. A migration not defined for the project's version is never invented: an unknown or newer format, or a deck version that cannot be established from its content, is reported and the affected files are left unchanged.",
+  "properties": {
+    "attaches-to": "requirements.requirement.upgrade-migrate-format"
+  },
+  "out": [],
+  "in": []
+}
