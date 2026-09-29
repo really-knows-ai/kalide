@@ -337,14 +337,34 @@ suffix are reserved too.
 - A theme is a `theme.css` token stylesheet plus optional files it owns.
   Theme-owned files (fonts, logos) are referenced **only from that theme's
   `theme.css`** via relative `url()` and are served from the theme directory. A
-  `url()` in `theme.css` must stay inside its own theme directory — no absolute
+  theme-owned `url()` must stay inside its own theme directory — no absolute
   paths and no `..`.
+- A theme's `theme.css`, and any CSS it `@import`s from its own theme directory,
+  may additionally reference the resolved library's shared `media/` tree with
+  the reserved `media:` URL prefix, for example
+  `url('media:fonts/Inter-Regular.woff2')`. That lets several themes share one
+  library copy of brand assets (fonts, backgrounds, logos) instead of
+  duplicating them into every `themes/<name>/`. The path after `media:` is
+  relative to the library's `media/` — the same base the layout
+  `{{ media "path" }}` helper uses — must not be absolute and must not contain
+  `..`, and the file must exist; a bad reference is an error naming the theme
+  CSS file and line. The prefix is valid only for a `url()` reference, never for
+  an `@import` target: an `@import` target must stay a relative path inside the
+  theme directory, so a `media:` `@import` is an error.
+- A theme can reach only its own theme directory and the resolved library's
+  `media/` tree through the prefix above — never another theme's directory or
+  anything outside the library.
 
 ## Media
 
 - Shared media of any type lives under the resolved library's `media/` and is
   referenced from layouts with `{{ media "path" }}`.
 - The path is relative to `media/` only: no absolute paths and no `..`.
+- A theme's `theme.css` (and CSS it `@import`s from its own theme directory)
+  reaches the same `media/` tree through the reserved `media:` URL prefix in a
+  `url()` reference, for example `url('media:fonts/Inter-Regular.woff2')` — see
+  **Themes**. The prefix is valid only for a `url()` reference, never for an
+  `@import` target.
 - Theme-owned files are not reachable through `media`; reference them from
   `theme.css`.
 - File types are not restricted; the content type is derived from the file
