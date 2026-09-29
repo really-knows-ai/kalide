@@ -8,15 +8,19 @@ import (
 // This file implements Section, the composition, variant and controlled-effects
 // engine: it resolves a template's declared sections, enforces their min/max
 // repeat limits over the section instances an author declared, walks the
-// section-template composition tree with no depth limit (terminating safely on
-// a reference cycle), and resolves the layout variant each enum field selects.
+// section-template composition tree bounded at six heading levels (terminating
+// safely on a reference cycle and reporting an over-deep chain), and resolves
+// the layout variant each enum field selects.
 //
 // Composition (template-composition): a slide template declares named sections,
 // each accepting one or more section-usage templates with min/max repeat limits;
-// a section template declares sections of its own, so composition nests with no
-// depth limit. Sections never accept slide templates — the registry's build-time
-// checks reject that, as they reject reference cycles; Walk here is what lets
-// those checks terminate on a cyclic resolver instead of looping forever.
+// a section template declares sections of its own, so composition nests. Nesting
+// depth is bounded by the content syntax — heading depth is nesting depth — so no
+// composition chain may exceed the six Markdown heading levels `#`…`######`
+// (requirements.constraint.section-depth-limit). Sections never accept slide
+// templates — the registry's build-time checks reject that, as they reject
+// reference cycles; Walk here is what lets those checks terminate on a cyclic
+// resolver instead of looping forever.
 //
 // Variants (template-variants): layout variants are selected only by enum
 // fields (the field's value changes the layout). Variants reports those
@@ -197,14 +201,18 @@ func (e *SectionDepthError) Error() string {
 
 // Walk returns every distinct section template reachable from tmpl through the
 // composition of its declared sections, in depth-first declaration order. It
-// descends as far as the resolver allows, with no depth limit.
+// descends the composition tree, counting every path — a template reachable at
+// two depths is examined at both, so a shallow reach never masks a deeper
+// chain — and stops at the six-heading-level bound
+// (requirements.constraint.section-depth-limit).
 //
 // A name already on the current descent path is a reference cycle and is
 // reported as *SectionCycleError (never an infinite loop); a name already
-// returned through another branch is skipped, so each template appears once. A
-// name the resolver does not define is an error. Whether a section accepts a
-// slide-usage template is checked by the registry's build-time checks, not
-// here.
+// returned through another branch is included in the result once. A chain
+// deeper than six heading levels is reported as *SectionDepthError with the
+// over-deep chain. A name the resolver does not define is an error. Whether a
+// section accepts a slide-usage template is checked by the registry's
+// build-time checks, not here.
 func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	if tmpl == nil {
 		return nil, nil
@@ -214,7 +222,7 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	}
 
 	var out []*Template
-	visited := make(map[string]bool)
+	emitted := make(map[string]bool)
 	onPath := make(map[string]bool)
 
 	var walk func(t *Template, path []string) error
@@ -226,6 +234,12 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 		path = append(path, t.Name)
 		defer delete(onPath, t.Name)
 
+		if len(path) > sectionDepthLimit {
+			chain := make([]string, len(path))
+			copy(chain, path)
+			return &SectionDepthError{Path: chain, Limit: sectionDepthLimit}
+		}
+
 		for i := range t.Sections {
 			for _, name := range t.Sections[i].Accepted {
 				if onPath[name] {
@@ -233,15 +247,16 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 					copy(cycle, path)
 					return &SectionCycleError{Path: append(cycle, name)}
 				}
-				if visited[name] {
-					continue
-				}
 				nested, ok := s.resolve(name)
 				if !ok || nested == nil {
 					return fmt.Errorf("section template %q is not defined", name)
 				}
-				visited[name] = true
-				out = append(out, nested)
+				if !emitted[name] {
+					emitted[name] = true
+					out = append(out, nested)
+				}
+				// Recurse even into an already-emitted template: a deeper
+				// path through it must still be counted against the bound.
 				if err := walk(nested, path); err != nil {
 					return err
 				}
