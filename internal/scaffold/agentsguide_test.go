@@ -7,8 +7,9 @@ package scaffold
 // The implemented format vocabulary is derived ONLY from the exported canonical
 // accessors — template.ManifestFieldTypes, template.BodyModes,
 // template.ReservedNames, template.ContextKeys, template.ManifestTopLevelKeys,
-// template.LibraryMetaKeys and template.LayoutFuncMap (the v1 `media` helper),
-// plus deck.ConfigKeys — and the two guide byte streams are read through
+// template.LibraryMetaKeys, template.MediaURLPrefix (the reserved `media:`
+// prefix) and template.LayoutFuncMap (the v1 `media` helper), plus
+// deck.ConfigKeys — and the two guide byte streams are read through
 // mustReadSeed and mustReadLibraryGuide. It never restates the vocabulary as a
 // hand-maintained fixture list: a format token added to the implementation is
 // returned by an accessor and immediately has to appear in a guide, so a token
@@ -20,11 +21,12 @@ package scaffold
 //   - union check: every implemented format token appears in at least one guide;
 //   - deck-guide scope: every kalide.yaml key (deck.ConfigKeys), the full CLI
 //     command set, and the shared format vocabulary (the deck guide is the
-//     complete format reference);
+//     complete format reference), including the reserved `media:` prefix;
 //   - library-guide scope: the templates/ library layout, the library.yaml
 //     keys, the template.yaml schema and body modes, the layout language, the
 //     reserved names deck/slide, the `media` helper, the reserved context keys,
-//     every field type and the themes/media rules.
+//     every field type, the themes/media rules and the reserved `media:`
+//     prefix.
 //
 // Negative assertion: the kalide.yaml config keys and the init/version CLI are
 // deliberately OUTSIDE the library-guide scope, so their absence from
@@ -165,6 +167,8 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 			{"A file format is documented elsewhere.", "format"},
 			{"The slide text is ordinary prose.", "text"},
 			{"Templates live under templates/.", "templates"},
+			{"`{{ media \"logo.svg\" }}`", "media:"},
+			{"the media layout helper renders a file", "media:"},
 		}
 		for _, tc := range absent {
 			if agentGuideContainsToken(tc.text, tc.token) {
@@ -182,6 +186,8 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 			{"`.deck.title`", "deck.title"},
 			{"`optional`", "optional"},
 			{"```\nmode: optional\n```", "optional"},
+			{"`media:`", "media:"},
+			{"```\nurl('media:fonts/x.woff2')\n```", "media:"},
 		}
 		for _, tc := range present {
 			if !agentGuideContainsToken(tc.text, tc.token) {
@@ -247,6 +253,7 @@ func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "context key", tokens: template.ContextKeys()},
 		{name: "template.yaml top-level key", tokens: template.ManifestTopLevelKeys()},
 		{name: "library.yaml key", tokens: template.LibraryMetaKeys()},
+		{name: "media URL prefix", tokens: []string{template.MediaURLPrefix()}},
 	}
 }
 
@@ -278,9 +285,9 @@ func agentGuideLayoutHelpers(t *testing.T) []string {
 // owns (agent-guide-drift-check, library-agent-guide): the templates/ library
 // layout, the library.yaml keys, the template.yaml schema and body modes, the
 // layout language, the reserved deck/slide names, the `media` helper, the
-// reserved context keys, every field type and the themes/media rules. It
-// deliberately omits the kalide.yaml config keys and the init/version CLI,
-// which are deck-guide-only.
+// reserved context keys, every field type, the themes/media rules and the
+// reserved `media:` prefix. It deliberately omits the kalide.yaml config keys
+// and the init/version CLI, which are deck-guide-only.
 func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 	t.Helper()
 
@@ -301,7 +308,7 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "layout helper", tokens: agentGuideLayoutHelpers(t)},
 		{name: "context key", tokens: template.ContextKeys()},
 		{name: "field type", tokens: template.ManifestFieldTypes()},
-		{name: "themes/media rule token", tokens: []string{template.ThemeStylesheet, "url()", "media \""}},
+		{name: "themes/media rule token", tokens: []string{template.ThemeStylesheet, template.MediaURLPrefix(), "url()", "media \""}},
 	}
 }
 
