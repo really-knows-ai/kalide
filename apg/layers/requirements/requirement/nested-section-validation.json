@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "nested-section-validation",
+  "body": "Nested-section validation is per parent instance and reports the full containment path. A parent's declared min/max are enforced over the child instances that parent actually contains: a section's repeat count is counted among its parent's children, not over the whole slide. An unknown child section name is an error naming the parent and suggesting the closest declared name. Every error gives the full path — the slide file, the line and the containment chain, e.g. `slides/3-columns.md:42 columns[2].blocks[1]: unknown field \"lable\" (did you mean \"label\"?)`. A container template's `example.md` may contain nested instances and is validated recursively against the same rules (template-build-checks). Validation is fail-fast and the message carries a fix hint, like every other deck/templates error.\n\nAC: a `blocks` child instance count outside its parent's min/max errors with the parent path (e.g. `columns[2].blocks`); an unknown child section name errors with a closest-match suggestion; a field error inside a nested instance reports the full containment path (`slides/3-columns.md:42 columns[2].blocks[1]: ...`); a container template's `example.md` with nested instances validates recursively, and one violating the nested rules fails at load.",
+  "properties": {
+    "feature": "deck-structure"
+  },
+  "out": [],
+  "in": []
+}
