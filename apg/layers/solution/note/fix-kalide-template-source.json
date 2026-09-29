@@ -1,9 +1,0 @@
-{
-  "layer": "solution",
-  "type": "note",
-  "name": "fix-kalide-template-source",
-  "body": "The project validates decks against the project's own reusable `templates/` library — no built-in templates and no embedded branded content.",
-  "properties": {},
-  "out": [],
-  "in": []
-}
