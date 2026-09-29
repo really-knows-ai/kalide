@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "requirements.requirement.deck-library-upgrade",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.upgrade-project",
+      "properties": {}
     }
   ],
   "in": []
