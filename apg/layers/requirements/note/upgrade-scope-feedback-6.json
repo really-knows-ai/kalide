@@ -4,6 +4,12 @@
   "name": "upgrade-scope-feedback-6",
   "body": "source: upgrade/feedback-6 — the feedback-2 fix narrowed the absent-write to the `AGENTS.md` guides in requirements.requirement.upgrade-refresh-owned-scaffold, but the parent requirements.requirement.deck-library-upgrade still said in scope (1) that refresh happens when scaffold files are \"absent or byte-identical\" and in its first AC that upgrade \"rewrites only kalide-owned scaffold files that are absent or byte-identical\". Read literally, a plan-writer could have upgrade re-create a deleted seed starter file (templates/library.yaml, templates/slides/hello/*, templates/themes/default/theme.css, slides/1-hello.md, a library's seeded themes/default/theme.css), contradicting the refresh-member rule. Resolution [autonomous]: reworded scope (1) and the first AC to match requirements.requirement.upgrade-refresh-owned-scaffold exactly — refresh members are rewritten when present and byte-identical to a known released version of that same file; the `AGENTS.md` author guides are also written when absent; deleted seed starter files are never re-created; a present file matching no known released version is left untouched. Added the same guides-only qualifier to global.constraint.upgrade-never-clobbers and global.constraint.no-embedded-template-assets (their \"only when absent or byte-identical\" was an upper bound and compatible, but the qualifier removes any ambiguity about seed files); the review flagged this as optional. Unaffected text preserved throughout.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-library-upgrade",
+      "properties": {}
+    }
+  ],
   "in": []
 }

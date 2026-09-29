@@ -63,6 +63,11 @@
       "kind": "details",
       "source": "requirements.note.upgrade-acs-feedback-4",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-scope-feedback-6",
+      "properties": {}
     }
   ]
 }
