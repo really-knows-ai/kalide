@@ -147,20 +147,32 @@ func (s *Section) CheckRepeats(tmpl *Template, names []string, opts ...Option) [
 
 // SectionCycleError reports that section templates reference one another in a
 // cycle. Path is the composition chain from the root template to the repeated
-// name, ending with that name, for example `content → columns → content`.
+// name, ending with that name, as plain template names, for example
+// `content → columns → content`. Error renders it section-qualified, so the
+// cycle reads `sections/content → sections/columns → sections/content`
+// (requirements.constraint.section-cycle-error-chain).
 //
 // A cyclic resolver can never be walked to completion; Section.Walk reports
 // this instead of looping forever. The registry rejects such a cycle at build
 // time (template-build-checks).
 type SectionCycleError struct {
 	// Path is the chain of template names that closes the cycle, root first
-	// and the repeated name last.
+	// and the repeated name last. Its entries are plain template names; the
+	// `sections/` prefix is added only by Error.
 	Path []string
 }
 
-// Error renders the cycle as a readable chain.
+// Error renders the cycle as a section-qualified chain: each plain template
+// name in Path is written with the `sections/` directory prefix section
+// templates live in, so a path of plain names `a → b → a` reads
+// `sections/a → sections/b → sections/a`
+// (requirements.constraint.section-cycle-error-chain).
 func (e *SectionCycleError) Error() string {
-	return "section template reference cycle: " + strings.Join(e.Path, " → ")
+	parts := make([]string, len(e.Path))
+	for i, name := range e.Path {
+		parts[i] = SectionsDir + "/" + name
+	}
+	return "section template reference cycle: " + strings.Join(parts, " → ")
 }
 
 // sectionDepthLimit is the greatest permitted composition depth, in heading
