@@ -64,6 +64,11 @@
       "kind": "details",
       "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.deck-body-subset",
+      "properties": {}
     }
   ],
   "in": []
