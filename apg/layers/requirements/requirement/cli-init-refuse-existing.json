@@ -23,11 +23,6 @@
       "kind": "details",
       "source": "requirements.note.init-path-refuse-existing",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-init-agents-md-pre-existing",
-      "properties": {}
     }
   ]
 }
