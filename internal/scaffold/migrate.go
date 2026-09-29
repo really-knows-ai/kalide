@@ -50,7 +50,6 @@
 //   - readLibraryFormat reads a library's raw `format:` integer tolerantly.
 //   - implementedFormat reports the highest format the binary implements.
 //   - unsupportedFormatError the unknown/newer refusal.
-//     TODO(upgrade/plan.phase-03.task-6)
 //   - migrateLibrary the orchestrator, delegating to the testable seam
 //     migrateLibraryWith. TODO(upgrade/plan.phase-03.task-7)
 package scaffold
@@ -210,7 +209,9 @@ func implementedFormat() int {
 // the library's files byte-for-byte untouched. It is never guessed or silently
 // migrated (global.constraint.upgrade-unknown-format-reported).
 //
-// TODO(upgrade/plan.phase-03.task-6): define the refusal error and its message.
+// The refusal is a read-only value: it carries no filesystem state and writes
+// nothing, so a caller (phase-4 Upgrade) returns it unchanged as the non-zero
+// refusal and the library's files stay byte-for-byte as they were.
 type unsupportedFormatError struct {
 	// found is the format integer read from the library's library.yaml.
 	found int
@@ -219,11 +220,12 @@ type unsupportedFormatError struct {
 	supported int
 }
 
-// Error renders the refusal, naming the format found and the format supported.
-//
-// TODO(upgrade/plan.phase-03.task-6): render the author-facing message.
+// Error renders the refusal, naming the format found and the format supported
+// (implementedFormat), so the command's non-zero report is self-contained and
+// the author learns both what the library declared and what this binary can
+// carry forward (global.constraint.upgrade-unknown-format-reported).
 func (e *unsupportedFormatError) Error() string {
-	return fmt.Sprintf("scaffold: unsupportedFormatError: not implemented yet (format found %d, format supported %d)", e.found, e.supported)
+	return fmt.Sprintf("scaffold: unsupported library format: found format %d, supported format %d", e.found, e.supported)
 }
 
 // migrateLibrary is the migration-half orchestrator: it applies kalide's
