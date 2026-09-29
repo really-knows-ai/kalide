@@ -5,5 +5,11 @@
   "body": "To decide whether a kalide-owned file is unmodified, upgrade recognizes the released versions of that file: the binary carries a catalog of the known released versions of the kalide-owned scaffold files (identity/version metadata and content digests). A file whose bytes match a catalogued digest is unmodified kalide content and may be refreshed; a file that matches no catalogued digest is author-edited or foreign and is never overwritten. The catalog stores digests and version metadata only — never the historical file contents, and never any template, theme, font, logo or other media — so it is core upgrade metadata, not embedded presentation content: global.constraint.no-embedded-template-assets and global.constraint.go-static-embedded-binary still hold (the binary embeds no historical assets and still ships as one self-contained static binary).",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "solution.note.upgrade-embedded-catalog",
+      "properties": {}
+    }
+  ]
 }
