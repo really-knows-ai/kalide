@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "watch-deck",
-  "body": "Watch deck: watch deck files (slides/, assets/, kalide.yaml) and the RESOLVED library's structure (the configured `templates:` path when set, else the local `templates/` — its library.yaml and its slides/, sections/, themes/, media/ subtrees only; any other top-level entry in the library root is ignored), debounce, publish deck-changed; on change reload templates→validate→render and publish deck-rebuilt. A change to the configured `templates:` value is not a live retarget: the session's library root is pinned at startup, so the change publishes the full-page restart-required error instead of reloading a different library (see template-retarget-requires-restart).",
+  "body": "Watch deck: watch deck files (slides/, assets/, kalide.yaml) and the RESOLVED library's structure (the configured `templates:` path when set, else the local `templates/` — its library.yaml and its slides/, sections/, themes/, media/ subtrees are its structure, and any other top-level entry in the library root is inert; see library-guide-layout), debounce, publish deck-changed; on change reload templates→validate→render and publish deck-rebuilt. A change to the configured `templates:` value keeps the session's startup-pinned library root and publishes the full-page restart-required error (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
   "properties": {},
   "out": [
     {
