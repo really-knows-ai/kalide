@@ -38,6 +38,11 @@
       "kind": "drives",
       "source": "requirements.requirement.nested-section-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.nested-sections-domain",
+      "properties": {}
     }
   ]
 }
