@@ -66,6 +66,12 @@ func libraryMediaFS(lib *template.Library) fs.FS {
 // exactly as assetHandler checks an embedded-asset request (assetName,
 // isRegularFile), so an absolute path or a ".." segment 404s instead of
 // escaping mediaFS's root.
+//
+// A .css file is served through rewriteThemeCSS and explicitly as text/css, so
+// a stylesheet reached from the /media/ route — including one another
+// stylesheet @imports through the reserved media: prefix — has its own
+// media:/theme:<name>/ references rewritten before the bytes reach the client.
+// Every other media file is served raw, exactly as before.
 func mediaFileHandler(mediaFS fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -78,7 +84,30 @@ func mediaFileHandler(mediaFS fs.FS) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		serveFileFS(w, r, mediaFS, name)
+		if !strings.HasSuffix(name, ".css") {
+			serveFileFS(w, r, mediaFS, name)
+			return
+		}
+
+		// A stylesheet served from the media tree may itself carry
+		// reserved-prefix references; rewrite them to the served URLs before
+		// writing the bytes, and set the MIME type explicitly (as the theme
+		// route does) rather than relying on ServeContent sniffing the
+		// rewritten bytes.
+		info, err := fs.Stat(mediaFS, name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		css, err := fs.ReadFile(mediaFS, name)
+		if err != nil {
+			// The file stat'd as a regular file but could not be read; this
+			// is a server-side failure, not a missing resource.
+			http.Error(w, "read media stylesheet", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		http.ServeContent(w, r, path.Base(name), info.ModTime(), bytes.NewReader(rewriteThemeCSS(css)))
 	})
 }
 
@@ -90,11 +119,16 @@ func mediaFileHandler(mediaFS fs.FS) http.Handler {
 // file or a path escaping the theme's root all 404.
 //
 // A .css theme asset is served through rewriteThemeCSS (theme-shared-media):
-// url() references carrying the reserved media: prefix are rewritten to their
-// served templates/media URL before the bytes reach the client. Every other
-// theme file is served raw, exactly as before. This applies to any .css file
-// in the theme tree, including one reached by an @import from theme.css, so
-// the media: rewrite is applied wherever a stylesheet is served.
+// url() references carrying the reserved media: or theme:<name>/ prefix — and
+// any such reference inside the url() or bare quoted-string form of an @import
+// target — are rewritten to the served templates/media or templates/themes/
+// URL before the bytes reach the client. Every other theme file is served raw,
+// exactly as before. This applies to every .css file the theme tree owns,
+// including theme.css itself and any stylesheet reached by an @import from it,
+// and including another theme's stylesheet reached through a reserved
+// theme:<name>/ reference: that stylesheet is then requested at the themes
+// route and served by this same handler, so its own references are rewritten
+// in turn.
 func themeFileHandler(themes *theme.Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -128,11 +162,14 @@ func themeFileHandler(themes *theme.Registry) http.Handler {
 		}
 
 		// A stylesheet may reach the library's shared media tree through the
-		// reserved media: prefix; rewrite those url() references to the
-		// served templates/media URL before writing the bytes. The MIME type
-		// is derived from the .css extension exactly as serveFileFS derives
-		// it (via ServeContent's name), but set explicitly so the rewritten
-		// bytes are served as CSS rather than content-sniffed.
+		// reserved media: prefix, or a sibling theme through the reserved
+		// theme:<name>/ prefix, whether directly in a url() or as an @import
+		// target; rewrite those references (in every .css file this handler
+		// serves) to the served templates/media or templates/themes/ URL
+		// before writing the bytes. The MIME type is derived from the .css
+		// extension exactly as serveFileFS derives it (via ServeContent's
+		// name), but set explicitly so the rewritten bytes are served as CSS
+		// rather than content-sniffed.
 		info, err := fs.Stat(t.Assets, name)
 		if err != nil {
 			http.NotFound(w, r)
