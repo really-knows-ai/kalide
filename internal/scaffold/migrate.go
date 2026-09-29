@@ -46,8 +46,6 @@
 //
 // The rest of phase 3 fills in the pieces declared here:
 //
-//   - formatMigration one ordered, versioned migration step.
-//     TODO(upgrade/plan.phase-03.task-2)
 //   - registeredMigrations kalide's ordered migration set (empty today).
 //     TODO(upgrade/plan.phase-03.task-3)
 //   - readLibraryFormat reads a library's raw `format:` integer tolerantly.
@@ -81,15 +79,15 @@ const firstLibraryFormat = 1
 
 // formatMigration is one ordered, versioned, kalide-defined migration step: its
 // source format integer (the library.yaml `format:` it upgrades FROM) plus the
-// transformation it applies to a library directory. It is the element of the
-// finite registry registeredMigrations returns; adding a migration is a kalide
-// change and is never inferred from a project's content
-// (requirements.constraint.upgrade-migrations-ordered-atomic,
+// transformation it applies to carry the project from that source format to the
+// next. It is the element of the finite registry registeredMigrations returns;
+// adding a migration is a kalide change and is never inferred from a project's
+// content (requirements.constraint.upgrade-migrations-ordered-atomic,
 // domain.value.format-migration).
 //
-// TODO(upgrade/plan.phase-03.task-2): define the source-format field and the
-// transformation it applies. A step preserves the author's values (a library's
-// name/description) and changes only the format/structure it governs.
+// A step preserves the author's values (a library's name/description) and
+// changes only the format/structure it governs; its result is validated before
+// it is kept (requirements.requirement.upgrade-migrate-format).
 type formatMigration struct {
 	// sourceFormat is the library.yaml `format:` this step upgrades FROM. The
 	// registry is consumed from the project's current format to
