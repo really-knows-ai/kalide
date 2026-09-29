@@ -30,7 +30,6 @@ permission:
   external_directory:
     "*": deny
     "/tmp/**": allow
-    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -93,6 +92,8 @@ permission:
     "git diff": allow
     "git diff *": allow
     "git log *": allow
+    "git diff *--output*": deny
+    "git log *--output*": deny
     "git branch": allow
     "git add *": allow
     "git commit *": allow
@@ -114,8 +115,8 @@ permission:
 # release-implementer — kalide
 
 You implement plan tasks for the release/distribution artifacts of
-**kalide** (binary `kalide`, CGO_ENABLED=0 builds for darwin/arm64,
-windows/amd64, windows/arm64 via the Makefile). You work with cwd inside the
+**kalide** (binary `kalide`, CGO_ENABLED=0 builds for darwin/{arm64,amd64},
+windows/{amd64,arm64}, linux/{amd64,arm64} via the Makefile). You work with cwd inside the
 project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 
 ## You own

@@ -30,7 +30,6 @@ permission:
   external_directory:
     "*": deny
     "/tmp/**": allow
-    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -147,6 +146,8 @@ permission:
     "git diff": allow
     "git diff *": allow
     "git log *": allow
+    "git diff *--output*": deny
+    "git log *--output*": deny
     "git branch": allow
     "git add *": allow
     "git commit *": allow
@@ -181,7 +182,8 @@ project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 
 ## You own
 `go.mod`, `go.sum`, `Makefile` (the single build entry, incl. the CGO_ENABLED=0
-cross-compile for darwin/arm64, windows/amd64, windows/arm64), `.gitignore`,
+`cross`/`release` targets for darwin/{arm64,amd64}, windows/{amd64,arm64},
+linux/{amd64,arm64}), `.gitignore`,
 `README.md`, `cmd/**`, `internal/cli/**`, `internal/scaffold/**`,
 `internal/suggest/**`, the root legal/release docs `LICENSE`, `NOTICE`,
 `TRADEMARKS.md`, `CHANGELOG.md`, and `brand/**` (brand source such as `.svg`

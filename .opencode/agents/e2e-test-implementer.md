@@ -30,7 +30,6 @@ permission:
   external_directory:
     "*": deny
     "/tmp/**": allow
-    "~/go/pkg/mod/**": allow
   read:
     "*": allow
     "apg/.trans/**": deny
@@ -84,6 +83,8 @@ permission:
     "git diff": allow
     "git diff *": allow
     "git log *": allow
+    "git diff *--output*": deny
+    "git log *--output*": deny
     "git branch": allow
     "git add *": allow
     "git commit *": allow

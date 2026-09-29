@@ -64,6 +64,8 @@ permission:
     "git diff": allow
     "git diff *": allow
     "git log *": allow
+    "git diff *--output*": deny
+    "git log *--output*": deny
     "git branch --show-current": allow
     "git remote -v": allow
     "git remote show *": allow
