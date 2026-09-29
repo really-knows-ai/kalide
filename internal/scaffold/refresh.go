@@ -230,10 +230,19 @@ func manifestPresent(path string) (bool, error) {
 // the seed-owned set is applied only to the deck that owns it
 // (requirements.constraint.upgrade-owned-scaffold-scope).
 //
-// TODO(upgrade/plan.phase-02.task-3): implement the predicate; refreshScaffold
-// (task-4) applies the seed-owned set only when it reports true.
+// A non-empty `templates:` key is authoritative and decisive: it makes the
+// predicate false without ever consulting the local templates/ directory, so a
+// leftover local tree never turns an external-library deck into a seed deck.
+// The directory check mirrors the loader's own resolution of the absent-key
+// case (template.ResolveLibraryRoot): os.Stat follows symlinks, and only an
+// existing directory counts. A missing local templates/, or one that exists but
+// is not a directory, is not a seed deck.
 func detectSeedDeck(deckRoot string, cfg *deck.Config) bool {
-	return false
+	if deck.TemplatesPath(cfg) != "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(deckRoot, template.TemplatesDir))
+	return err == nil && info.IsDir()
 }
 
 // refreshScaffold is the never-clobber refresh engine. For the detected form it
