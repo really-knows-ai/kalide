@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "domain.value.media-asset",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.media-paths-library-relative",
+      "properties": {}
     }
   ],
   "in": []
