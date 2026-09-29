@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "source-repo",
-  "body": "Source lives in the public GitHub repo `github.com/really-knows-ai/kalide` (https://github.com/really-knows-ai/kalide; git@github.com:really-knows-ai/kalide.git). The Go module path is `github.com/really-knows-ai/kalide`. AC: `go.mod` declares exactly that module path and all internal imports use it.",
+  "body": "Source lives in the public GitHub repo `github.com/really-knows-ai/kalide` (https://github.com/really-knows-ai/kalide; git@github.com:really-knows-ai/kalide.git). The Go module path is `github.com/really-knows-ai/kalide`; the CLI binary is `kalide`, built from `cmd/kalide`, and kalide's environment variables use the `KALIDE_` prefix (e.g. `KALIDE_BINARY`). AC: `go.mod` declares exactly that module path and all internal imports use it.",
   "properties": {
     "feature": "distribution"
   },
