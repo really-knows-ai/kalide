@@ -4,18 +4,18 @@
     "64bit always; the arm64 block is added by release.yml only when kalide-windows-arm64.exe was released; version/url/hash are regenerated from the tag and checksums.txt."
   ],
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "kalide turns a folder of Markdown files into a slide deck and shows it in your browser.",
   "homepage": "https://github.com/really-knows-ai/kalide",
   "license": "Apache-2.0",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.7.1/kalide-windows-amd64.exe#/kalide.exe",
-      "hash": "a824a0295b2461a4c194736b124f66ee4d24228ee8e2233e976bb9a5447b1bae"
+      "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.8.0/kalide-windows-amd64.exe#/kalide.exe",
+      "hash": "6f2da28342bb3d2fa544688aee025bd6d569e940fdc03bb3848f6327e43cb2d1"
     },
     "arm64": {
-      "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.7.1/kalide-windows-arm64.exe#/kalide.exe",
-      "hash": "60a7501b4845857f0e9a27230d83eba776ccc3476c17ea931d90af836c8cba4b"
+      "url": "https://github.com/really-knows-ai/kalide/releases/download/v0.8.0/kalide-windows-arm64.exe#/kalide.exe",
+      "hash": "aac13d1770b553b367b5f04ba444466ce42991ef5fa4c2b3d6565a731238dd01"
     }
   },
   "bin": "kalide.exe",
