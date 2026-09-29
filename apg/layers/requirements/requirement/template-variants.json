@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-variants",
-  "body": "Template variants are expressed as enum field(s) whose value changes the layout (e.g. `layout: image-left | image-right`). No other variant mechanism.",
+  "body": "Template variants are expressed as enum field(s) whose value changes the layout (e.g. `layout: image-left | image-right`); this is the only variant mechanism.",
   "properties": {
     "feature": "templates"
   },
