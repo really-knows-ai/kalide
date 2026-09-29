@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "configured-library-authoritative",
+  "body": "When `kalide.yaml` sets the top-level key `templates:`, that path is the deck's template library and the sole template root for the session: it is resolved as written (relative to the deck root, or absolute), and a configured path that is missing, not a directory, or not a valid library is a templates error naming that path. A local `templates/` is consulted only when the key is absent. kalide never substitutes one library root for another: there is no fallback from a configured path to a local `templates/`, and no silent retarget while serving (template-retarget-requires-restart).",
+  "properties": {
+    "attaches-to": "requirements.requirement.external-template-library"
+  },
+  "out": [],
+  "in": []
+}
