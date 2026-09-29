@@ -56,6 +56,11 @@
       "kind": "details",
       "source": "domain.note.theme-library-reach",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.nested-section-validation",
+      "properties": {}
     }
   ]
 }
