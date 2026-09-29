@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "upgrade-embedded-catalog",
+  "body": "Why a known-version catalog, and why it does not break the embedding laws. The user's safety rule is that only a file 'absent or byte-identical to a known previous version' may be written. Meeting that offline, for projects created by any past release, rules out a project-side lock file: a lock would add project state, and inside a library it would violate global.constraint.template-library-shareable (the library 'holds no machine- or project-specific state'), while for old projects no lock exists anyway. So the binary carries digests/identity of the released scaffold files. It stores no historical contents and no presentation assets, so global.constraint.no-embedded-template-assets and global.constraint.go-static-embedded-binary remain true; the catalog is core upgrade metadata [autonomous]. If a lock/state-file approach is later preferred for new projects, the catalog can be retired for them, but the catalog remains the only way to recognize files written before the feature existed [with user].",
+  "properties": {},
+  "out": [],
+  "in": []
+}
