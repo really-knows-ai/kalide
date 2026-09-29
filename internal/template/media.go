@@ -21,8 +21,9 @@ import (
 // that precedes the path. This is the ONE canonical source of truth for the
 // reserved prefix: the theme-CSS reference scanner, the serve-time CSS
 // rewriter and the agent-guide drift test all read it from here, so the token
-// must never be hardcoded elsewhere. It is valid only for a url() reference
-// in theme CSS, never for an @import target.
+// must never be hardcoded elsewhere. It is valid for BOTH a url() reference
+// and an @import target in theme CSS, resolving to the resolved library's
+// shared media/ tree.
 func MediaURLPrefix() string {
 	return "media:"
 }
