@@ -43,11 +43,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.init-path-refuse-existing",
-      "properties": {}
-    },
-    {
       "kind": "drives",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}
