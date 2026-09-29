@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.upgrade-migrate-format",
+      "properties": {}
     }
   ],
   "in": [
