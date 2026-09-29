@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.constraint.media-paths-library-relative",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.template-library-shareable",
+      "properties": {}
     }
   ],
   "in": []
