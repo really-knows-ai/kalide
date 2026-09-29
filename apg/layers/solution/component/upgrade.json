@@ -5,5 +5,11 @@
   "body": "Upgrade surface: the `kalide upgrade` command and the in-place migration it performs — detect a deck (`kalide.yaml`) or a template library (`library.yaml`), decide per kalide-owned file whether to refresh it (absent, or byte-identical to a known released kalide version), apply the ordered format migrations defined for the project's version, validate the result, and report every refreshed and every left-alone path. Owned by an `internal/cli` handler (a new `upgrade` case in cli.Run, beside init, init-library, start, templates, version and help) plus a new `internal/scaffold` upgrade entry point; it reuses the embedded author guides and init seed content and the template library loader and deck loader for validation, writes nothing unless it is safe, and is local-filesystem only with no `--force`.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }
