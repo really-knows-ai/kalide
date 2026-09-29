@@ -39,11 +39,6 @@
     },
     {
       "kind": "details",
-      "source": "domain.note.fix-deck-rebuilt-tracing",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "solution.note.fix-component-implemented-by",
       "properties": {}
     },
