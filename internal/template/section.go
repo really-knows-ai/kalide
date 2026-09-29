@@ -159,6 +159,28 @@ func (e *SectionCycleError) Error() string {
 	return "section template reference cycle: " + strings.Join(e.Path, " → ")
 }
 
+// sectionDepthLimit is the greatest permitted composition depth, in heading
+// levels: `#` opens a slide, `##` its first section, and so on through the last
+// Markdown heading level `######`. It is the syntax bound, not a setting
+// (requirements.constraint.section-depth-limit).
+const sectionDepthLimit = 6
+
+// SectionDepthError reports that a section-template composition chain is deeper
+// than the six heading levels the content syntax allows
+// (requirements.constraint.section-depth-limit): heading depth is nesting
+// depth, so no composition chain of templates may exceed six levels.
+//
+// Path is the over-deep chain of template names from the root template to the
+// template that crosses the bound. Limit is that bound, in heading levels.
+type SectionDepthError struct {
+	// Path is the composition chain that exceeded the bound, the root
+	// template first and the template that crosses the limit last.
+	Path []string
+
+	// Limit is the maximum permitted composition depth, in heading levels.
+	Limit int
+}
+
 // Walk returns every distinct section template reachable from tmpl through the
 // composition of its declared sections, in depth-first declaration order. It
 // descends as far as the resolver allows, with no depth limit.
