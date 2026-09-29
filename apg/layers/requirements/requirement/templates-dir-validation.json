@@ -50,11 +50,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.fix-validation-agents-md",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.theme-media-references",
       "properties": {}
