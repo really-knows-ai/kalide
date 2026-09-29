@@ -107,7 +107,10 @@ func parseOK(t *testing.T, file string, src []byte, cat Catalogue) *Slide {
 
 // wantParseError fails unless err is a *ParseError at exactly file:line whose
 // message contains every want substring. It also checks the rendered position
-// via ParseError.Error.
+// via ParseError.Error, including the section instance's indexed containment
+// path when one is present: a top-level section `# columns` is `columns[0]`, so
+// the canonical form is `file:line › columns[0]: message`
+// (nested-section-validation).
 func wantParseError(t *testing.T, err error, file string, line int, wants ...string) {
 	t.Helper()
 	if err == nil {
@@ -121,7 +124,12 @@ func wantParseError(t *testing.T, err error, file string, line int, wants ...str
 		t.Fatalf("Parse error = %s:%d: %s; want %s:%d", pe.File, pe.Line, pe.Msg, file, line)
 	}
 	if line > 0 {
-		if want := fmt.Sprintf("%s:%d: ", file, line); !strings.HasPrefix(pe.Error(), want) {
+		want := fmt.Sprintf("%s:%d", file, line)
+		if pe.Path != "" {
+			want += " › " + pe.Path
+		}
+		want += ": "
+		if !strings.HasPrefix(pe.Error(), want) {
 			t.Fatalf("ParseError.Error() = %q, want prefix %q", pe.Error(), want)
 		}
 	}
@@ -129,6 +137,22 @@ func wantParseError(t *testing.T, err error, file string, line int, wants ...str
 		if !strings.Contains(pe.Msg, w) {
 			t.Fatalf("Parse error message = %q, want it to contain %q", pe.Msg, w)
 		}
+	}
+}
+
+// wantParseErrorPath is wantParseError plus an exact containment-path check:
+// path is the rendered ` › `-joined chain (name[index] segments), or "" at the
+// slide's top level. It pins the canonical path form the source change
+// introduces (nested-section-validation).
+func wantParseErrorPath(t *testing.T, err error, file string, line int, path string, wants ...string) {
+	t.Helper()
+	wantParseError(t, err, file, line, wants...)
+	pe, ok := err.(*ParseError)
+	if !ok {
+		t.Fatalf("Parse error type = %T (%v), want *ParseError", err, err)
+	}
+	if pe.Path != path {
+		t.Fatalf("ParseError.Path = %q, want %q (Error() = %q)", pe.Path, path, pe.Error())
 	}
 }
 
@@ -340,7 +364,7 @@ func testParseSections(t *testing.T) {
 			"template: card",
 			"```",
 		), cat)
-		wantParseError(t, err, file, 7, `unknown template for section columns "card"`)
+		wantParseErrorPath(t, err, file, 7, "columns[0]", `unknown template for section columns "card"`)
 	})
 }
 
@@ -429,7 +453,7 @@ func testParseSectionFence(t *testing.T) {
 			"x: 1",
 			"```",
 		), cat)
-		wantParseError(t, err, file, 6,
+		wantParseErrorPath(t, err, file, 6, "gallery[0]",
 			`section "gallery": a template: is required when the section accepts more than one template`)
 	})
 
@@ -441,7 +465,7 @@ func testParseSectionFence(t *testing.T) {
 			"",
 			"# gallery",
 		), cat)
-		wantParseError(t, err, file, 5,
+		wantParseErrorPath(t, err, file, 5, "gallery[0]",
 			`section "gallery": a template: is required when the section accepts more than one template`)
 	})
 
@@ -493,7 +517,7 @@ func testParseSectionFence(t *testing.T) {
 			"width: 2",
 			"```",
 		), cat)
-		wantParseError(t, err, file, 6, `section frontmatter fence must not have a language tag ("yaml")`)
+		wantParseErrorPath(t, err, file, 6, "columns[0]", `section frontmatter fence must not have a language tag ("yaml")`)
 	})
 
 	t.Run("fence not directly after the heading errors at the fence line", func(t *testing.T) {
@@ -508,7 +532,7 @@ func testParseSectionFence(t *testing.T) {
 			"width: 2",
 			"```",
 		), cat)
-		wantParseError(t, err, file, 7, "frontmatter fence is only allowed immediately after a section heading")
+		wantParseErrorPath(t, err, file, 7, "columns[0]", "frontmatter fence is only allowed immediately after a section heading")
 	})
 }
 
@@ -569,7 +593,7 @@ func testParseNotes(t *testing.T) {
 			"template: notes",
 			"```",
 		), cat)
-		wantParseError(t, err, file, 7, `"notes" is reserved and cannot be used as a section template`)
+		wantParseErrorPath(t, err, file, 7, "columns[0]", `"notes" is reserved and cannot be used as a section template`)
 	})
 
 	t.Run("notes do not count toward a max", func(t *testing.T) {
