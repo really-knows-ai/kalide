@@ -25,6 +25,10 @@ Usage:
                              Validate and serve the deck, then open a browser
   kalide templates [name]    List the project's templates/ library, or show
                              one template by name
+  kalide upgrade             Refresh kalide-owned scaffold files and apply
+                             format migrations to the deck or template library
+                             in the current directory; takes no path and no
+                             --force (any argument is a usage error)
   kalide version             Print the build-stamped version (also --version,
                              -v)
   kalide help                Show this help
