@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "markdown-disallowed-errors",
-  "body": "Each of these in a body = error with file/line and guidance: images (use image fields), tables, blockquotes, fenced/indented code (except the section-frontmatter fence), horizontal rules, raw HTML, angle-bracket autolinks, GFM/other extensions (strikethrough, highlight, sup/sub, emoji shortcodes), `####`+ headings, lists nested deeper than one level.",
+  "body": "Each construct outside the allowed body subset (markdown-allowed-subset) is reported as an error with file/line and guidance: the deck body language is exactly the allowed subset, and every excluded construct is refused. The exclusion set is the law requirements.constraint.deck-body-subset.",
   "properties": {
     "feature": "markdown"
   },
