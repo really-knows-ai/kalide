@@ -63,6 +63,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.theme-library-reach-syntax",
+      "properties": {}
     }
   ]
 }
