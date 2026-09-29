@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-29
+
+### Added
+
+- Theme shared media: a theme's `theme.css` — and any CSS it `@import`s from
+  within its own theme directory — may now reference the resolved library's
+  shared `media/` tree with the reserved `media:` URL prefix, for example
+  `url('media:fonts/Inter-Regular.woff2')`. Several themes can share one library
+  copy of brand assets (fonts, backgrounds, logos) instead of duplicating them
+  into each `themes/<name>/`. At serve time kalide rewrites every `media:`
+  reference in the served theme CSS to the served media URL — the same URL a
+  layout `{{ media "path" }}` reference resolves to — and a reference is
+  validated at load time exactly like a layout `media` argument (missing file,
+  absolute path or `..` escape is an error naming the theme CSS file and line).
+  The prefix is valid only for a `url()` reference, never for an `@import`
+  target; a theme can reach only its own theme directory and the library's
+  `media/` tree.
+- Both embedded authoring guides now document the reserved `media:` prefix: the
+  deck-author guide written at a project root and the library/template-author
+  guide written at a library root.
+
 ## [0.7.1] - 2026-09-28
 
 ### Fixed
@@ -104,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/really-knows-ai/kalide/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/really-knows-ai/kalide/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/really-knows-ai/kalide/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/really-knows-ai/kalide/compare/v0.5.0...v0.6.0
