@@ -54,11 +54,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.fix-kalide-template-source",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
     }

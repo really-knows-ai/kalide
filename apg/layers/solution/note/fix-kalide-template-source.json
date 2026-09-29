@@ -4,13 +4,7 @@
   "name": "fix-kalide-template-source",
   "body": "source: system body said decks are validated 'against built-in EY templates'; inconsistency: the project replaces built-ins with a project-local reusable `templates/` library (feedback-1); resolution: body reworded to validate against the project's own `templates/` library, no built-ins, no EY reference [with user]. (Renamed from solution.note.fix-eypres-template-source in the kalide rename; now details solution.system.kalide.)",
   "properties": {},
-  "out": [
-    {
-      "kind": "details",
-      "target": "solution.system.kalide",
-      "properties": {}
-    }
-  ],
+  "out": [],
   "in": [
     {
       "kind": "details",
