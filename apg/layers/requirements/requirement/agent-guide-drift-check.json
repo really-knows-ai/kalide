@@ -61,11 +61,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.fix-agent-guide-drift-per-scope",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.theme-media-references-decisions",
       "properties": {}
     }
