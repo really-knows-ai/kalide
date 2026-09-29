@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "item-context-feedback-1",
+  "body": "source: feedback nested-sections/feedback-1 on requirements.requirement.item-context. Inconsistency: the requirement's only drives edge went to domain.value.item-context; because realised-by applies only from domain group|entity|service (not values), the spine dead-ended and item-context reached no solution component or code. Resolution: added drives requirements.requirement.item-context -> domain.service.render-deck (render-deck is realised-by solution.component.renderer, which is implemented-by internal/render code), keeping the existing drives to domain.value.item-context. The requirement now traces to code through the service [with user].",
+  "properties": {
+    "attaches-to": "requirements.requirement.item-context"
+  },
+  "out": [],
+  "in": []
+}
