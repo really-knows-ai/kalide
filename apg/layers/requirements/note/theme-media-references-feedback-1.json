@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.theme-media-references",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.templates-dir-validation",
+      "properties": {}
     }
   ],
   "in": []
