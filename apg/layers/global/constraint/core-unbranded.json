@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "core-unbranded",
-  "body": "kalide's binary, its embedded seeds and guide files, and its served page shells contain no third-party or organisation brand names, fonts, logos or assets; all branding comes from the project's own template library.",
+  "body": "kalide's binary, its embedded seeds and guide files, and its served page shells carry kalide's own identity: no third-party or organisation brand names, fonts, logos or assets appear in them, and all branding comes from the project's own template library.",
   "properties": {},
   "out": [],
   "in": []
