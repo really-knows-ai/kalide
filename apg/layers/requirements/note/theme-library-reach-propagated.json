@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-media",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
     }
   ],
   "in": []
