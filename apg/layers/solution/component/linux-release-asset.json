@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "linux-release-asset",
-  "body": "Linux release asset: no tap/bucket — the release workflow's published `kalide-linux-<arch>` GitHub Release asset is the entire Linux distribution channel; users download it directly, `chmod +x`, and run it.",
+  "body": "Linux release asset: the release workflow's published `kalide-linux-<arch>` GitHub Release asset is the entire Linux distribution channel (Linux has no tap/bucket); users download it directly, `chmod +x`, and run it.",
   "properties": {},
   "out": [],
   "in": [
