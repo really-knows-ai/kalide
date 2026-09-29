@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "publish-release",
-  "body": "Publish release: on a consented tag (human-created, or agent-created under explicit per-action consent), build one binary per supported target (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64), each gated purely on GitHub-hosted native runner availability, verify each natively with the offline init/start e2e, publish them with checksums to GitHub Releases, and update the package manifests (Linux has no package-manager manifest — see solution.component.linux-release-asset). Any failed supported target blocks publishing.",
+  "body": "Publish release: on a consented tag (human-created, or agent-created under explicit per-action consent), build one binary per supported target (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64), each gated purely on GitHub-hosted native runner availability, verify each natively with the offline init/start e2e, publish them with checksums to GitHub Releases, and update the package manifests (Linux distributes via the direct release asset — see solution.component.linux-release-asset). Any failed supported target blocks publishing.",
   "properties": {},
   "out": [
     {
