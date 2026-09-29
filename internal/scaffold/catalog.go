@@ -236,33 +236,34 @@ func dedupeVersions(labels []string) []string {
 
 // catalogLookup reports whether data is the exact bytes of a catalogued,
 // released version of the kalide-owned scaffold file identified by identity.
+// It is the digest-lookup API the refresh half (phase 2) uses to decide that a
+// file on disk may safely be refreshed: a member is rewritten only when
+// catalogLookup reports true for its own identity, so every other file —
+// author content and any byte sequence kalide never released — is left alone
+// (global.constraint.upgrade-never-clobbers).
 //
 // It hashes data with SHA-256 (lowercase hex — the algorithm the catalogue,
 // the drift self-test and the refresh half all share) and asks whether THAT
-// identity's entry carries the digest. An unknown identity, or bytes matching
-// no catalogued version of the named identity, reports false: the refresh half
-// then leaves the file alone, so author content and every uncatalogued byte
-// sequence are never rewritten (global.constraint.upgrade-never-clobbers).
+// identity's entry carries the digest. The lookup is identity-scoped: the key
+// is the identity together with the digest, never the digest alone, so a file
+// whose bytes match a DIFFERENT owned file's catalogued digest does not match.
+// The embedded seed makes that collision real — the deck's
+// templates/themes/default/theme.css and a library's themes/default/theme.css
+// are byte-identical, and the example template shares its bytes with the
+// generated slides/1-hello.md — so those digests legitimately appear under two
+// identities and each must resolve only through the identity it was catalogued
+// under.
 //
-// The lookup key is the identity, never the digest alone: the seed makes the
-// deck's templates/themes/default/theme.css and a library's
-// themes/default/theme.css byte-identical, so the same digest legitimately
-// appears under two identities and must match only the identity it was
-// catalogued under.
-//
-// TODO(upgrade/plan.phase-01.task-7): task 7 owns the complete lookup API. It
-// may widen or reshape this signature (for example to accept an
-// already-computed digest, or to also return the matching version metadata that
-// task 6 exposes) and is responsible for the identity-scoping tests
-// (upgrade/plan.phase-01.task-11). The minimal body here already enforces the
-// cross-identity rule so this file compiles and cannot silently match a
-// foreign digest.
+// An unknown identity, or bytes matching no catalogued version of the named
+// identity, reports false. The lookup is side-effect free and offline: it
+// reads only the embedded catalogue and computes a hash of the caller's bytes.
 func catalogLookup(identity string, data []byte) bool {
 	entry, ok := knownCatalog.byIdentity[identity]
 	if !ok {
 		return false
 	}
 	sum := sha256.Sum256(data)
-	_, ok = entry.digests[hex.EncodeToString(sum[:])]
-	return ok
+	digest := hex.EncodeToString(sum[:])
+	_, catalogued := entry.digests[digest]
+	return catalogued
 }
