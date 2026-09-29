@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "theme-library-reach",
+  "body": "Solution-tier propagation of the theme library-reach change. solution.component.template-library-loader, solution.component.template-registry, solution.component.theme-registry and solution.component.http-server were updated: load-time step-6 follows cross-tree imports (same theme, another theme, media/) cycle-safe; the theme and media serve routes rewrite both reserved prefixes, and `.css` served from the `media/` route is rewritten too, so an imported media stylesheet's own references are rewritten. solution.note.upgrade-refresh-drift now names the new reach alongside the 0.8.0 `media:` prefix as guide staleness the runtime refresh must fix. Existing realised-by edges (domain.entity.theme→theme-registry; load-template-library→template-library-loader; template-registry→template-registry/cli-commands; template-library→loader/http-server/demo-fixture) are unchanged. New implemented-by anchors added for the functions this change touches — rewriteThemeCSS, themeFileHandler, mediaFileHandler on http-server; checkThemeCSSReferences, themeCSSScanner.checkImport/checkURL, MediaURLPrefix, cleanMediaPath on template-library-loader; no planned Implementation nodes authored (that is the plan-writer's job at plan time). [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
