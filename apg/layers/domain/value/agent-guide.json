@@ -25,11 +25,6 @@
       "kind": "details",
       "source": "requirements.note.agent-authoring-decisions",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.fix-agent-guide-solution",
-      "properties": {}
     }
   ]
 }

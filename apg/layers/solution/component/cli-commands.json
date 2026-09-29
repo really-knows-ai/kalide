@@ -76,11 +76,6 @@
       "kind": "details",
       "source": "requirements.note.init-library-decisions",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.fix-agent-guide-solution",
-      "properties": {}
     }
   ]
 }
