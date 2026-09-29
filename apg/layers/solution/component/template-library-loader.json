@@ -49,11 +49,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.demo-fixture-placement",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "solution.note.reconcile-implemented-by-reusable-templates",
       "properties": {}
     },
