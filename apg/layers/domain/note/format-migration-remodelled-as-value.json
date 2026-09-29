@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "note",
+  "name": "format-migration-remodelled-as-value",
+  "body": "Reconciliation for review upgrade/feedback-5 (domain.entity.format-migration). Source statement: the reviewer challenged the model — a migration is a kalide-defined, ordered, versioned transformation (a rule/definition), not an occurrence, and with the registered migration set empty (feedback-3) there is no occurrence and nothing is recorded, so an `entity` with `kind=event` is over-modelled. Inconsistency: the node was typed `domain.entity.format-migration` (kind=event) while its body and every reference described a kalide-authored definition/rule with no occurrence identity. Resolution [with user]: re-modelled as the tier-2 value `domain.value.format-migration` (a definition, the correct kind for a rule that is not a thing that happens with its own identity) rather than folding it into domain.service.upgrade-project or keeping an event entity with no identified occurrence. Edges moved: the `contains` edge from domain.group.upgrade, and the requirement's `drives` edge from requirements.requirement.upgrade-migrate-format, both now target domain.value.format-migration. The entity's `realised-by` to solution.component.upgrade was dropped rather than moved: a value descriptor realises through its containing domain.group.upgrade (which already realises solution.component.upgrade), and no `Value` in the spec carries its own `realised-by` (cf. domain.value.kalide-owned-scaffold). Text updated: requirements.requirement.upgrade-migrate-format now names domain.value.format-migration; requirements.constraint.upgrade-migrations-ordered-atomic and domain.service.upgrade-project never named the FQN and are unchanged. Reviewer retraction noted: the reviewer's claim that the node carried no body was retracted — domain.entity.format-migration did carry a body, which is preserved in the value.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
