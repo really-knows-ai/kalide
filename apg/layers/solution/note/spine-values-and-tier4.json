@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "note",
   "name": "spine-values-and-tier4",
-  "body": "Spine convention: domain `value` nodes cannot carry `realised-by` edges (the schema allows group/entity/service only); a value is realised through its containing group or entity. Tier-4 `implemented-by` edges target code FQNs that resolve in the scanned graph or are declared planned by the plan-writer.",
+  "body": "Spine convention: `realised-by` edges attach to domain group/entity/service nodes; a `value` realises through its containing group or entity. Tier-4 `implemented-by` edges target code FQNs that resolve in the scanned graph or are declared planned by the plan-writer.",
   "properties": {},
   "out": [
     {
