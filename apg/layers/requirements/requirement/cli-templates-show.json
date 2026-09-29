@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-templates-show",
-  "body": "`kalide templates <name>` shows the template's fields (type, required, default, limits, formats, description), sections (accepted section templates, min/max repeats), body rules, and its example slide. Unknown name = error with closest-match suggestion.",
+  "body": "`kalide templates <name>` shows the template's fields (type, required, default, limits, formats, description), its sections — for a slide template the child sections it declares, and for a section template the child sections it can hold — each with the section templates it accepts and its min/max repeats, its body rules, and its example slide. Unknown name = error with closest-match suggestion. A tree view of a template's nesting (its composed child sections, recursively) is a nice-to-have.",
   "properties": {
     "feature": "cli"
   },
