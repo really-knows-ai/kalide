@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "distribution",
-  "body": "kalide is built, verified, released and installed through a defined distribution pipeline: public GitHub source repo (really-knows-ai/kalide), native-CI verification, public GitHub Releases assets (`kalide-<os>-<arch>`), Homebrew (macOS, both architectures) / Scoop (Windows) as the primary install channels, and a direct anonymous GitHub Release download for Linux (no package-manager channel) and as a fallback elsewhere. No step requires a GitHub account or token (global.constraint.anonymous-install).",
+  "body": "kalide is built, verified, released and installed through a defined distribution pipeline for the six supported targets (supported-platforms): public GitHub source repo (really-knows-ai/kalide), native-CI verification, public GitHub Releases assets (`kalide-<os>-<arch>`) for darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64 and linux/arm64, Homebrew (both macOS architectures) / Scoop (Windows, amd64 and arm64) as the primary install channels, and a direct anonymous GitHub Release download for Linux (both architectures) and as a fallback elsewhere. Every step is anonymous (global.constraint.anonymous-install).",
   "properties": {
     "feature": "distribution"
   },
