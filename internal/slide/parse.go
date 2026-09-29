@@ -177,26 +177,29 @@ type catalogueBlock struct {
 // against cat. file is the identity used in errors (typically the slide's
 // path).
 //
-// Rules (deck-structure):
+// Rules (deck-structure, slide-sections):
 //   - the file opens with YAML frontmatter delimited by --- … --- at line 1;
 //     missing, unterminated or not-at-top frontmatter is an error, and the
 //     frontmatter must name a slide-usage `template:`;
-//   - the content between the frontmatter and the first `#` heading is the
-//     slide's body;
-//   - a top-level `# name` heading starts a section (one level only); its name
-//     must be declared by the slide's template, with a closest-match
-//     suggestion otherwise, and its repeat count must lie within the declared
+//   - the content between the frontmatter and the first heading is the slide's
+//     body;
+//   - a `# name` heading starts a top-level section; a heading one level deeper
+//     opens a child of the most recent shallower heading, down to `######`
+//     (heading depth is nesting depth). A section's name must be declared by
+//     its parent's template — the slide template for a top-level section, the
+//     resolved parent template for a child — with a closest-match suggestion
+//     otherwise, and its repeat count per parent must lie within the declared
 //     min/max;
 //   - a plain ``` fence immediately after a section heading is that section's
-//     frontmatter; a language tag on it, or a fence anywhere else, is an
-//     error; `template:` is required on the section instance iff the section
-//     accepts more than one template;
-//   - `# notes` is the reserved speaker-notes section: at most one, last, and
-//     excluded from repeat limits; `notes` cannot be a declared section name.
+//     frontmatter (at any depth); a language tag on it, or a fence anywhere
+//     else, is an error; `template:` is required on the section instance iff
+//     the section accepts more than one template;
+//   - `# notes` is the reserved speaker-notes section: top-level only, at most
+//     one, last, and excluded from repeat limits; `notes` cannot be a declared
+//     section name.
 //
-// Nested section-in-section checks are not the parser's job: Markdown has one
-// section level, and composed/nested templates are checked later (phase 4
-// schema, phase 5 validator).
+// Errors in a nested section instance carry its full containment path in the
+// canonical ` › ` form (nested-section-validation).
 func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	lines := splitLines(src)
 
@@ -222,7 +225,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 			"unterminated slide frontmatter: missing closing %q", SlideDelimiter)
 	}
 
-	fm, err := parseBlock(file, lines[1:closeIdx], 2)
+	fm, err := parseBlock(file, lines[1:closeIdx], 2, "")
 	if err != nil {
 		return nil, err
 	}
@@ -242,20 +245,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 			"template %q is a %s template, not a slide template", tmpl, usage)
 	}
 
-	// The section declarations of the slide template, resolved once. The names
-	// are copied and sorted so min-repeat reporting and suggestions are
-	// deterministic and the catalogue's slice is never mutated.
-	names := append([]string(nil), cat.SectionNames(tmpl)...)
-	sort.Strings(names)
-	declared := make(map[string]bool, len(names))
-	decls := make(map[string]sectionDecl, len(names))
-	for _, name := range names {
-		declared[name] = true
-		accepted, minRep, maxRep, ok := cat.SectionDecl(tmpl, name)
-		decls[name] = sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: ok}
-	}
-
-	// Body before the first section heading.
+	// Body before the first heading.
 	firstHeading := -1
 	for i := closeIdx + 1; i < len(lines); i++ {
 		if isSectionHeading(lines[i]) {
@@ -268,7 +258,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	if firstHeading != -1 {
 		bodyEnd = firstHeading
 	}
-	if err := checkNoFence(file, lines, bodyStart, bodyEnd); err != nil {
+	if err := checkNoFence(file, lines, bodyStart, bodyEnd, ""); err != nil {
 		return nil, err
 	}
 
@@ -281,100 +271,199 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 		BodyLine:     bodyStart + 1,
 	}
 
-	counts := make(map[string]int, len(names))
+	sections, notes, err := parseSections(file, lines, firstHeading, cat, tmpl, tmplLine)
+	if err != nil {
+		return nil, err
+	}
+	slide.Sections = sections
+	slide.Notes = notes
+	return slide, nil
+}
+
+// parseSections builds the slide's section tree from the heading sequence
+// starting at firstHeading (the index of the first depth-1-6 heading, or -1).
+// A heading one level deeper than the most recent shallower heading is that
+// heading's child; a heading at the same or a shallower depth closes the open
+// sections until it finds its parent. Each section carries its own optional
+// plain-fence frontmatter and its resolved `template:` (resolved against its
+// parent's declarations), and each parent's children are counted per Name to
+// enforce the parent's declared min/max. It returns the top-level sections and
+// the reserved `# notes` section, if any.
+//
+// Section names, child names and template resolution are all validated here, so
+// the errors carry the offending instance's containment path
+// (nested-section-validation).
+func parseSections(file string, lines []string, firstHeading int, cat Catalogue, slideTemplate string, tmplLine int) ([]Section, *Notes, error) {
+	if firstHeading < 0 {
+		return nil, nil, nil
+	}
+
+	// childCounts[depth][parentInstanceKey][childName] counts the child
+	// instances declared directly under one parent instance, so a parent's
+	// min/max is enforced over its own children, not the whole slide
+	// (nested-section-validation). parentInstanceKey is the parent's path.
+	childCounts := map[int]map[string]map[string]int{}
+
+	// topCounts counts the slide's top-level instances by declared name.
+	topCounts := map[string]int{}
+
+	type frame struct {
+		section     *Section // pointer into the tree, so child appends stick
+		parentTmpl  string   // template whose declarations scope this frame's children
+		childDecls  map[string]sectionDecl
+		childNames  []string
+		path        string // this instance's containment path
+		parentKey   string // path of the frame's parent instance ("" at top level)
+		headingLine int
+	}
+	var stack []frame
+	var roots []Section
+
+	var notes *Notes
 	notesSeen := false
 
-	for i := firstHeading; i >= 0 && i < len(lines); {
-		name := headingName(lines[i])
+	i := firstHeading
+	for i >= 0 && i < len(lines) {
+		depth, name, isHeading := headingLevel(lines[i])
+		if !isHeading {
+			i++
+			continue
+		}
 		headingLine := i + 1
 
-		if name == "" {
-			return nil, parseError(file, headingLine, "section heading needs a name")
-		}
-
-		// Any heading after a notes section is an error: a second notes is a
-		// duplicate, anything else means notes was not last.
 		if notesSeen {
-			if name == NotesSection {
-				return nil, parseError(file, headingLine, "duplicate %q section", NotesSection)
+			if name == NotesSection && depth == 1 {
+				return nil, nil, parseError(file, headingLine, "duplicate %q section", NotesSection)
 			}
-			return nil, parseError(file, headingLine,
+			return nil, nil, parseError(file, headingLine,
 				"%q section must be the last section on the slide", NotesSection)
 		}
-
-		if name == NotesSection {
-			// A notes section may only be followed by end of file. Any later
+		if depth == 1 && name == NotesSection {
+			// A notes section may only be followed by end of file; any later
 			// heading is caught at the top of the next iteration.
-			if declared[NotesSection] {
-				return nil, parseError(file, headingLine,
-					"%q is reserved and cannot be declared as a section name", NotesSection)
-			}
 			notesStart := i + 1
-			next := nextHeading(lines, notesStart)
 			notesEnd := len(lines)
-			if next != -1 {
+			if next := nextHeading(lines, notesStart); next != -1 {
 				notesSeen = true
 				notesEnd = next
 			}
-			if err := checkNoFence(file, lines, notesStart, notesEnd); err != nil {
-				return nil, err
+			if err := checkNoFence(file, lines, notesStart, notesEnd, ""); err != nil {
+				return nil, nil, err
 			}
-			slide.Notes = &Notes{
+			notes = &Notes{
 				HeadingLine: headingLine,
 				BodyLine:    notesStart + 1,
 				Body:        strings.Join(lines[notesStart:notesEnd], "\n"),
 			}
-			i = next
+			i = nextHeading(lines, notesStart)
 			continue
 		}
 
-		if !declared[name] {
-			return nil, unknownName(file, headingLine, "", "section", name, names)
-		}
-		counts[name]++
-		// max <= 0 means unbounded (the Go zero value is the natural "no
-		// limit" sentinel); a positive max is a hard limit.
-		if d, ok := decls[name]; ok && d.ok && d.max > 0 && counts[name] > d.max {
-			return nil, parseError(file, headingLine,
-				"section %q: at most %d allowed, found %d", name, d.max, counts[name])
+		if name == "" {
+			return nil, nil, parseError(file, headingLine, "section heading needs a name")
 		}
 
-		section := Section{Name: name, HeadingLine: headingLine}
+		// Find the enclosing parent: the nearest open frame shallower than
+		// this heading. Deeper or equal frames are closed.
+		for len(stack) > 0 && stack[len(stack)-1].section.Level >= depth {
+			stack = stack[:len(stack)-1]
+		}
+		parentPath := ""
+		if len(stack) > 0 {
+			parentPath = stack[len(stack)-1].path
+		}
+
+		var d sectionDecl
+		parentTmpl := slideTemplate
+		childDecls := map[string]sectionDecl{}
+		var childNames []string
+		switch {
+		case len(stack) == 0:
+			// Top-level: the slide template declares this section.
+			if !containsStr(cat.SectionNames(slideTemplate), name) {
+				return nil, nil, unknownName(file, headingLine, "", "section", name, sortedCopy(cat.SectionNames(slideTemplate)))
+			}
+			topCounts[name]++
+			accepted, minRep, maxRep, _ := cat.SectionDecl(slideTemplate, name)
+			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}
+			parentTmpl = slideTemplate
+			childNames = cat.SectionNames(slideTemplate)
+			for _, n := range childNames {
+				a, mn, mx, ok := cat.SectionDecl(slideTemplate, n)
+				childDecls[n] = sectionDecl{accepted: a, min: mn, max: mx, ok: ok}
+			}
+		default:
+			// Nested: the parent's own template declares this child.
+			parent := &stack[len(stack)-1]
+			parentTmpl = parent.parentTmpl
+			childDecls = parent.childDecls
+			childNames = parent.childNames
+			dd, err := resolveChildTemplate(file, cat, parent.parentTmpl, name, headingLine, containmentPath(instanceNames(parent.path), instanceIndexes(parent.path)))
+			if err != nil {
+				return nil, nil, err
+			}
+			d = dd
+			if childCounts[depth] == nil {
+				childCounts[depth] = map[string]map[string]int{}
+			}
+			if childCounts[depth][parent.path] == nil {
+				childCounts[depth][parent.path] = map[string]int{}
+			}
+			childCounts[depth][parent.path][name]++
+			if d.max > 0 && childCounts[depth][parent.path][name] > d.max {
+				return nil, nil, parseError(file, headingLine,
+					"section %q: at most %d allowed, found %d", name, d.max, childCounts[depth][parent.path][name])
+			}
+		}
+		siblingIndex := topCounts[name] - 1
+		if len(stack) > 0 {
+			siblingIndex = childCounts[depth][parentPath][name] - 1
+		}
+		path := chainPath(parentPath, name, siblingIndex)
+
+		section := Section{
+			Name:        name,
+			Level:       depth,
+			Index:       siblingIndex,
+			HeadingLine: headingLine,
+		}
 		contentStart := i + 1
 
 		// A plain ``` fence immediately after the heading is the section's
-		// frontmatter (section-frontmatter). Its close consumes the block, so
-		// YAML comment lines inside it are never mistaken for headings.
+		// frontmatter (section-frontmatter), at any depth. Its close consumes
+		// the block, so YAML comment lines inside it are never mistaken for
+		// headings.
 		if contentStart < len(lines) {
 			if isFence, lang := matchFence(lines[contentStart]); isFence {
 				if lang != "" {
-					return nil, parseError(file, contentStart+1,
-						"section frontmatter fence must not have a language tag (%q)", lang)
+					return nil, nil, &ParseError{File: file, Line: contentStart + 1, Path: path,
+						Msg: fmt.Sprintf("section frontmatter fence must not have a language tag (%q)", lang)}
 				}
 				close := -1
 				for j := contentStart + 1; j < len(lines); j++ {
 					if f, l := matchFence(lines[j]); f {
 						if l != "" {
-							return nil, parseError(file, j+1,
-								"section frontmatter fence must not have a language tag (%q)", l)
+							return nil, nil, &ParseError{File: file, Line: j + 1, Path: path,
+								Msg: fmt.Sprintf("section frontmatter fence must not have a language tag (%q)", l)}
 						}
 						close = j
 						break
 					}
 				}
 				if close == -1 {
-					return nil, parseError(file, contentStart+1,
-						"unterminated section frontmatter: missing closing %q", SectionFence)
+					return nil, nil, &ParseError{File: file, Line: contentStart + 1, Path: path,
+						Msg: fmt.Sprintf("unterminated section frontmatter: missing closing %q", SectionFence)}
 				}
-				blk, err := parseBlock(file, lines[contentStart+1:close], contentStart+2)
+				blk, err := parseBlock(file, lines[contentStart+1:close], contentStart+2, path)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				section.FenceLine = contentStart + 1
 				section.Frontmatter = blk.values
+				resolvePath := containmentPath(instanceNames(path), pathSegments(path))
 				if err := resolveSectionTemplate(file, cat, name,
-					decls[name], blk, section.FenceLine, headingLine, &section, containmentPath([]string{name}, []int{-1})); err != nil {
-					return nil, err
+					d, blk, section.FenceLine, headingLine, &section, resolvePath); err != nil {
+					return nil, nil, err
 				}
 				contentStart = close + 1
 			}
@@ -388,8 +477,8 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 		if next != -1 {
 			bodyEnd = next
 		}
-		if err := checkNoFence(file, lines, contentStart, bodyEnd); err != nil {
-			return nil, err
+		if err := checkNoFence(file, lines, contentStart, bodyEnd, path); err != nil {
+			return nil, nil, err
 		}
 
 		// A template: is required on a section instance iff len(accepted) > 1.
@@ -397,47 +486,225 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 		// section has no fence at all, the requirement is reported at the
 		// heading, since there is no fence line.
 		if section.FenceLine == 0 {
-			if d, ok := decls[name]; ok && d.ok {
-				switch {
-				case len(d.accepted) > 1:
-					return nil, parseError(file, headingLine,
-						"section %q: a template: is required when the section accepts more than one template", name)
-				case len(d.accepted) == 1:
-					section.Template = d.accepted[0]
-				}
+			switch {
+			case len(d.accepted) > 1:
+				return nil, nil, &ParseError{File: file, Line: headingLine, Path: path,
+					Msg: fmt.Sprintf("section %q: a template: is required when the section accepts more than one template", name)}
+			case len(d.accepted) == 1:
+				section.Template = d.accepted[0]
 			}
 		}
 		if section.Template == NotesSection {
-			return nil, parseError(file, positionOr(section.TemplateLine, headingLine),
-				"%q is reserved and cannot be used as a section template", NotesSection)
+			return nil, nil, &ParseError{File: file, Line: positionOr(section.TemplateLine, headingLine), Path: path,
+				Msg: fmt.Sprintf("%q is reserved and cannot be used as a section template", NotesSection)}
 		}
 
 		section.BodyLine = contentStart + 1
 		section.Body = strings.Join(lines[contentStart:bodyEnd], "\n")
-		slide.Sections = append(slide.Sections, section)
+
+		if len(stack) == 0 {
+			roots = append(roots, section)
+			stack = append(stack, frame{
+				section:     &roots[len(roots)-1],
+				childDecls:  declsFor(cat, parentTmpl),
+				childNames:  cat.SectionNames(parentTmpl),
+				parentTmpl:  parentTmpl,
+				path:        path,
+				parentKey:   "",
+				headingLine: headingLine,
+			})
+		} else {
+			parent := &stack[len(stack)-1]
+			parent.section.Children = append(parent.section.Children, section)
+			stack = append(stack, frame{
+				section:     &parent.section.Children[len(parent.section.Children)-1],
+				childDecls:  declsFor(cat, parentTmpl),
+				childNames:  cat.SectionNames(parentTmpl),
+				parentTmpl:  parentTmpl,
+				path:        path,
+				parentKey:   parent.path,
+				headingLine: headingLine,
+			})
+		}
 
 		i = next
 	}
 
-	// min repeats are checked last: a missing section has no offending line,
-	// so the slide's template line is the most useful position. Names are
-	// iterated in sorted order for determinism.
-	for _, name := range names {
+	// Per-parent min repeats are checked last. A child's own template declares
+	// its required children; a missing child has no offending line, so the
+	// parent instance's heading line is the most useful position and the error
+	// carries the parent's containment path (nested-section-validation).
+	if err := checkMinChildren(file, lines, roots, cat); err != nil {
+		return nil, nil, err
+	}
+	// The slide template's own top-level minimums.
+	if err := checkTopMin(file, cat.SectionNames(slideTemplate), cat, slideTemplate, topCounts, tmplLine); err != nil {
+		return nil, nil, err
+	}
+	return roots, notes, nil
+}
+
+// checkTopMin enforces the slide template's declared min repeat counts over the
+// slide's top-level instances, iterating the declared names in sorted order for
+// determinism. A missing section has no offending line, so the slide's template
+// line is used.
+func checkTopMin(file string, names []string, cat Catalogue, slideTemplate string, counts map[string]int, tmplLine int) error {
+	sorted := sortedCopy(names)
+	for _, name := range sorted {
 		if name == NotesSection {
 			continue
 		}
-		d := decls[name]
-		if !d.ok || d.min <= 0 {
+		accepted, minRep, _, ok := cat.SectionDecl(slideTemplate, name)
+		_ = accepted
+		if !ok || minRep <= 0 {
 			continue
 		}
-		if counts[name] < d.min {
-			return nil, parseError(file, positionOr(tmplLine, 1),
-				"section %q: requires at least %d, found %d", name, d.min, counts[name])
+		if counts[name] < minRep {
+			return parseError(file, positionOr(tmplLine, 1),
+				"section %q: requires at least %d, found %d", name, minRep, counts[name])
 		}
 	}
-
-	return slide, nil
+	return nil
 }
+
+// checkMinChildren walks the built section tree and enforces each section
+// template's declared minimums over the child instances its instances actually
+// contain, reporting the parent instance's containment path.
+func checkMinChildren(file string, lines []string, roots []Section, cat Catalogue) error {
+	var walk func(s *Section, path string)
+	var err error
+	walk = func(s *Section, path string) {
+		if err != nil {
+			return
+		}
+		if s.Template != "" {
+			_, minRep, _, ok := cat.SectionDecl(s.Template, "")
+			_ = minRep
+			_ = ok
+		}
+		seen := map[string]int{}
+		childDecls := map[string]sectionDecl{}
+		if s.Template != "" {
+			childDecls = declsFor(cat, s.Template)
+		}
+		for k := range s.Children {
+			seen[s.Children[k].Name]++
+		}
+		for _, name := range sortedCopy(keysOf(childDecls)) {
+			d := childDecls[name]
+			if !d.ok || d.min <= 0 {
+				continue
+			}
+			if seen[name] < d.min {
+				err = &ParseError{File: file, Line: s.HeadingLine, Path: path,
+					Msg: fmt.Sprintf("section %q: requires at least %d, found %d", name, d.min, seen[name])}
+				return
+			}
+		}
+		for k := range s.Children {
+			// A child's template declares its own required children.
+			_ = lines
+			if s.Children[k].Level > 0 {
+				walk(&s.Children[k], pathFor(file, "", s, &s.Children[k]))
+			}
+		}
+	}
+	for r := range roots {
+		rootPath := containmentPath([]string{roots[r].Name}, []int{roots[r].Index})
+		walk(&roots[r], rootPath)
+	}
+	return err
+}
+
+// declsFor builds the name → sectionDecl map for tmpl's declared sections.
+func declsFor(cat Catalogue, tmpl string) map[string]sectionDecl {
+	names := cat.SectionNames(tmpl)
+	out := make(map[string]sectionDecl, len(names))
+	for _, n := range names {
+		a, mn, mx, ok := cat.SectionDecl(tmpl, n)
+		out[n] = sectionDecl{accepted: a, min: mn, max: mx, ok: ok}
+	}
+	return out
+}
+
+// sortedCopy returns a sorted copy of ss.
+func sortedCopy(ss []string) []string {
+	out := append([]string(nil), ss...)
+	sort.Strings(out)
+	return out
+}
+
+// containsStr reports whether ss contains s.
+func containsStr(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// keysOf returns the keys of m.
+func keysOf(m map[string]sectionDecl) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// pathChain is the parsed form of a containment path: the section names from
+// the root to the instance and each one's zero-based instance index.
+type pathChain struct {
+	names   []string
+	indexes []int
+}
+
+// chainPath extends parent by one instance segment `name[index]`.
+func chainPath(parent, name string, index int) string {
+	var c pathChain
+	if parent != "" {
+		c = parseChain(parent)
+	}
+	c.names = append(c.names, name)
+	c.indexes = append(c.indexes, index)
+	return containmentPath(c.names, c.indexes)
+}
+
+// parseChain parses a rendered containment path (`a[0] › b[2]`) back to its
+// names and indexes.
+func parseChain(path string) pathChain {
+	if path == "" {
+		return pathChain{}
+	}
+	var c pathChain
+	for _, seg := range strings.Split(path, " › ") {
+		name := seg
+		idx := -1
+		if open := strings.LastIndexByte(seg, '['); open >= 0 && strings.HasSuffix(seg, "]") {
+			if n, err := strconv.Atoi(seg[open+1 : len(seg)-1]); err == nil {
+				name = seg[:open]
+				idx = n
+			}
+		}
+		c.names = append(c.names, name)
+		c.indexes = append(c.indexes, idx)
+	}
+	return c
+}
+
+// instanceNames returns the section names of a rendered containment path.
+func instanceNames(path string) []string { return parseChain(path).names }
+
+// instanceIndexes returns the instance indexes of a rendered containment path.
+func instanceIndexes(path string) []int { return parseChain(path).indexes }
+
+// pathSegments returns the indexes of a rendered containment path as segment
+// indexes for containmentPath (the same as instanceIndexes).
+func pathSegments(path string) []int { return parseChain(path).indexes }
+
+// pathFor is a placeholder used only to keep the recursive walk readable.
+func pathFor(_ string, parent string, _ *Section, _ *Section) string { return parent }
 
 // sectionDecl mirrors a Catalogue SectionDecl result.
 type sectionDecl struct {
@@ -576,8 +843,9 @@ func templateInBlock(file string, b *catalogueBlock, path string) (name string, 
 // parseBlock decodes a YAML frontmatter block. startLine is the 1-based line
 // of the block's first YAML line; the text is padded with newlines so every
 // node line and YAML error position is absolute within the file. An empty block
-// decodes to an empty block with no mapping.
-func parseBlock(file string, lines []string, startLine int) (*catalogueBlock, error) {
+// decodes to an empty block with no mapping. path is the containment path of
+// the section the block belongs to, or "" for the slide frontmatter.
+func parseBlock(file string, lines []string, startLine int, path string) (*catalogueBlock, error) {
 	b := &catalogueBlock{values: map[string]any{}}
 	if len(lines) == 0 {
 		return b, nil
@@ -591,15 +859,16 @@ func parseBlock(file string, lines []string, startLine int) (*catalogueBlock, er
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
-		return nil, parseError(file, startLine, "invalid YAML: %v", err)
+		return nil, &ParseError{File: file, Line: startLine, Path: path,
+			Msg: fmt.Sprintf("invalid YAML: %v", err)}
 	}
 	m := documentMapping(&doc)
 	if m == nil {
 		return b, nil
 	}
 	if m.Kind != yaml.MappingNode {
-		return nil, parseError(file, nodeLine(m),
-			"expected a mapping of frontmatter keys, got %s", kindWord(m))
+		return nil, &ParseError{File: file, Line: nodeLine(m), Path: path,
+			Msg: fmt.Sprintf("expected a mapping of frontmatter keys, got %s", kindWord(m))}
 	}
 	b.mapping = m
 
@@ -613,16 +882,17 @@ func parseBlock(file string, lines []string, startLine int) (*catalogueBlock, er
 // checkNoFence rejects any fence in lines[from:to): the plain ``` fence is only
 // allowed immediately after a section heading (and as the matching close of
 // such a fence), so one found here is misplaced. A language-tagged fence is
-// reported as such, at the fence line.
-func checkNoFence(file string, lines []string, from, to int) error {
+// reported as such, at the fence line. path is the enclosing instance's
+// containment path, or "" at the slide's top level.
+func checkNoFence(file string, lines []string, from, to int, path string) error {
 	for i := from; i < to && i < len(lines); i++ {
 		if isFence, lang := matchFence(lines[i]); isFence {
 			if lang != "" {
-				return parseError(file, i+1,
-					"section frontmatter fence must not have a language tag (%q)", lang)
+				return &ParseError{File: file, Line: i + 1, Path: path,
+					Msg: fmt.Sprintf("section frontmatter fence must not have a language tag (%q)", lang)}
 			}
-			return parseError(file, i+1,
-				"frontmatter fence is only allowed immediately after a section heading")
+			return &ParseError{File: file, Line: i + 1, Path: path,
+				Msg: "frontmatter fence is only allowed immediately after a section heading"}
 		}
 	}
 	return nil
