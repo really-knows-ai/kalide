@@ -559,17 +559,43 @@ func insideSpans(spans [][2]int, offset int) bool {
 	return false
 }
 
-// themeCSSScanner walks a theme's stylesheets exactly once each: theme.css
-// plus every CSS file it @imports from the theme's own directory. visiting
-// holds the files on the current recursion stack (so an import cycle is
-// detected), and scanned holds files already fully validated (so a diamond
-// import is validated once, not re-followed).
+// themeCSSScanner walks a library's stylesheets exactly once each: every
+// theme's theme.css plus every CSS file they @import, wherever in the resolved
+// library that CSS lives — the same theme, another theme reached through the
+// reserved theme:<name>/ prefix, or the shared media/ tree reached through the
+// reserved media: prefix. visiting holds the stylesheets on the current
+// recursion stack (so an import cycle is detected), and scanned holds
+// stylesheets already fully validated (so a diamond import is validated once,
+// not re-followed).
 type themeCSSScanner struct {
-	root     string
-	th       *LibraryTheme
-	mediaFS  fs.FS
+	root string
+
+	// th is the theme the scan was entered from, and the theme whose files
+	// scanFile/checkImport/checkURL currently resolve against. It remains
+	// until those methods follow references across trees via themes.
+	th *LibraryTheme
+
+	// themes is the whole loaded library's themes keyed by name
+	// (Library.Themes), so the scanner can resolve any theme:<name>/
+	// reference across the import graph.
+	themes map[string]*LibraryTheme
+
+	// mediaFS is the library's media/ sub-filesystem (Library.Media). It
+	// backs every media: reference, and later a media: @import followed
+	// into the shared media tree.
+	mediaFS fs.FS
+
+	// visiting and scanned are the graph-wide recursion bookkeeping, keyed
+	// so the same stylesheet is never followed twice across trees.
 	visiting map[string]bool
 	scanned  map[string]bool
+
+	// tree is the owning tree of the stylesheet currently being scanned: a
+	// theme's directory (LibraryTheme.Dir, e.g. "themes/default"), or
+	// MediaDir ("media") when the stylesheet was reached through the
+	// reserved media: prefix. scanFile sets it so a stylesheet's unprefixed
+	// relative references are confined to the tree that owns it.
+	tree string
 }
 
 // checkThemeCSSReferences validates a theme's CSS references (templates-dir-
