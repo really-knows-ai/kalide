@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "upgrade-offline",
+  "body": "Upgrade is local-filesystem only: it never reaches the network, never runs git, and never clones, fetches or downloads anything. It works from the project's files on disk and the content the running binary already carries, on all six supported targets — consistent with global.constraint.go-static-embedded-binary and global.constraint.anonymous-install.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
