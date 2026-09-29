@@ -18,11 +18,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-reveal-pin",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.service.serve-deck",
       "properties": {}

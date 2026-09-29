@@ -20,11 +20,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-reveal-pin",
-      "properties": {}
-    },
-    {
       "kind": "contains",
       "source": "requirements.stakeholder.brand-owner",
       "properties": {}
