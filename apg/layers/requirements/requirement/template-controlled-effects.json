@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-controlled-effects",
-  "body": "Fragments, transitions and backgrounds are set only by template layouts; deck authors cannot set them (any attempt, e.g. a `transition:` key, is an unknown-field error).",
+  "body": "Fragments, transitions and backgrounds are set only by template layouts; a deck author supplies none of them. A deck-author attempt to set one (e.g. a `transition:` key) is an unknown-field error (global.constraint.no-per-slide-styling).",
   "properties": {
     "feature": "templates"
   },
