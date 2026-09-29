@@ -46,11 +46,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.fix-port-fallback-bound",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.fix-native-e2e-definition",
       "properties": {}
     },
