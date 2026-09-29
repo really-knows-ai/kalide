@@ -50,11 +50,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.fix-graceful-shutdown",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}

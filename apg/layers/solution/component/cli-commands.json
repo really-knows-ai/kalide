@@ -48,11 +48,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.fix-graceful-shutdown",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.entity.release",
       "properties": {}
