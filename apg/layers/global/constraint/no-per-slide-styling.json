@@ -2,7 +2,7 @@
   "layer": "global",
   "type": "constraint",
   "name": "no-per-slide-styling",
-  "body": "Strictly templates: deck authors must have no way to style individual slides (no CSS, classes, HTML, colours, fonts, transitions, fragments, backgrounds); all visual decisions come from templates and the deck-wide theme.",
+  "body": "Strictly templates: deck authors must have no way to style individual slides (no CSS, classes, HTML, colours, fonts, transitions, fragments, backgrounds); all visual choices come from templates and the deck-wide theme.",
   "properties": {},
   "out": [],
   "in": []
