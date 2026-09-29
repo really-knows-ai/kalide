@@ -33,6 +33,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.upgrade-migrate-format",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.nested-sections-requirements",
+      "properties": {}
     }
   ]
 }
