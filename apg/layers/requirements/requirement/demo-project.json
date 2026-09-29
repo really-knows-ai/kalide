@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "demo-project",
-  "body": "Demo project: the repo contains a small, non-EY-branded demo kalide project at `examples/demo/` (kalide.yaml, slides/, assets/, templates/) with a few slide templates (e.g. title, content, columns), a few section templates (e.g. column, person), one theme and at least one media file under templates/media/. It is the fixture for integration/e2e tests of template loading, validation, rendering and media serving, and is distinct from the minimal `hello` init seed (which stays minimal). It is not embedded in the binary. AC: `kalide start` in `examples/demo/` validates templates and deck cleanly; integration tests run against it; grep of `examples/demo/` finds no EY brand name, font or logo.",
+  "body": "Demo project: the repo contains a small demo kalide project at `examples/demo/` (kalide.yaml, slides/, assets/, templates/) with a few slide templates (e.g. title, content, columns), a few section templates (e.g. column, person), one theme and at least one media file under templates/media/. It is the fixture for integration/e2e tests of template loading, validation, rendering and media serving, and is distinct from the minimal `hello` init seed (which stays minimal). It is not embedded in the binary. AC: `kalide start` in `examples/demo/` validates templates and deck cleanly; integration tests run against it; grep of `examples/demo/` finds no brand name, font or logo.",
   "properties": {
     "feature": "project-templates"
   },
