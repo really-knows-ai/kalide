@@ -164,8 +164,13 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 	// library's media/ tree (validated like a layout `media` argument). A
 	// layout's literal src/href references stay inside templates/, and
 	// every `media` call argument is valid and exists.
-	for _, name := range themeNames {
-		if err := checkThemeCSSReferences(displayRoot, lib.Themes[name], lib.Media); err != nil {
+	orderedThemeNames := make([]string, 0, len(lib.Themes))
+	for name := range lib.Themes {
+		orderedThemeNames = append(orderedThemeNames, name)
+	}
+	sort.Strings(orderedThemeNames)
+	for _, name := range orderedThemeNames {
+		if err := checkThemeCSSReferences(displayRoot, lib.Themes[name], lib); err != nil {
 			return nil, err
 		}
 	}
@@ -608,27 +613,35 @@ type themeCSSScanner struct {
 // the quoted-string and url() forms, bounded and cycle-safe. Every error is a
 // *LibraryError qualified with the offending CSS file and its 1-based line.
 //
-// root is the templates/ root the display paths are built under. th.Dir is
-// the theme's directory within that root; th.StylesheetBytes is theme.css and
-// th.Files holds every other file the theme directory owns. mediaFS is the
-// theme library's resolved media/ sub-filesystem (Library.Media); a nil
-// mediaFS makes every media: reference fail, since there is nowhere to
-// resolve it.
-func checkThemeCSSReferences(root string, th *LibraryTheme, mediaFS fs.FS) error {
+// root is the templates/ root the display paths are built under. th is the
+// theme whose stylesheet seeds the scan: th.Dir is the theme's directory
+// within that root and th.Files holds every other file the theme directory
+// owns. lib is the whole loaded library, so the scanner can resolve any
+// theme:<name>/ reference across the import graph (lib.Themes) and reach the
+// shared media/ tree behind every media: reference (lib.Media; a nil
+// lib.Media makes every media: reference fail, since there is nowhere to
+// resolve it). The entry stylesheet is registered in the graph-wide visiting/
+// scanned sets under its full key, th.Dir/theme.css, not the bare theme.css: a
+// stylesheet is identified by its owning tree joined with its relative path,
+// so two themes' theme.css files are not confused with each other.
+func checkThemeCSSReferences(root string, th *LibraryTheme, lib *Library) error {
 	if th == nil {
 		return nil
 	}
+	themeKey := path.Join(th.Dir, ThemeStylesheet)
 	s := &themeCSSScanner{
 		root:     root,
 		th:       th,
-		mediaFS:  mediaFS,
-		visiting: map[string]bool{ThemeStylesheet: true},
+		themes:   lib.Themes,
+		mediaFS:  lib.Media,
+		visiting: map[string]bool{themeKey: true},
 		scanned:  map[string]bool{},
+		tree:     th.Dir,
 	}
 	if err := s.scanFile(th.StylesheetBytes, th.StylesheetPath, ThemeStylesheet); err != nil {
 		return err
 	}
-	s.scanned[ThemeStylesheet] = true
+	s.scanned[themeKey] = true
 	return nil
 }
 
