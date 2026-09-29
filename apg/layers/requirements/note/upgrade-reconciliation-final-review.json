@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "requirements.requirement.upgrade-migrate-format",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "global.constraint.upgrade-unknown-format-reported",
+      "properties": {}
     }
   ],
   "in": []
