@@ -35,11 +35,6 @@
   ],
   "in": [
     {
-      "kind": "contains",
-      "source": "requirements.stakeholder.ey-employees",
-      "properties": {}
-    },
-    {
       "kind": "details",
       "source": "requirements.note.fix-single-binary-targets",
       "properties": {}

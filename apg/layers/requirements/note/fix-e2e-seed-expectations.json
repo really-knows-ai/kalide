@@ -14,11 +14,6 @@
       "kind": "details",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "target": "requirements.stakeholder.ey-employees",
-      "properties": {}
     }
   ],
   "in": []
