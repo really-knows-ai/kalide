@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "requirements.requirement.cli-templates-show",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.nested-section-validation",
+      "properties": {}
     }
   ],
   "in": []
