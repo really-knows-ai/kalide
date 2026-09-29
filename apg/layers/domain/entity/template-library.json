@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "template-library",
-  "body": "Template library: the deck's template library directory — the path configured by `templates:` in `kalide.yaml`, else a local `templates/` (see external-template-library) — as one self-contained, relocatable unit, identified by its library manifest; contains templates, themes and media. Exactly one per deck; if neither root resolves it is an error. The layout is unchanged wherever the root is. The resolved root is pinned for the life of a `kalide start` session (captured at startup): retargeting the configured `templates:` value mid-session is refused with the full-page restart-required error, never live-applied (see template-retarget-requires-restart).",
+  "body": "Template library: the deck's template library directory — the path configured by `templates:` in `kalide.yaml`, else a local `templates/` (see external-template-library) — as one self-contained, relocatable unit, identified by its library manifest; contains templates, themes and media. Exactly one per deck; if neither root resolves it is an error. The layout is unchanged wherever the root is. The resolved root is pinned for the life of a `kalide start` session (captured at startup): a mid-session change to the configured `templates:` value keeps the pinned root and surfaces the full-page restart-required error (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
   "properties": {
     "kind": "entity"
   },
