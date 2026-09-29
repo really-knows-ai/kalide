@@ -161,7 +161,11 @@ func LoadTemplate(content fs.FS, t *Template) error {
 //  1. each template's local definition (name, usage, reserved names);
 //  2. no section accepts a slide-usage template;
 //  3. no field (or list item) uses a required-body template as its type;
-//  4. the composition tree has no reference cycle and no undefined names;
+//  4. the composition tree has no reference cycle, no undefined names, and
+//     no chain deeper than the six heading levels (the depth bound is
+//     requirements.constraint.section-depth-limit); a walk failure names the
+//     template it was walking so the templates loader path-qualifies it to
+//     that template.yaml;
 //  5. each example's STRUCTURED data satisfies its schema and the section
 //     repeat limits (no Markdown or slide parsing).
 func (r *Registry) Validate() error {
@@ -180,7 +184,13 @@ func (r *Registry) Validate() error {
 	}
 	for _, t := range r.Templates() {
 		if _, err := NewSection(r.Lookup).Walk(t); err != nil {
-			return err
+			// Name the template the composition walk started from so the
+			// templates loader (checkLibraryBuild, step 4) can path-qualify
+			// the failure to that template's template.yaml:
+			// manifestTemplateErrorName reads the `template "name": …`
+			// prefix. The wrapped error still satisfies errors.As for
+			// *SectionCycleError and *SectionDepthError.
+			return fmt.Errorf("template %q: %w", t.Name, err)
 		}
 	}
 	for _, t := range r.Templates() {
