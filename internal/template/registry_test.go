@@ -202,6 +202,21 @@ func buildAndValidate(ts ...*Template) error {
 	return r.Validate()
 }
 
+// chainSections returns a composition chain of section templates named names,
+// each declaring one "slot" section that accepts the next name; the last
+// accepts nothing. It builds the fixture for the composition-depth bound
+// (requirements.constraint.section-depth-limit).
+func chainSections(names ...string) []*Template {
+	ts := make([]*Template, len(names))
+	for i, name := range names {
+		ts[i] = regSection(name)
+		if i+1 < len(names) {
+			ts[i].Sections = []SectionDecl{{Name: "slot", Accepted: []string{names[i+1]}}}
+		}
+	}
+	return ts
+}
+
 // assertStringSlice compares a []string against an expected literal, reporting
 // both the length and the elements on failure.
 func assertStringSlice(t *testing.T, what string, got, want []string) {
@@ -1000,7 +1015,10 @@ func TestRegistryRegister(t *testing.T) {
 // walks templates sorted by name, and runs the cross-template stages in the
 // documented sequence (section checks, then field-type checks, then the
 // composition walk, then the structured-example checks) before returning the
-// first failure. Repeated calls are stable.
+// first failure. It also proves the composition-depth bound the walk enforces
+// — a six-deep chain validates, a seven-deep chain fails as *SectionDepthError
+// with the whole chain, and a section-stage failure still wins over it.
+// Repeated calls are stable.
 func TestRegistryValidateOrder(t *testing.T) {
 	t.Run("templates are checked in sorted order within a stage", func(t *testing.T) {
 		slide := regSlide("s")
@@ -1048,6 +1066,59 @@ func TestRegistryValidateOrder(t *testing.T) {
 		}
 		if want := []string{"aaa", "bbb", "aaa"}; !reflect.DeepEqual(cycle.Path, want) {
 			t.Errorf("cycle.Path = %v, want %v", cycle.Path, want)
+		}
+		// Path keeps the plain template names; Error renders them
+		// section-qualified (requirements.constraint.section-cycle-error-chain).
+		if got, want := cycle.Error(), "section template reference cycle: sections/aaa → sections/bbb → sections/aaa"; got != want {
+			t.Errorf("cycle.Error() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a six-deep composition chain validates", func(t *testing.T) {
+		// a → b → c → d → e → f is exactly the six Markdown heading levels
+		// the composition bound allows
+		// (requirements.constraint.section-depth-limit), so it validates.
+		chain := chainSections("a", "b", "c", "d", "e", "f")
+		if err := buildAndValidate(chain...); err != nil {
+			t.Fatalf("buildAndValidate() error = %v, want nil for a six-deep chain", err)
+		}
+	})
+
+	t.Run("a seven-deep composition chain fails as *SectionDepthError", func(t *testing.T) {
+		// One more level than the six heading levels breaks the bound: the
+		// walk reports the whole over-deep chain and the limit.
+		chain := chainSections("a", "b", "c", "d", "e", "f", "g")
+		err := buildAndValidate(chain...)
+		var depth *SectionDepthError
+		if !errors.As(err, &depth) {
+			t.Fatalf("buildAndValidate() error = %v, want *SectionDepthError", err)
+		}
+		if depth.Limit != 6 {
+			t.Errorf("depth.Limit = %d, want 6", depth.Limit)
+		}
+		if want := []string{"a", "b", "c", "d", "e", "f", "g"}; !reflect.DeepEqual(depth.Path, want) {
+			t.Errorf("depth.Path = %v, want %v", depth.Path, want)
+		}
+		// Validate names the template the walk started from so the loader can
+		// path-qualify the failure to that template.yaml.
+		if !strings.Contains(err.Error(), `template "a":`) {
+			t.Errorf("error = %q, want the walk failure named to the root template", err)
+		}
+	})
+
+	t.Run("the depth error surfaces after the section stage", func(t *testing.T) {
+		// The chain is seven deep (the walk's failure), but zzz's
+		// slide-accepting section is caught by the earlier section stage, so
+		// the section-stage error wins regardless of the walk bound.
+		slide := regSlide("s")
+		host := regSlide("zzz")
+		host.Sections = []SectionDecl{{Name: "slot", Accepted: []string{"s"}}}
+		chain := chainSections("a", "b", "c", "d", "e", "f", "g")
+
+		err := buildAndValidate(append(chain, slide, host)...)
+		want := `template "zzz": section "slot" accepts "s", which is a slide-usage template; sections accept only section-usage templates`
+		if err == nil || err.Error() != want {
+			t.Errorf("Validate() error = %v, want the section-stage error %q", err, want)
 		}
 	})
 
