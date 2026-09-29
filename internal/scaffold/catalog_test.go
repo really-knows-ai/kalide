@@ -24,6 +24,7 @@ package scaffold
 import (
 	"bytes"
 	"path"
+	"slices"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
@@ -155,14 +156,149 @@ func TestCatalogLookup(t *testing.T) {
 	})
 
 	t.Run("a catalogued digest resolves through its own identity", func(t *testing.T) {
-		t.Skip("concrete lookups implemented by upgrade/plan.phase-01.task-11")
+		for _, identity := range []string{
+			catalogDeckAGENTS,
+			catalogDeckThemeCSS,
+			catalogDeckDefaultSlide,
+			catalogDeckHelloExample,
+			catalogLibraryAGENTS,
+			catalogLibraryThemeCSS,
+		} {
+			data := catalogShippedBytes(t, identity)
+			if !catalogLookup(identity, data) {
+				t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", identity)
+				continue
+			}
+			// Resolution must come through this identity's own entry: the same
+			// shipped bytes' digest is recorded under exactly this identity,
+			// with the releases that shipped them.
+			digest := shippedScaffoldDigest(data)
+			if versions := knownCatalog.versionsForDigest(identity, digest); len(versions) == 0 {
+				t.Errorf("versionsForDigest(%q, %s) is empty; catalogLookup matched but the identity's entry carries no releases",
+					identity, digest)
+			}
+		}
 	})
 
 	t.Run("a digest shared with another owned file never cross-matches", func(t *testing.T) {
-		t.Skip("concrete lookups implemented by upgrade/plan.phase-01.task-11")
+		// The embedded seed makes the deck's templates/themes/default/theme.css
+		// and a library's themes/default/theme.css byte-identical, so one digest
+		// legitimately appears under BOTH identities. Each must resolve only
+		// through its own entry, and neither may match a third identity that does
+		// not catalogue those bytes.
+		deckTheme := catalogShippedBytes(t, catalogDeckThemeCSS)
+		libraryTheme := catalogShippedBytes(t, catalogLibraryThemeCSS)
+		if !bytes.Equal(deckTheme, libraryTheme) {
+			t.Fatalf("%s and %s no longer share bytes; the collision this case exists for is gone",
+				catalogDeckThemeCSS, catalogLibraryThemeCSS)
+		}
+		if !catalogLookup(catalogDeckThemeCSS, deckTheme) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogDeckThemeCSS)
+		}
+		if !catalogLookup(catalogLibraryThemeCSS, libraryTheme) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogLibraryThemeCSS)
+		}
+
+		// The identical digest is held in two SEPARATE per-identity entries, not
+		// one digest-wide entry: the seed theme shipped since before the library
+		// theme existed (v0.5.0), a release the library identity never shipped.
+		digest := shippedScaffoldDigest(deckTheme)
+		deckVersions := knownCatalog.versionsForDigest(catalogDeckThemeCSS, digest)
+		libraryVersions := knownCatalog.versionsForDigest(catalogLibraryThemeCSS, digest)
+		if len(deckVersions) == 0 || len(libraryVersions) == 0 {
+			t.Fatalf("shared digest %s is not catalogued under both theme identities (deck=%v, library=%v)",
+				digest, deckVersions, libraryVersions)
+		}
+		if !slices.Contains(deckVersions, "v0.5.0") {
+			t.Errorf("versionsForDigest(%q, %s) = %v, want the seed's v0.5.0 release among them",
+				catalogDeckThemeCSS, digest, deckVersions)
+		}
+		if slices.Contains(libraryVersions, "v0.5.0") {
+			t.Errorf("versionsForDigest(%q, %s) = %v, want the library's own releases only (v0.5.0 predates it)",
+				catalogLibraryThemeCSS, digest, libraryVersions)
+		}
+
+		// Identity scoping: the shared theme digest is catalogued under the two
+		// theme identities only, so presenting the very same bytes under any other
+		// owned identity must return false. A digest-keyed (identity-blind) lookup
+		// would wrongly report true here.
+		for _, identity := range []string{catalogDeckAGENTS, catalogLibraryAGENTS, catalogDeckHelloExample} {
+			if catalogLookup(identity, deckTheme) {
+				t.Errorf("catalogLookup(%q, the shared default theme.css bytes) = true; identity scoping is broken", identity)
+			}
+		}
+
+		// The example-template / starter-slide pair collides the same way (the
+		// generated slides/1-hello.md is the example rendered), and must likewise
+		// resolve only under its own identity.
+		example := catalogShippedBytes(t, catalogDeckHelloExample)
+		slide := catalogShippedBytes(t, catalogDeckDefaultSlide)
+		if !bytes.Equal(example, slide) {
+			t.Fatalf("%s and %s no longer share bytes; the collision this case exists for is gone",
+				catalogDeckHelloExample, catalogDeckDefaultSlide)
+		}
+		if !catalogLookup(catalogDeckHelloExample, example) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogDeckHelloExample)
+		}
+		if !catalogLookup(catalogDeckDefaultSlide, slide) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogDeckDefaultSlide)
+		}
+		if catalogLookup(catalogDeckThemeCSS, example) {
+			t.Errorf("catalogLookup(%q, the example/hello bytes) = true; identity scoping is broken", catalogDeckThemeCSS)
+		}
 	})
 
 	t.Run("an uncatalogued, author-edited or unknown-identity lookup resolves to nothing", func(t *testing.T) {
-		t.Skip("concrete lookups implemented by upgrade/plan.phase-01.task-11")
+		// (b) A digest taken from slides/1-hello.md presented under the AGENTS.md
+		// identity must not resolve: AGENTS.md is an owned file, but its own
+		// catalogue entry does not carry the slide's digest.
+		slide := catalogShippedBytes(t, catalogDeckDefaultSlide)
+		if !catalogLookup(catalogDeckDefaultSlide, slide) {
+			t.Fatalf("catalogLookup(%q, its own shipped bytes) = false; the AGENTS.md negative would be vacuous",
+				catalogDeckDefaultSlide)
+		}
+		for _, identity := range []string{catalogDeckAGENTS, catalogLibraryAGENTS} {
+			if catalogLookup(identity, slide) {
+				t.Errorf("catalogLookup(%q, slides/1-hello.md bytes) = true; a digest catalogued for another owned file must not cross-match",
+					identity)
+			}
+		}
+
+		// (c) An unknown identity — a file outside the owned scope, e.g.
+		// deck:kalide.yaml, the author-edited deck config — resolves to nothing
+		// regardless of the digest: neither bytes catalogued under some other
+		// identity nor arbitrary author bytes may match it.
+		if digests := knownCatalog.digestsForIdentity(catalogUnownedConfig); len(digests) != 0 {
+			t.Fatalf("catalogue unexpectedly carries identity %q (digests %v); it is not a whole-file owned member",
+				catalogUnownedConfig, digests)
+		}
+		catalogued := catalogShippedBytes(t, catalogDeckThemeCSS)
+		for _, identity := range []string{catalogUnownedConfig, "deck:not-owned.txt", "library:kalide.yaml"} {
+			if catalogLookup(identity, catalogued) {
+				t.Errorf("catalogLookup(%q, catalogued bytes) = true; an unknown identity must resolve to nothing", identity)
+			}
+			if catalogLookup(identity, []byte("author-edited content\n")) {
+				t.Errorf("catalogLookup(%q, author bytes) = true; an unknown identity must resolve to nothing", identity)
+			}
+		}
+
+		// An uncatalogued/author-edited digest still resolves to nothing under
+		// its OWN identity: flipping a byte moves shipped bytes off every
+		// catalogued version of that file.
+		for _, identity := range []string{
+			catalogDeckAGENTS,
+			catalogDeckThemeCSS,
+			catalogDeckDefaultSlide,
+			catalogDeckHelloExample,
+			catalogLibraryAGENTS,
+			catalogLibraryThemeCSS,
+		} {
+			data := catalogShippedBytes(t, identity)
+			mutated := slices.Clone(data)
+			mutated[0] ^= 0x80
+			if catalogLookup(identity, mutated) {
+				t.Errorf("catalogLookup(%q, author-edited bytes) = true, want false", identity)
+			}
+		}
 	})
 }
