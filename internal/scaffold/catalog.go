@@ -27,6 +27,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // catalogEmbed is the embedded known-version digest catalogue, rooted at the
@@ -43,30 +44,92 @@ const catalogFileName = "scaffoldversions.json"
 // scaffoldCatalog is the catalog data model: the decoded scaffoldversions.json,
 // keyed by owned-file identity.
 //
-// TODO(upgrade/plan.phase-01.task-6): task 6 owns the complete data model —
-// the identity-keyed digests plus the version metadata each digest shipped in
-// (today the versions are parsed but only used to build the digest set; task 6
-// may add accessors such as versions-for-digest and the full identity set, and
-// may reshape these fields). The field shapes below are the minimal model this
-// task's parsing fills and catalogLookup (task 7) reads.
+// The model is deliberately identity-scoped and content-free. Each owned-file
+// identity holds only the SHA-256 digests of the versions kalide released for
+// that file, and, per digest, the release labels that shipped those bytes — no
+// file contents and no presentation assets
+// (global.constraint.no-embedded-template-assets).
+//
+// Keying by identity is what stops a digest shared with a different owned file
+// from matching across identities: the embedded seed makes the deck's
+// templates/themes/default/theme.css and a library's
+// themes/default/theme.css byte-identical, so the same digest legitimately
+// appears under two identities and must match only the identity it was
+// catalogued under.
 type scaffoldCatalog struct {
-	// identities maps an owned-file identity (for example "deck:AGENTS.md")
-	// to that file's released digests. Keying by identity is what stops a
-	// digest shared with a different owned file from matching across
-	// identities.
-	identities map[string]catalogIdentity
+	// byIdentity maps an owned-file identity (for example "deck:AGENTS.md")
+	// to that file's catalogue entry.
+	byIdentity map[string]catalogIdentity
 }
 
 // catalogIdentity is one owned file's catalogue entry: its released content
-// digests, each mapped to the released versions that shipped those bytes.
+// digests, each mapped to the released version labels that shipped those bytes.
 //
-// TODO(upgrade/plan.phase-01.task-6): task 6 owns the complete entry model
-// (version metadata retrieval, ordering, dedup guarantees).
+// One digest entry serves every release whose bytes were unchanged between
+// them (a release that did not change the file adds no new digest), so the
+// version metadata answers both "is this digest a known release of this file?"
+// and "which releases shipped it?".
 type catalogIdentity struct {
 	// digests maps a lowercase-hex SHA-256 content digest to the released
-	// version labels that shipped bytes with that digest. One digest entry
-	// serves every release whose bytes were unchanged between them.
+	// version labels that shipped bytes with that digest, in catalogue order
+	// and deduplicated.
 	digests map[string][]string
+}
+
+// identities returns every owned-file identity in the catalogue, sorted for
+// deterministic iteration.
+//
+// It is the identity-set accessor the drift self-test consumes to assert the
+// catalogue covers exactly the requirements.constraint.upgrade-owned-scaffold-
+// scope set — no extra identity (notably not kalide.yaml) and none missing.
+func (c scaffoldCatalog) identities() []string {
+	names := make([]string, 0, len(c.byIdentity))
+	for name := range c.byIdentity {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// digestsForIdentity returns every lowercase-hex SHA-256 digest catalogued for
+// identity, sorted for deterministic iteration, or nil when identity is
+// unknown.
+//
+// The drift self-test consumes it to assert a currently shipped file's digest
+// is catalogued under its own identity. The refresh half's lookup consumes it
+// (directly or through catalogLookup) to resolve bytes against one identity
+// only, never against a digest alone: a digest that appears under a different
+// identity is not a match here.
+func (c scaffoldCatalog) digestsForIdentity(identity string) []string {
+	entry, ok := c.byIdentity[identity]
+	if !ok {
+		return nil
+	}
+	digests := make([]string, 0, len(entry.digests))
+	for digest := range entry.digests {
+		digests = append(digests, digest)
+	}
+	slices.Sort(digests)
+	return digests
+}
+
+// versionsForDigest returns the released version labels that shipped digest for
+// the owned file identified by identity, in catalogue (release) order, or nil
+// when identity is unknown or carries no such digest.
+//
+// It is the version-metadata accessor: a digest shared with a different
+// identity resolves to that identity's releases only, never another file's.
+// The returned slice is a copy, so callers cannot mutate the decoded catalogue.
+func (c scaffoldCatalog) versionsForDigest(identity, digest string) []string {
+	entry, ok := c.byIdentity[identity]
+	if !ok {
+		return nil
+	}
+	versions, ok := entry.digests[digest]
+	if !ok {
+		return nil
+	}
+	return slices.Clone(versions)
 }
 
 // catalogFile, catalogFileIdentity and catalogDigest mirror the on-disk JSON
@@ -77,8 +140,8 @@ type catalogIdentity struct {
 //	                                   "versions": [string] } ] } ] }
 //
 // These are unexported, decode-only shapes: nothing outside this file depends
-// on the wire format, so the internal model can change (task 6) without
-// touching the generated catalogue.
+// on the wire format, so the internal model can change without touching the
+// generated catalogue.
 type catalogFile struct {
 	Identities []catalogFileIdentity `json:"identities"`
 }
@@ -127,15 +190,48 @@ func parseCatalog() (scaffoldCatalog, error) {
 		return scaffoldCatalog{}, fmt.Errorf("parse %s: %w", catalogFileName, err)
 	}
 
-	catalog := scaffoldCatalog{identities: make(map[string]catalogIdentity, len(raw.Identities))}
+	catalog := scaffoldCatalog{byIdentity: make(map[string]catalogIdentity, len(raw.Identities))}
 	for _, identity := range raw.Identities {
+		if identity.Identity == "" {
+			return scaffoldCatalog{}, fmt.Errorf("parse %s: identity entry with empty identity", catalogFileName)
+		}
+		if _, dup := catalog.byIdentity[identity.Identity]; dup {
+			return scaffoldCatalog{}, fmt.Errorf("parse %s: duplicate identity %q", catalogFileName, identity.Identity)
+		}
 		entry := catalogIdentity{digests: make(map[string][]string, len(identity.Digests))}
 		for _, digest := range identity.Digests {
-			entry.digests[digest.Digest] = digest.Versions
+			if digest.Digest == "" {
+				return scaffoldCatalog{}, fmt.Errorf("parse %s: identity %q has an empty digest", catalogFileName, identity.Identity)
+			}
+			if _, dup := entry.digests[digest.Digest]; dup {
+				return scaffoldCatalog{}, fmt.Errorf("parse %s: identity %q repeats digest %q", catalogFileName, identity.Identity, digest.Digest)
+			}
+			entry.digests[digest.Digest] = dedupeVersions(digest.Versions)
 		}
-		catalog.identities[identity.Identity] = entry
+		catalog.byIdentity[identity.Identity] = entry
 	}
 	return catalog, nil
+}
+
+// dedupeVersions returns labels with duplicates removed, preserving first-seen
+// (catalogue/release) order. The catalogue records, per digest, only the
+// releases that shipped those bytes — one digest entry serves every release
+// whose bytes were unchanged — so a repeated label is a data error; collapsing
+// it here keeps the version-metadata accessors' answers unique.
+func dedupeVersions(labels []string) []string {
+	if len(labels) == 0 {
+		return labels
+	}
+	seen := make(map[string]struct{}, len(labels))
+	unique := make([]string, 0, len(labels))
+	for _, label := range labels {
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		unique = append(unique, label)
+	}
+	return unique
 }
 
 // catalogLookup reports whether data is the exact bytes of a catalogued,
@@ -162,7 +258,7 @@ func parseCatalog() (scaffoldCatalog, error) {
 // cross-identity rule so this file compiles and cannot silently match a
 // foreign digest.
 func catalogLookup(identity string, data []byte) bool {
-	entry, ok := knownCatalog.identities[identity]
+	entry, ok := knownCatalog.byIdentity[identity]
 	if !ok {
 		return false
 	}
