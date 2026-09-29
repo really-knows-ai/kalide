@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "slide-parser",
-  "body": "Slide parser: splits the slide's `---` … `---` YAML frontmatter (must start at line 1), the slide body (after frontmatter, before the first heading), sections by heading depth (a depth-n heading opens a child section of the most recent depth-(n-1) section, from `#` to `######`; a section runs to the next heading at the same or a shallower depth), each section's plain-fence frontmatter and body, and the speaker notes (at most one top-level `# notes`, which must be the last section and is excluded from the per-parent section min/max counts), keeping line numbers. A section name must be declared by its parent's template; an unknown child name is reported with the full containment path (`columns[2].blocks`) and a closest-match suggestion.",
+  "body": "Slide parser: splits the slide's `---` … `---` YAML frontmatter (must start at line 1), the slide body (after frontmatter, before the first heading), sections by heading depth (a depth-n heading opens a child section of the most recent depth-(n-1) section, from `#` to `######`; a section runs to the next heading at the same or a shallower depth), each section's plain-fence frontmatter and body, and the speaker notes (at most one top-level `# notes`, which must be the last section and is excluded from the per-parent section min/max counts), keeping line numbers. A section name must be declared by its parent's template; an unknown child name is reported with the full containment path in the canonical error-reporting form (e.g. `columns[2] › blocks`) and a closest-match suggestion.",
   "properties": {},
   "out": [],
   "in": [
