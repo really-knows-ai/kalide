@@ -321,19 +321,21 @@ func splitExampleLevel(lines []string, startLine int) (body string, bodyLine int
 			continue
 		}
 		content := lines[start:end]
-		nested, nestedLine, children := splitExampleLevel(content, startLine+start)
 		index := counts[h.name]
 		counts[h.name]++
+		// Each instance is a full block in its own right: parseExampleBlock
+		// strips its optional leading ``` frontmatter and, via
+		// splitExampleSections, nests its own deeper instances.
+		nested, err := parseExampleBlock(strings.Join(content, "\n"), KindSection, startLine+start)
+		if err != nil {
+			nested = &exampleBlock{Body: strings.Join(content, "\n"), BodyLine: startLine + start}
+		}
 		sections = append(sections, exampleSection{
-			Name:  h.name,
-			Line:  h.line,
-			Level: h.level,
-			Index: index,
-			exampleBlock: &exampleBlock{
-				Body:     nested,
-				BodyLine: nestedLine,
-				Sections: children,
-			},
+			Name:         h.name,
+			Line:         h.line,
+			Level:        h.level,
+			Index:        index,
+			exampleBlock: nested,
 		})
 		i = j
 	}
