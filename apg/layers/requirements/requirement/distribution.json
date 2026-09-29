@@ -98,6 +98,11 @@
       "kind": "contains",
       "source": "requirements.stakeholder.kalide-maintainers",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.positive-phrasing-refactor",
+      "properties": {}
     }
   ]
 }
