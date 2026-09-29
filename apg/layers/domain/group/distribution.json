@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "distribution",
-  "body": "Distribution: building, natively verifying, releasing and installing kalide on the supported macOS/Windows targets.",
+  "body": "Distribution: building, natively verifying, releasing and installing kalide on each supported target across macOS, Windows and Linux (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64).",
   "properties": {
     "attribute": "supporting",
     "root": "release"
