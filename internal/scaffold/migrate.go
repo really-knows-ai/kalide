@@ -48,7 +48,6 @@
 //
 //   - registeredMigrations kalide's ordered migration set (empty today).
 //   - readLibraryFormat reads a library's raw `format:` integer tolerantly.
-//     TODO(upgrade/plan.phase-03.task-4)
 //   - implementedFormat reports the highest format the binary implements.
 //     TODO(upgrade/plan.phase-03.task-5)
 //   - unsupportedFormatError the unknown/newer refusal.
@@ -59,7 +58,10 @@ package scaffold
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -131,12 +133,59 @@ func registeredMigrations() []formatMigration {
 // local-filesystem only: no network and no git
 // (global.constraint.upgrade-offline).
 //
-// TODO(upgrade/plan.phase-03.task-4): read and parse the integer here; an
-// absent library.yaml, a missing format key or a non-integer value is an error
-// naming what was found.
+// Tolerant means it reads only the `format:` key and imposes none of the
+// loader's other constraints: unknown keys, a missing name and any other
+// content are ignored, and the integer is returned unchanged — including a
+// value (0, 2, …) that loadLibraryMeta would reject as unsupported. The
+// caller decides what is supported by comparing against implementedFormat.
+//
+// A missing library.yaml, a document that is not a mapping, a non-integer
+// `format:` value and an absent `format:` key are each a clear error naming
+// the offending file (and, where one exists, the offending key).
 func readLibraryFormat(dir string) (int, error) {
 	path := filepath.Join(dir, template.LibraryFile)
-	return 0, fmt.Errorf("scaffold: readLibraryFormat: not implemented yet (would read %s)", path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, fmt.Errorf("scaffold: read library format: %s not found", path)
+		}
+		return 0, fmt.Errorf("scaffold: read library format: read %s: %w", path, err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return 0, fmt.Errorf("scaffold: read library format: parse %s: %w", path, err)
+	}
+
+	// Unwrap the document node to its root mapping, tolerating an empty file.
+	mapping := &doc
+	if doc.Kind == yaml.DocumentNode {
+		if len(doc.Content) == 0 {
+			mapping = nil
+		} else {
+			mapping = doc.Content[0]
+		}
+	}
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return 0, fmt.Errorf("scaffold: read library format: %s: expected a mapping of %s keys", path, template.LibraryFile)
+	}
+
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		key := mapping.Content[i]
+		val := mapping.Content[i+1]
+		if key.Value != libraryFormatKey {
+			continue
+		}
+		if val.Kind != yaml.ScalarNode || val.ShortTag() != "!!int" {
+			return 0, fmt.Errorf("scaffold: read library format: %s: key %q is not an integer", path, libraryFormatKey)
+		}
+		var format int
+		if err := val.Decode(&format); err != nil {
+			return 0, fmt.Errorf("scaffold: read library format: %s: key %q: %w", path, libraryFormatKey, err)
+		}
+		return format, nil
+	}
+	return 0, fmt.Errorf("scaffold: read library format: %s: missing required key %q", path, libraryFormatKey)
 }
 
 // implementedFormat returns the highest library.yaml format the running binary
