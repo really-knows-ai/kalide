@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "requirements.requirement.nested-section-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.item-context",
+      "properties": {}
     }
   ],
   "in": []
