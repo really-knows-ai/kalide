@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "note",
   "name": "distribution-solution",
-  "body": "Distribution: the release pipeline and package channels are repo/CI artefacts (GitHub Actions YAML, a Ruby formula, a Scoop JSON manifest, docs), not Go code, so they carry no implemented-by edges. Push/tag rule (global.constraint.humans-push-and-tag): pushing to the remote and creating tags require explicit, per-action human consent; absent that consent agents never push or tag, and with it an agent may perform any push/tag operation the human asked for (including force-push and moving/overwriting/deleting a tag). The release workflow's manifest-only commit (version/URL/checksum updates under `Formula/` and `bucket/`) is the one carve-out; the workflow never pushes code and never creates tags, and automation may only react to a consented tag (human-created, or agent-created under explicit per-action consent).",
+  "body": "Distribution: the release pipeline and package channels are repo/CI artefacts (GitHub Actions YAML, a Ruby formula, a Scoop JSON manifest, docs), not Go code, so they carry no implemented-by edges. Push/tag rule (global.constraint.humans-push-and-tag): pushing to the remote and creating tags require explicit, per-action human consent; an agent acts only under that consent, and with it may perform any push/tag operation the human asked for (including force-push and moving/overwriting/deleting a tag). The release workflow's manifest-only commit (version/URL/checksum updates under `Formula/` and `bucket/`) is the one carve-out: its writes stay manifest-only and it reacts to a consented tag, so code pushes and tag creation remain the maintainer's actions.",
   "properties": {},
   "out": [
     {
