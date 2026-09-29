@@ -21,7 +21,7 @@
 //
 //   - detectProject   classifies a directory as a deck or a library, and is
 //     the single owner of deck/library detection and of the both/neither
-//     error.                        TODO(upgrade/plan.phase-02.task-2)
+//     error.
 //   - detectSeedDeck  reports whether a deck is the no-arg seed deck that owns
 //     its local templates/.        TODO(upgrade/plan.phase-02.task-3)
 //   - refreshScaffold applies the never-clobber refresh.
@@ -38,7 +38,11 @@
 package scaffold
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -171,11 +175,52 @@ const (
 // what was expected, and nothing is written (deck-library-upgrade project
 // detection).
 //
-// TODO(upgrade/plan.phase-02.task-2): implement detection here. scaffold.Upgrade
-// (phase 4) must call this function for detection and must not re-implement it
-// or its error.
+// Presence is tested with os.Lstat, so a manifest that is a file, a directory
+// or a symlink all count as found, and a dangling symlink is not silently
+// treated as absent. Any other filesystem failure inspecting a manifest is
+// returned rather than reported as "absent".
+//
+// scaffold.Upgrade (phase 4) MUST call this function for detection and must not
+// re-implement it or its both/neither error.
 func detectProject(dir string) (projectKind, error) {
-	return projectKindUnknown, fmt.Errorf("scaffold: detectProject: not implemented yet")
+	hasDeck, err := manifestPresent(filepath.Join(dir, deck.ConfigFile))
+	if err != nil {
+		return projectKindUnknown, fmt.Errorf("upgrade: inspect %s: %w", deck.ConfigFile, err)
+	}
+	hasLibrary, err := manifestPresent(filepath.Join(dir, template.LibraryFile))
+	if err != nil {
+		return projectKindUnknown, fmt.Errorf("upgrade: inspect %s: %w", template.LibraryFile, err)
+	}
+
+	switch {
+	case hasDeck && hasLibrary:
+		return projectKindUnknown, fmt.Errorf(
+			"upgrade: cannot detect a project in %s: found both %s (a deck) and %s (a template library); expected exactly one",
+			dir, deck.ConfigFile, template.LibraryFile)
+	case hasDeck:
+		return projectKindDeck, nil
+	case hasLibrary:
+		return projectKindLibrary, nil
+	default:
+		return projectKindUnknown, fmt.Errorf(
+			"upgrade: cannot detect a project in %s: found neither %s (a deck) nor %s (a template library); expected exactly one",
+			dir, deck.ConfigFile, template.LibraryFile)
+	}
+}
+
+// manifestPresent reports whether path exists, without following symlinks: a
+// regular file, a directory or a symlink (even a dangling one) is present. Only
+// fs.ErrNotExist is absence; any other Lstat failure is returned.
+func manifestPresent(path string) (bool, error) {
+	_, err := os.Lstat(path)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 // detectSeedDeck reports whether deckRoot is a no-arg seed deck: a deck whose
