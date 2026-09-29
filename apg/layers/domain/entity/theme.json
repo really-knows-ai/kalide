@@ -11,11 +11,6 @@
       "kind": "realised-by",
       "target": "solution.component.theme-registry",
       "properties": {}
-    },
-    {
-      "kind": "realised-by",
-      "target": "solution.component.embedded-assets",
-      "properties": {}
     }
   ],
   "in": [
