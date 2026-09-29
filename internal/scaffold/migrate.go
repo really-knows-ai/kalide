@@ -47,7 +47,6 @@
 // The rest of phase 3 fills in the pieces declared here:
 //
 //   - registeredMigrations kalide's ordered migration set (empty today).
-//     TODO(upgrade/plan.phase-03.task-3)
 //   - readLibraryFormat reads a library's raw `format:` integer tolerantly.
 //     TODO(upgrade/plan.phase-03.task-4)
 //   - implementedFormat reports the highest format the binary implements.
@@ -102,17 +101,25 @@ type formatMigration struct {
 
 // registeredMigrations returns kalide's ordered migration set: every
 // kalide-authored step, in format order, consumed from a project's current
-// format to implementedFormat. The set is EMPTY today — no format older than
-// firstLibraryFormat exists, and a deck has no version field — so consuming it
-// leaves a format-1 library and every deck byte-for-byte unchanged and invents
-// no migration from content (requirements.constraint.upgrade-migrations-ordered-atomic).
+// format to implementedFormat, each applied at most once. The set is EMPTY
+// today, and that is intentional: there is no format older than
+// firstLibraryFormat (loadLibraryMeta has only ever accepted `format: 1`, so
+// no library can be at an older format), and a deck's kalide.yaml carries no
+// version field at all. Consuming the empty set therefore leaves a format-1
+// library and every deck byte-for-byte unchanged and invents no migration from
+// content (requirements.requirement.upgrade-migrate-format,
+// requirements.constraint.upgrade-migrations-ordered-atomic).
 //
-// Production may only ever pass this set; tests exercise ordering,
-// at-most-once/idempotence, atomic rollback and per-migration validation
-// through the migrateLibraryWith seam, never by adding a fake step here.
+// This set is KALIDE-AUTHORED and finite: adding a step is a kalide source
+// change that ships with the corresponding format bump, one format to the next
+// (domain.value.format-migration). It must NEVER be populated from a project's
+// content — no migration is inferred from what a project happens to contain.
 //
-// TODO(upgrade/plan.phase-03.task-3): finalize the kalide-authored ordered set
-// (empty today).
+// Production may only ever pass this set; it stays empty until kalide ships a
+// newer format. Ordering, at-most-once/idempotence, atomic rollback and
+// per-migration validation are exercised through the migrateLibraryWith seam,
+// never by adding a synthetic step here: only test files may supply migrations,
+// and they do so through that seam.
 func registeredMigrations() []formatMigration {
 	return nil
 }
