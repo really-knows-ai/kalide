@@ -3,9 +3,12 @@ package template
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
 )
 
 // This file implements checkLibraryExamples, templates-dir-validation step 7:
@@ -358,11 +361,19 @@ func exampleTemplateName(fm map[string]any) (string, bool) {
 	return s, ok
 }
 
-// validateExampleBlock validates one block (a whole example.md, or one
-// nested `# name` section instance) against def, populates ctx with the
-// rendered field/body/section values a layout expects, and recurses into
-// each declared section instance.
+// validateExampleBlock validates one block (a whole example.md, or one nested
+// section instance) against def, populates ctx with the rendered
+// field/body/section values a layout expects, and recurses into each declared
+// child instance. container is the instance's own containment path
+// (`columns[2]`) or "" at the root; child errors extend it and carry the full
+// path (nested-section-validation).
 func validateExampleBlock(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any) error {
+	return validateExampleBlockAt(path, def, block, resolve, ctx, "")
+}
+
+// validateExampleBlockAt is validateExampleBlock with the owning instance's
+// containment path threaded through for nested errors.
+func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any, container string) error {
 	fm := block.Frontmatter
 	if fm == nil {
 		fm = map[string]any{}
@@ -377,14 +388,24 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 
 	if res := CheckValues(fields, def, resolve); len(res.Errors) > 0 {
 		e := res.Errors[0]
-		return libraryErrorf(path, block.FrontmatterLine, "%s: %s", e.PathString(), e.What)
+		return exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
 	}
 	for k, v := range fields {
 		ctx[k] = v
 	}
 
+	// The subheading gate carries whether this block's own enclosing template
+	// declares child sections, so a heading at any depth is a section marker
+	// there and deeper headings stay subheadings otherwise
+	// (markdown-allowed-subset); CheckBody then enforces the template's own
+	// body.subheadings rule.
 	if ve, invalid := CheckBody(def.Body, block.Body, WithBodyLine(block.BodyLine)); invalid {
-		return libraryErrorf(path, ve.Line, "%s", ve.What)
+		return exampleError(path, ve.Line, container, "%s", ve.What)
+	}
+	if declares := len(def.Sections) > 0; declares || !def.Body.Subheadings {
+		if err := checkExampleBodySubheadings(path, def, block, container); err != nil {
+			return err
+		}
 	}
 	if strings.TrimSpace(block.Body) != "" {
 		ctx["body"] = block.Body
@@ -396,37 +417,85 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 	}
 	sect := NewSection(resolve)
 	if errs := sect.CheckRepeats(def, names); len(errs) > 0 {
-		return libraryErrorf(path, errs[0].Line, "%s", errs[0].What)
+		return exampleError(path, errs[0].Line, container, "%s", errs[0].What)
 	}
 
 	sectionValues := map[string][]map[string]any{}
+	counts := map[string]int{}
 	for _, sec := range block.Sections {
+		childPath := joinContainment(container, sec.Name, counts[sec.Name])
+		counts[sec.Name]++
 		d, ok := sect.Declared(def, sec.Name)
 		if !ok {
-			return libraryErrorf(path, sec.Line, "example declares section %q, which the template does not declare", sec.Name)
+			return exampleError(path, sec.Line, container, "example declares section %q, which the template does not declare", sec.Name)
 		}
 		chosen, named := exampleTemplateName(sec.Frontmatter)
 		if !named {
 			if len(d.Accepted) != 1 {
-				return libraryErrorf(path, sec.Line, "example section %q must name a template: (accepts %s)", sec.Name, strings.Join(d.Accepted, ", "))
+				return exampleError(path, sec.Line, childPath, "example section %q must name a template: (accepts %s)", sec.Name, strings.Join(d.Accepted, ", "))
 			}
 			chosen = d.Accepted[0]
 		}
 		if !containsString(d.Accepted, chosen) {
-			return libraryErrorf(path, sec.Line, "example section %q uses template %q, which is not one of the accepted templates (%s)", sec.Name, chosen, strings.Join(d.Accepted, ", "))
+			return exampleError(path, sec.Line, childPath, "example section %q uses template %q, which is not one of the accepted templates (%s)", sec.Name, chosen, strings.Join(d.Accepted, ", "))
 		}
 		nested, ok := resolve(chosen)
 		if !ok || nested == nil {
-			return libraryErrorf(path, sec.Line, "example section %q uses template %q, which is not defined", sec.Name, chosen)
+			return exampleError(path, sec.Line, childPath, "example section %q uses template %q, which is not defined", sec.Name, chosen)
 		}
 		nestedCtx := map[string]any{}
-		if err := validateExampleBlock(path, nested, sec.exampleBlock, resolve, nestedCtx); err != nil {
+		if err := validateExampleBlockAt(path, nested, sec.exampleBlock, resolve, nestedCtx, childPath); err != nil {
 			return err
 		}
 		sectionValues[sec.Name] = append(sectionValues[sec.Name], nestedCtx)
 	}
 	for name, instances := range sectionValues {
 		ctx[name] = instances
+	}
+	return nil
+}
+
+// joinContainment extends a containment path by one indexed segment
+// `name[index]`, starting the path when parent is empty.
+func joinContainment(parent, name string, index int) string {
+	seg := name + "[" + strconv.Itoa(index) + "]"
+	if parent == "" {
+		return seg
+	}
+	return parent + " › " + seg
+}
+
+// exampleError builds a *LibraryError at path:line whose message is prefixed
+// with the instance's containment path when there is one, so the canonical
+// ` › ` notation is uniform at any depth (nested-section-validation,
+// error-reporting).
+func exampleError(path string, line int, container, format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	if container != "" {
+		msg = container + ": " + msg
+	}
+	return libraryErrorf(path, line, "%s", msg)
+}
+
+// checkExampleBodySubheadings refuses a `##`/`###` subheading in an example
+// body when the enclosing template declares child sections (every heading at
+// any depth is then a section marker) or when the template forbids
+// subheadings; depths 4-6 are refused in subheading position
+// (markdown-allowed-subset). It reports the first offending heading with the
+// instance's containment path.
+func checkExampleBodySubheadings(path string, def *Template, block *exampleBlock, container string) error {
+	if strings.TrimSpace(block.Body) == "" {
+		return nil
+	}
+	issues := mdcheck.Check(path, []byte(block.Body), mdcheck.Options{
+		Mode:                          mdcheck.BodyMode,
+		StartLine:                     block.BodyLine,
+		TemplateDeclaresChildSections: len(def.Sections) > 0,
+	})
+	for _, iss := range issues {
+		if iss.Kind == mdcheck.KindUnsupportedConstruct && strings.Contains(iss.Message, "heading level") {
+			return exampleError(path, iss.Line, container, "%s", iss.Message)
+		}
 	}
 	return nil
 }
