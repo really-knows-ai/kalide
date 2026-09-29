@@ -48,6 +48,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.theme-media-references",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.upgrade-migrate-format",
+      "properties": {}
     }
   ]
 }
