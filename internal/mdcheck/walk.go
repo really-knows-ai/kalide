@@ -227,13 +227,9 @@ func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 				"headings at any depth are section markers inside a template that declares child sections; move the text into the section's own body or a field")}
 		}
 		if n.Level != 2 && n.Level != 3 {
-			msg := "use ## or ###; # is reserved for slide sections and ####+ is not supported"
-			if n.Level >= 4 {
-				msg = "use ## or ###; #### and deeper are not part of the slide typography"
-			}
 			return []Issue{ctx.newIssue(node, KindUnsupportedConstruct,
 				fmt.Sprintf("heading level %d is not allowed", n.Level),
-				msg)}
+				"use ## or ###; # is reserved for slide sections and ####+ is not supported")}
 		}
 	case *ast.List:
 		if ctx.listDepth > maxListNesting {
