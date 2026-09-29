@@ -58,6 +58,11 @@
       "kind": "details",
       "source": "requirements.note.theme-library-reach-propagated",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.nested-sections-requirements",
+      "properties": {}
     }
   ]
 }
