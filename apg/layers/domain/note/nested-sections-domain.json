@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "note",
+  "name": "nested-sections-domain",
+  "body": "Tier-2 reconciled for nested sections. domain.entity.section rewritten: heading depth is nesting depth (a depth-n heading opens a child of the most recent depth-(n-1) section, # … ######), in addition to section-typed-field nesting. domain.entity.template notes the shared sections: schema and the six-heading-level bound. domain.value.item-context added for the .item sibling descriptor. Judgment call: kept .item a VALUE, not an entity — it is an immutable computed descriptor with no identity; per the edge schema only domain group/entity/service carry realised-by, so it attaches by a drives edge only, consistent with every other domain.value.* node (none carries realised-by). domain.constraint.template-context-reserved extended from deck/slide to deck/slide/item [autonomous].",
+  "properties": {},
+  "out": [],
+  "in": []
+}
