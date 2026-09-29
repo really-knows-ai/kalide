@@ -29,6 +29,11 @@
       "kind": "realised-by",
       "target": "solution.component.cli-commands",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.embedded-assets",
+      "properties": {}
     }
   ],
   "in": [
