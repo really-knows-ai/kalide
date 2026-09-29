@@ -14,11 +14,6 @@
       "kind": "details",
       "target": "global.constraint.go-static-embedded-binary",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "target": "requirements.note.agent-authoring-decisions",
-      "properties": {}
     }
   ],
   "in": []

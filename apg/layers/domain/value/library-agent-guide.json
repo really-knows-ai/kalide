@@ -28,11 +28,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.agent-authoring-decisions",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.fix-library-extra-top-level-entries",
       "properties": {}
     }
