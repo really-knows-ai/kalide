@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.media-paths-library-relative",
+      "properties": {}
     }
   ],
   "in": []
