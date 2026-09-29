@@ -21,6 +21,11 @@
       "kind": "drives",
       "target": "domain.value.version",
       "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-manifest",
+      "properties": {}
     }
   ],
   "in": [
