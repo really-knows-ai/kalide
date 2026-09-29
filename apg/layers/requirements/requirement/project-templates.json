@@ -103,11 +103,6 @@
       "kind": "contains",
       "source": "requirements.user.template-author",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.project-templates-decisions",
-      "properties": {}
     }
   ]
 }

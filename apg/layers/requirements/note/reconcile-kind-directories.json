@@ -74,11 +74,6 @@
       "kind": "details",
       "target": "solution.component.init-seed",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "target": "requirements.note.project-templates-decisions",
-      "properties": {}
     }
   ],
   "in": []
