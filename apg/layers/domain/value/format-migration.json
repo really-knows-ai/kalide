@@ -20,6 +20,11 @@
       "kind": "details",
       "source": "domain.note.format-migration-remodelled-as-value",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-reconciliation-final-review",
+      "properties": {}
     }
   ]
 }
