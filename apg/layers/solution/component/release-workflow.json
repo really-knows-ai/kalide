@@ -39,11 +39,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.fix-component-implemented-by",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.reconcile-public-install",
       "properties": {}
     },

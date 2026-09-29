@@ -26,11 +26,6 @@
       "kind": "realised-by",
       "source": "domain.service.serve-deck",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.fix-component-implemented-by",
-      "properties": {}
     }
   ]
 }
