@@ -166,13 +166,19 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 	// a url() or @import reference (a url() media: target is validated like a
 	// layout `media` argument). A layout's literal src/href references stay
 	// inside templates/, and every `media` call argument is valid and exists.
+	// One scanner spans the whole load (newThemeCSSScanner), so the visiting/
+	// scanned sets and the maxThemeCSSImports bound are graph-wide: a
+	// stylesheet reachable from two themes is scanned once, and a cycle
+	// spanning themes is caught, instead of resetting per theme's entry
+	// stylesheet.
 	orderedThemeNames := make([]string, 0, len(lib.Themes))
 	for name := range lib.Themes {
 		orderedThemeNames = append(orderedThemeNames, name)
 	}
 	sort.Strings(orderedThemeNames)
+	themeScanner := newThemeCSSScanner(displayRoot, lib)
 	for _, name := range orderedThemeNames {
-		if err := checkThemeCSSReferences(displayRoot, lib.Themes[name], lib); err != nil {
+		if err := themeScanner.scanTheme(lib.Themes[name]); err != nil {
 			return nil, err
 		}
 	}
@@ -484,10 +490,11 @@ func cssLineAt(css []byte, offset int) int {
 	return line
 }
 
-// maxThemeCSSImports bounds how many distinct stylesheets a theme may pull in
-// through @import. A chain or fan-out longer than this is reported as a
-// templates error rather than making loading do unbounded work; an actual
-// import cycle is detected separately and reported as a cycle.
+// maxThemeCSSImports bounds how many distinct stylesheets the import graph may
+// pull in through @import across one library load. A chain or fan-out longer
+// than this is reported as a templates error rather than making loading do
+// unbounded work; an actual import cycle is detected separately and reported
+// as a cycle.
 const maxThemeCSSImports = 64
 
 // cssImportPattern matches an @import rule in both its quoted-string form
@@ -566,20 +573,27 @@ func insideSpans(spans [][2]int, offset int) bool {
 	return false
 }
 
-// themeCSSScanner walks a library's stylesheets exactly once each: every
-// theme's theme.css plus every CSS file they @import, wherever in the resolved
-// library that CSS lives — the same theme, another theme reached through the
-// reserved theme:<name>/ prefix, or the shared media/ tree reached through the
-// reserved media: prefix. visiting holds the stylesheets on the current
-// recursion stack (so an import cycle is detected), and scanned holds
-// stylesheets already fully validated (so a diamond import is validated once,
-// not re-followed).
+// themeCSSScanner walks a library's stylesheets exactly once each, across one
+// whole library load: every theme's theme.css plus every CSS file they
+// @import, wherever in the resolved library that CSS lives — the same theme,
+// another theme reached through the reserved theme:<name>/ prefix, or the
+// shared media/ tree reached through the reserved media: prefix. One scanner
+// is built per library load (newThemeCSSScanner) and reused for every theme's
+// entry stylesheet (scanTheme), so the visiting/scanned sets and the
+// maxThemeCSSImports count below span the whole import graph instead of
+// resetting per theme. visiting holds the stylesheets on the current recursion
+// stack (so an import cycle is detected), and scanned holds stylesheets
+// already fully validated (so a diamond import — or a stylesheet reachable
+// from two themes — is validated once, not re-followed).
 type themeCSSScanner struct {
 	root string
 
-	// th is the theme the scan was entered from, and the theme whose files
-	// scanFile/checkImport/checkURL currently resolve against. It remains
-	// until those methods follow references across trees via themes.
+	// th is the theme scanTheme is currently entering, used by themeByTree as
+	// a fast path. References ARE followed across trees through the reserved
+	// media:/theme:<name>/ prefixes (see checkImport and checkURL), so a
+	// stylesheet imported from another tree resolves its unprefixed relative
+	// references against the theme that actually owns it; themeByTree falls
+	// back to the whole library's themes when that tree is not th's.
 	th *LibraryTheme
 
 	// themes is the whole loaded library's themes keyed by name
@@ -605,6 +619,24 @@ type themeCSSScanner struct {
 	tree string
 }
 
+// newThemeCSSScanner builds the graph-wide scanner for one library load. root
+// is the templates/ root the display paths are built under. lib supplies the
+// whole loaded library: its themes (Library.Themes) let the scanner resolve
+// any theme:<name>/ reference across the import graph, and its media/
+// sub-filesystem (Library.Media) backs every media: reference (a nil lib.Media
+// makes every media: reference fail, since there is nowhere to resolve it).
+// One scanner is reused for every theme (scanTheme), so its visiting/scanned
+// sets and maxThemeCSSImports count span the whole graph.
+func newThemeCSSScanner(root string, lib *Library) *themeCSSScanner {
+	return &themeCSSScanner{
+		root:     root,
+		themes:   lib.Themes,
+		mediaFS:  lib.Media,
+		visiting: map[string]bool{},
+		scanned:  map[string]bool{},
+	}
+}
+
 // checkThemeCSSReferences validates a theme's CSS references (templates-dir-
 // validation step 6): every relative url() reference and every @import target
 // must resolve to an existing file inside the referencing stylesheet's own
@@ -619,6 +651,12 @@ type themeCSSScanner struct {
 // prefix has its own references validated in its own tree. Every error is a
 // *LibraryError qualified with the offending CSS file and its 1-based line.
 //
+// It builds one scanner for the call (newThemeCSSScanner) and scans th's entry
+// stylesheet with graph-wide visiting/scanned sets (scanTheme). loadLibrary
+// instead builds one scanner for the whole library load and scans every theme
+// through it, so the sets and the maxThemeCSSImports bound span the entire
+// import graph rather than resetting per theme.
+//
 // root is the templates/ root the display paths are built under. th is the
 // theme whose stylesheet seeds the scan: th.Dir is the theme's directory
 // within that root and th.Files holds every other file the theme directory
@@ -626,25 +664,34 @@ type themeCSSScanner struct {
 // theme:<name>/ reference across the import graph (lib.Themes) and reach the
 // shared media/ tree behind every media: reference (lib.Media; a nil
 // lib.Media makes every media: reference fail, since there is nowhere to
-// resolve it). The entry stylesheet is registered in the graph-wide visiting/
-// scanned sets under its full key, th.Dir/theme.css, not the bare theme.css: a
-// stylesheet is identified by its owning tree joined with its relative path,
-// so two themes' theme.css files are not confused with each other.
+// resolve it).
 func checkThemeCSSReferences(root string, th *LibraryTheme, lib *Library) error {
+	return newThemeCSSScanner(root, lib).scanTheme(th)
+}
+
+// scanTheme validates one theme's theme.css and everything it @imports with
+// the scanner's graph-wide visiting/scanned sets. th.Dir is the theme's
+// directory within root and th.Files holds every other file the theme
+// directory owns. The entry stylesheet is registered in the graph-wide sets
+// under its full key, th.Dir/theme.css, not the bare theme.css: a stylesheet
+// is identified by its owning tree joined with its relative path, so two
+// themes' theme.css files are not confused with each other. A theme whose
+// theme.css was already reached and validated through an earlier theme's
+// @import is skipped, so no stylesheet is scanned twice in one load and the
+// maxThemeCSSImports count is charged for it once.
+func (s *themeCSSScanner) scanTheme(th *LibraryTheme) error {
 	if th == nil {
 		return nil
 	}
 	themeKey := path.Join(th.Dir, ThemeStylesheet)
-	s := &themeCSSScanner{
-		root:     root,
-		th:       th,
-		themes:   lib.Themes,
-		mediaFS:  lib.Media,
-		visiting: map[string]bool{themeKey: true},
-		scanned:  map[string]bool{},
-		tree:     th.Dir,
+	if s.scanned[themeKey] {
+		return nil
 	}
-	if err := s.scanFile(th.StylesheetBytes, th.StylesheetPath, th.Dir, ThemeStylesheet); err != nil {
+	s.th = th
+	s.visiting[themeKey] = true
+	err := s.scanFile(th.StylesheetBytes, th.StylesheetPath, th.Dir, ThemeStylesheet)
+	delete(s.visiting, themeKey)
+	if err != nil {
 		return err
 	}
 	s.scanned[themeKey] = true
