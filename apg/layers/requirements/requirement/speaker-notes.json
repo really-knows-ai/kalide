@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "speaker-notes",
-  "body": "A `# notes` section holds speaker notes, rendered via the embedded reveal.js notes plugin (`dist/plugin/notes.js`), and is allowed only on slides (a slide file's top level), never inside a section template (= error). At most one `# notes` section per slide, and it must be the last section on the slide; a second `# notes` = error, and a `# notes` followed by any other section = error. It does not count toward any section's min/max repeat limits. `notes` is reserved and cannot be declared as a template section name. Notes body follows the Markdown subset.",
+  "body": "A `# notes` section holds speaker notes, rendered via the embedded reveal.js notes plugin (`dist/plugin/notes.js`). A `# notes` section belongs to a slide file's top level; declaring it inside a section template is an error. At most one `# notes` section per slide, and it is the last section on the slide; a second `# notes` is an error, and any section after a `# notes` is an error. It does not count toward any section's min/max repeat limits. `notes` is reserved and unavailable as a template section name (requirements.constraint.reserved-template-names). Notes body follows the Markdown subset.",
   "properties": {
     "feature": "deck-structure"
   },
