@@ -20,11 +20,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-schema-in-go",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}
