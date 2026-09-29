@@ -4,6 +4,12 @@
   "name": "upgrade-deck-vs-library",
   "body": "Detection and the two version anchors. `kalide upgrade` operates on the current directory with no path argument (mirroring `kalide init`): it is a deck if `kalide.yaml` is present (deck-config), a template library if `library.yaml` is present (domain.value.library-manifest). Both present, or neither, is an error and nothing is written [autonomous]. The two kinds have different anchors: a library is versioned by the required `library.yaml` `format:` integer — today only `1` is accepted, because internal/template.loadLibraryMeta rejects every other value, so nothing today can actually be at another format — whereas a deck's `kalide.yaml` has no version field at all (its key set is title, author, date, theme, navigation, properties, templates). That is why the deck path cannot key migrations off a recorded version and must instead recognize unmodified kalide-owned scaffold files by content against the known-version catalog (global.constraint.upgrade-known-version-catalog) [autonomous]. The running binary's version is `main.version` (stamped via -ldflags -X, `dev` otherwise), the same value `kalide version` prints (version-command) [autonomous]. The command surface (`kalide upgrade`, no `--force`), the two-half scope (refresh + migrate) and the conservative never-clobber safety model are the user's firm decisions [with user].",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-library-upgrade",
+      "properties": {}
+    }
+  ],
   "in": []
 }
