@@ -447,6 +447,23 @@ type sectionDecl struct {
 	ok       bool
 }
 
+// resolveChildTemplate scopes one child heading to its parent: given the parent
+// template that owns the declarations (the slide template for a top-level
+// section, the parent section's resolved template for a child), it returns the
+// declaration for name among that parent's declared child sections
+// (Catalogue.SectionNames/SectionDecl). An undeclared name is rejected with a
+// closest-match suggestion over the parent's declared names, carrying the
+// child's containment path. It owns child-scope derivation and child-name
+// validation only; it never resolves the instance's `template:` value.
+func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name string, line int, path string) (sectionDecl, error) {
+	names := cat.SectionNames(parentTemplate)
+	accepted, minRep, maxRep, ok := cat.SectionDecl(parentTemplate, name)
+	if !ok {
+		return sectionDecl{}, unknownName(file, line, path, "section", name, names)
+	}
+	return sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}, nil
+}
+
 // resolveSectionTemplate is the parent-level `template:` resolution entry
 // point. Given one section instance's frontmatter block (nil when the section
 // has none) and the parent-scoped sectionDecl d it must resolve against
