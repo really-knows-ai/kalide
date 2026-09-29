@@ -4,6 +4,12 @@
   "name": "theme-library-reach",
   "body": "Theme library-reach change (domain propagation). The requirement now says theme CSS — and every CSS it imports, wherever in the library that CSS lives — may `url()`/`@import` any servable library file via `media:` (shared media/) or `theme:<name>/` (another theme), resolved from the referencing file's own location and fully checked and rewritten (theme-media-references). Propagated to domain.entity.theme (reach and cross-theme layering), domain.value.media-asset (both prefixes plus relative), domain.service.load-template-library and domain.service.template-registry (step-6 checks follow the whole import graph, bounded and cycle-safe). Spine `drives` edges are unchanged: theme-media-references still drives theme, media-asset, load-template-library and template-registry; template-media still drives media-asset and template-library. The binding law requirements.constraint.media-paths-library-relative is amended separately. [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "domain.entity.theme",
+      "properties": {}
+    }
+  ],
   "in": []
 }
