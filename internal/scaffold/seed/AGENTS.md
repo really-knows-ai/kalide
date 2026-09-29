@@ -393,6 +393,7 @@ kalide init-library <path> Create a new, empty template library at <path>.
 kalide start [--port N] [--no-open]
                            Validate and serve the deck with live reload.
 kalide templates [name]    List the resolved library's templates, or show one.
+kalide upgrade             Refresh kalide-owned files and apply migrations.
 kalide version             Print the version (also --version, -v).
 kalide help                Show usage.
 ```
@@ -413,12 +414,20 @@ kalide help                Show usage.
 - `kalide templates` lists the templates in the resolved library;
   `kalide templates <name>` documents one template's fields, sections, body
   rules and example.
+- `kalide upgrade` brings an existing deck or library in the current directory
+  forward: it refreshes the kalide-owned scaffold files to the running binary's
+  versions and applies kalide's format migrations, entirely offline. It never
+  overwrites author content — a file the author has edited is left untouched and
+  reported — takes no path argument and has no `--force`.
 
 ## How to work on a deck
 
-1. Discover the real templates before writing slides: run `kalide templates`,
+1. If the deck was created by an older `kalide`, run `kalide upgrade` first: it
+   refreshes kalide-owned scaffold files and applies any format migrations,
+   offline, without overwriting your content.
+2. Discover the real templates before writing slides: run `kalide templates`,
    then `kalide templates <name>` for the fields, sections, body rules and a
    copyable example. Do not guess template names, field names or themes.
-2. Write or edit slide files under `slides/`.
-3. Validate with `kalide start`. If it reports a problem, fix exactly that
+3. Write or edit slide files under `slides/`.
+4. Validate with `kalide start`. If it reports a problem, fix exactly that
    first error and run it again.
