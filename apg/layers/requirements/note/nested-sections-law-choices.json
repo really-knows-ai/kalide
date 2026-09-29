@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.constraint.section-depth-limit",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.section-cycle-error-chain",
+      "properties": {}
     }
   ],
   "in": []
