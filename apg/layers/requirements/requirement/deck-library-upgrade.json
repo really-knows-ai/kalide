@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
