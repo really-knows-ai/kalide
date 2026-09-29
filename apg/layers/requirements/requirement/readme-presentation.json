@@ -43,11 +43,6 @@
       "kind": "contains",
       "source": "requirements.requirement.distribution",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.release-0-5-0-decisions",
-      "properties": {}
     }
   ]
 }
