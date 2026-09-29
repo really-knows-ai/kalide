@@ -1,0 +1,109 @@
+{
+  "identities": [
+    {
+      "identity": "deck:AGENTS.md",
+      "digests": [
+        {
+          "digest": "959ac30d93dd202d440c0af32ec1512c51d7c470186576ce12725c36cde31c16",
+          "versions": ["v0.7.0"]
+        },
+        {
+          "digest": "021639e1b438f8dd20b79e58926c0dc0df49f8843b4c7ed91d44eacb1b295491",
+          "versions": ["v0.7.1"]
+        },
+        {
+          "digest": "83a3d5fdb18a331d2d05b9df705669c0a3293432b5592ed0f6819dac8cd79036",
+          "versions": ["v0.8.0"]
+        },
+        {
+          "digest": "fd6b677b6856ac12c772ecd4a1144a534f75e95be549982c77066aceb9f6a5be",
+          "versions": ["unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "deck:templates/library.yaml",
+      "digests": [
+        {
+          "digest": "c39d54176f5718b9168636f9bea87a728f79bc3b2733427004f8025d4bae640e",
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "deck:templates/slides/hello/example.md",
+      "digests": [
+        {
+          "digest": "0ae29fe642f0ddccbfc5d5af35e77af15e602bc080b75c3402ae80e82b626dc2",
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "deck:templates/slides/hello/layout.html.tmpl",
+      "digests": [
+        {
+          "digest": "c657f5eff5f3a1eb45cc3f2c080ff380b9eec1b09bc31f34961f8e01569fa412",
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "deck:templates/slides/hello/template.yaml",
+      "digests": [
+        {
+          "digest": "182361141673e0ea87115d99049fca2fdfcc531740ecb2a6aad643a5cdeaf0a1",
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "deck:templates/themes/default/theme.css",
+      "digests": [
+        {
+          "digest": "de01256085de54b001cad6769c63df00f30c7954a87246a1e41bb49053706dfc",
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "deck:slides/1-hello.md",
+      "digests": [
+        {
+          "digest": "0ae29fe642f0ddccbfc5d5af35e77af15e602bc080b75c3402ae80e82b626dc2",
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "library:AGENTS.md",
+      "digests": [
+        {
+          "digest": "a05421cbe768ec32985cf7fd1f4fd3acd7125bae9e75ec10454fe5feb18e4533",
+          "versions": ["v0.7.0"]
+        },
+        {
+          "digest": "4fa76f5200e114436936bfcabbf85e603e726da7ce6d1463acfba739fee2f8d8",
+          "versions": ["v0.7.1"]
+        },
+        {
+          "digest": "7216061590a2d6a366f58b71c9fbc00ba2b662c6b6dbef36f005bae39acf34d8",
+          "versions": ["v0.8.0"]
+        },
+        {
+          "digest": "10e4e58e6e123fda1d76b5f3034334d0fb177e952970f910a9fabf773c740f61",
+          "versions": ["unreleased"]
+        }
+      ]
+    },
+    {
+      "identity": "library:themes/default/theme.css",
+      "digests": [
+        {
+          "digest": "de01256085de54b001cad6769c63df00f30c7954a87246a1e41bb49053706dfc",
+          "versions": ["v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+        }
+      ]
+    }
+  ]
+}
