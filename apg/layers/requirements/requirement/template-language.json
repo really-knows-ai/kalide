@@ -35,11 +35,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-template-language",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.template-context",
       "properties": {}

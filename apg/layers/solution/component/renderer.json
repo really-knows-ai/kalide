@@ -38,11 +38,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-template-language",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.group.templating",
       "properties": {}
