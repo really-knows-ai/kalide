@@ -7,8 +7,13 @@ package scaffold
 // global.constraint.upgrade-never-clobbers,
 // requirements.constraint.upgrade-owned-scaffold-scope).
 //
-// The tests are unit tier: every fixture is built in a t.TempDir, the tests
-// reach no network, no server and no git, and they run under -short.
+// The unit cases are unit tier: every fixture is built in a t.TempDir, the tests
+// reach no network, no server and no git, and they run under -short. The
+// integration aggregate TestRefreshScaffold
+// (upgrade/plan.phase-02.task-6) is int tier: it builds real projects on disk
+// with scaffold.Init, scaffold.InitExternal and scaffold.InitLibrary and
+// re-validates them through the real loaders, so it is guarded with
+// testing.Short and skipped by `go test -short`.
 //
 // upgrade/plan.phase-02.task-5 creates this file with the unit cases below. The
 // integration aggregate TestRefreshScaffold belongs to
@@ -41,6 +46,7 @@ import (
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // refreshPinnedTime is a fixed past instant pinned onto a file's mtime before a
@@ -826,5 +832,392 @@ func TestRefreshScaffoldNeverWritesKalideYAML(t *testing.T) {
 		if refreshIn(report.refreshed, deck.ConfigFile) || refreshIn(report.skipped, deck.ConfigFile) {
 			t.Errorf("report names %s; the author-edited deck config is not an owned member", deck.ConfigFile)
 		}
+	})
+}
+
+// refreshFileState is one path's kind, bytes and modification time in a tree
+// fingerprint.
+type refreshFileState struct {
+	dir   bool
+	bytes string
+	mtime time.Time
+}
+
+// refreshFingerprint maps every path under root — slash-separated and relative
+// to root, directories included — to its content and modification time.
+// Comparing two fingerprints detects any write, touch, creation or deletion
+// under root, not merely changed bytes: a rewrite that happened to write
+// identical bytes would still move the mtime
+// (global.constraint.upgrade-never-clobbers).
+func refreshFingerprint(t *testing.T, root string) map[string]refreshFileState {
+	t.Helper()
+
+	fingerprint := make(map[string]refreshFileState)
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if p == root {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, p)
+		if relErr != nil {
+			return relErr
+		}
+		info, infoErr := d.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		state := refreshFileState{dir: d.IsDir(), mtime: info.ModTime()}
+		if !d.IsDir() {
+			data, readErr := os.ReadFile(p)
+			if readErr != nil {
+				return readErr
+			}
+			state.bytes = string(data)
+		}
+		fingerprint[filepath.ToSlash(rel)] = state
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("fingerprint %s: %v", root, err)
+	}
+	return fingerprint
+}
+
+// refreshAssertTreeUntouched asserts every path in before is still present
+// under root with the same kind, bytes and mtime, and that no path was added:
+// the whole tree is byte-for-byte and mtime-identical. It is the strongest
+// "nothing was read-modified-written, refreshed or deleted" observation
+// (global.constraint.upgrade-never-clobbers).
+func refreshAssertTreeUntouched(t *testing.T, root string, before map[string]refreshFileState) {
+	t.Helper()
+
+	after := refreshFingerprint(t, root)
+	for rel, want := range before {
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		got, ok := after[rel]
+		if !ok {
+			t.Errorf("%s was removed, want it untouched", abs)
+			continue
+		}
+		if got.dir != want.dir || got.bytes != want.bytes {
+			t.Errorf("%s changed, want it byte-for-byte untouched", abs)
+		}
+		if !got.mtime.Equal(want.mtime) {
+			t.Errorf("%s mtime = %v, want the untouched %v; the path was rewritten", abs, got.mtime, want.mtime)
+		}
+	}
+	for rel := range after {
+		if _, ok := before[rel]; !ok {
+			t.Errorf("%s was created, want nothing written under the tree", filepath.Join(root, filepath.FromSlash(rel)))
+		}
+	}
+}
+
+// refreshLoadDeck loads a scaffolded deck through the real loaders and fails the
+// test on any error: theme.LoadDir builds the registry over the resolved
+// template library, deck.LoadConfig validates kalide.yaml against it, and
+// template.LoadDeckLibrary validates the deck's template root. libraryRoot is
+// the resolved library directory and configured is the raw `templates:` value
+// ("" for a no-arg seed deck's local templates/).
+func refreshLoadDeck(t *testing.T, deckRoot, libraryRoot, configured string) {
+	t.Helper()
+
+	themes, err := theme.LoadDir(os.DirFS(libraryRoot), template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir(%s) error = %v, want the refreshed deck's themes to load", libraryRoot, err)
+	}
+	if _, err := deck.LoadConfig(os.DirFS(deckRoot), deck.ConfigFile, themes); err != nil {
+		t.Fatalf("deck.LoadConfig(%s) error = %v, want the refreshed deck to load", deckRoot, err)
+	}
+	if _, err := template.LoadDeckLibrary(deckRoot, configured); err != nil {
+		t.Fatalf("template.LoadDeckLibrary(%s, %q) error = %v, want the refreshed template root to load",
+			deckRoot, configured, err)
+	}
+}
+
+// refreshLoadLibrary loads a refreshed template library through the real loader
+// and fails the test on any error. A library is a template root itself, so it is
+// loaded as a deck would load it with a configured library: the "." path
+// resolves against the library root and runs the full templates-dir-validation
+// checks over it.
+func refreshLoadLibrary(t *testing.T, libraryRoot string) {
+	t.Helper()
+
+	if _, err := template.LoadDeckLibrary(libraryRoot, "."); err != nil {
+		t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = %v, want the refreshed library to load", libraryRoot, err)
+	}
+}
+
+// TestRefreshScaffold is the integration aggregate for the refresh half
+// (upgrade/plan.phase-02.task-6). It builds real projects on disk with
+// scaffold.Init (a no-arg seed deck), scaffold.InitExternal (an external-library
+// deck) and scaffold.InitLibrary (a library), runs detectProject +
+// refreshScaffold over each, and re-validates the upgraded result through the
+// real loaders — template.LoadDeckLibrary for the template root and
+// deck.LoadConfig for the deck. It covers the never-clobber guarantees end to
+// end (global.constraint.upgrade-never-clobbers,
+// global.constraint.upgrade-never-breaks-project, agent-authoring,
+// library-agent-guide, external-template-library) plus the required
+// external-library, idempotence and old-catalogued-guide cases.
+//
+// The test proves the aggregate behaviour the unit cases decompose: author
+// content is byte-for-byte identical, a deleted starter file is not re-created,
+// an external-library deck gets no local templates/ or starter slide and leaves
+// its configured library byte- and mtime-untouched, an old catalogued AGENTS.md
+// (deck and library) is replaced by the current guide, a second run is a no-op,
+// and the project still loads cleanly. It uses the real filesystem under a
+// t.TempDir only: no server, no network and no git, so it is int tier and
+// guarded with testing.Short.
+func TestRefreshScaffold(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: builds real projects on disk and re-validates them through the loaders")
+	}
+
+	t.Run("a seed deck preserves author content, does not re-create a deleted starter, and still loads", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+
+		// Author content: an author-edited kalide-owned member (the default
+		// theme) that matches no catalogued released version, plus a slide the
+		// author added. Both must survive byte-for-byte, and the theme is a
+		// present member the engine must skip rather than refresh.
+		authorTheme := []byte("/* my own theme */\n:root { --accent: rebeccapurple; }\n")
+		refreshWrite(t, refreshAbs(root, refreshDeckThemePath), authorTheme)
+		refreshPin(t, refreshAbs(root, refreshDeckThemePath))
+
+		authorSlideRel := deck.SlidesDir + "/2-author.md"
+		authorSlide := []byte("---\ntemplate: hello\ntitle: My own slide\n---\nMy own words.\n")
+		refreshWrite(t, refreshAbs(root, authorSlideRel), authorSlide)
+		refreshPin(t, refreshAbs(root, authorSlideRel))
+
+		// A starter file the author deleted must not be re-created.
+		starter := refreshAbs(root, starterSlidePath)
+		if err := os.Remove(starter); err != nil {
+			t.Fatalf("remove %s: %v", starter, err)
+		}
+
+		kind, err := detectProject(root)
+		if err != nil {
+			t.Fatalf("detectProject(%s) error = %v, want a deck", root, err)
+		}
+		if kind != projectKindDeck {
+			t.Fatalf("detectProject(%s) kind = %v, want projectKindDeck", root, kind)
+		}
+		report, err := refreshScaffold(root, kind, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", root, err)
+		}
+
+		refreshAssertUnchanged(t, refreshAbs(root, refreshDeckThemePath), authorTheme)
+		refreshAssertUnchanged(t, refreshAbs(root, authorSlideRel), authorSlide)
+		refreshAssertAbsent(t, starter)
+		if len(report.refreshed) != 0 {
+			t.Errorf("report.refreshed = %v, want no write for a deck whose only non-current members are author content", report.refreshed)
+		}
+		if !refreshIn(report.skipped, starterSlidePath) {
+			t.Errorf("report.skipped = %v, want it to name the deleted starter slide %s", report.skipped, starterSlidePath)
+		}
+		if !refreshIn(report.skipped, refreshDeckThemePath) {
+			t.Errorf("report.skipped = %v, want it to name the author-edited %s", report.skipped, refreshDeckThemePath)
+		}
+		refreshAssertReport(t, report, refreshMemberPathSet(deckOwnedMembers))
+
+		// The upgraded deck still loads cleanly through the real loaders.
+		refreshLoadDeck(t, root, refreshAbs(root, template.TemplatesDir), "")
+	})
+
+	t.Run("a library preserves author content and still loads", func(t *testing.T) {
+		root := refreshLibrary(t)
+
+		// Author-edited seeded theme: present and matching no catalogued
+		// released version, so it must be skipped, never refreshed.
+		authorTheme := []byte("/* my own library theme */\n:root { --accent: teal; }\n")
+		refreshWrite(t, refreshAbs(root, themeCSSPath), authorTheme)
+		refreshPin(t, refreshAbs(root, themeCSSPath))
+
+		kind, err := detectProject(root)
+		if err != nil {
+			t.Fatalf("detectProject(%s) error = %v, want a library", root, err)
+		}
+		if kind != projectKindLibrary {
+			t.Fatalf("detectProject(%s) kind = %v, want projectKindLibrary", root, kind)
+		}
+		report, err := refreshScaffold(root, kind, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", root, err)
+		}
+
+		refreshAssertUnchanged(t, refreshAbs(root, themeCSSPath), authorTheme)
+		if len(report.refreshed) != 0 {
+			t.Errorf("report.refreshed = %v, want no write for a library whose only non-current member is author content", report.refreshed)
+		}
+		if !refreshIn(report.skipped, themeCSSPath) {
+			t.Errorf("report.skipped = %v, want it to name the author-edited %s", report.skipped, themeCSSPath)
+		}
+		refreshAssertReport(t, report, refreshMemberPathSet(libraryOwnedMembers))
+
+		// The upgraded library still loads cleanly through the real loader.
+		refreshLoadLibrary(t, root)
+	})
+
+	t.Run("an external-library deck leaves its configured library untouched and still loads", func(t *testing.T) {
+		parent := t.TempDir()
+		libraryRoot := filepath.Join(parent, "shared-lib")
+		if err := InitLibrary(libraryRoot); err != nil {
+			t.Fatalf("InitLibrary(%s) error = %v, want a fresh library", libraryRoot, err)
+		}
+		deckRoot := filepath.Join(parent, "deck")
+		// The `kalide init <path>` form: a real external-library deck.
+		if err := Init(deckRoot, "../shared-lib"); err != nil {
+			t.Fatalf("Init(%s, ../shared-lib) error = %v, want a fresh external-library deck", deckRoot, err)
+		}
+
+		// Fingerprint the configured library before the refresh: nothing under
+		// it may change, be added or be deleted.
+		before := refreshFingerprint(t, libraryRoot)
+
+		kind, err := detectProject(deckRoot)
+		if err != nil {
+			t.Fatalf("detectProject(%s) error = %v, want a deck", deckRoot, err)
+		}
+		if kind != projectKindDeck {
+			t.Fatalf("detectProject(%s) kind = %v, want projectKindDeck", deckRoot, kind)
+		}
+		report, err := refreshScaffold(deckRoot, kind, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", deckRoot, err)
+		}
+
+		// The configured `templates:` library is byte- and mtime-untouched.
+		refreshAssertTreeUntouched(t, libraryRoot, before)
+
+		// No local templates/ and no starter slide for an external-library deck.
+		refreshAssertAbsent(t, filepath.Join(deckRoot, template.TemplatesDir))
+		refreshAssertAbsent(t, refreshAbs(deckRoot, starterSlidePath))
+
+		// The deck-root guide is the only owned member and was already current.
+		refreshAssertReport(t, report, []string{agentsGuideName})
+		if len(report.refreshed) != 0 {
+			t.Errorf("report.refreshed = %v, want no write for an already-current external-library deck", report.refreshed)
+		}
+
+		// The upgraded deck still loads cleanly through the real loaders.
+		refreshLoadDeck(t, deckRoot, libraryRoot, "../shared-lib")
+	})
+
+	t.Run("an old catalogued deck guide is replaced by the current guide", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		guide := refreshAbs(root, agentsGuideName)
+		old := []byte("# an older released kalide deck guide\n\nOld guidance.\n")
+		refreshWrite(t, guide, old)
+		// The embedded catalogue holds digests only, so the seam presents the
+		// old released guide's digest for the real deck-guide identity.
+		refreshSetCatalog(t, refreshCatalogFixture{deckGuideIdentity: {old}})
+
+		kind, err := detectProject(root)
+		if err != nil {
+			t.Fatalf("detectProject(%s) error = %v, want a deck", root, err)
+		}
+		report, err := refreshScaffold(root, kind, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", root, err)
+		}
+
+		if got, want := refreshRead(t, guide), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
+			t.Errorf("old catalogued deck guide was not replaced by the current guide")
+		}
+		if !refreshIn(report.refreshed, agentsGuideName) {
+			t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, agentsGuideName)
+		}
+	})
+
+	t.Run("an old catalogued library guide is replaced by the current guide", func(t *testing.T) {
+		root := refreshLibrary(t)
+		guide := refreshAbs(root, agentsGuideName)
+		old := []byte("# an older released kalide library guide\n\nOld guidance.\n")
+		refreshWrite(t, guide, old)
+		refreshSetCatalog(t, refreshCatalogFixture{libraryGuideIdentity: {old}})
+
+		kind, err := detectProject(root)
+		if err != nil {
+			t.Fatalf("detectProject(%s) error = %v, want a library", root, err)
+		}
+		report, err := refreshScaffold(root, kind, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", root, err)
+		}
+
+		if got, want := refreshRead(t, guide), mustReadLibraryGuide(); !bytes.Equal(got, want) {
+			t.Errorf("old catalogued library guide was not replaced by the current guide")
+		}
+		if !refreshIn(report.refreshed, agentsGuideName) {
+			t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, agentsGuideName)
+		}
+	})
+
+	t.Run("a second refresh is a no-op", func(t *testing.T) {
+		t.Run("deck", func(t *testing.T) {
+			root := refreshSeedDeck(t)
+			guide := refreshAbs(root, agentsGuideName)
+			old := []byte("# an older released kalide deck guide\n")
+			refreshWrite(t, guide, old)
+			refreshSetCatalog(t, refreshCatalogFixture{deckGuideIdentity: {old}})
+
+			kind, err := detectProject(root)
+			if err != nil {
+				t.Fatalf("detectProject(%s) error = %v, want a deck", root, err)
+			}
+			first, err := refreshScaffold(root, kind, nil)
+			if err != nil {
+				t.Fatalf("first refreshScaffold(%s) error = %v", root, err)
+			}
+			if !refreshIn(first.refreshed, agentsGuideName) {
+				t.Fatalf("first refresh.refreshed = %v, want the old guide refreshed", first.refreshed)
+			}
+
+			// Pin every member after the first run: the second run must not
+			// rewrite any of them.
+			for _, member := range deckOwnedMembers {
+				refreshPin(t, refreshAbs(root, member.path))
+			}
+			second, err := refreshScaffold(root, kind, nil)
+			if err != nil {
+				t.Fatalf("second refreshScaffold(%s) error = %v", root, err)
+			}
+			if len(second.refreshed) != 0 {
+				t.Errorf("second refresh.refreshed = %v, want a no-op", second.refreshed)
+			}
+			refreshAssertReport(t, second, refreshMemberPathSet(deckOwnedMembers))
+			for _, member := range deckOwnedMembers {
+				refreshAssertUnchanged(t, refreshAbs(root, member.path), mustReadSeed(member.path))
+			}
+		})
+
+		t.Run("library", func(t *testing.T) {
+			root := refreshLibrary(t)
+
+			kind, err := detectProject(root)
+			if err != nil {
+				t.Fatalf("detectProject(%s) error = %v, want a library", root, err)
+			}
+			if _, err := refreshScaffold(root, kind, nil); err != nil {
+				t.Fatalf("first refreshScaffold(%s) error = %v", root, err)
+			}
+
+			for _, member := range libraryOwnedMembers {
+				refreshPin(t, refreshAbs(root, member.path))
+			}
+			second, err := refreshScaffold(root, kind, nil)
+			if err != nil {
+				t.Fatalf("second refreshScaffold(%s) error = %v", root, err)
+			}
+			if len(second.refreshed) != 0 {
+				t.Errorf("second refresh.refreshed = %v, want a no-op", second.refreshed)
+			}
+			refreshAssertReport(t, second, refreshMemberPathSet(libraryOwnedMembers))
+			refreshAssertUnchanged(t, refreshAbs(root, agentsGuideName), mustReadLibraryGuide())
+			refreshAssertUnchanged(t, refreshAbs(root, themeCSSPath), []byte(DefaultThemeCSS()))
+		})
 	})
 }
