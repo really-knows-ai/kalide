@@ -12,6 +12,11 @@
       "kind": "contains",
       "source": "domain.group.upgrade",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.upgrade-migrate-format",
+      "properties": {}
     }
   ]
 }

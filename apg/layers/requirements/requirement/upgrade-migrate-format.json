@@ -6,7 +6,13 @@
   "properties": {
     "feature": "project-templates"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.format-migration",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
