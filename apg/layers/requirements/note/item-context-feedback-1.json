@@ -6,6 +6,12 @@
   "properties": {
     "attaches-to": "requirements.requirement.item-context"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.item-context",
+      "properties": {}
+    }
+  ],
   "in": []
 }

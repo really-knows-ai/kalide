@@ -28,6 +28,11 @@
       "kind": "details",
       "source": "requirements.note.nested-sections-requirements",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.item-context-feedback-1",
+      "properties": {}
     }
   ]
 }
