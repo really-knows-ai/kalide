@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "domain.value.item-context",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.constraint.template-context-reserved",
+      "properties": {}
     }
   ],
   "in": []
