@@ -27,6 +27,18 @@ func MediaURLPrefix() string {
 	return "media:"
 }
 
+// ThemeURLPrefix returns the reserved prefix a theme stylesheet uses to
+// reference another theme's files, e.g. "theme:default/fonts/x.woff2". It is
+// the exact literal "theme:" — the scheme-like token including the colon that
+// precedes the sibling theme name. This is the ONE canonical source of truth
+// for the reserved prefix: the theme-CSS reference scanner, the serve-time CSS
+// rewriter and the agent-guide drift test all read it from here, so the token
+// must never be hardcoded elsewhere. The <name> after the prefix names a
+// sibling directory under the resolved library's themes/.
+func ThemeURLPrefix() string {
+	return "theme:"
+}
+
 // MediaFunc returns the `media` layout func: it resolves p relative to the
 // library's templates/media directory only, rejects an absolute path or a
 // path containing a `..` segment, and requires the file to exist — a missing
