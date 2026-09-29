@@ -171,51 +171,82 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// Slide body Markdown, then the slide template's implied body rule. The
 	// Markdown-subset check runs first because it is the body's well-formedness
 	// check; template.CheckBody then enforces the rule the template declares
-	// for the same body (body-rules).
-	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine); invalid {
+	// for the same body (body-rules). The subheading gate carries whether the
+	// slide template declares child sections, so a heading at any depth is a
+	// section marker there and deeper headings stay subheadings otherwise
+	// (markdown-allowed-subset).
+	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl)); invalid {
 		return verr, true
 	}
 	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine); invalid {
 		return verr, true
 	}
 
-	// Sections in source order, each one's frontmatter fields then its body, so
-	// the walk stays top-to-bottom by line.
-	//
-	// The slide parser yields exactly one section level: a section instance's
-	// body is Markdown after its `# name` heading, and composition nests inside
-	// templates, never in author Markdown (template-composition). A nested
-	// section instance is therefore a section-template-as-type YAML value with
-	// no Markdown body — its BodyDisallowed rule is enforced by CheckValues'
-	// `body:`-key rejection — so only the slide body and each top-level
-	// section body carry a body rule here.
-	for _, sec := range ps.Sections {
-		if sec.Template == "" {
-			continue
-		}
-		secTmpl, ok := reg.Lookup(sec.Template)
-		if !ok || secTmpl == nil {
-			continue
-		}
-		if verr, invalid := checkFields(fsys, s.Path, sec.Frontmatter, secTmpl, reg); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkBody(s.Path, sec.Body, sec.BodyLine); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkBodyRule(s.Path, secTmpl.Body, sec.Body, sec.BodyLine); invalid {
-			return verr, true
-		}
+	// Sections in source order, each one's frontmatter fields then its body,
+	// recursing into nested section instances (slide-sections). A nested
+	// instance's template declares its own body rule and its own
+	// child-section state, so each body is checked against its own enclosing
+	// template.
+	if verr, invalid := checkSections(fsys, s.Path, ps.Sections, reg); invalid {
+		return verr, true
 	}
 
-	// The reserved notes section is a body too and, being last, is checked last.
+	// The reserved notes section is a body too and, being last, is checked
+	// last. `# notes` is top-level only, and a deeper heading never starts
+	// notes, so the notes body carries the slide body's subheading gate.
 	if ps.Notes != nil {
-		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine); invalid {
+		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl)); invalid {
 			return verr, true
 		}
 	}
 
 	return ValidationError{}, false
+}
+
+// checkSections validates a slice of section instances in source order: each
+// instance's frontmatter fields, then its body against its own template's
+// implied body rule, then its children recursively (slide-sections). file is
+// the slide path every error is positioned in.
+func checkSections(fsys fs.FS, file string, sections []slide.Section, reg *template.Registry) (ValidationError, bool) {
+	for i := range sections {
+		sec := &sections[i]
+		if sec.Template == "" {
+			// No resolvable template: the parser already reported it, and no
+			// nested instances can be checked without one. Children with a
+			// template are still walked by their own parent below.
+			if verr, invalid := checkSections(fsys, file, sec.Children, reg); invalid {
+				return verr, true
+			}
+			continue
+		}
+		secTmpl, ok := reg.Lookup(sec.Template)
+		if !ok || secTmpl == nil {
+			if verr, invalid := checkSections(fsys, file, sec.Children, reg); invalid {
+				return verr, true
+			}
+			continue
+		}
+		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, reg); invalid {
+			return verr, true
+		}
+		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl)); invalid {
+			return verr, true
+		}
+		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine); invalid {
+			return verr, true
+		}
+		if verr, invalid := checkSections(fsys, file, sec.Children, reg); invalid {
+			return verr, true
+		}
+	}
+	return ValidationError{}, false
+}
+
+// declaresChildSections reports whether tmpl declares child sections, the
+// state mdcheck.Check's subheading gate carries (markdown-allowed-subset,
+// template-composition).
+func declaresChildSections(tmpl *template.Template) bool {
+	return tmpl != nil && len(tmpl.Sections) > 0
 }
 
 // checkFields checks one frontmatter/section data map against tmpl's field
@@ -241,14 +272,17 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 // checkBody checks one Markdown body (a slide body, a section body or the notes
 // body) against the accepted Markdown subset through internal/mdcheck. startLine
 // is the body's 1-based line in the file, so issues are positioned absolutely.
-// It returns the first issue and whether one was found.
-func checkBody(file, body string, startLine int) (ValidationError, bool) {
+// declaresChildSections is the enclosing template's child-section state, which
+// mdcheck.Check's subheading gate carries (markdown-allowed-subset). It returns
+// the first issue and whether one was found.
+func checkBody(file, body string, startLine int, declaresChildSections bool) (ValidationError, bool) {
 	if body == "" {
 		return ValidationError{}, false
 	}
 	issues := mdcheck.Check(file, []byte(body), mdcheck.Options{
-		Mode:      mdcheck.BodyMode,
-		StartLine: startLine,
+		Mode:                          mdcheck.BodyMode,
+		StartLine:                     startLine,
+		TemplateDeclaresChildSections: declaresChildSections,
 	})
 	if len(issues) == 0 {
 		return ValidationError{}, false

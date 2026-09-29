@@ -97,7 +97,24 @@ func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, label
 		return verr, true
 	}
 
-	for _, sec := range ps.Sections {
+	if verr, invalid := checkSectionLinks(file, ps.Sections, reg, labels, candidates); invalid {
+		return verr, true
+	}
+
+	if ps.Notes != nil {
+		if verr, invalid := checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates); invalid {
+			return verr, true
+		}
+	}
+	return ValidationError{}, false
+}
+
+// checkSectionLinks checks the links of each section instance in source order —
+// its frontmatter fields then its body — recursing into nested instances
+// (slide-sections). It returns the first error and whether one was found.
+func checkSectionLinks(file string, sections []slide.Section, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+	for i := range sections {
+		sec := &sections[i]
 		var secTmpl *template.Template
 		if sec.Template != "" {
 			secTmpl, _ = reg.Lookup(sec.Template)
@@ -108,10 +125,7 @@ func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, label
 		if verr, invalid := checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates); invalid {
 			return verr, true
 		}
-	}
-
-	if ps.Notes != nil {
-		if verr, invalid := checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates); invalid {
+		if verr, invalid := checkSectionLinks(file, sec.Children, reg, labels, candidates); invalid {
 			return verr, true
 		}
 	}
