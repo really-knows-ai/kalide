@@ -49,7 +49,6 @@
 //   - registeredMigrations kalide's ordered migration set (empty today).
 //   - readLibraryFormat reads a library's raw `format:` integer tolerantly.
 //   - implementedFormat reports the highest format the binary implements.
-//     TODO(upgrade/plan.phase-03.task-5)
 //   - unsupportedFormatError the unknown/newer refusal.
 //     TODO(upgrade/plan.phase-03.task-6)
 //   - migrateLibrary the orchestrator, delegating to the testable seam
@@ -189,14 +188,20 @@ func readLibraryFormat(dir string) (int, error) {
 }
 
 // implementedFormat returns the highest library.yaml format the running binary
-// implements (today firstLibraryFormat, `1`). The comparison is on the format
-// integer, never on the version string (domain.value.version): a
-// `dev`/unstamped build implements the format of the source it was built from,
-// so it never means "newer".
+// implements — today firstLibraryFormat, `1`. It is the single source of truth
+// for the running format: the binary-side anchor a project's current format is
+// compared against, and the upper bound migrateLibrary applies the registered
+// migrations up to.
 //
-// TODO(upgrade/plan.phase-03.task-5): return the implemented format.
+// The comparison is on the format integer, never on the version string
+// (domain.value.version). A `dev`/unstamped build implements the format of the
+// source it was built from, exactly like a tagged build of that same source, so
+// it never counts as "newer": an unstamped binary reports the format its source
+// implements, and a library at that same format is current, not ahead. What
+// makes a format "newer" is solely the integer exceeding this value — which is
+// why this returns firstLibraryFormat rather than reading a version.
 func implementedFormat() int {
-	return 0
+	return firstLibraryFormat
 }
 
 // unsupportedFormatError is the refusal for a library.yaml `format:` the binary
