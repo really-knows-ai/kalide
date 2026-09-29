@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "item-context",
+  "body": "The `.item` sibling descriptor available to every slide layout and section template at every nesting depth: the current instance's index (0-based), number (1-based), count, first/last flags, section name, resolved template, and its parent instance's fields. It is nil/absent for a slide, which has no siblings. Data, not a helper.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
