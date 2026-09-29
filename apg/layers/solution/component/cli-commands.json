@@ -43,11 +43,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.fix-native-e2e-definition",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.entity.release",
       "properties": {}
