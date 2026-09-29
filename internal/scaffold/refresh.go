@@ -23,26 +23,31 @@
 //     the single owner of deck/library detection and of the both/neither
 //     error.
 //   - detectSeedDeck  reports whether a deck is the no-arg seed deck that owns
-//     its local templates/.        TODO(upgrade/plan.phase-02.task-3)
+//     its local templates/.
 //   - refreshScaffold applies the never-clobber refresh.
-//     TODO(upgrade/plan.phase-02.task-4)
 //
 // The refresh half is built on the rest of the package's embedded content and
-// the catalogue above, plus the deck and template loaders: it reads and
-// validates a deck with deck.LoadConfig, takes its raw `templates:` value with
-// deck.TemplatesPath, and resolves and loads its library through the loader's
-// single root-resolution point, template.ResolveLibraryRoot and
-// template.LoadDeckLibrary. It reads only the embedded content, the embedded
-// catalogue and the local filesystem: it never reaches the network and never
-// runs git.
+// the catalogue above. It takes the deck's configuration — the caller-loaded
+// deck.LoadConfig result, or the raw `templates:` value read with
+// deck.TemplatesPath when none is given — and reads and writes only the
+// project's own local files. A deck's configured external `templates:` library
+// is never opened, so nothing under it is read or written
+// (requirements.constraint.upgrade-owned-scaffold-scope); reading only the
+// embedded content, the embedded catalogue and the local filesystem, the
+// refresh half never reaches the network and never runs git. The project's own
+// root resolution and end-to-end validation through template.ResolveLibraryRoot
+// and template.LoadDeckLibrary belong to scaffold.Upgrade (phase 4).
 package scaffold
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -112,10 +117,16 @@ type ownedMember struct {
 	path     string
 }
 
+// deckGuideMember is the deck-root AGENTS.md author guide (agent-authoring):
+// the one kalide-owned member every deck form has — a no-arg seed deck and an
+// external-library deck alike
+// (requirements.constraint.upgrade-owned-scaffold-scope).
+var deckGuideMember = ownedMember{identity: deckGuideIdentity, path: agentsGuideName}
+
 // deckOwnedMembers is the kalide-owned set of a no-arg seed deck. It covers the
 // whole embedded seed except kalide.yaml, and it includes the starter slide.
 var deckOwnedMembers = []ownedMember{
-	{identity: deckGuideIdentity, path: agentsGuideName},
+	deckGuideMember,
 	{identity: deckLibraryFileIdentity, path: deckLibraryFilePath},
 	{identity: deckHelloExampleIdentity, path: helloSlideDirPath + "/" + template.ExampleFile},
 	{identity: deckHelloLayoutIdentity, path: helloSlideDirPath + "/" + template.LayoutFile},
@@ -245,20 +256,178 @@ func detectSeedDeck(deckRoot string, cfg *deck.Config) bool {
 	return err == nil && info.IsDir()
 }
 
-// refreshScaffold is the never-clobber refresh engine. For the detected form it
-// rewrites each kalide-owned member only when the file is present AND
+// refreshScaffold is the never-clobber refresh engine. For the detected project
+// form it rewrites each kalide-owned member only when the file is present AND
 // byte-identical to a catalogued released version of that same identity
-// (catalogLookup), writes the two author guides when absent, and never
-// re-creates a deleted starter file. It returns a refreshReport naming every
-// refreshed path and every skipped path
+// (catalogLookup), writes the two AGENTS.md author guides when absent, and
+// never re-creates a deleted seed starter file. Author content, a file whose
+// bytes match no catalogued version, and a file already byte-identical to the
+// running binary's version of that same file are left byte-for-byte untouched —
+// already-current files are a no-op, never re-written. It returns a
+// refreshReport naming every refreshed path and every path it left alone
 // (requirements.requirement.upgrade-refresh-owned-scaffold,
 // global.constraint.upgrade-never-clobbers).
 //
-// TODO(upgrade/plan.phase-02.task-4): implement the engine. It consumes
-// detectSeedDeck for the deck form, reads the embedded content through
-// mustReadSeed and mustReadLibraryGuide, and loads the deck through
-// deck.LoadConfig and its library through template.ResolveLibraryRoot and
-// template.LoadDeckLibrary.
+// The owned set is scoped to the detected form and, for a deck, to its scaffold
+// form: a no-arg seed deck owns the whole embedded seed (deckOwnedMembers), an
+// external-library deck — one whose kalide.yaml configures a `templates:`
+// library — owns only its deck-root guide, and a template library owns its
+// library-root guide and its seeded default theme (libraryOwnedMembers). A
+// configured external library is never opened, so nothing under it is read or
+// written (requirements.constraint.upgrade-owned-scaffold-scope).
+//
+// deckRoot is the project root: the directory holding kalide.yaml for a deck,
+// or library.yaml for a library. cfg is the deck's already-loaded configuration
+// for the deck form (nil for a library); when nil, refreshScaffold derives the
+// raw `templates:` value from kalide.yaml itself, without opening the
+// configured library.
 func refreshScaffold(deckRoot string, kind projectKind, cfg *deck.Config) (*refreshReport, error) {
-	return nil, fmt.Errorf("scaffold: refreshScaffold: not implemented yet")
+	report := &refreshReport{}
+
+	switch kind {
+	case projectKindLibrary:
+		for _, member := range libraryOwnedMembers {
+			if err := report.refreshMember(deckRoot, member); err != nil {
+				return report, err
+			}
+		}
+		return report, nil
+
+	case projectKindDeck:
+		deckCfg, err := refreshDeckConfig(deckRoot, cfg)
+		if err != nil {
+			return report, err
+		}
+		members := deckOwnedMembers
+		if !detectSeedDeck(deckRoot, deckCfg) {
+			// An external-library deck owns only its deck-root guide: its
+			// configured library, and any leftover local templates/, are
+			// out of scope and left byte-for-byte untouched, and no
+			// starter slide is written
+			// (requirements.constraint.upgrade-owned-scaffold-scope).
+			members = []ownedMember{deckGuideMember}
+		}
+		for _, member := range members {
+			if err := report.refreshMember(deckRoot, member); err != nil {
+				return report, err
+			}
+		}
+		return report, nil
+
+	default:
+		return report, fmt.Errorf("upgrade: cannot refresh %s: no project form was detected", deckRoot)
+	}
+}
+
+// refreshDeckConfig returns the deck configuration the refresh engine works
+// from: the caller-loaded cfg when given, otherwise a minimal configuration
+// carrying only the raw `templates:` value read from kalide.yaml. Reading the
+// value directly — instead of loading and validating the whole deck through
+// deck.LoadConfig — keeps the refresh engine from opening the configured
+// external library: only deck.TemplatesPath is needed to tell a no-arg seed
+// deck from an external-library deck (detectSeedDeck), and the full load and
+// end-to-end validation belong to scaffold.Upgrade (phase 4).
+func refreshDeckConfig(deckRoot string, cfg *deck.Config) (*deck.Config, error) {
+	if cfg != nil {
+		return cfg, nil
+	}
+	data, err := os.ReadFile(filepath.Join(deckRoot, deck.ConfigFile))
+	if err != nil {
+		return nil, fmt.Errorf("upgrade: read %s: %w", deck.ConfigFile, err)
+	}
+	var raw struct {
+		Templates string `yaml:"templates"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("upgrade: parse %s: %w", deck.ConfigFile, err)
+	}
+	return &deck.Config{Templates: raw.Templates}, nil
+}
+
+// refreshMember applies the never-clobber rule to one owned member:
+//
+//   - absent: a missing AGENTS.md author guide is written from the embedded
+//     guide — the one absent-write exception; any other absent member (a
+//     deleted seed starter file, or a library's deleted seeded theme) is never
+//     re-created and is reported skipped;
+//   - present and already the running binary's current bytes: a no-op, left
+//     as-is and never re-written, reported skipped;
+//   - present and byte-identical to a catalogued released version of its own
+//     identity (catalogLookup): rewritten to the current bytes and reported
+//     refreshed;
+//   - present and matching no catalogued version of its identity (author
+//     content, including bytes that match only a DIFFERENT owned file's
+//     digest): left byte-for-byte untouched and reported skipped.
+func (r *refreshReport) refreshMember(root string, member ownedMember) error {
+	target := filepath.Join(root, filepath.FromSlash(member.path))
+
+	data, err := os.ReadFile(target)
+	switch {
+	case err == nil:
+		// Present: fall through to the decision below.
+	case errors.Is(err, fs.ErrNotExist):
+		if isAuthorGuide(member.identity) {
+			if err := writeMember(target, desiredMemberBytes(member)); err != nil {
+				return err
+			}
+			r.markRefreshed(member.path)
+			return nil
+		}
+		r.markSkipped(member.path)
+		return nil
+	default:
+		return fmt.Errorf("upgrade: read %s: %w", member.path, err)
+	}
+
+	desired := desiredMemberBytes(member)
+	if bytes.Equal(data, desired) {
+		// Already the running binary's version of this same file: a no-op,
+		// deliberately not re-written (global.constraint.upgrade-never-clobbers).
+		r.markSkipped(member.path)
+		return nil
+	}
+	if catalogLookup(member.identity, data) {
+		if err := writeMember(target, desired); err != nil {
+			return err
+		}
+		r.markRefreshed(member.path)
+		return nil
+	}
+	r.markSkipped(member.path)
+	return nil
+}
+
+// writeMember writes the running binary's bytes for an owned member, creating
+// the parent directory only when it is missing (the absent-guide case, whose
+// parent is the project root).
+func writeMember(target string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return fmt.Errorf("upgrade: create %s: %w", filepath.ToSlash(filepath.Dir(target)), err)
+	}
+	if err := os.WriteFile(target, data, 0o644); err != nil {
+		return fmt.Errorf("upgrade: write %s: %w", filepath.ToSlash(target), err)
+	}
+	return nil
+}
+
+// isAuthorGuide reports whether identity is one of the two AGENTS.md author
+// guides — the only owned members written when absent.
+func isAuthorGuide(identity string) bool {
+	return identity == deckGuideIdentity || identity == libraryGuideIdentity
+}
+
+// desiredMemberBytes returns the running binary's current bytes for an owned
+// member: the embedded library guide, the library's seeded default theme
+// (DefaultThemeCSS, the bytes InitLibrary writes), or — for every deck seed
+// member, whose on-disk path is also its seed path — the embedded seed file at
+// the member's own path.
+func desiredMemberBytes(member ownedMember) []byte {
+	switch member.identity {
+	case libraryGuideIdentity:
+		return mustReadLibraryGuide()
+	case libraryThemeIdentity:
+		return []byte(DefaultThemeCSS())
+	default:
+		return mustReadSeed(member.path)
+	}
 }
