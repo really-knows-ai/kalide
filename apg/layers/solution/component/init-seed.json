@@ -28,11 +28,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-kind-directories",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.service.scaffold-template-library",
       "properties": {}

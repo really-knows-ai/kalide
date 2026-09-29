@@ -30,11 +30,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.reconcile-kind-directories",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}
