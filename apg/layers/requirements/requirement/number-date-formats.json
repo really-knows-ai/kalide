@@ -23,11 +23,6 @@
       "kind": "contains",
       "source": "requirements.requirement.field-types",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-missing-template-depends",
-      "properties": {}
     }
   ]
 }
