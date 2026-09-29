@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "slide-metadata",
-  "body": "Per-slide metadata derived at render time, never authored: number — the slide's position label, a STRING formed from its `(number, letter)` position (domain.value.slide-position): the number with the lower-cased letter appended for a vertical slide and no letter for a horizontal slide (e.g. `1`, `1a`, `2`, `5`) — and total — the number of slide files in the deck, an integer. Exposed to layouts and section templates under the reserved `slide` context (template-context). Distinct from authored slide frontmatter (fields); derived from domain.value.slide-position.",
+  "body": "Per-slide metadata derived at render time from the slide's position (a derived value, distinct from authored frontmatter): number — the slide's position label, a STRING formed from its `(number, letter)` position (domain.value.slide-position): the number with the lower-cased letter appended for a vertical slide and no letter for a horizontal slide (e.g. `1`, `1a`, `2`, `5`) — and total — the number of slide files in the deck, an integer. Exposed to layouts and section templates under the reserved `slide` context (template-context). Derived from domain.value.slide-position.",
   "properties": {},
   "out": [],
   "in": [
