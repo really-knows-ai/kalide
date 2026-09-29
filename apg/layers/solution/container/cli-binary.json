@@ -86,11 +86,6 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.design-decisions",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.source-repo-module-path",
       "properties": {}
     },
