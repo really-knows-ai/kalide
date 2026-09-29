@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "single-binary",
-  "body": "Delivered as one self-contained static `kalide` binary (Go, built from `cmd/kalide`, released as `kalide-<os>-<arch>`) per supported target: darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64 — each only when a GitHub-hosted native runner exists for it (see supported-platforms). No runtime, network access or install step needed beyond placing the binary (Homebrew/Scoop channels, or a direct download for Linux, are a convenience). The binary packages the whole tool (authoring/scaffolding, templating, validation, presentation). AC: for every release, the offline init/start e2e passes on a native GitHub Actions runner for each supported target (see native-ci-verification); cross-compiling alone does not satisfy this AC.",
+  "body": "Delivered as one self-contained static `kalide` binary (Go, built from `cmd/kalide`, released as `kalide-<os>-<arch>`) per supported target: darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64 — each only when a GitHub-hosted native runner exists for it (see supported-platforms). No runtime, network access or install step is needed beyond placing the binary (Homebrew/Scoop channels, or a direct download for Linux, are a convenience). The binary packages the whole tool (authoring/scaffolding, templating, validation, presentation). AC: for every release, the offline init/start e2e passes on a native GitHub Actions runner for each supported target (see native-ci-verification); the AC is satisfied by a native offline e2e, not by cross-compiling alone.",
   "properties": {
     "feature": "cross-platform"
   },
