@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "license-notice",
-  "body": "License & notices: repo-root `LICENSE` (Apache-2.0 full text, covering the repo except `brand/`); repo-root `NOTICE` naming reveal.js vendored under MIT at `internal/assets/reveal/LICENSE` (part of embedded-assets), stating the `brand/` exclusion, and stating that \"kalide\" and the logo are Really Knows AI trademarks not licensed under Apache-2.0 (§6); and repo-root `TRADEMARKS.md` (short permitted-use policy). Also drives the `license` field in `Formula/kalide.rb` to `\"Apache-2.0\"` (owned by homebrew-formula).",
+  "body": "License & notices: repo-root `LICENSE` (Apache-2.0 full text, applying to the repository outside `brand/`); repo-root `NOTICE` naming reveal.js vendored under MIT at `internal/assets/reveal/LICENSE` (part of embedded-assets), stating the `brand/` exclusion, and stating that \"kalide\" and the logo are Really Knows AI trademarks kept outside the Apache-2.0 grant (§6); and repo-root `TRADEMARKS.md` (short permitted-use policy). Also drives the `license` field in `Formula/kalide.rb` to \"Apache-2.0\" (owned by homebrew-formula).",
   "properties": {},
   "out": [],
   "in": [
