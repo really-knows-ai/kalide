@@ -70,12 +70,23 @@ type Slide struct {
 	Notes *Notes
 }
 
-// Section is one top-level `# name` section of a slide. A section's frontmatter
-// is the optional plain ``` fence immediately after its heading
-// (section-frontmatter).
+// Section is one `# name` (or deeper) section of a slide. A section's
+// frontmatter is the optional plain ``` fence immediately after its heading
+// (section-frontmatter). Sections nest: a Section's Children are the child
+// sections a deeper heading opens beneath it, so the tree is as deep as the
+// headings are (slide-sections).
 type Section struct {
-	// Name is the section name: the heading text after `# `.
+	// Name is the section name: the heading text after its leading `#`s.
 	Name string
+
+	// Level is the heading depth that opened the section: 1 for `#` through 6
+	// for `######`. Heading depth is nesting depth (slide-sections).
+	Level int
+
+	// Index is the section's zero-based instance index among its siblings of
+	// the same Name, used to render the containment path segment `name[i]`
+	// (nested-section-validation).
+	Index int
 
 	// HeadingLine is the 1-based line of the `# name` heading.
 	HeadingLine int
@@ -99,11 +110,17 @@ type Section struct {
 	FenceLine int
 
 	// Body is the section content after its heading (and frontmatter, when
-	// present), up to the next section heading or end of file.
+	// present), up to the first child heading or the next heading at the same
+	// or a shallower depth.
 	Body string
 
 	// BodyLine is the 1-based line where Body starts.
 	BodyLine int
+
+	// Children are the section's child sections in source order. A section
+	// whose template declares no child sections has none; a child is exactly
+	// one heading level deeper than its parent (slide-sections).
+	Children []Section
 }
 
 // Notes is a slide's reserved `# notes` speaker-notes section
