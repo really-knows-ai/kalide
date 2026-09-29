@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "domain.service.upgrade-project",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "upgrade/feedback-3",
+      "properties": {}
     }
   ],
   "in": []
