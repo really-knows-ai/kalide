@@ -95,11 +95,6 @@
   ],
   "in": [
     {
-      "kind": "details",
-      "source": "requirements.note.distribution-decisions",
-      "properties": {}
-    },
-    {
       "kind": "contains",
       "source": "requirements.stakeholder.kalide-maintainers",
       "properties": {}

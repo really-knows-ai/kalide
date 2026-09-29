@@ -41,11 +41,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.distribution-decisions",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.fix-supported-targets-runners",
       "properties": {}
     }

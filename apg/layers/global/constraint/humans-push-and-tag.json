@@ -5,11 +5,5 @@
   "body": "Pushing to the remote and creating tags require explicit, per-action human consent. Absent that consent, agents must never push or tag. With explicit per-action consent for the specific action, an agent may perform any push or tag operation the human asked for — including force-push and moving, overwriting or deleting a tag; no push/tag operation remains categorically barred once that specific action is explicitly authorised. Consent is per action, never standing or blanket. One carve-out is retained: the CI release workflow may push manifest-only commits, meaning version, URL and checksum updates confined to `Formula/` and `bucket/`. Automation may only react to a consented tag (a tag created by a human, or by an agent acting under explicit per-action consent).",
   "properties": {},
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.distribution-decisions",
-      "properties": {}
-    }
-  ]
+  "in": []
 }
