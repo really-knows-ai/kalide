@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,21 +36,366 @@ import (
 	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
-// TestRunUpgrade is the command-surface suite for `kalide upgrade`. The
-// scaffolding it relies on is in this file (task 8); the cases themselves are
-// authored by plan.phase-04.task-9: both/neither-manifest detection errors, the
-// usage errors for a path argument and a --force-style flag, a clean refresh and
-// report, idempotence, an author-edited file skipped and named, an
-// external-library deck's configured library left byte-for-byte untouched, the
-// unknown/newer library-format refusal, the post-refresh+migrate validation
-// failure and its undo, and the upgraded project still loading through the
-// loaders `kalide start` uses. Until then this placeholder keeps the file
-// compiling and green.
+// upgradeDeckMemberPaths is the kalide-owned deck member set refreshScaffold
+// visits, in visit order (internal/scaffold/refresh.go deckOwnedMembers): the
+// deck-root guide, the local library.yaml, the hello template's three files, the
+// default theme and the starter slide. It is the deck form's report path set.
+var upgradeDeckMemberPaths = []string{
+	"AGENTS.md",
+	template.TemplatesDir + "/" + template.LibraryFile,
+	template.TemplatesDir + "/" + template.SlidesDir + "/" + "hello/" + template.ExampleFile,
+	template.TemplatesDir + "/" + template.SlidesDir + "/" + "hello/" + template.LayoutFile,
+	template.TemplatesDir + "/" + template.SlidesDir + "/" + "hello/" + template.ManifestFile,
+	template.TemplatesDir + "/" + template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
+	template.SlidesDir + "/" + "1-hello.md",
+}
+
+// upgradeLibraryMemberPaths is the library-owned deck member set refreshScaffold
+// visits, in visit order (internal/scaffold/refresh.go libraryOwnedMembers): the
+// library-root guide and the seeded default theme.
+var upgradeLibraryMemberPaths = []string{
+	"AGENTS.md",
+	template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
+}
+
+// assertUpgradeReportCounts asserts the printed report's refreshed and skipped
+// headings carry the expected counts, pinning the full report shape.
+func assertUpgradeReportCounts(t *testing.T, stdout string, refreshed, skipped int) {
+	t.Helper()
+	if want := fmt.Sprintf("refreshed (%d):", refreshed); !strings.Contains(stdout, want) {
+		t.Errorf("upgrade report = %q, want the heading %q", stdout, want)
+	}
+	if want := fmt.Sprintf("skipped (left alone) (%d):", skipped); !strings.Contains(stdout, want) {
+		t.Errorf("upgrade report = %q, want the heading %q", stdout, want)
+	}
+}
+
+// upgradeReportNamesPath reports whether the printed report names rel as a path
+// line ("  <rel>"), so a case can assert a refreshed or skipped path instead of
+// a bare substring.
+func upgradeReportNamesPath(stdout, rel string) bool {
+	return strings.Contains(stdout, "  "+rel+"\n")
+}
+
+// TestRunUpgrade is the command-surface suite for `kalide upgrade`
+// (upgrade/plan.phase-04.task-9): requirements.requirement.deck-library-upgrade,
+// global.constraint.upgrade-never-clobbers,
+// global.constraint.upgrade-unknown-format-reported,
+// global.constraint.upgrade-never-breaks-project and
+// global.constraint.upgrade-offline. It drives runUpgrade — and, for the route,
+// cli.Run's `upgrade` case — against real project trees written to a t.TempDir
+// and asserts exit codes, stdout/stderr text and tree bytes plus mtimes.
+//
+// COVERAGE BOUNDARY: the refresh engine's "present and byte-identical to a
+// catalogued released version is rewritten" branch presents an OLD released
+// version. The catalogue holds digests only, never historical contents
+// (global.constraint.upgrade-known-version-catalog), and the embedded seed ships
+// only the running binary's own bytes, so that old-bytes state cannot be
+// constructed from package cli — the in-package catalogue seam (refreshSetCatalog)
+// lives in internal/scaffold's refresh_test.go and is unexported here. The
+// reachable refresh-half write at this surface is the absent-author-guide
+// exception (an absent AGENTS.md is written), which the clean-run, library-run,
+// idempotence and unknown-format cases below use; an already-current owned file
+// is skipped, and an author-edited one is skipped and named.
 func TestRunUpgrade(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: `kalide upgrade` writes real project trees to disk")
 	}
-	t.Skip("cli.TestRunUpgrade is completed by plan.phase-04.task-9")
+
+	t.Run("Run dispatches upgrade to the handler", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		t.Chdir(dir)
+
+		code, stdout, stderr := runUpgradeCLI()
+		if code != 0 {
+			t.Fatalf("Run(upgrade) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(upgrade) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: deck") {
+			t.Fatalf("Run(upgrade) stdout = %q, want the deck report header", stdout)
+		}
+	})
+
+	t.Run("a path argument is a usage error: exit 2, usage printed, stdout empty, nothing written", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		before := snapshotUpgradeTree(t, dir)
+
+		stdout, stderr := runUpgradeExpect(t, dir, 2, "../deck")
+		if stdout != "" {
+			t.Errorf("runUpgrade(../deck) stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{"unexpected argument", "\"../deck\"", "Usage:"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("runUpgrade(../deck) stderr = %q, want it to contain %q", stderr, want)
+			}
+		}
+		assertUpgradeTreeUnchanged(t, dir, before)
+	})
+
+	t.Run("a --force-style flag is a usage error: exit 2, usage printed, stdout empty, nothing written", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		before := snapshotUpgradeTree(t, dir)
+
+		stdout, stderr := runUpgradeExpect(t, dir, 2, "--force")
+		if stdout != "" {
+			t.Errorf("runUpgrade(--force) stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{"unexpected argument", "\"--force\"", "Usage:"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("runUpgrade(--force) stderr = %q, want it to contain %q", stderr, want)
+			}
+		}
+		assertUpgradeTreeUnchanged(t, dir, before)
+	})
+
+	t.Run("the Run route rejects --force with exit 2 and usage", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		code, stdout, stderr := runUpgradeCLI("--force")
+		if code != 2 {
+			t.Fatalf("Run(upgrade --force) exit = %d, want 2", code)
+		}
+		if stdout != "" {
+			t.Errorf("Run(upgrade --force) stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, "Usage:") {
+			t.Errorf("Run(upgrade --force) stderr = %q, want the usage text", stderr)
+		}
+	})
+
+	t.Run("both manifests is a detection error naming found vs expected and writes nothing", func(t *testing.T) {
+		dir := t.TempDir()
+		writeUpgradeFile(t, dir, deck.ConfigFile, "title: Both\n")
+		writeUpgradeFile(t, dir, template.LibraryFile, "name: shared-lib\nformat: 1\n")
+		before := snapshotUpgradeTree(t, dir)
+
+		stdout, stderr := runUpgradeExpect(t, dir, 1)
+		if stdout != "" {
+			t.Errorf("runUpgrade(both manifests) stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{deck.ConfigFile, template.LibraryFile, "both", "expected exactly one"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("runUpgrade(both manifests) stderr = %q, want it to contain %q", stderr, want)
+			}
+		}
+		assertUpgradeTreeUnchanged(t, dir, before)
+	})
+
+	t.Run("neither manifest is a detection error naming found vs expected and writes nothing", func(t *testing.T) {
+		dir := t.TempDir()
+		before := snapshotUpgradeTree(t, dir)
+
+		stdout, stderr := runUpgradeExpect(t, dir, 1)
+		if stdout != "" {
+			t.Errorf("runUpgrade(neither manifest) stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{deck.ConfigFile, template.LibraryFile, "neither", "expected exactly one"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("runUpgrade(neither manifest) stderr = %q, want it to contain %q", stderr, want)
+			}
+		}
+		assertUpgradeTreeUnchanged(t, dir, before)
+	})
+
+	t.Run("a clean deck run refreshes the absent guide and reports every owned path", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		guide := readUpgradeFile(t, dir, "AGENTS.md")
+		if err := os.Remove(filepath.Join(dir, "AGENTS.md")); err != nil {
+			t.Fatalf("remove AGENTS.md: %v", err)
+		}
+
+		stdout, stderr := runUpgradeExpect(t, dir, 0)
+		if stderr != "" {
+			t.Errorf("runUpgrade(clean deck) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: deck") {
+			t.Errorf("runUpgrade(clean deck) stdout = %q, want the deck report header", stdout)
+		}
+		assertUpgradeReportCounts(t, stdout, 1, len(upgradeDeckMemberPaths)-1)
+		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
+			t.Errorf("runUpgrade(clean deck) stdout = %q, want the refreshed AGENTS.md named", stdout)
+		}
+		for _, rel := range upgradeDeckMemberPaths[1:] {
+			if !upgradeReportNamesPath(stdout, rel) {
+				t.Errorf("runUpgrade(clean deck) stdout = %q, want the skipped path %q named", stdout, rel)
+			}
+		}
+		if got := readUpgradeFile(t, dir, "AGENTS.md"); !bytes.Equal(got, guide) {
+			t.Errorf("written AGENTS.md does not equal the scaffolded deck guide")
+		}
+
+		// The refreshed deck still loads through the loader `kalide start` uses.
+		assertUpgradeDeckLoads(t, dir)
+	})
+
+	t.Run("a second deck run is a no-op exit 0 and writes nothing", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		if err := os.Remove(filepath.Join(dir, "AGENTS.md")); err != nil {
+			t.Fatalf("remove AGENTS.md: %v", err)
+		}
+		// The first run writes the absent guide, so the second has nothing to do.
+		runUpgradeExpect(t, dir, 0)
+
+		before := snapshotUpgradeTree(t, dir)
+		stdout, stderr := runUpgradeExpect(t, dir, 0)
+		if stderr != "" {
+			t.Errorf("second runUpgrade stderr = %q, want empty", stderr)
+		}
+		assertUpgradeReportCounts(t, stdout, 0, len(upgradeDeckMemberPaths))
+		if !strings.Contains(stdout, "(none)") {
+			t.Errorf("second runUpgrade stdout = %q, want an empty refreshed list", stdout)
+		}
+		assertUpgradeTreeUnchanged(t, dir, before)
+	})
+
+	t.Run("an author-edited owned file is skipped, named and exits 0", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		themeRel := template.TemplatesDir + "/" + template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet
+		author := "/* my own theme */\n:root { --accent: rebeccapurple; }\n"
+		writeUpgradeFile(t, dir, themeRel, author)
+		before := snapshotUpgradeTree(t, dir)
+
+		stdout, stderr := runUpgradeExpect(t, dir, 0)
+		if stderr != "" {
+			t.Errorf("runUpgrade(author-edited) stderr = %q, want empty", stderr)
+		}
+		assertUpgradeReportCounts(t, stdout, 0, len(upgradeDeckMemberPaths))
+		if !upgradeReportNamesPath(stdout, themeRel) {
+			t.Errorf("runUpgrade(author-edited) stdout = %q, want the skipped %q named", stdout, themeRel)
+		}
+		if got := string(readUpgradeFile(t, dir, themeRel)); got != author {
+			t.Errorf("%s bytes changed, want the author content untouched", themeRel)
+		}
+		assertUpgradeTreeUnchanged(t, dir, before)
+
+		assertUpgradeDeckLoads(t, dir)
+	})
+
+	t.Run("an external-library deck leaves its configured library byte-for-byte untouched and still loads", func(t *testing.T) {
+		deckDir, libDir := newUpgradeExternalDeck(t, "shared-lib")
+		before := snapshotUpgradeTree(t, libDir)
+
+		stdout, stderr := runUpgradeExpect(t, deckDir, 0)
+		if stderr != "" {
+			t.Errorf("runUpgrade(external-library deck) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: deck") {
+			t.Errorf("runUpgrade(external-library deck) stdout = %q, want the deck report header", stdout)
+		}
+		// An already-current external-library deck refreshes nothing; its only
+		// owned member is the deck-root guide, reported skipped.
+		assertUpgradeReportCounts(t, stdout, 0, 1)
+		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
+			t.Errorf("runUpgrade(external-library deck) stdout = %q, want the skipped deck guide named", stdout)
+		}
+
+		// The configured `templates:` library is byte-for-byte and mtime-untouched.
+		assertUpgradeTreeUnchanged(t, libDir, before)
+
+		// No local templates/ is created for an external-library deck.
+		if _, err := os.Lstat(filepath.Join(deckDir, template.TemplatesDir)); !os.IsNotExist(err) {
+			t.Errorf("Lstat(%s/templates) err = %v, want the external-library deck to have no local templates/", deckDir, err)
+		}
+
+		assertUpgradeDeckLoads(t, deckDir)
+	})
+
+	t.Run("a library run exits 0 and reports the library-owned refreshed and skipped paths", func(t *testing.T) {
+		libDir := newUpgradeLibrary(t, "shared-lib")
+		guide := readUpgradeFile(t, libDir, "AGENTS.md")
+		if err := os.Remove(filepath.Join(libDir, "AGENTS.md")); err != nil {
+			t.Fatalf("remove library AGENTS.md: %v", err)
+		}
+
+		stdout, stderr := runUpgradeExpect(t, libDir, 0)
+		if stderr != "" {
+			t.Errorf("runUpgrade(library) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: library") {
+			t.Errorf("runUpgrade(library) stdout = %q, want the library report header", stdout)
+		}
+		assertUpgradeReportCounts(t, stdout, 1, len(upgradeLibraryMemberPaths)-1)
+		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
+			t.Errorf("runUpgrade(library) stdout = %q, want the refreshed library guide named", stdout)
+		}
+		if !upgradeReportNamesPath(stdout, upgradeLibraryMemberPaths[1]) {
+			t.Errorf("runUpgrade(library) stdout = %q, want the skipped library theme named", stdout)
+		}
+		if got := readUpgradeFile(t, libDir, "AGENTS.md"); !bytes.Equal(got, guide) {
+			t.Errorf("written library AGENTS.md does not equal the scaffolded library guide")
+		}
+
+		assertUpgradeLibraryLoads(t, libDir)
+	})
+
+	for _, format := range []int{0, 2} {
+		format := format
+		t.Run(fmt.Sprintf("a library declaring format %d is refused untouched", format), func(t *testing.T) {
+			libDir := newUpgradeLibrary(t, "shared-lib")
+			writeUpgradeLibraryFormat(t, libDir, format)
+			// Remove the guide so the refresh half WOULD write it if it ran: the
+			// format check must refuse before any refresh write, leaving nothing
+			// on disk (the reachable proxy for a member the refresh half would
+			// otherwise have refreshed).
+			if err := os.Remove(filepath.Join(libDir, "AGENTS.md")); err != nil {
+				t.Fatalf("remove library AGENTS.md: %v", err)
+			}
+			before := snapshotUpgradeTree(t, libDir)
+
+			stdout, stderr := runUpgradeExpect(t, libDir, 1)
+			if stdout != "" {
+				t.Errorf("runUpgrade(format %d) stdout = %q, want empty", format, stdout)
+			}
+			for _, want := range []string{
+				"unsupported library format",
+				fmt.Sprintf("found format %d", format),
+				"supported format 1",
+			} {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("runUpgrade(format %d) stderr = %q, want it to contain %q", format, stderr, want)
+				}
+			}
+
+			// The whole tree is byte-for-byte and mtime identical, and no
+			// refresh-half write (the absent AGENTS.md) was left behind.
+			assertUpgradeTreeUnchanged(t, libDir, before)
+			if _, err := os.Lstat(filepath.Join(libDir, "AGENTS.md")); !os.IsNotExist(err) {
+				t.Errorf("Lstat(library AGENTS.md) err = %v, want the format refusal to leave no refresh write on disk", err)
+			}
+		})
+	}
+
+	t.Run("a post-refresh validation failure exits non-zero and restores the project", func(t *testing.T) {
+		dir := newUpgradeDeck(t)
+		// A pre-existing author error that survives detection and refresh but
+		// fails the end-to-end validation: a deck referencing an unknown theme.
+		writeUpgradeFile(t, dir, deck.ConfigFile, "title: Broken\ntheme: no-such-theme\n")
+		// Remove the deck guide so the refresh half creates it; the undo must
+		// remove that created file when validation fails.
+		if err := os.Remove(filepath.Join(dir, "AGENTS.md")); err != nil {
+			t.Fatalf("remove AGENTS.md: %v", err)
+		}
+		before := snapshotUpgradeTree(t, dir)
+
+		stdout, stderr := runUpgradeExpect(t, dir, 1)
+		if stdout != "" {
+			t.Errorf("runUpgrade(invalid deck) stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{"validation failed", deck.ConfigFile} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("runUpgrade(invalid deck) stderr = %q, want it to contain %q", stderr, want)
+			}
+		}
+
+		// The project is exactly as it was: no file added, removed or rewritten,
+		// and the newly created AGENTS.md is gone.
+		assertUpgradeTreeUnchanged(t, dir, before)
+		if _, err := os.Lstat(filepath.Join(dir, "AGENTS.md")); !os.IsNotExist(err) {
+			t.Errorf("Lstat(AGENTS.md) err = %v, want the undo to remove the file Upgrade created", err)
+		}
+	})
 }
 
 // runUpgradeInDir runs runUpgrade with args in dir and returns its exit code and
