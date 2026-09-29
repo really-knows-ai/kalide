@@ -657,7 +657,7 @@ func TestRegistryRejections(t *testing.T) {
 		{
 			name:      "reference cycle",
 			templates: []*Template{cycleA, cycleB},
-			want:      "section template reference cycle: cyclea → cycleb → cyclea",
+			want:      `template "cyclea": section template reference cycle: sections/cyclea → sections/cycleb → sections/cyclea`,
 		},
 		{
 			name:      "section accepts a slide-usage template",
@@ -880,8 +880,8 @@ func TestRegistryRejections(t *testing.T) {
 		}
 	})
 
-	t.Run("reserved field name notes, body, deck and slide", func(t *testing.T) {
-		for _, name := range []string{"notes", "body", "deck", "slide"} {
+	t.Run("reserved field name notes, body, deck, slide and item", func(t *testing.T) {
+		for _, name := range []string{"notes", "body", "deck", "slide", "item"} {
 			libErr := libraryRejection(t, "fields:\n  - name: "+name+"\n    type: text\n", "")
 			if !strings.Contains(libErr.Message, "reserved") {
 				t.Errorf("field %q: Message = %q, want it to say the name is reserved", name, libErr.Message)
@@ -889,8 +889,8 @@ func TestRegistryRejections(t *testing.T) {
 		}
 	})
 
-	t.Run("reserved section name notes, body, deck and slide", func(t *testing.T) {
-		for _, name := range []string{"notes", "body", "deck", "slide"} {
+	t.Run("reserved section name notes, body, deck, slide and item", func(t *testing.T) {
+		for _, name := range []string{"notes", "body", "deck", "slide", "item"} {
 			libErr := libraryRejection(t, "sections:\n  - name: "+name+"\n    accepted: [badsec]\n", "")
 			if !strings.Contains(libErr.Message, "reserved") {
 				t.Errorf("section %q: Message = %q, want it to say the name is reserved", name, libErr.Message)
@@ -928,20 +928,88 @@ func TestRegistryRejections(t *testing.T) {
 			"sections/cycleb/layout.html.tmpl": {Data: []byte("<div></div>")},
 			"sections/cycleb/example.md":       {Data: []byte("```\n```\n")},
 		}
-		// A section reference cycle surfaces as *SectionCycleError, not a
-		// *LibraryError: checkLibraryBuild only re-positions errors whose
-		// text names a template (manifestTemplateErrorName), and a cycle's
-		// message names a chain, not a single template.
+		// Validate names the root template it was walking (`template
+		// "cyclea": …`), so checkLibraryBuild path-qualifies the cycle to that
+		// template's template.yaml, and SectionCycleError.Error renders the
+		// chain section-qualified
+		// (requirements.constraint.section-cycle-error-chain).
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
-		if err == nil {
-			t.Fatal("LoadLibrary() error = nil, want a reference-cycle error")
+		libErr := asLibraryError(t, err)
+		if want := "templates/sections/cyclea/template.yaml"; libErr.Path != want {
+			t.Errorf("Path = %q, want %q", libErr.Path, want)
 		}
-		var cycle *SectionCycleError
-		if !errors.As(err, &cycle) {
-			t.Fatalf("LoadLibrary() error = %T, want *SectionCycleError", err)
+		want := `template "cyclea": section template reference cycle: sections/cyclea → sections/cycleb → sections/cyclea`
+		if libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
 		}
-		if !strings.Contains(cycle.Error(), "reference cycle") {
-			t.Errorf("Message = %q, want it to say there is a reference cycle", cycle.Error())
+	})
+
+	t.Run("a section template declaring nested sections loads", func(t *testing.T) {
+		// A section template may declare `sections:` with the slide schema, so
+		// composition nests (template-composition). outer holds one `items`
+		// child accepting the inner section template. Its example.md nests a
+		// child instance under a top-level `# items` heading, which phase-1
+		// example validation accepts.
+		fsys := fstest.MapFS{
+			"library.yaml": {Data: []byte("name: nested\nformat: 1\n")},
+			"sections/outer/template.yaml": {Data: []byte("description: a container section\n" +
+				"sections:\n  - name: items\n    accepted: [inner]\n    min: 1\n    max: 4\n")},
+			"sections/outer/layout.html.tmpl": {Data: []byte("<div>{{range .items}}<span>{{.}}</span>{{end}}</div>")},
+			"sections/outer/example.md":       {Data: []byte("# items\n")},
+			"sections/inner/template.yaml":    {Data: []byte("description: an inner child\n")},
+			"sections/inner/layout.html.tmpl": {Data: []byte("<span>{{.body}}</span>")},
+			"sections/inner/example.md":       {Data: []byte("\n")},
+		}
+		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil for a nested composition", err)
+		}
+		outer, kind, ok := lib.TemplateByName("outer")
+		if !ok || kind != KindSection {
+			t.Fatalf("TemplateByName(outer) = (%v, %q, %v), want (non-nil, %q, true)", outer, kind, ok, KindSection)
+		}
+		if outer.Definition == nil {
+			t.Fatal("checkLibraryBuild left outer.Definition nil")
+		}
+		got := outer.Definition.Sections
+		if len(got) != 1 || got[0].Name != "items" || !reflect.DeepEqual(got[0].Accepted, []string{"inner"}) {
+			t.Errorf("outer.Sections = %+v, want one %q section accepting inner", got, "items")
+		}
+		if _, _, ok := lib.TemplateByName("inner"); !ok {
+			t.Error("section template inner not loaded")
+		}
+	})
+
+	t.Run("a composition chain deeper than six heading levels is positioned", func(t *testing.T) {
+		// cha → … → chg is seven composition levels: one more than the six
+		// Markdown heading levels the bound allows
+		// (requirements.constraint.section-depth-limit). The walk reports it
+		// as a step-4 templates error path-qualified to the root template's
+		// template.yaml.
+		fsys := fstest.MapFS{"library.yaml": {Data: []byte("name: deep\nformat: 1\n")}}
+		chain := []string{"cha", "chb", "chc", "chd", "che", "chf", "chg"}
+		for i, name := range chain {
+			manifest := ""
+			if i+1 < len(chain) {
+				manifest = "sections:\n  - name: slot\n    accepted: [" + chain[i+1] + "]\n"
+			}
+			fsys["sections/"+name+"/template.yaml"] = &fstest.MapFile{Data: []byte(manifest)}
+			fsys["sections/"+name+"/layout.html.tmpl"] = &fstest.MapFile{Data: []byte("<div></div>")}
+			fsys["sections/"+name+"/example.md"] = &fstest.MapFile{Data: []byte("\n")}
+		}
+		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		libErr := asLibraryError(t, err)
+		if want := "templates/sections/cha/template.yaml"; libErr.Path != want {
+			t.Errorf("Path = %q, want %q", libErr.Path, want)
+		}
+		if !strings.Contains(libErr.Message, "7 levels deep") {
+			t.Errorf("Message = %q, want it to report the over-deep chain", libErr.Message)
+		}
+		if slug := "cha → chb → chc → chd → che → chf → chg"; !strings.Contains(libErr.Message, slug) {
+			t.Errorf("Message = %q, want the whole chain %q", libErr.Message, slug)
+		}
+		if !strings.Contains(libErr.Message, "6-heading-level limit") {
+			t.Errorf("Message = %q, want the six-heading-level limit", libErr.Message)
 		}
 	})
 
