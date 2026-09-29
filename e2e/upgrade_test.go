@@ -301,7 +301,7 @@ func assertUpgradeTreeUnchanged(t *testing.T, root string, before map[string]upg
 // that author-edited files are skipped and that an external-library deck's
 // configured library is left untouched.
 //
-// It is three cases, each with its own Harness (and therefore its own clean
+// It is four cases, each with its own Harness (and therefore its own clean
 // working directory and its own build of cmd/kalide):
 //
 //   - "seed deck": `kalide init` in the working directory; `kalide upgrade`
@@ -315,7 +315,14 @@ func assertUpgradeTreeUnchanged(t *testing.T, root string, before map[string]upg
 //   - "external-library deck": `kalide init-library ../shared-lib` plus
 //     `kalide init ../shared-lib`, then `kalide upgrade` in the deck, asserting
 //     the configured library is byte-for-byte and mtime-untouched and no local
-//     templates/ is created.
+//     templates/ is created;
+//   - "deleted seed starters": `kalide init`, then the author deletes the
+//     starter slide, the hello template directory and the seed default theme
+//     directory and adds a valid author slide/template/theme; `kalide start`
+//     captures the rendered page, `kalide upgrade` names every deleted member
+//     skipped (re-creating none), and a restart serves a byte-for-byte
+//     identical page (AC 3 of
+//     requirements.requirement.upgrade-refresh-owned-scaffold).
 //
 // Every upgrade run is proxy-armed (runUpgradeOffline / EnableOfflineProxy), so
 // a network-honouring client fails its connection, and the served-deck leg adds
@@ -519,6 +526,139 @@ func TestUpgrade(t *testing.T) {
 		assertUpgradeTreeUnchanged(t, h.WorkDir(), deckBefore)
 		assertUpgradeTreeUnchanged(t, libDir, before)
 	})
+
+	// Case 4: the author deletes the seed starter slide, the hello template and
+	// the seed default theme and adds their own valid slide, template and
+	// theme. AC 3 of requirements.requirement.upgrade-refresh-owned-scaffold
+	// has two halves: the deleted seed starters are never re-created, and the
+	// deck the author left valid still serves with identical rendered output
+	// before and after the upgrade.
+	t.Run("deleted seed starters", func(t *testing.T) {
+		h := NewHarness(t)
+		initUpgradeSeedDeck(t, h)
+
+		// The author deletes the seed starter slide, the seed hello template
+		// directory and the seed default theme directory. The directories are
+		// removed whole: a leftover empty templates/slides/hello or
+		// templates/themes/default would itself fail the library loader (a
+		// template directory without its three files, and a theme directory
+		// without theme.css). The refresh engine still visits the members'
+		// file paths, so the report names the deleted files.
+		deleted := []string{
+			template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ExampleFile,
+			template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.LayoutFile,
+			template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ManifestFile,
+			template.TemplatesDir + "/" + template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
+			template.SlidesDir + "/1-hello.md",
+		}
+		for _, dir := range []string{
+			template.TemplatesDir + "/" + template.SlidesDir + "/hello",
+			template.TemplatesDir + "/" + template.ThemesDir + "/" + theme.DefaultName,
+		} {
+			if err := os.RemoveAll(h.Path(dir)); err != nil {
+				t.Fatalf("remove deleted seed directory %s: %v", dir, err)
+			}
+		}
+		if err := os.Remove(h.Path(template.SlidesDir + "/1-hello.md")); err != nil {
+			t.Fatalf("remove deleted seed starter slide: %v", err)
+		}
+
+		// The author adds their own valid slide, template and theme, and points
+		// kalide.yaml at the author theme so the deck still validates with the
+		// seed template and theme gone.
+		h.WriteFile("kalide.yaml", []byte("title: My presentation\ntheme: author\n"))
+		h.WriteFile(template.TemplatesDir+"/"+template.SlidesDir+"/author/"+template.ManifestFile, []byte(`description: "Author slide: a required heading and an optional body."
+fields:
+  - name: heading
+    type: text
+    required: true
+    max_length: 80
+body:
+  mode: optional
+`))
+		h.WriteFile(template.TemplatesDir+"/"+template.SlidesDir+"/author/"+template.LayoutFile, []byte(`<section class="author-slide">
+  <h1 class="author-heading">{{ .heading }}</h1>
+  {{ with .body }}<div class="author-body">{{ . }}</div>{{ end }}
+</section>
+`))
+		h.WriteFile(template.TemplatesDir+"/"+template.SlidesDir+"/author/"+template.ExampleFile, []byte(`---
+template: author
+heading: Author example
+---
+The example body.
+
+# notes
+Notes are not shown.
+`))
+		h.WriteFile(template.TemplatesDir+"/"+template.ThemesDir+"/author/"+template.ThemeStylesheet, []byte(`body {
+  font-family: system-ui, sans-serif;
+  background: #ffffff;
+  color: #111111;
+}
+
+.author-heading {
+  font-size: 2.5em;
+  font-weight: 600;
+}
+`))
+		h.WriteFile(template.SlidesDir+"/1-author.md", []byte(`---
+template: author
+heading: Author heading
+---
+The author's slide body.
+`))
+
+		// The author's deck validates and serves: capture the rendered page.
+		h.Start()
+		before, err := h.GetString("/")
+		if err != nil {
+			t.Fatalf("GET / before upgrade: %v", err)
+		}
+		if strings.Contains(before, "Deck error") {
+			t.Fatalf("page served before upgrade is the error page, want the author deck:\n%s", before)
+		}
+		if !strings.Contains(before, "Author heading") {
+			t.Fatalf("page served before upgrade does not carry the author slide:\n%s", before)
+		}
+		h.Stop()
+
+		// `kalide upgrade` never re-creates the deleted seed starters: it
+		// reports every owned member left alone, naming each deleted file, and
+		// refreshes nothing.
+		stdout, stderr, code := runUpgradeOffline(t, h)
+		if code != 0 {
+			t.Fatalf("kalide upgrade after deleting seed starters exit = %d, want 0 (stdout = %q, stderr = %q)",
+				code, stdout, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide upgrade after deleting seed starters stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: deck") {
+			t.Fatalf("kalide upgrade stdout = %q, want the deck report header", stdout)
+		}
+		assertUpgradeReportCounts(t, stdout, 0, len(upgradeDeckMemberPaths))
+		assertUpgradeReportNamesPaths(t, stdout, deleted)
+
+		for _, rel := range deleted {
+			if _, err := os.Lstat(h.Path(rel)); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("Lstat(%s) err = %v, want the deleted seed starter to stay absent", rel, err)
+			}
+		}
+
+		// The deck the author left valid still serves, and the rendered page is
+		// byte-for-byte what it was before the upgrade. The server-injected
+		// live-reload block is ignored: it is server plumbing, not the deck's
+		// rendered output.
+		h.Start()
+		after, err := h.GetString("/")
+		if err != nil {
+			t.Fatalf("GET / after upgrade: %v", err)
+		}
+		if got, want := upgradeBodyWithoutLiveReload(after), upgradeBodyWithoutLiveReload(before); got != want {
+			t.Errorf("served page changed across the upgrade:\n--- before ---\n%s\n--- after ---\n%s", want, got)
+		}
+		h.Stop()
+	})
 }
 
 // assertUpgradeReportNamesPaths asserts the printed report names every rel in
@@ -532,4 +672,31 @@ func assertUpgradeReportNamesPaths(t *testing.T, stdout string, rels []string) {
 			t.Errorf("upgrade report = %q, want the path %q named", stdout, rel)
 		}
 	}
+}
+
+// upgradeBodyWithoutLiveReload returns a served page with the server-injected
+// live-reload client script removed, so two runs' rendered deck output can be
+// compared for equality even if that injected block carried any per-run
+// detail. The block is the <script> element whose body references EventSource
+// (internal/server's injected client script); a page without one is returned
+// unchanged.
+func upgradeBodyWithoutLiveReload(body string) string {
+	const (
+		marker = "EventSource"
+		open   = "<script>"
+		close  = "</script>"
+	)
+	i := strings.Index(body, marker)
+	if i < 0 {
+		return body
+	}
+	start := strings.LastIndex(body[:i], open)
+	if start < 0 {
+		return body
+	}
+	end := strings.Index(body[i:], close)
+	if end < 0 {
+		return body
+	}
+	return body[:start] + body[i+end+len(close):]
 }
