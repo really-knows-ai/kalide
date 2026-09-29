@@ -74,11 +74,6 @@
       "kind": "drives",
       "source": "requirements.requirement.kalide-rename",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
     }
   ]
 }

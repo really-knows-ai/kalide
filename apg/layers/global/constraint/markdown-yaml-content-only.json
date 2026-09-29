@@ -5,11 +5,5 @@
   "body": "Deck content must always be Markdown (restricted subset) and YAML only; kalide is not a developer tool — every author-facing message must be plain-language with a fix hint.",
   "properties": {},
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

@@ -33,11 +33,6 @@
       "kind": "details",
       "source": "requirements.note.reconcile-demo-project",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
     }
   ]
 }

@@ -31,11 +31,6 @@
       "kind": "drives",
       "source": "requirements.requirement.slide-file-ordering",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
     }
   ]
 }

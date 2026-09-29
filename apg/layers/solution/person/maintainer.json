@@ -14,11 +14,6 @@
   "in": [
     {
       "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "global.note.agent-push-consent-decisions",
       "properties": {}
     }

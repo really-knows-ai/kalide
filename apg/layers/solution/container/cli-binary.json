@@ -93,11 +93,6 @@
       "kind": "contains",
       "source": "solution.system.kalide",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
     }
   ]
 }

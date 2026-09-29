@@ -5,11 +5,5 @@
   "body": "The project validates decks against the project's own reusable `templates/` library — no built-in templates and no embedded branded content.",
   "properties": {},
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

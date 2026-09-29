@@ -16,11 +16,5 @@
       "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

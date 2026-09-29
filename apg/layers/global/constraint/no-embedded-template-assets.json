@@ -13,11 +13,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.kalide-rename",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "global.note.fix-agent-guide-global-constraints",
       "properties": {}
     }
