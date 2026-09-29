@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "upgrade-owned-scaffold-scope",
+  "body": "The refresh set is exactly the kalide-owned scaffold content scoped to the project's form: (a) a deck-root `AGENTS.md` (agent-authoring) and, for a no-arg seed deck only, the `kalide init` seed starter content (cli-init-minimal-seed: the seed `templates/library.yaml`, the `hello` slide template with its `example.md`, the default theme, and `slides/1-hello.md`); (b) a library-root `AGENTS.md` (library-agent-guide) and, only when it is the seeded default, `themes/default/theme.css` (init-library). It never includes author slides/sections/templates/themes/media, never an external-library deck's absent local `templates/`, and never a library's templates. `kalide.yaml` is the author-edited deck config and is not a whole-file refresh member. A file outside this scoped set is never written, whatever its contents.",
+  "properties": {
+    "attaches-to": "requirements.requirement.upgrade-refresh-owned-scaffold"
+  },
+  "out": [],
+  "in": []
+}
