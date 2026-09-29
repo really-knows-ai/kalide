@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "domain.entity.theme",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.media-asset",
+      "properties": {}
     }
   ],
   "in": []
