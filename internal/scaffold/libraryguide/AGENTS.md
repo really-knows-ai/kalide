@@ -248,18 +248,29 @@ fields or sections.
 
 ## Validating the library
 
-There is no library-only serve command. Point a deck at the library and run
-`kalide start`:
+There is no library-only serve command. Bring the library forward, then point a
+deck at it and run `kalide start`:
 
-1. Create a deck whose `kalide.yaml` resolves your library — either put the
+1. If the library was created by an older `kalide`, run `kalide upgrade` at the
+   library root first. It brings the library forward: it refreshes the
+   kalide-owned scaffold files to the running binary's versions and applies
+   kalide's format migrations, entirely offline, with no network or `git`. It
+   never overwrites author content — your `slides/`, `sections/`, every theme
+   (including its `theme.css` and theme-owned files) and the shared `media/`
+   tree are left byte-for-byte untouched, and a kalide-owned file the author has
+   edited is left alone and reported. An unknown or newer `library.yaml`
+   `format:` is refused instead: `kalide upgrade` exits non-zero, names the
+   format found and the format supported, and changes nothing. `kalide upgrade`
+   takes no path argument and has no `--force`.
+2. Create a deck whose `kalide.yaml` resolves your library — either put the
    library at the deck's `templates/` directory, or set the deck's `templates:`
    key to the library path (relative to the deck root, or absolute).
-2. Run `kalide start`. It validates the library (`library.yaml`, the layout,
+3. Run `kalide start`. It validates the library (`library.yaml`, the layout,
    every template manifest and layout, the themes and every media reference)
    and the deck, then serves it. Validation is fail-fast: exactly one error is
    reported, with the file, the line, the path, what is wrong and how to fix
    it, plus closest-match suggestions for unknown names.
-3. Use `kalide templates` to list the loaded library, and
+4. Use `kalide templates` to list the loaded library, and
    `kalide templates <name>` to inspect one template's fields, sections, body
    rules and example.
 
