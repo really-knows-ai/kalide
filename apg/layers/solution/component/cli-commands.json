@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "cli-commands",
-  "body": "CLI commands: init [path], init-library <path>, start (`--port`, `--no-open`), templates [name], version (also `--version`/`-v`, printing `kalide <version>` from the build-stamped `main.version`, passed into `cli.Run`); exit codes and terminal output, including the printed server URL. Shutdown: clean on SIGINT/SIGTERM (macOS) and Ctrl+C / Ctrl+Break (Windows, via os/signal `os.Interrupt`). A clean exit means exit code 0, the port released, and no leftover child processes. init and init-library also write an `AGENTS.md` (agent-authoring, library-agent-guide, library-guide-layout) and their created-paths messages list it.",
+  "body": "CLI commands: init [path], init-library <path>, start (`--port`, `--no-open`), templates [name], version (also `--version`/`-v`, printing `kalide <version>` from the build-stamped `main.version`, passed into `cli.Run`); exit codes and terminal output, including the printed server URL. Shutdown: clean on SIGINT/SIGTERM (macOS) and Ctrl+C / Ctrl+Break (Windows, via os/signal `os.Interrupt`). A clean exit means exit code 0, the port released, and every child process reaped. init and init-library also write an `AGENTS.md` (agent-authoring, library-agent-guide, library-guide-layout) and their created-paths messages list it.",
   "properties": {},
   "out": [
     {
