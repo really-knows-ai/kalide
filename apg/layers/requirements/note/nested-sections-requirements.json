@@ -59,6 +59,11 @@
       "kind": "details",
       "target": "requirements.requirement.item-context",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.markdown-allowed-subset",
+      "properties": {}
     }
   ],
   "in": []
