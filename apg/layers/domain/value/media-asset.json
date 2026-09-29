@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "media-asset",
-  "body": "Media asset: any file (font, logo, image, video, …) in the template library's servable trees — the shared `media/` directory or a theme directory — addressed by its path within the resolved library root; type-agnostic. A layout addresses a `media/` asset with `{{ media \"path\" }}`; theme CSS — and every CSS it imports — addresses a shared `media/` asset with the reserved `media:` prefix, another theme's file with the reserved `theme:<name>/` prefix, or a file relative to its own location, validated at load and rewritten to the served URL (theme-media-references).",
+  "body": "Media asset: any file (font, logo, image, video, …) in the template library's servable trees — the shared `media/` directory or a theme directory — addressed by its path within the resolved library root; type-agnostic. A layout addresses a `media/` asset with `{{ media \"path\" }}`; theme CSS — and every CSS it imports — addresses a shared `media/` asset with the reserved `media:` prefix, another theme's file with the reserved `theme:<name>/` prefix, or a file relative to its own location, validated at load and rewritten to the served URL (theme-media-references). An unprefixed relative reference resolves from the referencing file's own location and must stay inside that file's own tree (its theme directory, or `media/` for a stylesheet imported through `media:`); cross-tree reach is only through the `media:` / `theme:<name>/` prefixes, and a relative `..` that leaves its tree is rejected with the offending CSS file:line.",
   "properties": {},
   "out": [],
   "in": [
