@@ -4,6 +4,12 @@
   "name": "nested-sections-solution",
   "body": "Tier-3 reconciled for nested sections. solution.component.slide-parser now parses sections by heading depth (child of the most recent shallower heading) and counts min/max per parent instance. solution.component.renderer now renders sections bottom-up through each section's layout.html.tmpl, passes each parent its children as a list of trusted HTML (top-level slide sections included), keeps section-template-as-field data-only, and provides the item context. solution.component.template-registry and solution.component.template-library-loader reject cycles with the chain, enforce the six-heading-level depth bound, and validate container examples (nested instances) recursively. solution.component.templates-gallery shows a template's nesting tree. Code anchors confirmed via the graph before authoring: internal/slide/parse.go (headingRe matches one leading # only — \"Markdown has only one level of sections\"; isSectionHeading/headingName/nextHeading; resolveSectionTemplate requires template: only when >1 accepted), internal/template/section.go (Section.Walk descends \"with no depth limit\"; SectionCycleError renders `content → columns → content`; CheckRepeats enforces min/max; Declarations/Declared), internal/render/render.go renderer.slideData (groups section instances as data maps by declared name into groups[sec.Name] and injects them into the slide layout map; it does NOT execute each section's layout.html.tmpl — the behaviour the feature fixes). [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.slide-parser",
+      "properties": {}
+    }
+  ],
   "in": []
 }
