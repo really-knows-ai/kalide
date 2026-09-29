@@ -4,6 +4,12 @@
   "name": "theme-library-reach-propagated",
   "body": "source: change request \"let theme CSS reference any file in the template library\". requirements.requirement.theme-media-references was rewritten from \"a theme reaches only its own directory + media/ via `media:` (url() only)\" to \"theme CSS and any CSS it imports may url()/@import any servable library file via `media:` or `theme:<name>/`, resolved from its own location and fully checked and rewritten\". Propagated across the requirements tier [autonomous]: template-media and template-language (reference rules), templates-dir-layout (theme/media entry rules), templates-dir-validation (step 6 follows the whole import graph; AC updated), theme-selection (a theme may build on another), agent-authoring / library-agent-guide (guides document both prefixes and drop the old restrictions) and agent-guide-drift-check (the `theme:` token is a new union token; removing it or `media:` from BOTH guides fails the self-test). upgrade-refresh-owned-scaffold now names the new prefixes as another guide-staleness event. requirements.constraint.media-paths-library-relative amended to the new reach. Requirement-tree `contains` edges and `drives` edges are unchanged.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-media",
+      "properties": {}
+    }
+  ],
   "in": []
 }
