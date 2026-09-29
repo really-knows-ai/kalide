@@ -104,6 +104,18 @@ func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	writeFile(t, filepath.Join(root, "sections", "item", "layout.html.tmpl"), []byte("<li>{{.Title}}</li>"))
 	writeFile(t, filepath.Join(root, "sections", "item", "example.md"), []byte("# item\n"))
 
+	// Nested-composition section template: a section template may itself
+	// declare `sections:` with the same schema as a slide's, so composition
+	// nests (template-composition). group holds `items` children accepting
+	// the item section, and its example nests a child instance under a
+	// top-level `# items` heading.
+	writeFile(t, filepath.Join(root, "sections", "group", "template.yaml"),
+		[]byte("description: a group of item children\n"+
+			"sections:\n  - name: items\n    accepted: [item]\n    min: 1\n    max: 4\n"))
+	writeFile(t, filepath.Join(root, "sections", "group", "layout.html.tmpl"),
+		[]byte("<ul>{{range .items}}<li>{{.}}</li>{{end}}</ul>"))
+	writeFile(t, filepath.Join(root, "sections", "group", "example.md"), []byte("# items\n"))
+
 	// Theme with an owned font file.
 	writeFile(t, filepath.Join(root, "themes", "plain", "theme.css"), []byte("body { color: black; }"))
 	writeFile(t, filepath.Join(root, "themes", "plain", "fonts", "body.woff2"), []byte("fontdata"))
@@ -126,6 +138,18 @@ func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	}
 	if _, _, ok := lib.TemplateByName("item"); !ok {
 		t.Error("section template item not loaded")
+	}
+	// The nested container section loaded with its declared child section.
+	group, kind, ok := lib.TemplateByName("group")
+	if !ok || kind != KindSection {
+		t.Fatalf("TemplateByName(group) = (%v, %q, %v), want (non-nil, %q, true)", group, kind, ok, KindSection)
+	}
+	if group.Definition == nil {
+		t.Fatal("checkLibraryBuild left group.Definition nil")
+	}
+	if got := group.Definition.Sections; len(got) != 1 || got[0].Name != "items" ||
+		len(got[0].Accepted) != 1 || got[0].Accepted[0] != "item" {
+		t.Errorf("group.Sections = %+v, want one %q section accepting item", got, "items")
 	}
 	th, ok := lib.Themes["plain"]
 	if !ok {
