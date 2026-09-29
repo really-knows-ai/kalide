@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "format-migration",
+  "body": "Format migration: the application of one ordered, versioned step that carries a kalide project from one format/version to the next — for a template library, a `library.yaml` `format:` bump and the schema rewrites it governs; across kalide versions, a `template.yaml` (or deck-config) schema change. Each migration is defined by kalide and names its source and target version; it is applied at most once, in order, by the upgrade-project service, and preserves the author's values (a library's `name`/`description`, a deck's title/author/date/properties) while changing only the format/structure it governs. Migrations are not guessed from the project's files: a format with no defined migration (unknown, or newer than the running kalide) is reported, not migrated (global.constraint.upgrade-unknown-format-reported). The result of a migration is validated before it is kept; a multi-file migration is all-or-nothing, so a failed step leaves the project unchanged (global.constraint.upgrade-never-breaks-project).",
+  "properties": {
+    "kind": "event"
+  },
+  "out": [],
+  "in": []
+}
