@@ -213,35 +213,45 @@ fields or sections.
 - A deck selects a theme by name; a library that defines no theme is load-valid,
   but a library that hosts a deck must define the theme that deck resolves (the
   deck's `theme` defaults to `default`).
-- Theme-owned files are referenced **only from that theme's `theme.css`** using
-  relative `url()` and are served from the theme directory; a `url()` must stay
-  inside its own theme directory — no absolute paths and no `..`.
-- A theme's `theme.css`, and any CSS it `@import`s from its own theme directory,
-  may additionally reference the library's shared `media/` tree with the
-  reserved `media:` URL prefix, for example
-  `url('media:fonts/Inter-Regular.woff2')`. That lets several themes share one
-  library copy of brand assets (fonts, logos) instead of duplicating them into
-  every `themes/<name>/`. The path after `media:` is relative to the library's
-  `media/` — the same base the layout `{{ media "path" }}` helper uses — must
-  not be absolute and must not contain `..`, and the file must exist; a bad
-  reference is an error naming the theme CSS file and line. The prefix is valid
-  only for a `url()` reference, never for an `@import` target: an `@import`
-  target must stay a relative path inside the theme directory, so a `media:`
-  `@import` is an error.
-- A theme can reach only its own theme directory and the library's `media/` tree
-  through the prefix above — never another theme's directory or anything outside
-  the library.
+- Theme-owned files are referenced from that theme's CSS and are served from
+  the theme directory.
+- A theme's `theme.css` — and every CSS it `@import`s, wherever in the library
+  that CSS lives (its own theme directory, another theme, or `media/`) — may
+  reference a servable library file with both `url()` and `@import`, in three
+  forms:
+  - an unprefixed relative path, resolved from the referencing file's own
+    location and confined to that file's own tree: the theme directory for a
+    stylesheet in a theme, or `media/` for a stylesheet reached through
+    `media:`;
+  - the reserved `media:` prefix → the library's shared `media/` tree, for
+    example `url('media:fonts/Inter-Regular.woff2')` or
+    `@import url('media:theme.css')`;
+  - the reserved `theme:<name>/` prefix → another theme's directory, for
+    example `url('theme:default/theme.css')` or
+    `@import url('theme:default/theme.css')`, so a theme may build on another.
+- Cross-tree reach happens only through the `media:` and `theme:<name>/`
+  prefixes. An unprefixed relative reference stays inside the stylesheet's own
+  tree: no absolute paths, no `..` leaving that tree, no other scheme, nothing
+  outside the library, and no references into non-servable entries (`slides/`,
+  `sections/`, `library.yaml`, `AGENTS.md`). The path after `media:` is relative
+  to the library's `media/` — the same base the layout `{{ media "path" }}`
+  helper uses — and the path after `theme:<name>/` is relative to
+  `themes/<name>/`; an unknown `theme:<name>` is an error. Both prefixes work in
+  both `url()` and `@import`, and an imported stylesheet's own references are
+  checked too. `@import` is followed, bounded and cycle-safe across the whole
+  import graph; a missing file, a bad reference or a cycle is an error naming
+  the theme CSS file and line.
 
 ## Media
 
 - Shared media of any type lives under `media/` and is referenced from layouts
   with `{{ media "path" }}`.
 - The path is relative to `media/` only: no absolute paths and no `..`.
-- A theme's `theme.css` (and CSS it `@import`s from its own theme directory)
-  reaches the same `media/` tree through the reserved `media:` URL prefix in a
-  `url()` reference, for example `url('media:fonts/Inter-Regular.woff2')` — see
-  **Themes**. The prefix is valid only for a `url()` reference, never for an
-  `@import` target.
+- A theme's CSS — `theme.css` and every CSS it `@import`s — reaches the same
+  `media/` tree through the reserved `media:` prefix and another theme's
+  directory through the reserved `theme:<name>/` prefix; both work in `url()`
+  and `@import`, so a theme may build on another. An unprefixed relative
+  reference stays inside the stylesheet's own tree. See **Themes**.
 - Theme files are not reachable through `media`.
 - File types are unrestricted; the server derives the content type from the
   extension.
