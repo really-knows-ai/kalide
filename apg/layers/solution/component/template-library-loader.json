@@ -76,6 +76,11 @@
       "kind": "details",
       "source": "requirements.note.theme-media-references-feedback-1",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.nested-sections-solution",
+      "properties": {}
     }
   ]
 }
