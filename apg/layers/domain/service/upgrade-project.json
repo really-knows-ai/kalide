@@ -4,7 +4,13 @@
   "name": "upgrade-project",
   "body": "Upgrade project: given a directory that is a deck or a template library, determine which it is (kalide.yaml vs library.yaml; both present or neither is an error), decide for each kalide-owned scaffold file whether it is safe to refresh (absent, or byte-identical to a known released kalide version — global.constraint.upgrade-known-version-catalog), rewrite the safe ones to the running kalide's content, apply the ordered format migrations defined for the project's version (a library's `library.yaml` `format:`; for a deck, only migrations provable from its content), and report every path it refreshed and every path it left untouched. It never writes a file it does not own or cannot recognize as unmodified, never introduces scaffold content the project's form never had (a local `templates/` or starter slide in an external-library deck, for example), and never applies an unknown or newer format — it reports it instead. A migration result is validated before it is kept (a library through the template library loader; a deck through the deck loader), so the project is never left broken. Local filesystem only: offline, no git, no clone or fetch.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.upgrade",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",

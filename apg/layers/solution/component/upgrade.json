@@ -15,6 +15,11 @@
       "kind": "realised-by",
       "source": "domain.group.upgrade",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.upgrade-project",
+      "properties": {}
     }
   ]
 }
