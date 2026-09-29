@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "person",
   "name": "template-author",
-  "body": "Template author (C4 person): writes a project `templates/` library (templates, themes, media) and runs `kalide start`/`kalide templates` against it; never builds templates into the binary.",
+  "body": "Template author (C4 person): writes a project `templates/` library (templates, themes, media) and runs `kalide start`/`kalide templates` against it; works entirely from the resolved library, with templates loaded at run time (global.constraint.no-embedded-template-assets).",
   "properties": {},
   "out": [
     {
