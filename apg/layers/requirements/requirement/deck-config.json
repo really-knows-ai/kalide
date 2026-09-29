@@ -41,11 +41,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.fix-deck-config-keys",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.kalide-rename",
       "properties": {}
     },
