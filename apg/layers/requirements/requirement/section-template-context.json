@@ -28,11 +28,6 @@
       "kind": "contains",
       "source": "requirements.requirement.template-context",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.deck-properties-decisions",
-      "properties": {}
     }
   ]
 }
