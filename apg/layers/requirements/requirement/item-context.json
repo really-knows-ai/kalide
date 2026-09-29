@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "item-context",
+  "body": "Every slide layout and every section template, at any nesting depth, is additionally given a reserved `item` context describing the current instance's place among its siblings: `index` (0-based), `number` (1-based), `count` (the number of siblings in the same parent section), `first` and `last` (booleans), `section` (the section name) and `template` (the resolved template), and `parent` (the parent instance's fields, or nil at the top level). At slide level `item` is nil or absent — a slide has no siblings. `item` is a reserved top-level name: neither a field nor a section may be named `item`, and exposing it adds no layout helper (the v1 helper set stays exactly `media`).\n\nAC: a layout or section template can read `{{.item.number}}`, `{{.item.count}}`, `{{.item.first}}`, `{{.item.last}}`, `{{.item.section}}`, `{{.item.template}}` and `{{.item.parent.<field>}}`; the values reflect the instance's position among its siblings (index 0-based, number 1-based); a slide layout sees `item` nil/absent; loading a template that declares a field or section named `item` is a templates error.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
