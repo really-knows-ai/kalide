@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -733,6 +734,27 @@ func contains(ss []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// containmentPath renders a nested-section containment path from, per depth, the
+// section name and the zero-based instance index of the section at that depth.
+// A negative index renders the segment as the bare name: it marks a section
+// that is not one instance (the leaf of a min/max or unknown-name error, or an
+// aggregate over a parent's child instances). Segments are joined with the
+// canonical ` › ` (U+203A) separator (nested-section-validation,
+// error-reporting), so per-depth counters [2, 1] over [columns, blocks] render
+// `columns[2] › blocks[1]`. It is shared by the parser's nested validation
+// errors.
+func containmentPath(names []string, indexes []int) string {
+	parts := make([]string, len(names))
+	for i, name := range names {
+		if i < len(indexes) && indexes[i] >= 0 {
+			parts[i] = name + "[" + strconv.Itoa(indexes[i]) + "]"
+			continue
+		}
+		parts[i] = name
+	}
+	return strings.Join(parts, " › ")
 }
 
 // parseError builds a positioned *ParseError.
