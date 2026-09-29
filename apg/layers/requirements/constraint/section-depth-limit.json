@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "section-depth-limit",
+  "body": "No template composition chain may be deeper than six heading levels (`#` through `######`): heading depth is nesting depth, so a section at depth n has children at depth n+1 only, and the depth is bounded by the content syntax, not a setting. A template set whose composition depth exceeds six is refused at load with a templates error path-qualified to the offending `template.yaml` (templates-dir-validation step 4).",
+  "properties": {
+    "attaches-to": "requirements.requirement.template-composition"
+  },
+  "out": [],
+  "in": []
+}
