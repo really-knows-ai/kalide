@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "global.constraint.upgrade-unknown-format-reported",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-library-upgrade",
+      "properties": {}
     }
   ],
   "in": []

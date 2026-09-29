@@ -53,6 +53,11 @@
       "kind": "details",
       "source": "requirements.note.upgrade-deck-vs-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-migrate-framework-scope",
+      "properties": {}
     }
   ]
 }
