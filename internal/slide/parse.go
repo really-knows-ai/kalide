@@ -26,12 +26,6 @@ const SlideDelimiter = "---"
 // frontmatter. It is a plain fence with no language tag.
 const SectionFence = "```"
 
-// headingRe matches a top-level ATX heading: up to three leading spaces, a
-// single `#`, whitespace and the section name. `##` and deeper are not sections
-// (Markdown has only one level of sections); `#name` without a space is not a
-// heading. The name may be empty.
-var headingRe = regexp.MustCompile(`^[ \t]{0,3}#(?:[ \t]+(.*?))?[ \t]*$`)
-
 // atxHeadingRe matches a CommonMark ATX heading of depth 1-6: up to three
 // leading spaces, one to six `#`, then whitespace and the heading text (which
 // may be empty). Seven or more `#`, or `#` with no following whitespace, is not
@@ -633,14 +627,15 @@ func isSectionHeading(line string) bool {
 	return ok
 }
 
-// headingName returns the section name of a heading line, or "" when the
-// heading has no name. A CommonMark closing sequence (`# foo #`) is stripped.
+// headingName returns the section name of an ATX heading line at any depth 1-6,
+// or "" when the line is not a heading or the heading has no name. A CommonMark
+// ATX closing sequence (`# foo #`, `## foo ##`) is stripped at any depth.
 func headingName(line string) string {
-	m := headingRe.FindStringSubmatch(line)
+	m := atxHeadingRe.FindStringSubmatch(line)
 	if m == nil {
 		return ""
 	}
-	name := strings.TrimSpace(m[1])
+	name := strings.TrimSpace(m[2])
 	if strings.HasSuffix(name, "#") {
 		trimmed := strings.TrimRight(name, "#")
 		if trimmed != "" && strings.HasSuffix(trimmed, " ") {
@@ -652,22 +647,15 @@ func headingName(line string) string {
 
 // headingLevel parses an ATX heading line's depth (1-6) and its name. ok is
 // false when line is not a depth-1-6 ATX heading. The name has any CommonMark
-// ATX closing sequence stripped, matching headingName. Heading depth is nesting
-// depth: a `#` heading is a top-level section and each extra `#` is one level
-// deeper (slide-sections).
+// ATX closing sequence stripped (headingName). Heading depth is nesting depth: a
+// `#` heading is a top-level section and each extra `#` is one level deeper
+// (slide-sections).
 func headingLevel(line string) (level int, name string, ok bool) {
 	m := atxHeadingRe.FindStringSubmatch(line)
 	if m == nil {
 		return 0, "", false
 	}
-	name = strings.TrimSpace(m[2])
-	if strings.HasSuffix(name, "#") {
-		trimmed := strings.TrimRight(name, "#")
-		if trimmed != "" && strings.HasSuffix(trimmed, " ") {
-			name = strings.TrimSpace(trimmed)
-		}
-	}
-	return len(m[1]), name, true
+	return len(m[1]), headingName(line), true
 }
 
 // documentMapping returns the root mapping of a parsed YAML document, or nil
