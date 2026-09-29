@@ -26,6 +26,11 @@
       "kind": "realised-by",
       "target": "solution.component.upgrade",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.format-migration",
+      "properties": {}
     }
   ],
   "in": [
