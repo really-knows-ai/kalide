@@ -29,11 +29,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.fix-ci-manifest-push",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.fix-supported-targets-runners",
       "properties": {}
     },

@@ -10,11 +10,6 @@
       "kind": "details",
       "source": "requirements.note.distribution-decisions",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-ci-manifest-push",
-      "properties": {}
     }
   ]
 }
