@@ -26,11 +26,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.fix-field-value-syntax",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.fix-missing-template-depends",
       "properties": {}
     }

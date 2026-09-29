@@ -15,11 +15,6 @@
       "kind": "drives",
       "source": "requirements.requirement.field-rules",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.fix-field-value-syntax",
-      "properties": {}
     }
   ]
 }
