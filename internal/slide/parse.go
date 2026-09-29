@@ -31,6 +31,13 @@ const SectionFence = "```"
 // heading. The name may be empty.
 var headingRe = regexp.MustCompile(`^[ \t]{0,3}#(?:[ \t]+(.*?))?[ \t]*$`)
 
+// atxHeadingRe matches a CommonMark ATX heading of depth 1-6: up to three
+// leading spaces, one to six `#`, then whitespace and the heading text (which
+// may be empty). Seven or more `#`, or `#` with no following whitespace, is not
+// a heading. Heading depth is nesting depth (slide-sections). Group 1 is the
+// `#` run and group 2 the raw heading text.
+var atxHeadingRe = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
+
 // Slide is one parsed slide file. Every element carries the 1-based line where
 // it begins, so callers can report positioned errors and render from source.
 type Slide struct {
@@ -618,6 +625,26 @@ func headingName(line string) string {
 		}
 	}
 	return name
+}
+
+// headingLevel parses an ATX heading line's depth (1-6) and its name. ok is
+// false when line is not a depth-1-6 ATX heading. The name has any CommonMark
+// ATX closing sequence stripped, matching headingName. Heading depth is nesting
+// depth: a `#` heading is a top-level section and each extra `#` is one level
+// deeper (slide-sections).
+func headingLevel(line string) (level int, name string, ok bool) {
+	m := atxHeadingRe.FindStringSubmatch(line)
+	if m == nil {
+		return 0, "", false
+	}
+	name = strings.TrimSpace(m[2])
+	if strings.HasSuffix(name, "#") {
+		trimmed := strings.TrimRight(name, "#")
+		if trimmed != "" && strings.HasSuffix(trimmed, " ") {
+			name = strings.TrimSpace(trimmed)
+		}
+	}
+	return len(m[1]), name, true
 }
 
 // documentMapping returns the root mapping of a parsed YAML document, or nil
