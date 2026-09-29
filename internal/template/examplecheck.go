@@ -82,7 +82,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 
 // exampleBlock is one parsed `---`/fence-delimited frontmatter plus body plus
 // nested named section instances, either a whole example.md (slide or
-// section) or one `# name` section instance within one.
+// section) or one heading-delimited section instance within one.
 type exampleBlock struct {
 	// Frontmatter is the parsed YAML mapping, or nil when the block carries
 	// none.
@@ -92,22 +92,27 @@ type exampleBlock struct {
 	// when Frontmatter is nil.
 	FrontmatterLine int
 
-	// Body is the Markdown after the frontmatter, up to the first top-level
-	// `# name` heading (or the whole remainder when there is none).
+	// Body is the Markdown after the frontmatter, up to the first child
+	// heading (or the whole remainder when there is none).
 	Body string
 
 	// BodyLine is Body's 1-based starting file line.
 	BodyLine int
 
-	// Sections holds each top-level `# name` instance in source order,
-	// excluding a reserved `# notes` section.
+	// Sections holds each section instance in source order, excluding a
+	// reserved `# notes` section.
 	Sections []exampleSection
 }
 
-// exampleSection is one `# name` instance within an exampleBlock.
+// exampleSection is one heading-delimited instance within an exampleBlock: the
+// section name, the heading depth that opened it, its zero-based instance index
+// among siblings of the same name, and its own block (frontmatter, body and
+// nested children) under exampleBlock.Sections.
 type exampleSection struct {
-	Name string
-	Line int
+	Name  string
+	Line  int
+	Level int
+	Index int
 	*exampleBlock
 }
 
@@ -187,32 +192,67 @@ func scanFence(lines []string, start int, close string) ([]string, int, bool) {
 // sectionHeadingPattern matches a top-level `# name` section heading line —
 // exactly one `#`, a space, then the name — never a `##`/`###` subheading.
 func isSectionHeading(line string) (string, bool) {
-	trimmed := strings.TrimRight(line, " \t\r")
-	if !strings.HasPrefix(trimmed, "# ") {
-		return "", false
-	}
-	if strings.HasPrefix(trimmed, "##") {
-		return "", false
-	}
-	name := strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
-	if name == "" {
+	level, name, ok := exampleHeadingLevel(line)
+	if !ok || level != 1 {
 		return "", false
 	}
 	return name, true
 }
 
-// splitExampleSections splits lines (starting at file line startLine) into
-// the body text before the first top-level `# name` heading and the section
-// instances that follow, tracking fenced code blocks so a `#` inside one is
-// never mistaken for a heading.
+// exampleHeadingLevel parses an ATX heading line's depth (1-6) and its name.
+// Heading depth is nesting depth, so a deeper heading is a child instance of
+// the most recent shallower one (slide-sections). Seven or more `#` is not a
+// heading. The name has any ATX closing sequence stripped.
+func exampleHeadingLevel(line string) (level int, name string, ok bool) {
+	trimmed := strings.TrimRight(line, " \t\r")
+	trimmed = strings.TrimLeft(trimmed, " \t")
+	hashes := 0
+	for hashes < len(trimmed) && trimmed[hashes] == '#' {
+		hashes++
+	}
+	if hashes == 0 || hashes > 6 {
+		return 0, "", false
+	}
+	rest := trimmed[hashes:]
+	if rest != "" && rest[0] != ' ' && rest[0] != '\t' {
+		return 0, "", false
+	}
+	name = strings.TrimSpace(rest)
+	if strings.HasSuffix(name, "#") {
+		body := strings.TrimRight(name, "#")
+		if body != "" && (strings.HasSuffix(body, " ") || strings.HasSuffix(body, "\t")) {
+			name = strings.TrimSpace(body)
+		}
+	}
+	if name == "" {
+		return 0, "", false
+	}
+	return hashes, name, true
+}
+
+// splitExampleSections splits lines (starting at file line startLine) into the
+// body text before the first heading and the section instances that follow,
+// nesting each heading one level deeper beneath the most recent shallower one
+// (heading depth is nesting depth, slide-sections). A heading at the same or a
+// shallower depth closes the open instances. Fenced code blocks are tracked so
+// a `#` inside one is never mistaken for a heading.
 func splitExampleSections(lines []string, startLine int) (body string, bodyLine int, sections []exampleSection) {
+	body, bodyLine, sections = splitExampleLevel(lines, startLine)
+	return body, bodyLine, sections
+}
+
+// splitExampleLevel parses one level of an example body: the body before its
+// first heading and the instances at that level, recursing into deeper ones.
+func splitExampleLevel(lines []string, startLine int) (body string, bodyLine int, sections []exampleSection) {
 	inFence := false
 	bodyEnd := len(lines)
-	var headings []struct {
-		name string
-		line int
-		idx  int
+	type heading struct {
+		level int
+		name  string
+		line  int
+		idx   int
 	}
+	var headings []heading
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") {
@@ -222,37 +262,66 @@ func splitExampleSections(lines []string, startLine int) (body string, bodyLine 
 		if inFence {
 			continue
 		}
-		if name, ok := isSectionHeading(line); ok {
-			if bodyEnd == len(lines) {
-				bodyEnd = i
-			}
-			headings = append(headings, struct {
-				name string
-				line int
-				idx  int
-			}{name, startLine + i, i})
+		level, name, ok := exampleHeadingLevel(line)
+		if !ok {
+			continue
 		}
+		if bodyEnd == len(lines) {
+			bodyEnd = i
+		}
+		headings = append(headings, heading{level, name, startLine + i, i})
 	}
 
 	body = strings.TrimRight(strings.Join(lines[:bodyEnd], "\n"), "\n")
 	bodyLine = startLine
+	if len(headings) == 0 {
+		return body, bodyLine, nil
+	}
 
-	for h := range headings {
-		start := headings[h].idx + 1
-		end := len(lines)
-		if h+1 < len(headings) {
-			end = headings[h+1].idx
+	base := headings[0].level
+	// Only headings at the first heading's depth open siblings here; a deeper
+	// heading belongs to the instance that precedes it.
+	counts := map[string]int{}
+	i := 0
+	for i < len(headings) {
+		h := headings[i]
+		if h.level < base {
+			break
 		}
-		if headings[h].name == "notes" {
+		if h.level > base {
+			i++
+			continue
+		}
+		// Extent runs to the next heading at base depth or shallower.
+		j := i + 1
+		for j < len(headings) && headings[j].level > base {
+			j++
+		}
+		start := h.idx + 1
+		end := len(lines)
+		if j < len(headings) {
+			end = headings[j].idx
+		}
+		if h.name == "notes" {
+			i = j
 			continue
 		}
 		content := lines[start:end]
-		nested, _ := parseExampleBlock(strings.Join(content, "\n"), KindSection, startLine+start)
+		nested, nestedLine, children := splitExampleLevel(content, startLine+start)
+		index := counts[h.name]
+		counts[h.name]++
 		sections = append(sections, exampleSection{
-			Name:         headings[h].name,
-			Line:         headings[h].line,
-			exampleBlock: nested,
+			Name:  h.name,
+			Line:  h.line,
+			Level: h.level,
+			Index: index,
+			exampleBlock: &exampleBlock{
+				Body:     nested,
+				BodyLine: nestedLine,
+				Sections: children,
+			},
 		})
+		i = j
 	}
 	return body, bodyLine, sections
 }
