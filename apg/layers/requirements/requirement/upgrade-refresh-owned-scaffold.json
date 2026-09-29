@@ -48,6 +48,11 @@
       "kind": "details",
       "source": "requirements.note.upgrade-refresh-absent-rule",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.theme-library-reach-propagated",
+      "properties": {}
     }
   ]
 }
