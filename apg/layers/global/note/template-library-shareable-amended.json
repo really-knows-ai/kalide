@@ -4,6 +4,12 @@
   "name": "template-library-shareable-amended",
   "body": "source: change request \"let theme CSS reference any file in the template library\". global.constraint.template-library-shareable said a theme's theme.css \"reaches only its own theme directory and the resolved library's shared media/ tree\" — the exact restriction being lifted.\n\nResolution [autonomous]: amended that sentence to the new reach — a theme's theme.css, and every CSS it imports, may reach its own directory, the shared media/ tree (reserved `media:`) and another theme's files (reserved `theme:<name>/`), both valid for url() and @import (theme-media-references) — while keeping the self-contained/relocatable law: every target stays inside the library root and no reference escapes it (no absolute paths, no `..` escape, no outside scheme). The first sentence (relocatable unit; no references into slides/ or the project assets/) is unchanged. global.constraint.theme-tokens-only needs no change: the new reach adds no visual values — every value still comes from the active theme's tokens — so no amendment was made there. [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "global.constraint.template-library-shareable",
+      "properties": {}
+    }
+  ],
   "in": []
 }
