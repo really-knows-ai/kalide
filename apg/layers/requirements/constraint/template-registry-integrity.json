@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "template-registry-integrity",
+  "body": "The template registry admits only a consistent template set. Every template reference chain is acyclic; a section declaration accepts only templates under `templates/sections/`; a field type is a section template (never a slide template, never a required-body template); a template name is unique across `templates/slides/` and `templates/sections/`; every referenced template is defined; and each `example.md` validates against its template. A template set violating one of these is refused at load with a templates error path-qualified to the offending `template.yaml`/`example.md` (templates-dir-validation step 4).",
+  "properties": {
+    "attaches-to": "requirements.requirement.template-build-checks"
+  },
+  "out": [],
+  "in": []
+}
