@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "domain.value.format-migration",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-library-upgrade",
+      "properties": {}
     }
   ],
   "in": []

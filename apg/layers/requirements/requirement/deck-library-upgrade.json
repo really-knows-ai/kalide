@@ -68,6 +68,11 @@
       "kind": "details",
       "source": "requirements.note.upgrade-scope-feedback-6",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-reconciliation-final-review",
+      "properties": {}
     }
   ]
 }
