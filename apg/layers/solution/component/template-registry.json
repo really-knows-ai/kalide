@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "solution.note.theme-library-reach",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.nested-sections-solution",
+      "properties": {}
     }
   ]
 }
