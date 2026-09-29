@@ -7,5 +7,11 @@
     "attaches-to": "requirements.requirement.upgrade-migrate-format"
   },
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-migrate-framework-scope",
+      "properties": {}
+    }
+  ]
 }
