@@ -181,6 +181,20 @@ type SectionDepthError struct {
 	Limit int
 }
 
+// Error renders the over-deep composition chain and the heading-level bound as
+// a plain-language templates error: how deep the chain is, the six-heading-
+// level limit it breaks, the chain itself, and a hint to nest fewer section
+// templates or flatten the composition.
+func (e *SectionDepthError) Error() string {
+	limit := e.Limit
+	if limit <= 0 {
+		limit = sectionDepthLimit
+	}
+	return fmt.Sprintf(
+		"section template composition is %d levels deep, exceeding the %d-heading-level limit: %s — nest fewer section templates or flatten the composition",
+		len(e.Path), limit, strings.Join(e.Path, " → "))
+}
+
 // Walk returns every distinct section template reachable from tmpl through the
 // composition of its declared sections, in depth-first declaration order. It
 // descends as far as the resolver allows, with no depth limit.
