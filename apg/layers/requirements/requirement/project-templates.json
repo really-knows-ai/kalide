@@ -116,11 +116,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.external-template-library-decisions",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.init-library-decisions",
       "properties": {}
     }

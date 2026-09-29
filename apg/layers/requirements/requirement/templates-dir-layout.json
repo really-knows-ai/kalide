@@ -45,11 +45,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.external-template-library-decisions",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}

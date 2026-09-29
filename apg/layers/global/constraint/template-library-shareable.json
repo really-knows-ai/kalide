@@ -5,11 +5,5 @@
   "body": "Forward compatibility with git-based sharing (future, out of scope now): the `templates/` directory must be a self-contained, relocatable unit — it must not reference files outside itself (no absolute paths, no `..` escapes, no references into `slides/` or the project `assets/`), must carry its identity and format version in `templates/library.yaml`, and must hold no machine- or project-specific state — so that it can later be the root of (or be pulled from) its own git repository without layout changes. Within the library, a theme's `theme.css` may reference only its own theme directory and the resolved library's shared `media/` tree (via the reserved `media:` URL prefix, theme-media-references) — never another theme's directory and never anything outside the library; because the `media:` target lives inside the library, this preserves the self-contained/relocatable property.",
   "properties": {},
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.external-template-library-decisions",
-      "properties": {}
-    }
-  ]
+  "in": []
 }
