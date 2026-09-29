@@ -41,6 +41,11 @@
       "kind": "drives",
       "target": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
     }
   ],
   "in": [
