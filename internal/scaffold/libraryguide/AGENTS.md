@@ -257,11 +257,14 @@ deck at it and run `kalide start`:
    kalide's format migrations, entirely offline, with no network or `git`. It
    never overwrites author content — your `slides/`, `sections/`, every theme
    (including its `theme.css` and theme-owned files) and the shared `media/`
-   tree are left byte-for-byte untouched, and a kalide-owned file the author has
-   edited is left alone and reported. An unknown or newer `library.yaml`
-   `format:` is refused instead: `kalide upgrade` exits non-zero, names the
-   format found and the format supported, and changes nothing. `kalide upgrade`
-   takes no path argument and has no `--force`.
+   tree are left byte-for-byte untouched, with one exception: a seeded default
+   `themes/default/theme.css` that is still byte-identical to a known released
+   kalide version (that is, unedited since `kalide init`) is refreshed to the
+   running binary's version. A kalide-owned file the author has edited — an
+   edited `themes/default/theme.css` included — is left alone and reported. An
+   unknown or newer `library.yaml` `format:` is refused instead: `kalide upgrade`
+   exits non-zero, names the format found and the format supported, and changes
+   nothing. `kalide upgrade` takes no path argument and has no `--force`.
 2. Create a deck whose `kalide.yaml` resolves your library — either put the
    library at the deck's `templates/` directory, or set the deck's `templates:`
    key to the library path (relative to the deck root, or absolute).
