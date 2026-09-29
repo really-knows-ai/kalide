@@ -40,6 +40,8 @@ package scaffold
 // completed by upgrade/plan.phase-01.task-9.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"path"
 	"slices"
@@ -167,22 +169,102 @@ func shippedScaffoldIdentities(files []shippedScaffoldFile) []string {
 	return identities
 }
 
+// shippedScaffoldDigest returns data's lowercase-hex SHA-256 digest — the
+// algorithm the catalogue, catalogLookup and the refresh half all share — so
+// the drift self-test hashes bytes exactly as catalogLookup does.
+func shippedScaffoldDigest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
 // TestCatalogCoversShippedScaffold is the build/test-time catalog drift
 // self-test (global.constraint.upgrade-known-version-catalog): it derives the
 // checked shipped-scaffold set from the actual writers with
-// derivedShippedScaffold and will assert that every current shipped file's
-// SHA-256 is a catalogued entry for its own identity, that the catalogue's
-// identity set equals exactly the derived set (no extra identity, notably NOT
-// kalide.yaml, and none missing), and — as a negative self-check — that a
-// mutated, uncatalogued byte slice is reported as uncatalogued so the gate
-// cannot pass vacuously.
+// derivedShippedScaffold and asserts that
 //
-// The assertion body is implemented by upgrade/plan.phase-01.task-9; this file
-// (task 8) provides the derivation and identity mapping it runs on.
+//   - every current shipped file's SHA-256 is a catalogued entry for its own
+//     identity (both catalogLookup and digestsForIdentity agree), so a writer
+//     whose bytes are missing from the catalogue fails the gate rather than
+//     silently shipping an unrefreshable file;
+//   - the catalogue's identity set equals exactly the derived set — no extra
+//     identity (notably NOT deck:kalide.yaml, the author-edited config) and
+//     none missing — pinning the catalogue to
+//     requirements.constraint.upgrade-owned-scaffold-scope; and
+//   - as a negative self-check mirroring agentsguide_test.go's negative
+//     subtests, a mutated (uncatalogued) byte slice is reported as
+//     uncatalogued, proving the gate can fire rather than passing vacuously.
 func TestCatalogCoversShippedScaffold(t *testing.T) {
 	files := derivedShippedScaffold(t)
 	if len(files) == 0 {
 		t.Fatal("derivedShippedScaffold returned no shipped scaffold files; the derivation is broken")
 	}
-	t.Skip("catalog drift assertions are implemented by upgrade/plan.phase-01.task-9")
+
+	t.Run("every shipped file's digest is catalogued under its own identity", func(t *testing.T) {
+		for _, file := range files {
+			digest := shippedScaffoldDigest(file.data)
+			if !catalogLookup(file.identity, file.data) {
+				t.Errorf("%s (%s) digest %s is not catalogued in %s; regenerate the catalogue so a project shipping these bytes can be refreshed",
+					file.identity, file.origin, digest, catalogFileName)
+				continue
+			}
+			if !slices.Contains(knownCatalog.digestsForIdentity(file.identity), digest) {
+				t.Errorf("%s (%s) digest %s passes catalogLookup but digestsForIdentity does not list it; the catalogue's lookup and listing disagree",
+					file.identity, file.origin, digest)
+			}
+		}
+	})
+
+	t.Run("the catalogue's identity set equals exactly the shipped owned-scaffold set", func(t *testing.T) {
+		want := shippedScaffoldIdentities(files)
+		got := knownCatalog.identities()
+
+		if !slices.Equal(got, want) {
+			t.Errorf("catalogue identity set = %v, want exactly the shipped owned-scaffold set %v", got, want)
+			for _, identity := range got {
+				if !slices.Contains(want, identity) {
+					t.Errorf("catalogue carries extra identity %q that no writer ships", identity)
+				}
+			}
+			for _, identity := range want {
+				if !slices.Contains(got, identity) {
+					t.Errorf("catalogue is missing shipped identity %q", identity)
+				}
+			}
+		}
+
+		// The seed walk's kalide.yaml is deliberately not an owned whole-file
+		// member — it is the author-edited deck config — so no catalogue
+		// identity may name it.
+		configIdentity := catalogOwnedIdentity(catalogIdentityDeckForm, deck.ConfigFile)
+		if slices.Contains(got, configIdentity) {
+			t.Errorf("catalogue carries identity %q; %s is author-edited and must not be a whole-file owned member",
+				configIdentity, deck.ConfigFile)
+		}
+	})
+
+	t.Run("negative: a mutated, uncatalogued digest is reported as uncatalogued", func(t *testing.T) {
+		// Flipping a byte must move the file's digest off every catalogued
+		// version; were catalogLookup or digestsForIdentity to match the
+		// mutated bytes, the drift gate would pass vacuously.
+		for _, file := range files {
+			if len(file.data) == 0 {
+				t.Fatalf("%s (%s) has no bytes; cannot mutate an empty file", file.identity, file.origin)
+			}
+			mutated := slices.Clone(file.data)
+			mutated[0] ^= 0x80
+
+			original := shippedScaffoldDigest(file.data)
+			changed := shippedScaffoldDigest(mutated)
+			if changed == original {
+				t.Fatalf("%s: mutating a byte did not change the digest; the negative self-check is vacuous", file.identity)
+			}
+			if catalogLookup(file.identity, mutated) {
+				t.Errorf("%s: catalogLookup reported a mutated byte slice (digest %s, original %s) as catalogued; the drift gate would pass vacuously",
+					file.identity, changed, original)
+			}
+			if slices.Contains(knownCatalog.digestsForIdentity(file.identity), changed) {
+				t.Errorf("%s: digestsForIdentity still lists the mutated digest %s; the drift gate would pass vacuously", file.identity, changed)
+			}
+		}
+	})
 }
