@@ -31,8 +31,9 @@ import (
 //     phase-2 task-11 fills it in;
 //  5. each theme has theme.css;
 //  6. a theme's CSS references — theme.css and any CSS it @imports — stay
-//     inside the theme directory (or reach the library media/ tree via the
-//     reserved media: prefix), a layout's literal src/href references stay
+//     inside the tree that owns them (or reach the library media/ tree via
+//     the reserved media: prefix, or a sibling theme via the reserved
+//     theme:<name>/ prefix), a layout's literal src/href references stay
 //     inside templates/, and every `media` call argument is valid and
 //     exists;
 //  7. (hook) checkLibraryExamples — each example.md validates against its
@@ -159,11 +160,12 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 	}
 
 	// Step 6: every theme CSS reference — in theme.css or any CSS it
-	// @imports — must be a relative path inside its theme directory, or a
-	// url() carrying the reserved media: prefix resolving against the
-	// library's media/ tree (validated like a layout `media` argument). A
-	// layout's literal src/href references stay inside templates/, and
-	// every `media` call argument is valid and exists.
+	// @imports — must be a relative path inside the tree that owns it, or
+	// reach the library's shared media/ tree (the reserved media: prefix) or
+	// a sibling theme's directory (the reserved theme:<name>/ prefix) through
+	// a url() or @import reference (a url() media: target is validated like a
+	// layout `media` argument). A layout's literal src/href references stay
+	// inside templates/, and every `media` call argument is valid and exists.
 	orderedThemeNames := make([]string, 0, len(lib.Themes))
 	for name := range lib.Themes {
 		orderedThemeNames = append(orderedThemeNames, name)
@@ -606,16 +608,16 @@ type themeCSSScanner struct {
 // checkThemeCSSReferences validates a theme's CSS references (templates-dir-
 // validation step 6): every relative url() reference and every @import target
 // must resolve to an existing file inside the referencing stylesheet's own
-// tree, and a url() carrying the reserved media: prefix must resolve like a
-// layout `media "path"` argument against mediaFS. An absolute path, a `..`
-// escape that leaves that tree, and any other scheme (http:, https:, data:,
-// //) are rejected; an @import target may instead carry the reserved media:
-// prefix (the shared media/ tree) or the reserved theme:<name>/ prefix
-// (another theme's directory). @imports are followed in both the quoted-string
-// and url() forms, bounded and cycle-safe across the whole import graph, so a
-// stylesheet reached through a prefix has its own references validated in its
-// own tree. Every error is a *LibraryError qualified with the offending CSS
-// file and its 1-based line.
+// tree. A reference carrying the reserved media: prefix must resolve like a
+// layout `media "path"` argument against mediaFS (both url() and @import), and
+// one carrying the reserved theme:<name>/ prefix must name a file inside an
+// existing theme's directory (both url() and @import); an unknown <name> is a
+// templates error. An absolute path, a `..` escape that leaves the resolved
+// tree, and any other scheme (http:, https:, data:, //) are rejected.
+// @imports are followed in both the quoted-string and url() forms, bounded and
+// cycle-safe across the whole import graph, so a stylesheet reached through a
+// prefix has its own references validated in its own tree. Every error is a
+// *LibraryError qualified with the offending CSS file and its 1-based line.
 //
 // root is the templates/ root the display paths are built under. th is the
 // theme whose stylesheet seeds the scan: th.Dir is the theme's directory
@@ -793,16 +795,7 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 			}
 			data = b
 		} else {
-			owner := s.th
-			if owner == nil || owner.Dir != s.tree {
-				owner = nil
-				for _, th := range s.themes {
-					if th.Dir == s.tree {
-						owner = th
-						break
-					}
-				}
-			}
+			owner := s.themeByTree(s.tree)
 			var exists bool
 			if owner != nil {
 				if importRel == ThemeStylesheet {
@@ -842,15 +835,24 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 	return nil
 }
 
-// checkURL validates one url() reference that is not an @import target: a
-// media:-prefixed target resolves against mediaFS like a layout `media`
-// argument, and any other target must be a relative path naming an existing
-// file inside the theme directory.
+// checkURL validates one url() reference that is not an @import target. A
+// target carrying the reserved media: prefix resolves against mediaFS like a
+// layout `media` argument; one carrying the reserved theme:<name>/ prefix
+// names a file inside the named sibling theme's directory (an unknown <name>
+// is a templates error naming this CSS file and line); any other target must
+// be a relative path naming an existing file inside the stylesheet's own tree
+// — its theme directory, or media/ for a stylesheet reached through the
+// reserved media: prefix. A scheme (http:, https:, data:, //) or an absolute
+// path, and a `..` that leaves the resolved tree, are rejected. Every error is
+// a *LibraryError qualified with the offending CSS file and its 1-based line.
 func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, line int) error {
 	target := ref.value
 	if target == "" {
 		return nil
 	}
+
+	// The reserved media: prefix names a file under the shared media/ tree,
+	// exactly like a layout `media "path"` argument.
 	if mediaPath := strings.TrimPrefix(target, MediaURLPrefix()); mediaPath != target {
 		clean, err := cleanMediaPath(mediaPath)
 		if err != nil {
@@ -866,22 +868,114 @@ func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, lin
 		}
 		return nil
 	}
+
+	// The reserved theme:<name>/ prefix names a file inside the named theme's
+	// directory: the url() counterpart of the @import form. <name> must be a
+	// loaded theme, and the path after it is relative to that theme's
+	// directory and must stay inside it.
+	if rest := strings.TrimPrefix(target, ThemeURLPrefix()); rest != target {
+		name, sub, found := strings.Cut(rest, "/")
+		if !found || name == "" || sub == "" {
+			return libraryErrorf(displayPath, line,
+				"url(%q): expected %s<theme>/<path>", target, ThemeURLPrefix())
+		}
+		owner, ok := s.themes[name]
+		if !ok {
+			return libraryErrorf(displayPath, line,
+				"url(%q): unknown theme %q", target, name)
+		}
+		dir := path.Join(s.root, owner.Dir)
+		if path.IsAbs(sub) || strings.HasPrefix(sub, "/") {
+			return libraryErrorf(displayPath, line,
+				"url(%q): path %q must be relative to theme directory %s, not absolute",
+				target, sub, dir)
+		}
+		themeRel := path.Clean(sub)
+		if themeRel == ".." || strings.HasPrefix(themeRel, "../") {
+			return libraryErrorf(displayPath, line,
+				"url(%q): path %q must not escape theme directory %s with \"..\"",
+				target, sub, dir)
+		}
+		if themeRel == "." {
+			return libraryErrorf(displayPath, line,
+				"url(%q): path must not be empty", target)
+		}
+		if !themeOwnsFile(owner, themeRel) {
+			return libraryErrorf(displayPath, line,
+				"url(%q): file not found inside theme directory %s", target, dir)
+		}
+		return nil
+	}
+
+	// Any other scheme or an absolute path is external and rejected. The
+	// tree the reference must stay inside is the stylesheet's own: its theme
+	// directory, or media/ when it was reached through the reserved media:
+	// prefix.
+	desc := "its theme directory"
+	if s.tree == MediaDir {
+		desc = MediaDir + "/"
+	}
 	if isExternalRef(target) {
 		return libraryErrorf(displayPath, line,
-			"url(%q) must be a relative path inside its theme directory", target)
+			"url(%q) must be a relative path inside %s", target, desc)
 	}
-	themeRel := path.Clean(path.Join(path.Dir(rel), target))
-	if themeRel == ".." || strings.HasPrefix(themeRel, "../") || path.IsAbs(themeRel) {
+
+	// An unprefixed relative target resolves from this stylesheet's own
+	// location and must stay inside the tree that owns it — never the tree
+	// the scan was entered from.
+	urlRel := path.Clean(path.Join(path.Dir(rel), target))
+	if urlRel == ".." || strings.HasPrefix(urlRel, "../") || path.IsAbs(urlRel) {
 		return libraryErrorf(displayPath, line,
-			"url(%q) escapes its theme directory %s", target, path.Join(s.root, s.tree))
+			"url(%q) escapes %s %s", target, desc, path.Join(s.root, s.tree))
 	}
-	if themeRel != ThemeStylesheet {
-		if _, ok := s.th.Files[themeRel]; !ok {
+	if s.tree == MediaDir {
+		if s.mediaFS == nil {
 			return libraryErrorf(displayPath, line,
-				"url(%q): file not found inside theme directory %s", target, path.Join(s.root, s.tree))
+				"url(%q): media file not found: no templates/media directory", target)
+		}
+		if _, statErr := fs.Stat(s.mediaFS, urlRel); statErr != nil {
+			return libraryErrorf(displayPath, line,
+				"url(%q): media file not found: %v", target, statErr)
+		}
+		return nil
+	}
+	if !themeOwnsFile(s.themeByTree(s.tree), urlRel) {
+		return libraryErrorf(displayPath, line,
+			"url(%q): file not found inside theme directory %s", target, path.Join(s.root, s.tree))
+	}
+	return nil
+}
+
+// themeByTree returns the loaded theme whose directory is tree (a
+// LibraryTheme.Dir, e.g. "themes/default"), or nil when no theme owns it. A
+// stylesheet reached through an import resolves its unprefixed relative
+// references against the theme that actually owns it, rather than the theme
+// the scan was entered from, so the lookup goes through the whole library.
+func (s *themeCSSScanner) themeByTree(tree string) *LibraryTheme {
+	if s.th != nil && s.th.Dir == tree {
+		return s.th
+	}
+	for _, th := range s.themes {
+		if th.Dir == tree {
+			return th
 		}
 	}
 	return nil
+}
+
+// themeOwnsFile reports whether th owns rel, a path relative to th.Dir.
+// theme.css itself counts as owned even though Files excludes it, mirroring
+// loadLibraryTheme, which stores the required stylesheet separately from the
+// other theme files.
+func themeOwnsFile(th *LibraryTheme, rel string) bool {
+	if th == nil {
+		return false
+	}
+	if rel == ThemeStylesheet {
+		return true
+	}
+	_, ok := th.Files[rel]
+	return ok
 }
 
 // positionThemeCSSError re-points a *LibraryError that names a media path
