@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "requirements.requirement.theme-selection",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.agent-authoring",
+      "properties": {}
     }
   ],
   "in": []
