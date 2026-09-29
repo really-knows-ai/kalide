@@ -36,11 +36,6 @@
       "kind": "realised-by",
       "source": "domain.entity.deck-rebuilt",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.template-retarget-restart-decisions",
-      "properties": {}
     }
   ]
 }

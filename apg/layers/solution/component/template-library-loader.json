@@ -36,11 +36,6 @@
       "kind": "contains",
       "source": "solution.container.cli-binary",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.template-retarget-restart-decisions",
-      "properties": {}
     }
   ]
 }

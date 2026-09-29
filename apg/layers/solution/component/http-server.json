@@ -51,11 +51,6 @@
       "kind": "realised-by",
       "source": "domain.service.watch-deck",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.template-retarget-restart-decisions",
-      "properties": {}
     }
   ]
 }
