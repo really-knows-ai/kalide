@@ -58,8 +58,8 @@ type Registry struct {
 // Example.Markdown already — useful for tests and fully in-code templates.
 //
 // Templates registered here are subject to Register's reserved field/section
-// name checks (checkDeclaredName): "deck" and "slide" are reserved alongside
-// "body", "notes", and "_format".
+// name checks (checkDeclaredName): "deck", "slide" and "item" are reserved
+// alongside "body", "notes", and "_format".
 //
 // single-binary (requirements.requirement.single-binary): the registry is
 // packaged in the binary and works offline — content is read only through
@@ -296,7 +296,7 @@ func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, ma
 // with a name, its usage must be slide or section (an empty usage is tolerated
 // so a partially built fixture can exercise the other checks), and its declared
 // field and section names must be non-empty, unique, and free of the reserved
-// `body`, `notes`, `deck`, `slide` and `_format` names.
+// `body`, `notes`, `deck`, `slide` and `item` names.
 func checkDefinition(t *Template) error {
 	if t == nil {
 		return errors.New("template: definition must not be nil")
@@ -361,9 +361,9 @@ func checkFieldVariants(tmpl string, f *Field) error {
 
 // reservedDeclaredNames are the exact field/section names checkDeclaredName
 // rejects: `body` the implied body field, `notes` the parser's speaker-notes
-// section, and `deck` and `slide` the reserved top-level template-context
-// names.
-var reservedDeclaredNames = []string{"body", "notes", "deck", "slide"}
+// section, `deck`, `slide` and `item` the reserved template-context names
+// (requirements.constraint.reserved-template-names).
+var reservedDeclaredNames = []string{"body", "notes", "deck", "slide", "item"}
 
 // reservedDeclaredNameSuffix is the reserved suffix of a field's
 // format-selection sibling: a declared field or section name ending in it
@@ -371,11 +371,12 @@ var reservedDeclaredNames = []string{"body", "notes", "deck", "slide"}
 const reservedDeclaredNameSuffix = "_format"
 
 // ReservedNames returns the sorted reserved declared-name tokens enforced by
-// checkDeclaredName: the exact names `body`, `notes`, `deck` and `slide`, plus
-// the reserved `_format` suffix token. It is the single source of truth for the
-// reserved-name vocabulary, deriving from the same declarations
+// checkDeclaredName: the exact names `body`, `notes`, `deck`, `slide` and
+// `item`, plus the reserved `_format` suffix token. It is the single source of
+// truth for the reserved-name vocabulary, deriving from the same declarations
 // checkDeclaredName enforces (the `_format` entry is a suffix, not an exact
 // name). The returned slice is a fresh allocation.
+// (requirements.constraint.reserved-template-names)
 func ReservedNames() []string {
 	out := make([]string, 0, len(reservedDeclaredNames)+1)
 	out = append(out, reservedDeclaredNames...)
@@ -386,9 +387,9 @@ func ReservedNames() []string {
 
 // checkDeclaredName rejects a field or section name that is empty or reserved.
 // `body` is the implied body field, `notes` the parser's speaker-notes section,
-// `deck` and `slide` the reserved top-level template-context names, and a
-// trailing `_format` the reserved format-selection sibling of a field. None of
-// them is declarable.
+// `deck`, `slide` and `item` the reserved top-level template-context names, and
+// a trailing `_format` the reserved format-selection sibling of a field. None
+// of them is declarable.
 //
 // single-binary (requirements.requirement.single-binary): the check is pure
 // string logic, OS-neutral and offline — an exact, case-sensitive byte
