@@ -41,11 +41,6 @@
       "kind": "details",
       "source": "requirements.note.reconcile-public-install",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "global.note.agent-push-consent-decisions",
-      "properties": {}
     }
   ]
 }

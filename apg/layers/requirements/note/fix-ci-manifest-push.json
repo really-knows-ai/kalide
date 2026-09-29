@@ -21,11 +21,5 @@
       "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "global.note.agent-push-consent-decisions",
-      "properties": {}
-    }
-  ]
+  "in": []
 }
