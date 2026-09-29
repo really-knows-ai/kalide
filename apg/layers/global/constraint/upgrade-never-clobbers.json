@@ -5,5 +5,11 @@
   "body": "Upgrade never overwrites author content. It writes only kalide-owned scaffold files (requirements.requirement.upgrade-refresh-owned-scaffold) and only when the target file is byte-identical to a known released kalide version of that same file — or, for the two `AGENTS.md` author guides only, when the file is absent; a file whose bytes match no known released version is treated as author content and left byte-for-byte untouched, and a file already byte-identical to the running kalide's version of that same file is already current — a no-op, left as-is and not re-written. Author content — slide files and their frontmatter, author templates/sections/themes/media, `kalide.yaml` author keys, a library's templates — is never a write candidate. Every skipped and every refreshed path is reported. There is no `--force` flag and no partial overwrite.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.upgrade-scope-feedback-6",
+      "properties": {}
+    }
+  ]
 }
