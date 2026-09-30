@@ -44,6 +44,11 @@
       "kind": "implemented-by",
       "target": "internal/server/assets.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/server/media.go",
+      "properties": {}
     }
   ],
   "in": [
