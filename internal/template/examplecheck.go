@@ -298,10 +298,13 @@ func exampleDataContext(sections []exampleSection, def *Template, resolve func(s
 // context so the target sees a consistent shape: the effective field values as
 // top-level entries, the reserved `deck`/`slide` entries (the empty example
 // stand-ins), the one-item `.item` descriptor (index 0, number/count 1,
-// first/last true, section/template the target name, parent callerFields), and
-// the reserved `.raw` source view of what the call supplied plus the supplied
-// body. The body is set only when the call supplies one. The helper passes no
-// child sections, so no child section keys are published.
+// first/last true, section/template the target name, parent callerFields), the
+// reserved `.raw` source view of what the call supplied plus the supplied body
+// (exampleRawContext, matching the renderer's rawContext), and the reserved
+// `.data` entry as an EMPTY map — the helper passes no child sections, so the
+// target has no authored children and contributes no entry to the caller's
+// `.data`, exactly as at render time (section-data-context). The body is set
+// only when the call supplies one.
 //
 // The target's layout is re-parsed under LayoutFuncMap with the `section` entry
 // overridden by this same factory bound to the target's own field values, so a
@@ -345,22 +348,20 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 		// top level, the reserved deck/slide context and its one-item .item
 		// descriptor — the same shape checkLibraryExample gives a section
 		// template's own layout. .raw is the source view of what the call
-		// supplied (the fields plus the body when present).
-		ctx := make(map[string]any, len(call.Values)+5)
+		// supplied — the declared fields plus the body when present, built by
+		// exampleRawContext so it matches the renderer's rawContext — and .data
+		// is an empty map, because the helper passes no child sections: the
+		// target has no authored children, exactly as at render time, and the
+		// call appends nothing to the caller's .data.
+		ctx := make(map[string]any, len(call.Values)+6)
 		for k, v := range call.Values {
 			ctx[k] = v
 		}
 		ctx["deck"] = emptyExampleDeckContext()
 		ctx["slide"] = emptyExampleSlideContext()
 		ctx["item"] = call.Item
-		raw := make(map[string]any, len(fields)+1)
-		for k, v := range fields {
-			raw[k] = v
-		}
-		if body != "" {
-			raw["body"] = body
-		}
-		ctx["raw"] = raw
+		ctx["raw"] = exampleRawContext(fields, call.Template, call.Body)
+		ctx["data"] = map[string]any{}
 		if strings.TrimSpace(body) != "" {
 			ctx["body"] = body
 		}
