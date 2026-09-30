@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.item-context-feedback-1",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.nested-sections-coverage-reconcile",
+      "properties": {}
     }
   ]
 }
