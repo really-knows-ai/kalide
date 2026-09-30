@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.container.release-pipeline",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": ".github/workflows/ci.yml",
+      "properties": {}
     }
   ],
   "in": []
