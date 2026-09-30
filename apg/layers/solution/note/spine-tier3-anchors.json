@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "spine-tier3-anchors",
+  "body": "source: I3 — every solution.component must have ≥1 implemented-by. Gaps: solution.component.changelog, solution.component.license-notice, solution.component.linux-release-asset had none. Resolution: anchored each to the real scanned File node(s) that implement it — changelog -> CHANGELOG.md; license-notice -> LICENSE, NOTICE, TRADEMARKS.md, internal/assets/reveal/LICENSE; linux-release-asset -> .github/workflows/release.yml (publishes the kalide-linux-<arch> GitHub Release asset) and Makefile (the `release` target emits dist/kalide-linux-amd64|arm64). File nodes are legal implemented-by targets, as already used by release-workflow, homebrew-formula, scoop-manifest, install-docs, brand-assets, demo-fixture, native-e2e-ci and anonymous-install-e2e; this supersedes the blanket \"no implemented-by edges\" claim in solution.note.distribution-solution for repo/CI artefacts. Grouping levels: solution.system.kalide and containers browser-frontend, cli-binary, package-channels and release-pipeline carry no direct implemented-by; the model anchors C4 grouping nodes through their contained components (every container has ≥1 anchored component, and all components are now anchored), so they are left as-is. [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
