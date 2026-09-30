@@ -14,6 +14,11 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.writeHelloSeed",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.InitExternal",
+      "properties": {}
     }
   ],
   "in": [
