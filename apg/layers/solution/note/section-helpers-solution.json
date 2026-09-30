@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.renderer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.template-registry",
+      "properties": {}
     }
   ],
   "in": []
