@@ -98,6 +98,11 @@
       "kind": "contains",
       "source": "requirements.stakeholder.kalide-maintainers",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.user.maintainer",
+      "properties": {}
     }
   ]
 }

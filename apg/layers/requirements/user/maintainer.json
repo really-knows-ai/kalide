@@ -9,6 +9,11 @@
       "kind": "represents",
       "target": "domain.entity.maintainer",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.distribution",
+      "properties": {}
     }
   ],
   "in": []
