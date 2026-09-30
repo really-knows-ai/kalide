@@ -5,5 +5,11 @@
   "body": "CI workflow: GitHub Actions PR/push gate (`.github/workflows/ci.yml`, `name: CI`, triggered on `push` and `pull_request`) in the public repo, with `contents: read` plus `actions: read` (granted for the reusable native-e2e.yml it calls). The `test` job runs on `macos-14` (darwin/arm64, a supported target: the host suite compiles a host binary, so it must be a target the project builds; Linux would compile a Linux binary, which the project never builds) and performs, in order: the gofmt gate (`gofmt -l .` must print nothing), `go vet ./...`, `make build`, the module-path guard (the module path must be exactly `github.com/really-knows-ai/kalide`, and no package under the repo root may be imported under a different module path — catching stray nested modules and stale paths), and `go test ./...` (unit, integration and e2e; the e2e harness builds its own CGO_ENABLED=0 host-target binary, so no `KALIDE_BINARY` release artifact is needed). A `native-e2e` job then `needs: test` and calls the reusable `.github/workflows/native-e2e.yml` (owned by solution.component.native-e2e-ci), delegating native end-to-end verification to one GitHub-hosted native runner per supported target. Its comments describe the repo as public (requirements.requirement.native-ci-verification). Realises domain.service.publish-release alongside its sibling native-e2e-ci and release-workflow.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.release-pipeline",
+      "properties": {}
+    }
+  ]
 }

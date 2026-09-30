@@ -41,6 +41,11 @@
       "kind": "contains",
       "target": "solution.component.anonymous-install-e2e",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.ci-workflow",
+      "properties": {}
     }
   ],
   "in": [
