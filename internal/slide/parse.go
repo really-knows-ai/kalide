@@ -573,7 +573,9 @@ func checkTopMin(file string, names []string, cat Catalogue, slideTemplate strin
 
 // checkMinChildren walks the built section tree and enforces each section
 // template's declared minimums over the child instances its instances actually
-// contain, reporting the parent instance's containment path.
+// contain, reporting the aggregate parent path: the parent instance's
+// containment chain extended by the missing child name (bare, no index), for
+// example `columns[2] › blocks` (nested-section-validation).
 func checkMinChildren(file string, lines []string, roots []Section, cat Catalogue) error {
 	_ = lines
 	var err error
@@ -596,7 +598,7 @@ func checkMinChildren(file string, lines []string, roots []Section, cat Catalogu
 				continue
 			}
 			if seen[name] < d.min {
-				err = &ParseError{File: file, Line: s.HeadingLine, Path: path,
+				err = &ParseError{File: file, Line: s.HeadingLine, Path: chainPath(path, name, -1),
 					Msg: fmt.Sprintf("section %q: requires at least %d, found %d", name, d.min, seen[name])}
 				return
 			}
