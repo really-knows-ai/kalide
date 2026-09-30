@@ -148,25 +148,30 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 	if funcMap == nil {
 		funcMap = template.LayoutFuncMap(nil, "")
 	}
-	// The shared layout namespace is parsed before any section data is built:
-	// each section instance executes its own layout.html.tmpl through it
-	// (renderSection), so it must exist before slideData renders the sections
-	// bottom-up into trusted HTML (template-language).
-	root, err := parseLayouts(slideTmpl, reg, funcMap)
-	if err != nil {
-		return "", &RenderError{File: parsed.File, Err: err}
-	}
-
+	// The renderer is constructed before parseLayouts because parseLayouts
+	// installs its renderer-backed `section` helper on the shared namespace;
+	// root is assigned from the parse result below, before any layout executes.
 	r := &renderer{
 		reg:     reg,
 		formats: template.BuiltinFormats,
-		root:    root,
 		// The slide layout executes at the top of the composition tree, so a
 		// `{{ section … }}` call it makes has the slide, not a section, as its
 		// parent: callerFields stays nil (zero value) while callerCtx carries
 		// the slide's deck/slide context (section-template-context).
 		callerCtx: &sectionCtx{cfg: cfg, meta: meta, total: total},
 	}
+
+	// The shared layout namespace is parsed before any section data is built:
+	// each section instance executes its own layout.html.tmpl through it
+	// (renderSection), so it must exist before slideData renders the sections
+	// bottom-up into trusted HTML (template-language). parseLayouts installs
+	// the renderer-backed `section` helper, so every reachable layout using
+	// `{{ section … }}` parses and executes against it (section-helper).
+	root, err := parseLayouts(r, slideTmpl, reg, funcMap)
+	if err != nil {
+		return "", &RenderError{File: parsed.File, Err: err}
+	}
+	r.root = root
 
 	data, err := r.slideData(parsed, slideTmpl, cfg, meta, total)
 	if err != nil {
@@ -939,6 +944,15 @@ func dateString(raw any) string {
 // layout using `media` or a format function parses and executes
 // (template-media, template-language).
 //
+// r's renderer-backed `section` helper is installed on the namespace here, at
+// the per-template func-map binding point, overriding the parse-resolvable stub
+// template.LayoutFuncMap registers (RenderSlide/parseLayouts): every reachable
+// layout that calls `{{ section "<name>" [fields] [body] }}` therefore parses
+// and, once the namespace executes, resolves against the render-time
+// implementation rather than the stub (section-helper). The caller's funcMap is
+// copied before the override, so binding a renderer never mutates a map the
+// caller reuses across renders.
+//
 // Parse time is unaffected by the reserved execution context
 // (`.deck.properties`, `.slide`, `.item`): those keys are injected only when
 // the parsed layout is later executed (see slideData / renderSection / values
@@ -951,13 +965,22 @@ func dateString(raw any) string {
 // OS-neutral, identical across all six supported targets (darwin/arm64,
 // darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64)
 // (requirements.requirement.single-binary).
-func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
-	// The namespace carries its own name only so html/template has a handle;
-	// it deliberately differs from every layout name. Naming the namespace
-	// after the slide's own layout would make namespace.New(layoutName(slideTmpl))
-	// shadow that layout with an empty associated template, so executing the
-	// slide layout would fail with "is an incomplete template".
-	namespace := htmltmpl.New("layouts").Funcs(funcMap)
+func parseLayouts(r *renderer, slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
+	// Bind the renderer-backed `section` helper into the namespace's func map,
+	// overriding the parse-resolvable stub. The map is copied so a reused
+	// caller map is never mutated with a method value that captures one
+	// renderer. The namespace carries its own name only so html/template has a
+	// handle; it deliberately differs from every layout name. Naming the
+	// namespace after the slide's own layout would make
+	// namespace.New(layoutName(slideTmpl)) shadow that layout with an empty
+	// associated template, so executing the slide layout would fail with "is
+	// an incomplete template".
+	layoutFuncs := make(htmltmpl.FuncMap, len(funcMap)+1)
+	for name, fn := range funcMap {
+		layoutFuncs[name] = fn
+	}
+	layoutFuncs["section"] = r.sectionHelper
+	namespace := htmltmpl.New("layouts").Funcs(layoutFuncs)
 	for _, t := range reachableTemplates(slideTmpl, reg) {
 		if t.Layout.Text == "" {
 			return nil, fmt.Errorf("template %q has no layout text", t.Name)
