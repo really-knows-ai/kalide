@@ -170,12 +170,16 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 	return htmltmpl.HTML(out), nil
 }
 
-// renderer carries the two collaborators every field conversion needs: the
-// template registry (to resolve a section-template field's nested schema) and
-// the number/date format catalogue.
+// renderer carries the collaborators every field conversion needs — the
+// template registry (to resolve a section-template field's nested schema and a
+// section instance's own template) and the number/date format catalogue — plus
+// the parsed layout namespace every layout, at any composition depth, executes
+// against. root is set by RenderSlide before any section data is built, so a
+// section instance can execute its own layout.html.tmpl (template-language).
 type renderer struct {
 	reg     *template.Registry
 	formats *template.Format
+	root    *htmltmpl.Template
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
@@ -248,6 +252,72 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	data["deck"] = deckContext(cfg)
 	data["slide"] = slideContext(meta, total)
 	return data, nil
+}
+
+// renderSection renders one section instance through its own layout.html.tmpl,
+// deepest first: it first renders every child section instance (each through
+// its own layout, recursively) and attaches them to its execution context as
+// lists of trusted HTML — one element per child instance, in source order — so
+// a parent layout splices each child's rendered markup with
+// `{{ range .blocks }}{{ . }}{{ end }}` rather than ranging over data maps
+// (template-language). The returned HTML is what the parent receives, so
+// section markup composes bottom-up at every depth and at the top level.
+//
+// secCtx is the instance's execution context: its field values are converted
+// with the reserved `.deck`/`.slide`/`.item` entries (values), its body is
+// rendered, and its resolved template's layout runs in the shared namespace
+// (renderer.root) with `deck`/`slide`/`item` plus the instance's own fields.
+// A child's `.item.parent` is this instance's field values (item-context); at
+// the top level the parent is the slide, so the descriptor carries nil.
+func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, secCtx *sectionCtx) (htmltmpl.HTML, error) {
+	data, err := r.values(sec.Frontmatter, tmpl, secCtx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(sec.Body) != "" {
+		body, err := renderBody(sec.Body)
+		if err != nil {
+			return "", err
+		}
+		data["body"] = body
+	}
+
+	// Sibling counts are per declared section name, matching slide.Section's
+	// Index, so the descriptor's index/number/count/first/last describe the
+	// instance's place among its same-name siblings under this parent.
+	counts := make(map[string]int, len(sec.Children))
+	for i := range sec.Children {
+		counts[sec.Children[i].Name]++
+	}
+	for i := range sec.Children {
+		child := &sec.Children[i]
+		if child.Template == "" {
+			continue
+		}
+		childTmpl, ok := r.reg.Lookup(child.Template)
+		if !ok || childTmpl == nil {
+			continue
+		}
+		childCtx := &sectionCtx{
+			cfg:    secCtx.cfg,
+			meta:   secCtx.meta,
+			total:  secCtx.total,
+			item:   itemContext(child.Index, counts[child.Name], child.Name, child.Template, data),
+			parent: data,
+		}
+		rendered, err := r.renderSection(child, childTmpl, childCtx)
+		if err != nil {
+			return "", err
+		}
+		list, _ := data[child.Name].([]htmltmpl.HTML)
+		data[child.Name] = append(list, rendered)
+	}
+
+	var buf bytes.Buffer
+	if err := r.root.ExecuteTemplate(&buf, layoutName(tmpl), data); err != nil {
+		return "", fmt.Errorf("execute layout: %w", err)
+	}
+	return htmltmpl.HTML(buf.String()), nil
 }
 
 // deckContext builds the reserved `deck` execution context
