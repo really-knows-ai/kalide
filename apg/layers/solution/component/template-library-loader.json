@@ -64,6 +64,11 @@
       "kind": "implemented-by",
       "target": "internal/template/library.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/libraryerror.go",
+      "properties": {}
     }
   ],
   "in": [
