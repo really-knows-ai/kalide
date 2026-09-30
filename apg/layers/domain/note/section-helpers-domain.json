@@ -4,6 +4,12 @@
   "name": "section-helpers-domain",
   "body": "Tier-2 reconciled for the layout-helper/source-context change. domain.service.render-sections extended: it also executes the section helper, exposes the dict/list constructors and the .raw/.data data view, and builds the one-item .item. domain.entity.section extended: a section instance also arises from the section helper (fields validated like a fence's YAML, body against the target's body rule); added realised-by domain.entity.section -> solution.component.renderer (it already had solution.component.slide-parser). domain.entity.template extended: the helper set is media/section/dict/list and a layout may invoke a section template directly. domain.value.item-context extended: the helper's one-item descriptor with parent = the caller's fields. domain.service.template-registry and domain.constraint.template-context-reserved extended: four-helper set, raw/data reserved names, helper-call references in the cycle checks. domain.value.body and domain.value.field note that the helper's body/fields are checked by the same rules. Added domain.value.raw-source and domain.value.section-data for the .raw and .data context values. Judgment call: kept .raw and .data as domain values (immutable computed data with no identity), consistent with domain.value.item-context; per the edge schema only domain group/entity/service carry realised-by, so they attach by drives edges only. [autonomous]",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "domain.service.render-sections",
+      "properties": {}
+    }
+  ],
   "in": []
 }
