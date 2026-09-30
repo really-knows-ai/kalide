@@ -1,8 +1,10 @@
 package template
 
 import (
+	htmltemplate "html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -211,27 +213,44 @@ func TestLoadLibrarySectionHelperChecksInt(t *testing.T) {
 	}
 }
 
-// TestLoadLibrarySectionHelpersHappyPathInt proves a library that uses the
-// helpers loads cleanly: the slide layout calls `media`, `section` (with a
-// literal dict supplying the target's required field) and `list`, and the
-// section target's own example and layout are valid. This is the passing side
-// of the same step-4 analysis the failure cases exercise, so it guards against
-// over-rejection.
+// TestLoadLibrarySectionHelpersHappyPathInt proves a library whose host slide
+// layout calls the `section` helper unconditionally loads cleanly and that the
+// step-7 example execution actually renders the target's HTML. The layout
+// calls `media`, `section` (with a literal dict supplying the target's
+// required field) and `list`, and the section target's own example and layout
+// are valid. This is the passing side of the same step-4 analysis the failure
+// cases exercise, so it guards against over-rejection.
 //
-// The section call is guarded by `{{ with .body }}`. The load-time
-// example smoke-execution (checkLibraryExamples, step 7) runs a layout with
-// only the reserved deck/slide context and binds the `section` helper to
-// LayoutFuncMap's parse-resolvable stub, which is not executable; the guard
-// keeps that pass from invoking the stub while the call is still statically
-// extracted and checked by checkSections, and a slide with a body renders the
-// footer in a deck (slideData sets `.body` only when the slide has one).
+// The `{{ section "footer" (dict "title" "Hi") }}` call carries no
+// `{{ with .body }}` guard, so executing it is unconditional. checkLibraryExample
+// (step 7) re-parses the host layout under LayoutFuncMap with its `section`
+// entry overridden by the load-time exampleSectionHelper, so the host layout
+// executes the helper and renders the footer target rather than hitting
+// LayoutFuncMap's parse-only stub (which errors with "no render-time
+// implementation bound").
+//
+// LoadLibrary discards the rendered bytes — it returns the *Library, not the
+// output — so there is no public API through which to observe the HTML step 7
+// produced. This test therefore repeats step 7's exact binding in-package:
+// LayoutFuncMap with `section` overridden by exampleSectionHelper(lib, nil)
+// (host is a slide layout, so its call's .item.parent is nil), then parses
+// host's LayoutText, executes it against the same reserved deck/slide example
+// context and asserts the captured output contains the target's
+// `<footer>Hi</footer>` and carries neither the stub's error nor any other
+// execute failure.
+//
+// A second, failing case proves step-7 execution is a real gate over and above
+// the step-4 static analysis: `(dict "title" 42)` passes the static check (the
+// key is declared and the required field is supplied; step 4 checks keys, not
+// value types) but the number violates the target's text field only when the
+// call executes, so LoadLibrary fails with a step-7 execute error.
 func TestLoadLibrarySectionHelpersHappyPathInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
 	}
 
 	const hostLayout = "<section>{{ media \"logo.svg\" }}\n" +
-		"{{ with .body }}{{ section \"footer\" (dict \"title\" \"Hi\") }}{{ end }}\n" +
+		"{{ section \"footer\" (dict \"title\" \"Hi\") }}\n" +
 		"<ul>{{ range list \"a\" \"b\" }}<li>{{ . }}</li>{{ end }}</ul></section>\n"
 
 	files := mergeIntFiles(
@@ -260,11 +279,12 @@ func TestLoadLibrarySectionHelpersHappyPathInt(t *testing.T) {
 		}
 	}
 
-	// Prove the guard did not hide the call from the checks: the loaded host
-	// definition still carries the `{{ section "footer" (dict "title" "Hi") }}`
-	// helper call, with its literal field key, for Section.HelperCalls (the
-	// input to Registry.checkSections). A library would not load if that call
-	// were invalid.
+	// Prove the unconditionally-executed call was still statically extracted:
+	// the loaded host definition carries the
+	// `{{ section "footer" (dict "title" "Hi") }}` helper call, with its
+	// literal field key, for Section.HelperCalls (the input to
+	// Registry.checkSections). A library would not load if that call were
+	// invalid.
 	host, _, ok := lib.TemplateByName("host")
 	if !ok || host == nil || host.Definition == nil {
 		t.Fatal(`TemplateByName("host") definition not loaded`)
@@ -280,4 +300,58 @@ func TestLoadLibrarySectionHelpersHappyPathInt(t *testing.T) {
 		len(call.FieldKeys) != 1 || call.FieldKeys[0] != "title" {
 		t.Errorf("HelperCalls(host)[0] = %+v, want name=footer FieldsLiteral FieldKeys=[title]", call)
 	}
+
+	// LoadLibrary discards step 7's rendered bytes, so repeat step 7's exact
+	// binding here to observe what it executed: LayoutFuncMap with its
+	// `section` entry overridden by the load-time exampleSectionHelper, bound
+	// to nil caller fields because host is a slide layout.
+	step7FuncMap := LayoutFuncMap(lib.Media, "/"+MediaDir)
+	step7FuncMap["section"] = exampleSectionHelper(lib, nil)
+	step7Layout, err := htmltemplate.New("host").Funcs(step7FuncMap).Parse(host.LayoutText)
+	if err != nil {
+		t.Fatalf("parse host layout under the step-7 section binding: %v", err)
+	}
+	var rendered strings.Builder
+	if err := step7Layout.Execute(&rendered, map[string]any{
+		"deck":  emptyExampleDeckContext(),
+		"slide": emptyExampleSlideContext(),
+	}); err != nil {
+		t.Fatalf("execute host layout under the step-7 section binding: %v, want nil (LoadLibrary's own step-7 execution succeeded)", err)
+	}
+	got := rendered.String()
+	if !strings.Contains(got, "<footer>Hi</footer>") {
+		t.Errorf("step-7 rendered host layout = %q, want it to contain the target's HTML <footer>Hi</footer>", got)
+	}
+	if strings.Contains(got, "no render-time implementation bound") {
+		t.Errorf("step-7 rendered host layout = %q contains the parse-only section stub's error; the load-time helper must be bound", got)
+	}
+
+	// Step-7 execution is a real gate beyond the step-4 static analysis: a call
+	// that passes the key-only static check can still violate the target's
+	// field rules when it executes. `(dict "title" 42)` supplies the declared
+	// required field (so step 4 accepts it) but gives the target's text field a
+	// number, which CheckValues rejects at example time.
+	t.Run("a literal field value of the wrong type fails at step 7", func(t *testing.T) {
+		badFiles := mergeIntFiles(
+			templateIntFiles(SlidesDir, "host", "name: host\n",
+				`{{ section "footer" (dict "title" 42) }}`, "# host\n"),
+			templateIntFiles(SectionsDir, "footer", sectionHelperIntFooterRequired,
+				"<footer>{{ .title }}</footer>", "```\ntitle: Hi\n```\nDetails.\n"),
+		)
+		projectDir := writeSectionHelperIntLibrary(t, badFiles)
+		badLib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err == nil {
+			t.Fatalf("LoadLibrary() = %+v, nil; want the wrong-typed field value to fail the step-7 example execution", badLib)
+		}
+		if badLib != nil {
+			t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", badLib)
+		}
+		libErr := asLibraryError(t, err)
+		if want := TemplatesDir + "/" + SlidesDir + "/host/" + LayoutFile; libErr.Path != want {
+			t.Errorf("Path = %q, want the offending host layout %q", libErr.Path, want)
+		}
+		if !strings.Contains(libErr.Message, "execute:") || !strings.Contains(libErr.Message, "expected a text field") {
+			t.Errorf("Message = %q, want a step-7 execute failure naming the text-field type error", libErr.Message)
+		}
+	})
 }
