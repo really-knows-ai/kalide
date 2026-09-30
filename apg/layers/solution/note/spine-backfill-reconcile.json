@@ -64,6 +64,11 @@
       "kind": "details",
       "target": "solution.component.slide-parser",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.deck-validator",
+      "properties": {}
     }
   ],
   "in": []
