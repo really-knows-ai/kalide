@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-markdown-allowed-subset",
+  "body": "Spine completion [autonomous]. requirements.requirement.markdown-allowed-subset drove only domain.value.body; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.validate-deck (the allowed subset is checked when the deck is validated). domain.service.validate-deck already realises solution.component.markdown-validator, which previously had no implemented-by anchor. Added `implemented-by` solution.component.markdown-validator -> internal/mdcheck.Check (CommonMark AST check against the allowed subset). Path: markdown-allowed-subset -> validate-deck -> markdown-validator -> internal/mdcheck.Check. Existing `drives` to domain.value.body kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
