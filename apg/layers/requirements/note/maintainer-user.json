@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "maintainer-user",
+  "body": "Maintainer user (spine-backfill represents pass) [with user]. Added requirements.user.maintainer as the user view of requirements.stakeholder.kalide-maintainers — the third requirements user, beside deck-author and template-author. Grounding in existing requirements: the maintainer develops kalide and cuts releases (requirements.requirement.distribution and its subtree — brand-identity, changelog, github-releases, homebrew-install, install-docs, license, linux-install, native-ci-verification, package-manifest-update, readme-install-front-loading, readme-presentation, scoop-install, source-repo, supported-platforms, tap-bucket-location, version-command), keeps the install channels working, and brings existing projects forward (requirements.requirement.deck-library-upgrade and its subtree — upgrade-refresh-owned-scaffold, upgrade-migrate-format). Contained requirement roots: distribution and deck-library-upgrade. Both were already stakeholder-reachable (kalide-maintainers -> distribution; brand-owner -> project-templates -> deck-library-upgrade), so no new stakeholder anchor was needed. Pushes and tag creation remain under explicit per-action human consent (global.constraint.humans-push-and-tag). The individual is represented on the solution tier by solution.person.maintainer through domain.entity.maintainer (represents); see global.note.represents-actor-tier and domain.note.actor-entities.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
