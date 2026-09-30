@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "domain.value.raw-source",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.section-data",
+      "properties": {}
     }
   ],
   "in": []
