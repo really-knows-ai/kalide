@@ -21,6 +21,11 @@
       "kind": "details",
       "source": "requirements.note.spine-stakeholder-reachability",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.represents-unused",
+      "properties": {}
     }
   ]
 }
