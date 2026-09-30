@@ -24,6 +24,11 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/template.CheckValues",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.parseManifestField",
+      "properties": {}
     }
   ],
   "in": [
