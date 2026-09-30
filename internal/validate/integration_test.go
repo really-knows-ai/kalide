@@ -189,6 +189,40 @@ func TestValidateIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("nested body-rule violation carries the full containment path", func(t *testing.T) {
+		dir := writeNestedErrorDeck(t, nestedBodyRuleErrorSlide)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatal("Validate() invalid = false, want the nested body-rule error")
+		}
+		// The block child's body exceeds the block template's implied
+		// max_paragraphs, so the body rule is reported as the implied `body`
+		// field with the enclosing instance chain prepended: the nested
+		// instance's `blocks[0]` under `columns[0]` (nested-section-validation).
+		want := `slides/3-columns.md:17 › columns[0] › blocks[0] › body: max_paragraphs: the body has 2 paragraphs, maximum is 1 — shorten the body to at most 1 paragraphs`
+		if got := Format(verr); got != want {
+			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+
+	t.Run("nested Markdown issue carries the full containment path", func(t *testing.T) {
+		dir := writeNestedErrorDeck(t, nestedMarkdownErrorSlide)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatal("Validate() invalid = false, want the nested Markdown-subset error")
+		}
+		// A disallowed Markdown construct in the block child's body is
+		// positioned in the body and carries the enclosing instance chain as
+		// its path, with no `body` segment (the issue is the section's body
+		// itself): `columns[0] › blocks[0]` (nested-section-validation).
+		want := `slides/3-columns.md:17 › columns[0] › blocks[0]: block quotes are not allowed — remove the > quote markers and keep the text in the body`
+		if got := Format(verr); got != want {
+			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+
 	cases := []struct {
 		name  string
 		files map[string]string
@@ -455,6 +489,55 @@ label: c
 ` + "```" + `
 `
 
+// nestedBodyRuleErrorSlide is a valid deck's third slide except that its
+// nested block child (blocks[0]) has a two-paragraph body, one over the block
+// template's implied max_paragraphs of one. It pins the full containment path a
+// nested body-rule violation carries: `columns[0] › blocks[0] › body`.
+const nestedBodyRuleErrorSlide = `---
+template: content
+heading: Body rule
+---
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+first paragraph.
+
+second paragraph.
+`
+
+// nestedMarkdownErrorSlide is a valid deck's third slide except that its
+// nested block child (blocks[0]) has a block quote in its body, a construct
+// outside the accepted Markdown subset. It pins the containment path a nested
+// Markdown-subset issue carries: `columns[0] › blocks[0]`.
+const nestedMarkdownErrorSlide = `---
+template: content
+heading: Markdown
+---
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+> quoted text
+`
+
 // nestedLibraryFiles returns a complete, otherwise-valid on-disk templates/
 // library with a container section template (`group`) that declares `blocks`
 // children accepting `block`, plus a `content` slide template that declares
@@ -482,7 +565,7 @@ func nestedLibraryFiles() map[string]string {
 		"templates/sections/group/layout.html.tmpl": "<div class=\"group\">{{.title}}{{range .blocks}}<div class=\"block\">{{.}}</div>{{end}}</div>",
 		"templates/sections/group/example.md":       "# blocks\n```\ntemplate: block\nlabel: first\n```\n",
 
-		"templates/sections/block/template.yaml":    "description: a leaf block\nfields:\n  - name: label\n    type: text\nbody:\n  mode: optional\n",
+		"templates/sections/block/template.yaml":    "description: a leaf block\nfields:\n  - name: label\n    type: text\nbody:\n  mode: optional\n  max_paragraphs: 1\n",
 		"templates/sections/block/layout.html.tmpl": "<span class=\"block\">{{.label}}</span>",
 		"templates/sections/block/example.md":       "```\nlabel: first\n```\n",
 	}
