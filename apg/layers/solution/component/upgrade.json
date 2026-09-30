@@ -54,6 +54,11 @@
       "kind": "implemented-by",
       "target": "internal/cli/upgrade.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/catalog.go",
+      "properties": {}
     }
   ],
   "in": [
