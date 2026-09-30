@@ -226,7 +226,15 @@
           <p class="gallery-page__empty">This template declares no fields.</p>
           {{ end }}
 
-          <h3>Sections</h3>
+          {{/*
+            Child-section relationships, usage-dependent: a slide template
+            "declares" the sections it may contain, a section template
+            "Can hold" child sections. The heading (.SectionsLabel) and each
+            row's verb (.Label) come from internal/server's gallerySections,
+            which derives them from the template's usage. No recursive tree is
+            shown: each row lists the accepted templates and repeat bounds.
+          */}}
+          <h3>{{ .SectionsLabel }}</h3>
           {{ if .Sections }}
           <table class="gallery-page__table">
             <thead>
@@ -235,7 +243,7 @@
             <tbody>
               {{ range .Sections }}
               <tr>
-                <td><code>{{ .Name }}</code></td>
+                <td><code>{{ .Name }}</code> {{ .Label }}</td>
                 <td><code>{{ with .Accepted }}{{ . }}{{ else }}—{{ end }}</code></td>
                 <td>{{ with .Repeats }}{{ . }}{{ else }}any{{ end }}</td>
                 <td>{{ .Description }}</td>
@@ -244,7 +252,7 @@
             </tbody>
           </table>
           {{ else }}
-          <p class="gallery-page__empty">This template declares no sections.</p>
+          <p class="gallery-page__empty">This template has no child sections.</p>
           {{ end }}
 
           <h3>Body</h3>
