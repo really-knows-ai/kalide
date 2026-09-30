@@ -540,6 +540,167 @@ func (s *Section) HelperRefs(tmpl *Template) ([]string, error) {
 	return out, nil
 }
 
+// SectionCall is the resolved runtime execution input of one `section` helper
+// invocation: the target template a `{{ section "<name>" [fields] [body] }}`
+// call resolves to, the effective field values the target executes with, the
+// validated body, and the one-item `.item` descriptor it is rendered under. It
+// is what ResolveSectionCall builds.
+//
+// SectionCall is the runtime counterpart of HelperCall: HelperCall is the
+// static, load-time record of a call extracted from a layout's text (its target
+// name, literal keys/body and literal/non-literal markers), while SectionCall is
+// the resolved, ready-to-execute invocation. Both the load-time example
+// execution (exampleSectionHelper) and the phase-03 renderer reuse
+// ResolveSectionCall so resolution, defaults and validation have one
+// implementation rather than one per caller.
+type SectionCall struct {
+	// Template is the resolved target, always a section-usage template.
+	Template *Template
+
+	// Values is the effective field data the target executes with: the call's
+	// supplied fields with the target's field defaults applied for every
+	// declared field the call left out. It is the map CheckValues validated.
+	Values map[string]any
+
+	// Body is the validated body the call supplies, exactly as written; it is
+	// "" when the call supplies none.
+	Body string
+
+	// Item is the one-item `.item` descriptor the target executes under
+	// (item-context): index 0, number and count 1, first and last true,
+	// section and template the target name, and parent the caller's fields
+	// (nil from a slide layout). The helper passes no child sections, so the
+	// target is always the sole instance of its own one-item group.
+	Item map[string]any
+}
+
+// ResolveSectionCall resolves a `{{ section "<name>" [fields] [body] }}` call's
+// target against resolve and builds the runtime execution input its layout is
+// executed with, or reports why the call cannot be executed.
+//
+// resolve is the same name → *Template lookup CheckValues and NewSection take,
+// so *Registry.Lookup and the library loader's resolver both satisfy it; a nil
+// resolver is an error, not a panic.
+//
+// The target must resolve to a defined section-usage template: an unknown name
+// or a slide-usage template is rejected, because sections never accept slide
+// templates.
+//
+// Field handling applies the target's declared defaults FIRST and then validates
+// the effective map with CheckValues:
+//
+//   - every declared field the call leaves out takes its Field.Default when it
+//     has one, so a required field that carries a default is satisfied and only
+//     an undefaulted required field is still reported missing (the note-15
+//     mismatch);
+//   - a key the target does not declare, or a supplied value that breaks a
+//     field rule, is reported as CheckValues reports it.
+//
+// This is the same defaults-first rule the registry's build-time helper check
+// applies (section-helper-load-checks).
+//
+// The body is checked against the target's body rule with CheckBody, and because
+// the helper passes no child sections through, a body whose heading names a
+// section the target declares is rejected even when the body rule would allow a
+// subheading.
+//
+// The returned *SectionCall carries the resolved *Template, the effective
+// values, the body and the one-item .item descriptor. A violation is returned as
+// the first ValueError CheckValues or CheckBody reports, so a caller adapts it
+// through the same positioned path as any other field or body error.
+func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, parent map[string]any) (*SectionCall, error) {
+	if resolve == nil {
+		return nil, fmt.Errorf("section helper: no template resolver for %q", name)
+	}
+	target, ok := resolve(name)
+	if !ok || target == nil {
+		return nil, fmt.Errorf("section helper: section template %q is not defined", name)
+	}
+	if target.Usage != UsageSection {
+		return nil, fmt.Errorf("section helper: template %q is not a section-usage template", name)
+	}
+
+	effective := applyFieldDefaults(target, fields)
+	if res := CheckValues(effective, target, resolve); len(res.Errors) > 0 {
+		return nil, res.Errors[0]
+	}
+
+	if ve, invalid := CheckBody(target.Body, body); invalid {
+		return nil, ve
+	}
+	if child, named := bodyNamesChildSection(target, body); named {
+		return nil, ValueError{
+			Path:  []PathSegment{{Name: bodyField}},
+			Rule:  "subheadings",
+			Value: body,
+			What:  fmt.Sprintf("subheadings: the body heading names child section %q, but the section helper passes no child sections", child),
+			Fix:   "remove the heading; the section helper supplies no child sections",
+		}
+	}
+
+	return &SectionCall{
+		Template: target,
+		Values:   effective,
+		Body:     body,
+		Item: map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  name,
+			"template": name,
+			"parent":   parent,
+		},
+	}, nil
+}
+
+// applyFieldDefaults returns a fresh copy of fields with every declared field
+// that is absent and carries a Default set to that default. The caller's map is
+// never mutated, and a caller-supplied value always wins over the default.
+func applyFieldDefaults(target *Template, fields map[string]any) map[string]any {
+	effective := make(map[string]any, len(fields)+len(target.Fields))
+	for k, v := range fields {
+		effective[k] = v
+	}
+	for i := range target.Fields {
+		f := &target.Fields[i]
+		if _, present := effective[f.Name]; present {
+			continue
+		}
+		if f.Default != nil {
+			effective[f.Name] = f.Default
+		}
+	}
+	return effective
+}
+
+// bodyNamesChildSection reports the first heading in body that names a section
+// target declares, so a helper body never smuggles in a child section. Fenced
+// code is skipped, matching the registry's build-time helper scan; an empty body
+// or a target with no declared sections can never match.
+func bodyNamesChildSection(target *Template, body string) (string, bool) {
+	if target == nil || len(target.Sections) == 0 || strings.TrimSpace(body) == "" {
+		return "", false
+	}
+	inFence := false
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		if _, name, ok := exampleHeadingLevel(line); ok {
+			if _, declared := declaredSection(target, name); declared {
+				return name, true
+			}
+		}
+	}
+	return "", false
+}
+
 // positionedCall pairs an extracted HelperCall with the byte position of its
 // `section` command, so calls gathered from several parse trees — the layout
 // root plus its `define`/`block` bodies — can be returned in source order.
