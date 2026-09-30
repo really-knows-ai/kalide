@@ -175,7 +175,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// slide template declares child sections, so a heading at any depth is a
 	// section marker there and deeper headings stay subheadings otherwise
 	// (markdown-allowed-subset).
-	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl)); invalid {
+	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil); invalid {
 		return verr, true
 	}
 	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine); invalid {
@@ -195,7 +195,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// last. `# notes` is top-level only, and a deeper heading never starts
 	// notes, so the notes body carries the slide body's subheading gate.
 	if ps.Notes != nil {
-		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl)); invalid {
+		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil); invalid {
 			return verr, true
 		}
 	}
@@ -236,7 +236,7 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
 			return verr, true
 		}
-		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl)); invalid {
+		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix); invalid {
 			return verr, true
 		}
 		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine); invalid {
@@ -286,9 +286,12 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 // body) against the accepted Markdown subset through internal/mdcheck. startLine
 // is the body's 1-based line in the file, so issues are positioned absolutely.
 // declaresChildSections is the enclosing template's child-section state, which
-// mdcheck.Check's subheading gate carries (markdown-allowed-subset). It returns
-// the first issue and whether one was found.
-func checkBody(file, body string, startLine int, declaresChildSections bool) (ValidationError, bool) {
+// mdcheck.Check's subheading gate carries (markdown-allowed-subset). prefix, when
+// non-empty, is the enclosing section instance's containment chain and becomes
+// the issue's path, so a nested Markdown-subset issue reads
+// `columns[0] › blocks[0]` (nested-section-validation); the slide and notes
+// bodies pass nil. It returns the first issue and whether one was found.
+func checkBody(file, body string, startLine int, declaresChildSections bool, prefix []string) (ValidationError, bool) {
 	if body == "" {
 		return ValidationError{}, false
 	}
@@ -300,7 +303,7 @@ func checkBody(file, body string, startLine int, declaresChildSections bool) (Va
 	if len(issues) == 0 {
 		return ValidationError{}, false
 	}
-	return adaptIssue(issues[0]), true
+	return adaptIssue(issues[0], prefix), true
 }
 
 // checkBodyRule checks one Markdown body against its template's implied `body`
@@ -408,9 +411,11 @@ func adaptParseError(err error) ValidationError {
 }
 
 // adaptIssue adapts a positioned mdcheck.Issue: its message is the "what" and
-// its guidance the "fix". mdcheck has no path concept, so the path is empty.
-func adaptIssue(iss mdcheck.Issue) ValidationError {
-	return New(iss.File, iss.Line, nil, iss.Message, iss.Guidance)
+// its guidance the "fix". mdcheck has no path concept, so prefix — the
+// enclosing section instance's containment chain — is the issue's path when
+// non-empty; the slide body, notes and body links pass nil.
+func adaptIssue(iss mdcheck.Issue, prefix []string) ValidationError {
+	return New(iss.File, iss.Line, prefix, iss.Message, iss.Guidance)
 }
 
 // adaptValueError adapts a template.ValueError into a ValidationError: the

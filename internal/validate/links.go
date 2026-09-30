@@ -176,7 +176,7 @@ func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}
 	})
 	for _, ev := range mergeLinkEvents(links, issues) {
 		if ev.issue != nil {
-			return adaptIssue(*ev.issue), true
+			return adaptIssue(*ev.issue, nil), true
 		}
 		if verr, invalid := checkLabelRef(file, ev.link.Label, ev.link.Destination, nil, ev.link.Line, labels, candidates); invalid {
 			return verr, true
