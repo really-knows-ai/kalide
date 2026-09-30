@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "section-helper",
+  "body": "A layout can render a section template directly with the `section` helper, exactly as if the instance had been written in Markdown: `{{ section \"<name>\" [fields] [body] }}`. `<name>` names a section-usage template; the call executes that template's own `layout.html.tmpl` and yields the same trusted HTML a Markdown-authored instance of the same template produces. `fields` is an optional map of source values (typically built with `dict`), validated like a section fence's YAML against the target's field schema (field-rules); when omitted, the target's defaults apply. `body` is an optional Markdown string, validated against the target's body rule (body-rules). The rendered instance is executed with the reserved `deck`/`slide` context and with an `.item` descriptor that treats it as a one-item group: `section` and `template` are the target name, `index` 0, `number` 1, `count` 1, `first` and `last` true, and `parent` is the calling instance's fields — the fields of the section instance whose layout made the call, or nil when the call is made from a slide layout. `.raw` carries the values the call supplied (raw-source-context). No child sections pass through the helper in v1: a target that declares a child section with min > 0 is a load error, and a helper body whose heading names a declared child section of the target is rejected (it is not silently dropped and no child section is rendered through the helper).\n\nAC: a slide layout calling `{{ section \"footer\" }}` renders the `footer` section template's HTML on the slide; `{{ section \"number-heading\" (dict \"number\" .item.number \"heading\" .raw.title) }}` renders that template with those field values; `{{ section \"callout\" (dict \"label\" \"Proposition\") .raw.body }}` renders `callout` with a literal field and the slide's original body as its body; the rendered instance reads `{{.item.index}}`/`{{.item.number}}`/`{{.item.count}}`/`{{.item.first}}`/`{{.item.last}}` as 0/1/1/true/true, `{{.item.section}}`/`{{.item.template}}` as the target name, and `{{.item.parent.<field>}}` as the calling section instance's field (nil from a slide layout).",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
