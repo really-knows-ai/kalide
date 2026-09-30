@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "deck-renderer",
-  "body": "Deck renderer: assembles the whole-deck reveal.js document — applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors and notes — over the per-slide documents. Realised by internal/render.RenderDeck, the top-level entry internal/server.Reloader.renderDefault calls. The render tier splits by role: solution.component.renderer executes templates and section instances bottom-up; deck-renderer assembles the resulting deck document.",
+  "body": "Deck renderer: assembles the whole-deck reveal.js document — applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors and notes — over the per-slide documents. Owns internal/render/deck.go (RenderDeck plus renderDeckSlide, themeStylesheet, insertBeforeSectionClose); it is the top-level entry internal/server.Reloader.renderDefault calls. The render tier splits by role: solution.component.renderer executes templates and section instances bottom-up (internal/render/render.go); deck-renderer assembles the resulting deck document (internal/render/deck.go).",
   "properties": {},
   "out": [
     {
