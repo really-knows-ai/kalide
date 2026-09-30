@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "section-helper-load-checks",
+  "body": "Section-helper calls are static references and are checked with the rest of the template set when the resolved library is loaded (template-build-checks; templates-dir-validation step 4), from the same parsed layout trees the loader already builds. For every `{{ section \"<name>\" [fields] [body] }}` call in a layout: `<name>` must resolve to an existing section-usage template — an unknown name or a slide-usage template is a path-qualified templates error with a closest-match suggestion; when `fields` is present and is a literal `dict` call, every literal key must be a field the target declares, and every required field of the target must be present among those keys or carry a default; when `fields` is omitted, every required field of the target must carry a default. The call is a reference edge of the template composition graph, so it participates in the same cycle rejection as declared sections — two section templates whose layouts call each other through the helper are rejected with the chain (requirements.constraint.section-cycle-error-chain). A target that declares a child section with min > 0 is a templates error, because v1 passes no child sections through the helper. A `fields` expression that is not a literal `dict` call cannot be statically key-checked at load; its keys and required fields are checked when the target renders (field-rules).\n\nAC: a helper naming an unknown template, or a slide template, fails at load with a path-qualified templates error and a closest-match suggestion; a helper whose literal `dict` supplies a key the target does not declare fails at load naming the key; a helper omitting a required field that has no default fails at load; a helper on a target declaring a min>0 child section fails at load; section templates a and b whose layouts each call `{{ section \"<the other>\" }}` are rejected at load as a cycle whose chain names both; a helper passing a non-literal `fields` expression loads, its keys checked when the target renders.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [],
+  "in": []
+}
