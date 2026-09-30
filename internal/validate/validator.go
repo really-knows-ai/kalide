@@ -187,7 +187,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// instance's template declares its own body rule and its own
 	// child-section state, so each body is checked against its own enclosing
 	// template.
-	if verr, invalid := checkSections(fsys, s.Path, ps.Sections, reg); invalid {
+	if verr, invalid := checkSections(fsys, s.Path, ps.Sections, nil, reg); invalid {
 		return verr, true
 	}
 
@@ -207,26 +207,33 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 // instance's frontmatter fields, then its body against its own template's
 // implied body rule, then its children recursively (slide-sections). file is
 // the slide path every error is positioned in.
-func checkSections(fsys fs.FS, file string, sections []slide.Section, reg *template.Registry) (ValidationError, bool) {
+//
+// prefix is the containment chain of the enclosing instances (outermost first,
+// each segment `name[index]`); it is extended by the current instance before
+// checking its fields, so a nested instance's field error carries its full
+// instance chain (nested-section-validation). The slide's top-level call passes
+// nil.
+func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []string, reg *template.Registry) (ValidationError, bool) {
 	for i := range sections {
 		sec := &sections[i]
+		secPrefix := append(append([]string(nil), prefix...), sec.Name+"["+strconv.Itoa(sec.Index)+"]")
 		if sec.Template == "" {
 			// No resolvable template: the parser already reported it, and no
 			// nested instances can be checked without one. Children with a
 			// template are still walked by their own parent below.
-			if verr, invalid := checkSections(fsys, file, sec.Children, reg); invalid {
+			if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
 				return verr, true
 			}
 			continue
 		}
 		secTmpl, ok := reg.Lookup(sec.Template)
 		if !ok || secTmpl == nil {
-			if verr, invalid := checkSections(fsys, file, sec.Children, reg); invalid {
+			if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
 				return verr, true
 			}
 			continue
 		}
-		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, nil, reg); invalid {
+		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
 			return verr, true
 		}
 		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl)); invalid {
@@ -235,7 +242,7 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, reg *templ
 		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine); invalid {
 			return verr, true
 		}
-		if verr, invalid := checkSections(fsys, file, sec.Children, reg); invalid {
+		if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
 			return verr, true
 		}
 	}
