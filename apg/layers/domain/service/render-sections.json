@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "render-sections",
-  "body": "Render sections: execute each section instance through its own `layout.html.tmpl`, deepest first, and deliver every child section to its parent as a list of trusted HTML, passing the reserved `deck`/`slide`/`item` context at every composition depth (template-language, template-context, section-template-context, item-context). Realised by solution.component.renderer. Distinct from domain.service.render-deck, which assembles the whole-deck document (solution.component.deck-renderer).",
+  "body": "Render sections: execute each section instance through its own `layout.html.tmpl`, deepest first, and deliver every child section to its parent as a list of trusted HTML, passing the reserved `deck`/`slide`/`item`/`raw`/`data` context at every composition depth (template-language, template-context, section-template-context, item-context, raw-source-context, section-data-context). It also executes the `section` helper: a layout may render a named section template directly, exactly as if the instance had been authored in Markdown, and the renderer builds that instance's context (one-item `.item`, `.raw` from the values the call supplied, and no child sections in v1) and runs the target layout bottom-up (section-helper). It exposes the `dict`/`list` constructors and the `.raw`/`.data` data view alongside the rendered-HTML lists. Realised by solution.component.renderer. Distinct from domain.service.render-deck, which assembles the whole-deck document (solution.component.deck-renderer).",
   "properties": {},
   "out": [
     {
