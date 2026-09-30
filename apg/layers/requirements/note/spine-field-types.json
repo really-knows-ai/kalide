@@ -4,6 +4,12 @@
   "name": "spine-field-types",
   "body": "Spine completion [autonomous]. requirements.requirement.field-types drove only domain.value.field-type; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.template-registry (the field types are declared by the template schema the registry owns). Added `implemented-by` solution.component.template-registry -> internal/template.parseManifestField (decodes a `template.yaml` field, its type and its options). Path: field-types -> template-registry -> solution.component.template-registry -> internal/template.parseManifestField. Existing `drives` to domain.value.field-type kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.field-types",
+      "properties": {}
+    }
+  ],
   "in": []
 }
