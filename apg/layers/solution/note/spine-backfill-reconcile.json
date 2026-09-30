@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "solution.component.markdown-validator",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.http-server",
+      "properties": {}
     }
   ],
   "in": []
