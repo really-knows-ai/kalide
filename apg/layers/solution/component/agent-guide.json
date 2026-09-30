@@ -66,6 +66,11 @@
       "kind": "details",
       "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.agent-guide-test-anchor-removed",
+      "properties": {}
     }
   ]
 }
