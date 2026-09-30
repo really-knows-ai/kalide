@@ -13,11 +13,6 @@
   ],
   "in": [
     {
-      "kind": "details",
-      "source": "global.note.represents-unused",
-      "properties": {}
-    },
-    {
       "kind": "represents",
       "source": "domain.entity.maintainer",
       "properties": {}
