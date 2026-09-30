@@ -34,6 +34,11 @@
       "kind": "contains",
       "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.slide-file-ordering",
+      "properties": {}
     }
   ],
   "in": []
