@@ -59,9 +59,9 @@ const themesURLPrefix = "/assets/templates/themes/"
 // `list`, plus the format functions), threaded into every slide's RenderSlide
 // call so a library layout using any helper renders (template-media,
 // template-language, section-helper); RenderSlide rebinds the render-time
-// `section` helper over the func map's parse-resolvable stub. RenderDeck derives
-// the deck's slide-file
-// count once (deck.Deck.Total) and threads cfg plus each slide's modelled
+// `section` helper over the func map's parse-resolvable stub. RenderDeck
+// derives the deck's slide-file count once (deck.Deck.Total) and threads cfg
+// plus each slide's modelled
 // position into RenderSlide, so every slide layout executes with the reserved
 // `deck` and `slide` context (deck-data-in-templates, slide-metadata).
 //
