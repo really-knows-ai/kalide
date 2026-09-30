@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "solution.component.deck-renderer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.deck-page",
+      "properties": {}
     }
   ],
   "in": []
