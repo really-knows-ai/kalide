@@ -1,11 +1,14 @@
 package validate
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
@@ -41,6 +44,110 @@ func TestValidateIntegration(t *testing.T) {
 		}
 		if !reflect.DeepEqual(verr, ValidationError{}) {
 			t.Fatalf("Validate() error = %#v, want the zero ValidationError", verr)
+		}
+	})
+
+	// Heading-depth nesting and recursive example validation against a real
+	// on-disk library: the fixture library is written to the temp dir's
+	// templates/ as a container section template (group) holding block
+	// children, so template.LoadLibrary's step-7 check validates the nested
+	// example.md recursively (template-build-checks, nested-section-
+	// validation) and the parser nests a deck's sections by heading depth
+	// (slide-sections).
+	t.Run("nested container library loads with recursive example validation", func(t *testing.T) {
+		dir := writeDeck(t, nestedLibraryFiles())
+		// loadFixtureLibrary fails the test when LoadLibrary reports a
+		// nested example violation, so reaching here proves the container
+		// example validated recursively.
+		loadFixtureLibrary(t, dir)
+	})
+
+	t.Run("heading-depth nested deck validates end to end", func(t *testing.T) {
+		files := nestedLibraryFiles()
+		files["kalide.yaml"] = "title: Nested Deck\ntheme: plain\n"
+		files["slides/1-nested.md"] = nestedDeckSlide
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if invalid {
+			t.Fatalf("Validate() invalid = true with %q, want a valid nested deck", Format(verr))
+		}
+	})
+
+	t.Run("demo library parses one heading level and validates", func(t *testing.T) {
+		demoDir := filepath.Join("..", "..", "examples", "demo")
+		if _, err := os.Stat(demoDir); err != nil {
+			t.Skipf("examples/demo not found: %v", err)
+		}
+		fsys := os.DirFS(demoDir)
+		// Loading the demo library recursively validates its examples.
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
+			t.Fatalf("template.LoadLibrary(examples/demo): %v", err)
+		}
+		reg, err := template.NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+		}
+		themes, err := theme.LoadDir(fsys, filepath.Join(template.TemplatesDir, template.ThemesDir))
+		if err != nil {
+			t.Fatalf("theme.LoadDir: %v", err)
+		}
+
+		// The demo's team slide is one heading level deep: its content
+		// template declares `columns` at level 1, with no deeper instances.
+		srcBytes, err := os.ReadFile(filepath.Join(demoDir, "slides", "3-team.md"))
+		if err != nil {
+			t.Fatalf("read demo slide: %v", err)
+		}
+		ps, err := slide.Parse("slides/3-team.md", srcBytes, reg)
+		if err != nil {
+			t.Fatalf("slide.Parse(demo team slide): %v", err)
+		}
+		if len(ps.Sections) != 2 {
+			t.Fatalf("len(demo team sections) = %d, want 2", len(ps.Sections))
+		}
+		for i := range ps.Sections {
+			sec := ps.Sections[i]
+			if sec.Name != "columns" || sec.Level != 1 || sec.Index != i {
+				t.Errorf("Sections[%d] = %q level %d index %d, want %q level 1 index %d", i, sec.Name, sec.Level, sec.Index, "columns", i)
+			}
+			if len(sec.Children) != 0 {
+				t.Errorf("Sections[%d].Children = %+v, want none (the demo is one level)", i, sec.Children)
+			}
+		}
+
+		verr, invalid := Validate(fsys, reg, themes)
+		if invalid {
+			t.Fatalf("Validate(examples/demo) invalid = true with %q", Format(verr))
+		}
+	})
+
+	t.Run("broken nested example fails at load with the containment path", func(t *testing.T) {
+		files := nestedLibraryFiles()
+		// The nested `block` child of the container's own example names an
+		// unknown field, so the recursive example validation must fail at
+		// load with the child instance's containment path (`blocks[0]`),
+		// positioned at the container's example.md.
+		files["templates/sections/group/example.md"] = "# blocks\n```\ntemplate: block\nlable: first\n```\n"
+		dir := writeDeck(t, files)
+
+		_, err := template.LoadLibrary(os.DirFS(dir), template.TemplatesDir)
+		if err == nil {
+			t.Fatal("LoadLibrary() error = nil, want the nested example violation")
+		}
+		var libErr *template.LibraryError
+		if !errors.As(err, &libErr) {
+			t.Fatalf("LoadLibrary() error = %T (%v), want *template.LibraryError", err, err)
+		}
+		if want := template.TemplatesDir + "/sections/group/example.md"; libErr.Path != want {
+			t.Errorf("LibraryError.Path = %q, want %q", libErr.Path, want)
+		}
+		if !strings.Contains(libErr.Message, "blocks[0]") {
+			t.Errorf("LibraryError.Message = %q, want the child containment path %q", libErr.Message, "blocks[0]")
+		}
+		if !strings.Contains(libErr.Message, `unknown field "lable"`) {
+			t.Errorf("LibraryError.Message = %q, want the nested unknown-field violation", libErr.Message)
 		}
 	})
 
@@ -152,6 +259,66 @@ We added 1,250 new logos in the quarter.
 # notes
 Pause on the metric so the number lands.
 `
+
+// nestedDeckSlide is a deck slide whose sections nest by heading depth: a
+// top-level `# columns` instance resolves to the container template `group`,
+// and its `## blocks` children resolve to `block` (slide-sections).
+const nestedDeckSlide = `---
+template: content
+heading: Nested heading
+---
+
+# columns
+` + "```" + `
+template: group
+title: Group one
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: first
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: second
+` + "```" + `
+`
+
+// nestedLibraryFiles returns a complete, otherwise-valid on-disk templates/
+// library with a container section template (`group`) that declares `blocks`
+// children accepting `block`, plus a `content` slide template that declares
+// `columns` accepting `group`. Its group/example.md nests a block child, so
+// template.LoadLibrary's recursive example validation parses the example by
+// heading depth (template-build-checks, nested-section-validation).
+func nestedLibraryFiles() map[string]string {
+	return map[string]string{
+		"templates/library.yaml":           "name: nested-fixture\nformat: 1\n",
+		"templates/themes/plain/theme.css": "body { margin: 0; }\n",
+
+		"templates/slides/content/template.yaml": "description: content with a nested container section\n" +
+			"fields:\n  - name: heading\n    type: text\n    required: true\n" +
+			"sections:\n  - name: columns\n    accepted: [group]\n" +
+			"body:\n  mode: optional\n",
+		"templates/slides/content/layout.html.tmpl": "<section>{{.heading}}{{range .columns}}<div class=\"col\">{{.}}</div>{{end}}</section>",
+		"templates/slides/content/example.md": "---\ntemplate: content\nheading: Nested\n---\n\n" +
+			"# columns\n```\ntemplate: group\ntitle: Group one\n```\n\n" +
+			"## blocks\n```\ntemplate: block\nlabel: first\n```\n",
+
+		"templates/sections/group/template.yaml": "description: a container of block children\n" +
+			"fields:\n  - name: title\n    type: text\n" +
+			"sections:\n  - name: blocks\n    accepted: [block]\n    min: 1\n    max: 2\n" +
+			"body:\n  mode: optional\n",
+		"templates/sections/group/layout.html.tmpl": "<div class=\"group\">{{.title}}{{range .blocks}}<div class=\"block\">{{.}}</div>{{end}}</div>",
+		"templates/sections/group/example.md":       "# blocks\n```\ntemplate: block\nlabel: first\n```\n",
+
+		"templates/sections/block/template.yaml":    "description: a leaf block\nfields:\n  - name: label\n    type: text\nbody:\n  mode: optional\n",
+		"templates/sections/block/layout.html.tmpl": "<span class=\"block\">{{.label}}</span>",
+		"templates/sections/block/example.md":       "```\nlabel: first\n```\n",
+	}
+}
 
 // writeDeck writes one deck file tree to a fresh t.TempDir() and returns the
 // directory. Keys are deck-relative slash paths (for example
