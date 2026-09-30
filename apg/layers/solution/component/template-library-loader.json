@@ -59,6 +59,11 @@
       "kind": "implemented-by",
       "target": "internal/template/examplecheck.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/library.go",
+      "properties": {}
     }
   ],
   "in": [
