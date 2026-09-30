@@ -48,6 +48,11 @@
       "kind": "details",
       "source": "requirements.note.spine-markdown-allowed-subset",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
     }
   ]
 }
