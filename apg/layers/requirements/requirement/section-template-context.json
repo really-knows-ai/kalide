@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.nested-sections-requirements",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.nested-sections-coverage-reconcile",
+      "properties": {}
     }
   ]
 }
