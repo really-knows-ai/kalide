@@ -18,6 +18,11 @@
       "kind": "contains",
       "source": "domain.group.actors",
       "properties": {}
+    },
+    {
+      "kind": "represents",
+      "source": "requirements.user.deck-author",
+      "properties": {}
     }
   ]
 }
