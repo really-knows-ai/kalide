@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.cli-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.renderer",
+      "properties": {}
     }
   ],
   "in": []
