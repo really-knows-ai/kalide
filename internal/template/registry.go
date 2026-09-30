@@ -159,15 +159,30 @@ func LoadTemplate(content fs.FS, t *Template) error {
 // The checks run in a fixed, deterministic order over templates sorted by name:
 //
 //  1. each template's local definition (name, usage, reserved names);
-//  2. no section accepts a slide-usage template;
+//  2. each template's declared sections and the static analysis of every
+//     `section` helper call in its layout (checkSections,
+//     section-helper-load-checks): no section accepts a slide-usage template,
+//     and each call's target must be a defined section-usage template (an
+//     unknown name gets a closest-match suggestion), each literal `dict` key a
+//     field the target declares, every required target field present or
+//     defaulted, no target declaring a min>0 child section, and no literal body
+//     heading naming a declared child section of the target;
 //  3. no field (or list item) uses a required-body template as its type;
 //  4. the composition tree has no reference cycle, no undefined names, and
 //     no chain deeper than the six heading levels (the depth bound is
-//     requirements.constraint.section-depth-limit); a walk failure names the
-//     template it was walking so the templates loader path-qualifies it to
-//     that template.yaml;
+//     requirements.constraint.section-depth-limit); the walk (NewSection.Walk)
+//     follows the `section` helper-call edges (HelperRefs) as well as the
+//     declared-section edges, so a helper-closed cycle is rejected with the
+//     chain in the error, but a helper edge is not a heading and adds no depth
+//     level; a walk failure names the template it was walking so the templates
+//     loader path-qualifies it to that template.yaml;
 //  5. each example's STRUCTURED data satisfies its schema and the section
 //     repeat limits (no Markdown or slide parsing).
+//
+// Every failure carries the `template "<name>":` prefix — the helper checks of
+// step 2 as well as the walk errors of step 4 — so checkLibraryBuild
+// (templates-dir-validation step 4) path-qualifies it to the offending
+// template.yaml.
 func (r *Registry) Validate() error {
 	for _, t := range r.Templates() {
 		if err := checkDefinition(t); err != nil {
