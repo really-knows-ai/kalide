@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-stakeholder-reachability",
+  "body": "source: I4 — every Requirement must be reachable from a Stakeholder via `contains`. Inconsistency: 62 of 81 requirements were reachable only from the two User nodes (requirements.user.deck-author, requirements.user.template-author); the reader hierarchy Stakeholder ⊃ User could not be expressed because the binary's `contains` schema allows only `requirements.stakeholder|user|requirement -> requirements.requirement` — `Stakeholder -> User` is REFUSED. Resolution: anchored each User-rooted requirement root directly to its Stakeholder, the closest schema-legal expression of `deck-author ⊂ deck-creators` and `template-author ⊂ brand-owner` — requirements.stakeholder.deck-creators ⊃ {cli-init, cli-start, cli-templates-list, deck-config, markdown-allowed-subset, slide-file-ordering, slide-template-required, whole-deck-validation}; requirements.stakeholder.brand-owner ⊃ {project-templates, template-definition}. The User->Requirement edges are retained, so those roots now have both a User and a Stakeholder parent (a DAG, not a strict single-parent tree); all 81 requirements are now Stakeholder-reachable. [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
