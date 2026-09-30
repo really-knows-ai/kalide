@@ -59,6 +59,11 @@
       "kind": "implemented-by",
       "target": "internal/server/server.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/server/themecss.go",
+      "properties": {}
     }
   ],
   "in": [
