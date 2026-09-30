@@ -9,12 +9,15 @@ import (
 )
 
 // This file implements the html/template func map every library layout
-// executes with (template-language): exactly one helper, `media`, plus the
-// number/date format functions (Format.FuncMap). It never adds a
-// Sprig-style utility library or a Markdown helper: a layout composes
-// already-rendered HTML fragments (body/text/section, passed in by the
-// renderer as template.HTML) and plain data values, which html/template
-// auto-escapes on its own.
+// executes with (template-language): the four helpers
+// `media`/`section`/`dict`/`list`, plus the number/date format functions
+// (Format.FuncMap). `media` is the real implementation here; `dict` and
+// `list` are the data constructors; `section` is registered as a
+// parse-resolvable stub that the renderer rebinds to its implementation, so a
+// layout using it parses at load. It never adds a Sprig-style utility library
+// or a Markdown helper: a layout composes already-rendered HTML fragments
+// (body/text/section, passed in by the renderer as template.HTML) and plain
+// data values, which html/template auto-escapes on its own.
 
 // MediaURLPrefix returns the reserved URL prefix a theme stylesheet uses to
 // reference the library's shared media tree, e.g. "media:fonts/x.woff2". It
@@ -136,16 +139,32 @@ func ListFunc(items ...any) []any {
 }
 
 // LayoutFuncMap returns the complete, documented html/template func map every
-// library layout parses and executes with: exactly one helper `media`
-// (MediaFunc, bound to mediaFS and base) plus the built-in number/date format
+// library layout parses and executes with: the four helpers — `media`
+// (MediaFunc, bound to mediaFS and base), `dict` (DictFunc), `list`
+// (ListFunc) and `section` (a parse-resolvable stub the renderer rebinds to
+// the render-time implementation) — plus the built-in number/date format
 // functions (Format.FuncMap). This is the single source of truth for "the
 // documented func set": ParseLayout (used by LoadLibrary's step-3 layout
 // parse check) and the renderer both build their func map from here, so a
 // layout that parses during validation also executes the same way at render
 // time.
+//
+// The `section` entry is a stub only so that a layout using
+// `{{ section "name" [fields] [body] }}` parses at load; the renderer
+// overrides it (RenderSlide/parseLayouts) with the renderer-backed helper
+// before execution. Its variadic `(name string, args ...any)` shape accepts
+// the optional fields map and body argument of that grammar, and executing it
+// unbound — i.e. without the renderer's override — is a clear error.
 func LayoutFuncMap(mediaFS fs.FS, base string) htmltemplate.FuncMap {
 	fm := htmltemplate.FuncMap{
 		"media": MediaFunc(mediaFS, base),
+		"dict":  DictFunc,
+		"list":  ListFunc,
+		"section": func(name string, args ...any) (htmltemplate.HTML, error) {
+			return "", fmt.Errorf(
+				"section: the %q helper has no render-time implementation bound: template.LayoutFuncMap registers it only so the layout parses; the renderer must override it before execution",
+				name)
+		},
 	}
 	for name, fn := range BuiltinFormats.FuncMap() {
 		fm[name] = fn
