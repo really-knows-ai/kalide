@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "requirements.user.template-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.user.maintainer",
+      "properties": {}
     }
   ],
   "in": []

@@ -26,6 +26,11 @@
       "kind": "details",
       "source": "requirements.note.maintainer-user",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.represents-actor-tier",
+      "properties": {}
     }
   ]
 }
