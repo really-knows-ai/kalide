@@ -245,10 +245,18 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 			"template %q is a %s template, not a slide template", tmpl, usage)
 	}
 
-	// Body before the first heading.
+	// Body before the first section marker. A heading is a marker only where
+	// the enclosing template declares child sections; a depth-2-6 heading in a
+	// slide template that declares no child sections stays in the slide body as
+	// an ordinary Markdown subheading (slide-sections, markdown-allowed-subset).
+	slideDeclares := len(cat.SectionNames(tmpl)) > 0
 	firstHeading := -1
 	for i := closeIdx + 1; i < len(lines); i++ {
-		if isSectionHeading(lines[i]) {
+		depth, _, isHeading := headingLevel(lines[i])
+		if !isHeading {
+			continue
+		}
+		if _, isMarker := sectionMarkerParent(nil, depth, slideDeclares); isMarker {
 			firstHeading = i
 			break
 		}
@@ -978,16 +986,6 @@ func matchFence(line string) (isFence bool, lang string) {
 		return false, ""
 	}
 	return true, strings.TrimSpace(t[len(SectionFence):])
-}
-
-// isSectionHeading reports whether line is an ATX heading of any depth 1-6. Any
-// depth is a potential section marker: heading depth is nesting depth, and the
-// enclosing template's declarations decide whether a heading opens a child
-// section or stays an ordinary Markdown subheading (slide-sections,
-// markdown-allowed-subset).
-func isSectionHeading(line string) bool {
-	_, _, ok := headingLevel(line)
-	return ok
 }
 
 // headingName returns the section name of an ATX heading line at any depth 1-6,
