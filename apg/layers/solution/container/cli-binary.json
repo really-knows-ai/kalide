@@ -113,6 +113,11 @@
       "kind": "realised-by",
       "source": "domain.entity.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.template-author",
+      "properties": {}
     }
   ]
 }
