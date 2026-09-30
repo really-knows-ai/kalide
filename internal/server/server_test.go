@@ -381,7 +381,7 @@ func TestServer(t *testing.T) {
 		}
 
 		// Spot-check the documented names/usage explicitly required by the task.
-		for name, usage := range map[string]string{"title": "slide", "content": "slide", "column": "section"} {
+		for name, usage := range map[string]string{"title": "slide", "content": "slide", "column": "section", "group": "section"} {
 			if !strings.Contains(body, `class="gallery-page__name">`+name+`<span class="gallery-page__usage">`+usage) {
 				t.Errorf("gallery entry for %q (%s) not found in expected form", name, usage)
 			}
@@ -390,6 +390,30 @@ func TestServer(t *testing.T) {
 		for _, want := range []string{"<code>columns</code>", "<code>column</code>", "2–4", "max 2 paragraphs"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("gallery is missing expected content-template documentation %q", want)
+			}
+		}
+
+		// The child-section heading and row verb are usage-dependent: a slide
+		// template's rows say "declares" under "Sections", a section
+		// template's rows say "Can hold" under "Child sections".
+		if !strings.Contains(body, "<h3>Sections</h3>") {
+			t.Errorf("gallery does not head a slide template's declared sections with %q", "Sections")
+		}
+		if !strings.Contains(body, "<code>columns</code> declares") {
+			t.Errorf("gallery does not label the content slide's section rows %q", "declares")
+		}
+		if !strings.Contains(body, "<h3>Child sections</h3>") {
+			t.Errorf("gallery does not head a section template's child sections with %q", "Child sections")
+		}
+		if !strings.Contains(body, "<code>items</code> Can hold") {
+			t.Errorf("gallery does not label the group section's child rows %q", "Can hold")
+		}
+
+		// group (section) can hold items accepting column, 1–3 times: the
+		// declared child-section name, accepted templates and repeats.
+		for _, want := range []string{"<code>items</code>", "<code>column</code>", "1–3"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("gallery is missing expected group child-section documentation %q", want)
 			}
 		}
 	})
