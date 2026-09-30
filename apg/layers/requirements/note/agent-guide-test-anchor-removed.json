@@ -4,6 +4,12 @@
   "name": "agent-guide-test-anchor-removed",
   "body": "source: spine-backfill/feedback-3 on solution.component.agent-guide. Inconsistency: agent-guide carried `implemented-by -> go.github.com/really-knows-ai/kalide/internal/scaffold.TestAgentGuidesMatchFormat`, a test function in internal/scaffold/agentsguide_test.go. No production component anchors test code, and this edge had been added only to give requirements.requirement.agent-guide-drift-check a path to code (see requirements.note.spine-agent-guide-drift-check). Resolution [autonomous]: removed the implemented-by edge to the test function. No drives hop needed fixing and no test anchor was re-added, because agent-guide already owns the production code the drift check protects: internal/scaffold/libraryguide.go (File) and the seed/writer functions scaffold.Init, scaffold.InitExternal, scaffold.InitLibrary and scaffold.writeHelloSeed. The requirement still reaches that code through its existing drives: agent-guide-drift-check -> domain.group.authoring and domain.group.templating (both realised-by solution.component.agent-guide) and, via templating, template-registry and renderer. Verification on this branch: the requirement-spine query (Requirement ->Drives-> Domain ->RealisedBy-> Solution ->SpecImplementedBy-> code) yields 17 distinct production code units for agent-guide-drift-check and 0 rows for the violation query (requirements reaching no code, and requirements reaching only test code). agent-guide's implemented-by set is now 5 production anchors: internal/scaffold/libraryguide.go, scaffold.Init, scaffold.InitExternal, scaffold.InitLibrary, scaffold.writeHelloSeed; the TestAgentGuidesMatchFormat edge is gone.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
+    }
+  ],
   "in": []
 }

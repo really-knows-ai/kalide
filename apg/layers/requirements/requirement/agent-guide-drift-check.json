@@ -78,6 +78,11 @@
       "kind": "details",
       "source": "requirements.note.spine-agent-guide-drift-check",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.agent-guide-test-anchor-removed",
+      "properties": {}
     }
   ]
 }
