@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "field-rules",
-  "body": "Field rules: required, default, max_length (text: counts characters of the text after Markdown is stripped), min_items/max_items (list), min/max (number/date), description. Wrong type (e.g. a string for a `number`, a non-`YYYY-MM-DD` `date`) or out-of-range value = error stating the rule and the actual value.",
+  "body": "Field rules: required, default, max_length (text: counts characters of the text after Markdown is stripped), min_items/max_items (list), min/max (number/date), description. A required field that declares a default is satisfied when it is omitted: the declared default is applied and the omission is not an error — this holds everywhere a `fields` map is validated (slide frontmatter, a section instance, a template `example.md`, and a `section` helper's `fields`), and only a required field with no default and no supplied value is reported missing; a supplied value always wins over the declared default. Wrong type (e.g. a string for a `number`, a non-`YYYY-MM-DD` `date`) or out-of-range value = error stating the rule and the actual value.\n\nAC: a required field that declares a default may be omitted at any of the four validation sites (slide frontmatter, section instance, `example.md`, `section` helper `fields`) and no error is reported — the default is applied; a required field with no default and no supplied value errors naming the field, e.g. `required: field \"name\" is required but missing`, at those same sites; a supplied value overrides the default; the `section` helper and the load-time helper check apply the same defaults-first rule (section-helper, section-helper-load-checks).",
   "properties": {
     "feature": "templates"
   },
