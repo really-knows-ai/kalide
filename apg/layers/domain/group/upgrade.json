@@ -33,6 +33,11 @@
       "kind": "drives",
       "source": "requirements.requirement.deck-library-upgrade",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.group-less-domains-audit",
+      "properties": {}
     }
   ]
 }
