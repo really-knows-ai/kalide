@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "solution.note.nested-sections-coverage-reconcile",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.section-helpers-requirements",
+      "properties": {}
     }
   ]
 }
