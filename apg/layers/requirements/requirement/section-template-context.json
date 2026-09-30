@@ -19,11 +19,6 @@
     },
     {
       "kind": "drives",
-      "target": "domain.service.render-deck",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
       "target": "domain.service.render-sections",
       "properties": {}
     }
