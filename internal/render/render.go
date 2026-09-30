@@ -588,16 +588,19 @@ func dateString(raw any) string {
 // parseLayouts parses the slide template and every layout reachable from it —
 // declared section templates and section-template-as-type fields, at every
 // depth — into one html/template namespace keyed by layout name, so a composed
-// layout can invoke another with `{{ template "<name>" . }}`. funcMap is the
-// library's layout func map (template.LayoutFuncMap): `media` plus the
-// number/date format functions, installed on the namespace root so every
-// library layout using `media` or a format function parses and executes
+// layout can invoke another with `{{ template "<name>" . }}`. It returns that
+// shared namespace: RenderSlide executes the slide layout through it and hands
+// it to the renderer so every section instance, at any depth, executes its own
+// layout.html.tmpl against the same namespace (template-language). funcMap is
+// the library's layout func map (template.LayoutFuncMap): `media` plus the
+// number/date format functions, installed on the namespace so every library
+// layout using `media` or a format function parses and executes
 // (template-media, template-language).
 //
 // Parse time is unaffected by the reserved execution context
-// (`.deck.properties`, `.slide`): those keys are injected only when the
-// parsed layout is later executed (see slideData / values / fieldValue), not
-// while its text is being parsed here.
+// (`.deck.properties`, `.slide`, `.item`): those keys are injected only when
+// the parsed layout is later executed (see slideData / renderSection / values
+// / fieldValue), not while its text is being parsed here.
 //
 // single-binary: layout parsing uses only the in-process html/template engine:
 // layouts come from the registry's already-loaded Layout.Text (project library
@@ -607,21 +610,21 @@ func dateString(raw any) string {
 // darwin/amd64, windows/amd64, windows/arm64, linux/amd64, linux/arm64)
 // (requirements.requirement.single-binary).
 func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (*htmltmpl.Template, error) {
-	// The namespace root carries its own name only so html/template has a
-	// handle; it deliberately differs from every layout name. Naming the root
-	// after the slide's own layout would make root.New(layoutName(slideTmpl))
+	// The namespace carries its own name only so html/template has a handle;
+	// it deliberately differs from every layout name. Naming the namespace
+	// after the slide's own layout would make namespace.New(layoutName(slideTmpl))
 	// shadow that layout with an empty associated template, so executing the
 	// slide layout would fail with "is an incomplete template".
-	root := htmltmpl.New("layouts").Funcs(funcMap)
+	namespace := htmltmpl.New("layouts").Funcs(funcMap)
 	for _, t := range reachableTemplates(slideTmpl, reg) {
 		if t.Layout.Text == "" {
 			return nil, fmt.Errorf("template %q has no layout text", t.Name)
 		}
-		if _, err := root.New(layoutName(t)).Parse(t.Layout.Text); err != nil {
+		if _, err := namespace.New(layoutName(t)).Parse(t.Layout.Text); err != nil {
 			return nil, fmt.Errorf("template %q: parse layout: %w", t.Name, err)
 		}
 	}
-	return root, nil
+	return namespace, nil
 }
 
 // reachableTemplates returns tmpl followed by every template reachable from it
