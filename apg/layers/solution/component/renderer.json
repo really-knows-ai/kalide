@@ -101,6 +101,11 @@
       "kind": "details",
       "source": "solution.note.renderer-implementedby-anchors",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.section-helpers-supersede-reconcile",
+      "properties": {}
     }
   ]
 }
