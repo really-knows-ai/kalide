@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "solution.container.browser-frontend",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.container.cli-binary",
+      "properties": {}
     }
   ],
   "in": []
