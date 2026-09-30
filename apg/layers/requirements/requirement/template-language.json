@@ -21,6 +21,11 @@
       "kind": "drives",
       "target": "domain.service.render-sections",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.section-helper",
+      "properties": {}
     }
   ],
   "in": [
