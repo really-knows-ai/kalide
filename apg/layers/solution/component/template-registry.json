@@ -166,6 +166,11 @@
       "kind": "details",
       "source": "solution.note.section-helpers-solution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.feedback-11-load-time-traceability",
+      "properties": {}
     }
   ]
 }
