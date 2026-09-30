@@ -72,3 +72,41 @@ type ContextNode struct {
 	// into them, keyed and shaped the same way.
 	Children []ContextNode
 }
+
+// RawContext builds the reserved `.raw` execution-context entry for a slide or
+// section instance (raw-source-context): the author's ORIGINAL source values,
+// alongside the converted ones the same context carries under the field names.
+// This is the single shared builder both halves use — the load-time example
+// execution (templates-dir-validation step 7, examplecheck.go) and the
+// render-time execution (internal/render) — so the two source views cannot
+// drift (template-context).
+//
+// It holds the source value of every declared field the author supplied —
+// keyed by the field's own name, for a text field the Markdown exactly as
+// written, before inline-Markdown rendering — and the instance's original body
+// source under `body` when the author supplied one.
+//
+// source is the instance's pre-conversion source map — a slide's or section's
+// decoded frontmatter, or a section helper call's supplied fields — and t is
+// the resolved template whose field schema names the declared fields. Only
+// declared fields are copied: the reserved `template:` selector, a
+// `<field>_format` sibling and any other undeclared key are not fields. A field
+// the author did not supply is absent, and a field's declared default is not
+// copied, because a default is not an authored source value; a body the author
+// did not supply is likewise absent. A nil t or source yields a well-formed
+// (possibly body-only) context, so a caller may pass them freely.
+func RawContext(source map[string]any, t *Template, body string) map[string]any {
+	out := make(map[string]any, 1)
+	if t != nil {
+		for i := range t.Fields {
+			name := t.Fields[i].Name
+			if v, present := source[name]; present {
+				out[name] = v
+			}
+		}
+	}
+	if body != "" {
+		out["body"] = body
+	}
+	return out
+}
