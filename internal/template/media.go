@@ -122,6 +122,19 @@ func DictFunc(kv ...any) (map[string]any, error) {
 	return out, nil
 }
 
+// ListFunc is the `list` layout constructor: `{{ list "a" "b" }}` returns its
+// arguments as a []any, the syntax a layout uses to give a list-typed field a
+// literal sequence instead of a YAML sequence. It is an ordinary
+// html/template function that reads nothing outside its arguments and has no
+// failure mode — any mix of values is valid — and it returns a fresh slice,
+// non-nil even when called with no arguments, so `len` and `range` behave on
+// it the same way they do on a YAML-authored empty list.
+func ListFunc(items ...any) []any {
+	out := make([]any, len(items))
+	copy(out, items)
+	return out
+}
+
 // LayoutFuncMap returns the complete, documented html/template func map every
 // library layout parses and executes with: exactly one helper `media`
 // (MediaFunc, bound to mediaFS and base) plus the built-in number/date format
