@@ -34,6 +34,11 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/seed/AGENTS.md",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/libraryguide/AGENTS.md",
+      "properties": {}
     }
   ],
   "in": [
