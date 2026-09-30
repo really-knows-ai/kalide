@@ -39,11 +39,6 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/libraryguide/AGENTS.md",
       "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "internal/scaffold/agentsguide_test.go",
-      "properties": {}
     }
   ],
   "in": [
