@@ -60,6 +60,18 @@ func checkLibraryExamples(lib *Library) error {
 // nested instances, never treated as subheadings, and a no-children template's
 // `##`/`###` are governed by its body.subheadings. This keeps example
 // validation in agreement with deck validation.
+//
+// After validation the reserved source contexts are published into the example
+// execution context alongside deck/slide (raw-source-context,
+// section-data-context, template-context, item-context): `.raw` is the
+// example's original source field values and body (exampleRawContext) and
+// `.data` is its authored child sections as data (exampleDataContext), both
+// mirroring the render-time rawContext/dataContext, so an unguarded
+// `{{ section "…" … .raw.body }}` or `{{ .data.<section> }}` access executes
+// at step 7 instead of failing LoadLibrary. A section template's own layout is
+// itself a section instance, so it additionally gets the one-item `.item`
+// descriptor mirroring a section-helper invocation; a slide template's item
+// stays absent.
 func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 	if lt == nil || lt.Definition == nil {
 		return nil
@@ -93,13 +105,40 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 		if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, ctx); err != nil {
 			return err
 		}
+
+		// The reserved source contexts, mirroring the render-time
+		// rawContext/dataContext. source is the example frontmatter minus the
+		// reserved `template` selector, exactly as validateExampleBlock drops
+		// it from the executed context.
+		source := make(map[string]any, len(block.Frontmatter))
+		for k, v := range block.Frontmatter {
+			if k == "template" {
+				continue
+			}
+			source[k] = v
+		}
+		ctx["raw"] = exampleRawContext(source, def, block.Body)
+		ctx["data"] = exampleDataContext(block.Sections, def, resolve, nil)
+
 		if lt.Kind == KindSection {
-			callerFields = make(map[string]any, len(block.Frontmatter))
-			for k, v := range block.Frontmatter {
-				if k == "template" {
-					continue
-				}
-				callerFields[k] = v
+			// A section template's own layout is a section instance, so its
+			// `.item` descriptor mirrors a one-item section-helper invocation:
+			// section and template are the template's own name, parent nil
+			// (item-context). A slide template's item stays absent.
+			callerFields = source
+			ctx["item"] = map[string]any{
+				"index":    0,
+				"number":   1,
+				"count":    1,
+				"first":    true,
+				"last":     true,
+				"section":  lt.Name,
+				"template": lt.Name,
+				// A typed nil map, matching the shape itemContext,
+				// ResolveSectionCall and exampleDataContext publish for an
+				// absent parent: `{{if .parent}}` is false and a chained
+				// `.parent.<field>` evaluates to no value rather than failing.
+				"parent": map[string]any(nil),
 			}
 		}
 	}
