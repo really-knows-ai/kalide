@@ -16,6 +16,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": [
