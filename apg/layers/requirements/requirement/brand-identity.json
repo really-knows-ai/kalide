@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "solution.note.brand-mark-source",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-brand-identity",
+      "properties": {}
     }
   ]
 }

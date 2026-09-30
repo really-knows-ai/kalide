@@ -4,6 +4,12 @@
   "name": "spine-brand-identity",
   "body": "Spine completion [autonomous]. requirements.requirement.brand-identity drove only domain.value.brand-identity; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.group.distribution (owns the brand-identity value). domain.group.distribution already realises solution.component.brand-assets. Added `implemented-by` solution.component.brand-assets -> brand/logo_dark.svg, brand/logo_light.svg, brand/LICENSE and TRADEMARKS.md (File nodes: the brand collateral the requirement names). Path: brand-identity -> distribution -> brand-assets -> brand/logo_light.svg. Existing `drives` to domain.value.brand-identity kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.brand-identity",
+      "properties": {}
+    }
+  ],
   "in": []
 }
