@@ -59,6 +59,11 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/catalog.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/migrate.go",
+      "properties": {}
     }
   ],
   "in": [
