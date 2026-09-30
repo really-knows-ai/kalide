@@ -46,6 +46,11 @@
       "kind": "drives",
       "source": "requirements.requirement.closest-match-suggestions",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.error-reporting",
+      "properties": {}
     }
   ]
 }
