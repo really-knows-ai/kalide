@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "helper-refs-precomputed",
+  "body": "source: section-helpers boy-scout pass before merge (item 5). Checked: the performance change — layout helper refs computed once (cached on the template) instead of re-parsed per render — needs no spec change, because no requirement or constraint mandates per-render parsing. The relevant laws are satisfied or unaffected: requirements.requirement.section-helper-load-checks says helper calls are checked at load from the parsed layout trees (template.Section.HelperRefs), and requirements.constraint.template-registry-integrity / domain.constraint.template-defects-build-time require template-definition defects to be caught when the project's templates are loaded — precomputing the refs at load supports that. Currently renderer.reachableTemplates calls template.NewSection(reg.Lookup).HelperRefs(t) inside the per-render walk (internal/render/render.go:1057); caching the refs is an internal optimisation with no observable spec behaviour. No body, AC or constraint edit. Anchors already present: renderer.reachableTemplates is anchored by solution.note.renderer-implementedby-anchors to solution.component.renderer; template.Section.HelperRefs is anchored to solution.component.template-registry.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
