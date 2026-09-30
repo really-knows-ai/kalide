@@ -86,6 +86,11 @@
       "kind": "drives",
       "source": "requirements.requirement.number-date-formats",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.section-helper-load-checks",
+      "properties": {}
     }
   ]
 }
