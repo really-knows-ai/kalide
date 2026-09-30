@@ -437,7 +437,14 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 
 	// The target is the sole instance of its own one-item group, so it
 	// executes with the calling slide's deck/slide context and its own .item
-	// descriptor; it has no authored children of its own to render.
+	// descriptor; it has no authored children of its own to render. Its
+	// reserved `.raw`/`.data` context (raw-source-context,
+	// section-data-context) is supplied to values and merged into the instance
+	// map there, exactly as a rendered instance's is: `.raw` is the source view
+	// of what the call supplied — the supplied fields before defaults are
+	// applied, so a default is never mistaken for authored source, plus the
+	// body — and `.data` is empty, because the helper passes no child sections
+	// and so contributes no authored instance to the data view.
 	caller := r.callerCtx
 	if caller == nil {
 		caller = &sectionCtx{}
@@ -447,6 +454,8 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 		meta:  caller.meta,
 		total: caller.total,
 		item:  call.Item,
+		raw:   r.rawContext(fields, call.Template, call.Body),
+		data:  map[string]any{},
 	}
 	data, err := r.values(call.Values, call.Template, secCtx)
 	if err != nil {
@@ -459,11 +468,6 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 		}
 		data["body"] = rendered
 	}
-	// .raw is the source view of what the call supplied (the supplied fields
-	// plus the body); .data is empty, because the helper passes no child
-	// sections and so contributes no authored instance to the data view.
-	data["raw"] = r.rawContext(fields, call.Template, call.Body)
-	data["data"] = map[string]any{}
 
 	// A nested {{ section … }} call in the target's layout reads this
 	// instance's field values as its .item.parent and inherits the same
@@ -566,6 +570,23 @@ type sectionCtx struct {
 	// (item-context). It is nil at the top level, where the parent is the
 	// slide, not a section instance.
 	parent map[string]any
+
+	// raw is the instance's reserved `.raw` context (raw-source-context): the
+	// source view of the author's original values, built by the caller with
+	// rawContext. It is nil when the map under construction is not a section
+	// instance — the slide LAYOUT map (whose `raw` slideData sets directly) and
+	// a section-template-as-type field value (data-only, like its missing
+	// `.item`) — and values then adds no `raw` entry.
+	raw map[string]any
+
+	// data is the instance's reserved `.data` context
+	// (section-data-context): the instance's authored child sections as data,
+	// built by the caller with dataContext. It is nil when the map under
+	// construction is not a section instance, on the same terms as raw, and
+	// values then adds no `data` entry. A section instance with no authored
+	// children carries a non-nil but empty map, so a section template always
+	// sees `.data` at every depth.
+	data map[string]any
 }
 
 // values converts one map of validated field data against t's field schema,
@@ -578,11 +599,17 @@ type sectionCtx struct {
 // secCtx is non-nil exactly when out is a SECTION INSTANCE map (top-level or
 // nested): the reserved `deck`/`slide` entries are merged into it and, when
 // the instance has a sibling descriptor, the reserved `item` entry too
-// (template-context, section-template-context, item-context). The
-// slide-frontmatter call passes nil, since that map is the slide LAYOUT map
-// and slideData sets `deck`/`slide` on it directly; a slide layout has no
-// siblings, so it never gains an `item` entry. A section-template-as-type
-// field value keeps `deck`/`slide` but is data-only and carries no `item`.
+// (template-context, section-template-context, item-context). When the caller
+// supplied them, the reserved `raw` (the instance's source values,
+// raw-source-context) and `data` (its authored child sections as data,
+// section-data-context) entries are merged in as well, next to `deck`/`slide`/
+// `item`, so a section template sees the full template context at every depth
+// while its declared fields stay directly addressable under their own names.
+// The slide-frontmatter call passes nil, since that map is the slide LAYOUT
+// map and slideData sets `deck`/`slide` (and the layout's own `raw`/`data`)
+// on it directly; a slide layout has no siblings, so it never gains an `item`
+// entry. A section-template-as-type field value keeps `deck`/`slide` but is
+// data-only and carries no `item`, `raw` or `data`.
 func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sectionCtx) (map[string]any, error) {
 	out := make(map[string]any, len(t.Fields))
 	for i := range t.Fields {
@@ -605,6 +632,16 @@ func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sec
 		out["slide"] = slideContext(secCtx.meta, secCtx.total)
 		if secCtx.item != nil {
 			out["item"] = secCtx.item
+		}
+		// The reserved `.raw`/`.data` entries are merged next to `deck`/`slide`/
+		// `item` when the caller built them for this section instance. They are
+		// absent — not nil — for a data-only section-template-as-type value and
+		// for the slide layout, so nothing renders as `<no value>`.
+		if secCtx.raw != nil {
+			out["raw"] = secCtx.raw
+		}
+		if secCtx.data != nil {
+			out["data"] = secCtx.data
 		}
 	}
 	return out, nil
