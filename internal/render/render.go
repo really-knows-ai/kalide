@@ -980,28 +980,27 @@ func parseLayouts(r *renderer, slideTmpl *template.Template, reg *template.Regis
 // execute its own layout (template-language, section-template-context).
 //
 // A layout's `{{ section "name" … }}` calls are followed too, after the
-// declared-section and field walk: template.NewSection(reg.Lookup).HelperRefs
-// re-parses each reached layout with the canonical layout func map and returns
-// its helper-call targets, so a helper-only target — one that is not also a
-// declared child of its caller — is still pulled into the shared namespace and
-// the render-time helper can execute it. Helper edges are followed transitively
-// to the same closure as declared edges, bounded by seen. Missing names are
+// declared-section and field walk: reg.HelperTargets returns each reached
+// layout's helper-call targets, re-parsing Layout.Text with the canonical
+// layout func map under a lazily memoised registry cache — so a slide's whole
+// walk re-parses each layout at most once across RenderSlide calls instead of
+// once per render — and a helper-only target, one that is not also a declared
+// child of its caller, is still pulled into the shared namespace so the
+// render-time helper can execute it. Helper edges are followed transitively to
+// the same closure as declared edges, bounded by seen. Missing names are
 // skipped: validation has already rejected an undefined name, and a layout
 // simply cannot invoke a template that does not exist.
 //
-// A HelperRefs error is deliberately not propagated. reachableTemplates cannot
-// return one, load already validated every layout, and the only way HelperRefs
-// can fail is a layout that does not re-parse with the canonical func map —
-// which is exactly what parseLayouts' own Parse reports for the same text, so
-// skipping the edges here loses no error that the caller does not already
-// surface.
+// A HelperTargets error is deliberately not propagated: the accessor swallows
+// the re-parse error to nil, exactly as the previous Section.HelperRefs call
+// swallowed it here. reachableTemplates cannot return an error, load already
+// validated every layout, and the only way the re-parse can fail is a layout
+// that does not re-parse with the canonical func map — which is exactly what
+// parseLayouts' own Parse reports for the same text, so skipping the edges here
+// loses no error that the caller does not already surface.
 func reachableTemplates(root *template.Template, reg *template.Registry) []*template.Template {
 	seen := make(map[string]bool)
 	var out []*template.Template
-
-	// One Section bound to the registry's resolver serves every layout; it
-	// holds no per-call state, only the resolver.
-	section := template.NewSection(reg.Lookup)
 
 	var add func(t *template.Template)
 	add = func(t *template.Template) {
@@ -1020,11 +1019,9 @@ func reachableTemplates(root *template.Template, reg *template.Registry) []*temp
 		for i := range t.Fields {
 			addFieldTemplate(&t.Fields[i], reg, add)
 		}
-		if refs, err := section.HelperRefs(t); err == nil {
-			for _, name := range refs {
-				if st, ok := reg.Lookup(name); ok && st != nil {
-					add(st)
-				}
+		for _, name := range reg.HelperTargets(t.Name) {
+			if st, ok := reg.Lookup(name); ok && st != nil {
+				add(st)
 			}
 		}
 	}
