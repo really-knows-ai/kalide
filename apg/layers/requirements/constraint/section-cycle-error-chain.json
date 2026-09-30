@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "constraint",
   "name": "section-cycle-error-chain",
-  "body": "Section-template reference cycles are rejected when the library's templates are loaded, and the error names the cycle chain, e.g. `sections/a → sections/b → sections/a`. A cycle is never accepted (the composition walk terminates safely and reports the chain instead of looping), and it is a templates error path-qualified to the offending `template.yaml` (template-build-checks).",
+  "body": "Section-template reference cycles are rejected when the library's templates are loaded, and the error names the cycle chain, e.g. `sections/a → sections/b → sections/a`. A reference is a declared `sections:` acceptance or a `section` helper call in a layout (section-helper-load-checks); a cycle closed through helper calls is rejected exactly as a declared one. A cycle is never accepted (the composition walk terminates safely and reports the chain instead of looping), and it is a templates error path-qualified to the offending `template.yaml` (template-build-checks).",
   "properties": {
     "attaches-to": "requirements.requirement.template-build-checks"
   },
