@@ -2,28 +2,16 @@
   content — slide-usage template layout.
 
   Context: map[string]any keyed by field name; `columns` maps to a slice of
-  `column` section instance maps. Each instance is rendered inline here
-  (rather than through a cross-template `{{ template "column" . }}` call) so
-  the layout stays self-contained and executes standalone against its own
-  render context — checkLibraryExamples (library-load) executes each
-  template's layout in isolation, one file at a time.
+  TRUSTED HTML, one element per section instance in source order — each
+  instance already rendered bottom-up through its own layout.html.tmpl
+  (template-language). The layout splices each rendered instance with
+  `{{ range .columns }}{{ . }}{{ end }}` rather than ranging over data maps and
+  rendering the column layout inline.
 */}}
 <section class="demo-slide demo-slide--content">
   <h2 class="demo-heading">{{ .heading }}</h2>
   {{ with .body }}<div class="demo-body">{{ . }}</div>{{ end }}
   <div class="demo-columns">
-    {{ range $.columns }}
-    <div class="demo-column">
-      {{ with .title }}<h3 class="demo-column__title">{{ . }}</h3>{{ end }}
-      {{ with .body }}<div class="demo-column__body">{{ . }}</div>{{ end }}
-      {{ range .people }}
-      <div class="demo-person">
-        {{ with .avatar }}<img class="demo-person__avatar" src="{{ . }}" alt="">{{ end }}
-        <span class="demo-person__name">{{ .name }}</span>
-        {{ with .role }}<span class="demo-person__role">{{ . }}</span>{{ end }}
-      </div>
-      {{ end }}
-    </div>
-    {{ end }}
+    {{ range .columns }}{{ . }}{{ end }}
   </div>
 </section>
