@@ -164,7 +164,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 
 	// Slide frontmatter fields, top of the file. The reserved `template:`
 	// selector is not a field value and is removed before schema checking.
-	if verr, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, reg); invalid {
+	if verr, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg); invalid {
 		return verr, true
 	}
 
@@ -226,7 +226,7 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, reg *templ
 			}
 			continue
 		}
-		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, reg); invalid {
+		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, nil, reg); invalid {
 			return verr, true
 		}
 		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl)); invalid {
@@ -254,10 +254,16 @@ func declaresChildSections(tmpl *template.Template) bool {
 // section-template-as-type values and list items at every depth with full path
 // tracking. It returns the first error and whether one was found.
 //
+// prefix is the enclosing section instance's containment chain (for example
+// []string{"columns[2]", "blocks[1]"}); when non-empty it is prepended to the
+// rendered value path, so a nested instance's field error carries its full
+// instance chain, e.g. `columns[2] › blocks[1] › lable`
+// (nested-section-validation). The slide frontmatter call passes nil.
+//
 // Image fields are checked against fsys: template.CheckValues enforces the
 // assets/ prefix itself and the WithImageExists callback verifies the file
 // exists in the deck.
-func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, reg *template.Registry) (ValidationError, bool) {
+func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) (ValidationError, bool) {
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
 		template.WithImageExists(func(p string) bool {
 			_, err := fs.Stat(fsys, p)
@@ -266,7 +272,7 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 	if len(res.Errors) == 0 {
 		return ValidationError{}, false
 	}
-	return adaptValueError(file, res.Errors[0]), true
+	return adaptValueError(file, res.Errors[0], prefix), true
 }
 
 // checkBody checks one Markdown body (a slide body, a section body or the notes
@@ -306,7 +312,7 @@ func checkBodyRule(file string, rule template.BodyRule, body string, startLine i
 	if !invalid {
 		return ValidationError{}, false
 	}
-	return adaptValueError(file, ve), true
+	return adaptValueError(file, ve, nil), true
 }
 
 // themeResolves reports whether name resolves in the caller's theme registry.
@@ -402,9 +408,16 @@ func adaptIssue(iss mdcheck.Issue) ValidationError {
 
 // adaptValueError adapts a template.ValueError into a ValidationError: the
 // caller supplies the file (ValueError carries only a path within it), the path
-// segments are rendered, and What and Fix carry across.
-func adaptValueError(file string, ve template.ValueError) ValidationError {
-	return New(file, ve.Line, valuePath(ve.Path), ve.What, ve.Fix)
+// segments are rendered, and What and Fix carry across. prefix, when non-empty,
+// is the enclosing section instance's containment chain and is prepended to the
+// rendered value path, so a nested instance's field error reads
+// `columns[2] › blocks[1] › lable: …` (nested-section-validation).
+func adaptValueError(file string, ve template.ValueError, prefix []string) ValidationError {
+	path := valuePath(ve.Path)
+	if len(prefix) > 0 {
+		path = append(append([]string(nil), prefix...), path...)
+	}
+	return New(file, ve.Line, path, ve.What, ve.Fix)
 }
 
 // valuePath renders template.PathSegment values into the display strings
