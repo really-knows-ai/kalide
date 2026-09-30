@@ -163,8 +163,13 @@ type galleryEntry struct {
 	Description string
 	Example     htmltmpl.HTML
 	Fields      []galleryField
-	Sections    []gallerySection
-	Body        *galleryBody
+	// SectionsLabel heads the child-section table. It is usage-dependent:
+	// "Sections" for a slide template (the child sections it declares) and
+	// "Child sections" for a section template (the child sections it can
+	// hold), matching `kalide templates`' usage-dependent headings.
+	SectionsLabel string
+	Sections      []gallerySection
+	Body          *galleryBody
 }
 
 // galleryField is one row of the field documentation table.
@@ -180,7 +185,11 @@ type galleryField struct {
 
 // gallerySection is one row of the section documentation table.
 type gallerySection struct {
-	Name        string
+	Name string
+	// Label is the usage-dependent relationship verb shown beside the
+	// section name: "declares" for a slide template's section rows and
+	// "Can hold" for a section template's child-section rows.
+	Label       string
 	Accepted    string
 	Repeats     string
 	Description string
@@ -207,12 +216,14 @@ func galleryEntries(reg *template.Registry, funcMap htmltmpl.FuncMap) []galleryE
 		if t == nil {
 			continue
 		}
+		sections, sectionsLabel := gallerySections(t)
 		entry := galleryEntry{
-			Name:        t.Name,
-			Usage:       string(t.Usage),
-			Description: t.Description,
-			Fields:      galleryFields(t),
-			Sections:    gallerySections(t),
+			Name:          t.Name,
+			Usage:         string(t.Usage),
+			Description:   t.Description,
+			Fields:        galleryFields(t),
+			SectionsLabel: sectionsLabel,
+			Sections:      sections,
 			Body: &galleryBody{
 				Mode:    string(t.Body.Mode),
 				Limits:  bodyLimits(t.Body),
@@ -371,21 +382,32 @@ func galleryFields(t *template.Template) []galleryField {
 	return out
 }
 
-// gallerySections renders a template's declared sections, in declaration order.
-// SectionDecl carries no free-text description, so the description cell is
-// left empty rather than invented.
-func gallerySections(t *template.Template) []gallerySection {
+// gallerySections renders a template's declared child sections, in declaration
+// order, together with the heading of the table that lists them. The heading
+// and each row's verb depend on the template's usage: a slide template's
+// `Sections` are the child sections it declares (verb "declares"), while a
+// section template's `Child sections` are the child sections it can hold (verb
+// "Can hold"). SectionDecl carries no free-text description, so the description
+// cell is left empty rather than invented.
+func gallerySections(t *template.Template) ([]gallerySection, string) {
+	heading := "Sections"
+	verb := "declares"
+	if t.Usage == template.UsageSection {
+		heading = "Child sections"
+		verb = "Can hold"
+	}
 	out := make([]gallerySection, 0, len(t.Sections))
 	for i := range t.Sections {
 		d := &t.Sections[i]
 		out = append(out, gallerySection{
 			Name:        d.Name,
+			Label:       verb,
 			Accepted:    strings.Join(d.Accepted, ", "),
 			Repeats:     sectionRepeats(d),
 			Description: "",
 		})
 	}
-	return out
+	return out, heading
 }
 
 // fieldDefault renders a field's default in its display form, or "" when the
