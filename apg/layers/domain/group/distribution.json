@@ -57,6 +57,11 @@
       "kind": "realised-by",
       "target": "solution.component.brand-assets",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.verify-changes",
+      "properties": {}
     }
   ],
   "in": [
