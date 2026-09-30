@@ -64,6 +64,11 @@
       "kind": "details",
       "target": "requirements.constraint.reserved-template-names",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.section-cycle-error-chain",
+      "properties": {}
     }
   ],
   "in": []

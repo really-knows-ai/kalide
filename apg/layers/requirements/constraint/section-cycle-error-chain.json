@@ -12,6 +12,11 @@
       "kind": "details",
       "source": "requirements.note.nested-sections-law-choices",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.section-helpers-requirements",
+      "properties": {}
     }
   ]
 }
