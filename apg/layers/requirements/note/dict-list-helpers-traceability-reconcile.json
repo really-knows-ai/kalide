@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "dict-list-helpers-traceability-reconcile",
+  "body": "source: final-review divergence feedback-10 (spec reconciliation, traceability): dict-list-helpers' spine reached only solution.component.renderer (internal/render/render.go), yet the dict/list constructors are built in internal/template/media.go (template.DictFunc media.go:99-126, template.ListFunc media.go:128-139, registered by template.LayoutFuncMap media.go:141-173). No solution node anchored internal/template/media.go.\n\ninconsistency: requirement dict-list-helpers -Drives-> domain.service.render-sections -RealisedBy-> solution.component.renderer, whose SpecImplementedBy edges cover only internal/render/render.go and render.* FQNs. The template-package helper code was traceable only from solution.component.template-registry's LayoutFuncMap edge, i.e. no requirement spine reached it.\n\nresolution: dict-list-helpers now also drives domain.service.template-registry (whose body already owns the central layout function set media/section/dict/list and names dict-list-helpers), and that service is already realised-by solution.component.template-registry. Added SpecImplementedBy edges from solution.component.template-registry to the file internal/template/media.go and the functions go.github.com/really-knows-ai/kalide/internal/template.DictFunc and .ListFunc. The helpers stay semantically owned by template-registry, not renderer (the renderer only consumes the central map). [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
