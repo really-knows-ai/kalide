@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "requirements.note.spine-slide-parser-anchors",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
     }
   ]
 }

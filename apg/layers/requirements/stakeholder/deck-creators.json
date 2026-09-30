@@ -39,6 +39,11 @@
       "kind": "contains",
       "target": "requirements.requirement.slide-file-ordering",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.slide-template-required",
+      "properties": {}
     }
   ],
   "in": []
