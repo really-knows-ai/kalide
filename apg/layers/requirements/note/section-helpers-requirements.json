@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-build-checks",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-composition",
+      "properties": {}
     }
   ],
   "in": []
