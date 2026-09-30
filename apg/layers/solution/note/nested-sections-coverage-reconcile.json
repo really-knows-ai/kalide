@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "domain.service.render-sections",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": []
