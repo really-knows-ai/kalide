@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "solution.component.cli-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.upgrade",
+      "properties": {}
     }
   ],
   "in": []

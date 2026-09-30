@@ -96,6 +96,11 @@
       "kind": "details",
       "source": "solution.note.upgrade-implementation-pending",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
+      "properties": {}
     }
   ]
 }
