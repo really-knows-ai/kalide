@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.nested-sections-error-format-reconciled",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-error-reporting",
+      "properties": {}
     }
   ]
 }
