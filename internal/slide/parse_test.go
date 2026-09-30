@@ -1169,7 +1169,9 @@ func testParseSectionFence(t *testing.T) {
 }
 
 // testParseNotes covers the reserved `# notes` section: position, uniqueness,
-// reserved-name rejection and exclusion from repeat limits.
+// reserved-name rejection, exclusion from repeat limits, and that it is
+// top-level only — a deeper heading never starts notes (speaker-notes,
+// slide-sections).
 func testParseNotes(t *testing.T) {
 	cat := testCatalogue()
 	const file = "slides/1-intro.md"
@@ -1259,5 +1261,97 @@ func testParseNotes(t *testing.T) {
 			"b",
 		), cat)
 		wantParseError(t, err, file, 2, `section "columns": requires at least 2, found 1`)
+	})
+
+	// `# notes` is top-level only: a deeper `## notes`/`### notes` heading is
+	// never the reserved section. Inside a template that declares no child
+	// sections it stays ordinary Markdown in the enclosing body; at the
+	// slide's top level in a template that does declare child sections it is
+	// an undeclared section name, not notes.
+
+	t.Run("deeper notes heading is body when the enclosing template declares no children", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"column body",
+			"",
+			"## notes",
+			"",
+			"not speaker notes",
+		), cat)
+		if slide.Notes != nil {
+			t.Fatalf("Notes = %+v, want nil (a deeper heading never starts notes)", slide.Notes)
+		}
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		col := slide.Sections[0]
+		if len(col.Children) != 0 {
+			t.Fatalf("columns.Children = %+v, want none", col.Children)
+		}
+		const wantBody = "column body\n\n## notes\n\nnot speaker notes"
+		if col.Body != wantBody {
+			t.Errorf("columns.Body = %q, want %q", col.Body, wantBody)
+		}
+	})
+
+	t.Run("deeper notes heading at the top level is not the reserved section", func(t *testing.T) {
+		// The content slide template declares child sections, so a leading
+		// `## notes` is a section marker at the top level; `notes` is not a
+		// declarable name, so it is rejected as an unknown section, never
+		// accepted as speaker notes.
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"## notes",
+		), cat)
+		wantParseErrorPath(t, err, file, 5, "", `unknown section "notes"`)
+	})
+
+	t.Run("notes after a nested child is top-level", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"# notes",
+			"note body",
+		), cat)
+		if slide.Notes == nil || slide.Notes.HeadingLine != 12 || slide.Notes.Body != "note body" {
+			t.Fatalf("Notes = %+v, want the top-level section at line 12 body %q", slide.Notes, "note body")
+		}
+		if len(slide.Sections) != 1 || len(slide.Sections[0].Children) != 1 {
+			t.Fatalf("sections = %+v, want one columns with one blocks child", slide.Sections)
+		}
+	})
+
+	t.Run("notes nested under a container is not notes", func(t *testing.T) {
+		// group declares `blocks`, not `notes`, so `## notes` under a columns
+		// instance is an unknown child section, not speaker notes.
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## notes",
+		), cat)
+		wantParseErrorPath(t, err, file, 10, "columns[0]", `unknown section "notes"`)
 	})
 }
