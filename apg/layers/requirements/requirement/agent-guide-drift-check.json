@@ -73,6 +73,11 @@
       "kind": "details",
       "source": "requirements.note.theme-library-reach-propagated",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-agent-guide-drift-check",
+      "properties": {}
     }
   ]
 }

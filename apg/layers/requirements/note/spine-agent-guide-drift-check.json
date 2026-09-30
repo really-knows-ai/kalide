@@ -4,6 +4,12 @@
   "name": "spine-agent-guide-drift-check",
   "body": "Spine completion [autonomous]. requirements.requirement.agent-guide-drift-check drove only domain.value.agent-guide and domain.value.library-agent-guide; because `realised-by` applies only from a domain group|entity|service, the spine dead-ended before any solution or code. Added `drives` -> domain.group.authoring (owns the deck-guide value domain.value.agent-guide and the scaffold writers) and `drives` -> domain.group.templating (owns the library-guide value domain.value.library-agent-guide); both groups realise solution.component.agent-guide. Added `implemented-by` solution.component.agent-guide -> internal/scaffold.TestAgentGuidesMatchFormat, the build/test-time self-test that fails when either embedded guide drifts from the implemented format. Path: agent-guide-drift-check -> authoring/templating -> agent-guide -> internal/scaffold.TestAgentGuidesMatchFormat. The existing `drives` to the two value nodes are kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
+    }
+  ],
   "in": []
 }
