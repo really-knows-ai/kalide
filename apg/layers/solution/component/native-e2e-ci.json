@@ -14,6 +14,11 @@
       "kind": "implemented-by",
       "target": "e2e/native_test.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": ".github/workflows/native-e2e.yml",
+      "properties": {}
     }
   ],
   "in": [
