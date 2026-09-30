@@ -26,6 +26,11 @@
       "kind": "realised-by",
       "source": "domain.service.verify-changes",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.feedback-14-ci-workflow",
+      "properties": {}
     }
   ]
 }

@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "domain.service.verify-changes",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.ci-workflow",
+      "properties": {}
     }
   ],
   "in": []
