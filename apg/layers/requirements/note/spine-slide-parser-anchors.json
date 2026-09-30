@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "requirements.requirement.slide-template-required",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.speaker-notes",
+      "properties": {}
     }
   ],
   "in": []

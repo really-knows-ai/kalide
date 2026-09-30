@@ -23,6 +23,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-slide-parser-anchors",
+      "properties": {}
     }
   ]
 }
