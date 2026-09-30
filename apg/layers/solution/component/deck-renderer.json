@@ -5,5 +5,11 @@
   "body": "Deck renderer: assembles the whole-deck reveal.js document — applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors and notes — over the per-slide documents. Realised by internal/render.RenderDeck, the top-level entry internal/server.Reloader.renderDefault calls. The render tier splits by role: solution.component.renderer executes templates and section instances bottom-up; deck-renderer assembles the resulting deck document.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }

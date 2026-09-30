@@ -86,6 +86,11 @@
       "kind": "contains",
       "target": "solution.component.cli-templates",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.deck-renderer",
+      "properties": {}
     }
   ],
   "in": [
