@@ -64,6 +64,11 @@
       "kind": "implemented-by",
       "target": "internal/template/section.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/template.go",
+      "properties": {}
     }
   ],
   "in": [
