@@ -4,6 +4,12 @@
   "name": "actor-entities",
   "body": "Actor entities (spine-backfill represents pass) [with user]. The domain tier gained an `actors` group holding one entity per individual who acts on kalide — domain.entity.deck-author, domain.entity.template-author and domain.entity.maintainer. They exist so the `represents` identity chain (requirements.user.* -> domain.entity.* -> solution.person.*) can be expressed: the binary's `Represents` schema is User->Entity plus Entity->Person only, and a direct user->person edge is refused. `CALL show_connection('Represents')` confirms it. Each actor entity is realised-by the solution container through which its role acts — the two authors by solution.container.cli-binary, the maintainer by solution.container.release-pipeline — and the group by solution.system.kalide, so every new domain node keeps a solution anchor; the *identity* to the person is carried by `represents` (the only legal Entity->Person edge), because `realised-by` cannot target a Person. This is option (b) recorded in the now-retired global.note.represents-unused, taken up by the human gate's decision that represents is mandatory. See global.note.represents-actor-tier.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "domain.group.actors",
+      "properties": {}
+    }
+  ],
   "in": []
 }

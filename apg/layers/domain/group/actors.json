@@ -28,5 +28,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "domain.note.actor-entities",
+      "properties": {}
+    }
+  ]
 }
