@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "solution.component.native-e2e-ci",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.container.release-pipeline",
+      "properties": {}
     }
   ],
   "in": []
