@@ -281,7 +281,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 }
 
 // parseSections builds the slide's section tree from the heading sequence
-// starting at firstHeading (the index of the first depth-1-6 heading, or -1).
+// starting at firstHeading (the index of the first section marker, or -1).
 // A heading one level deeper than the most recent shallower heading is that
 // heading's child; a heading at the same or a shallower depth closes the open
 // sections until it finds its parent. Each section carries its own optional
@@ -290,6 +290,11 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 // enforce the parent's declared min/max. It returns the top-level sections and
 // the reserved `# notes` section, if any.
 //
+// A heading is a section marker only where its enclosing template declares
+// child sections; anywhere else a depth-1-6 heading stays in the enclosing body
+// as ordinary Markdown content, and `# notes` stays top-level only
+// (slide-sections, markdown-allowed-subset).
+//
 // Section names, child names and template resolution are all validated here, so
 // the errors carry the offending instance's containment path
 // (nested-section-validation).
@@ -297,6 +302,11 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 	if firstHeading < 0 {
 		return nil, nil, nil
 	}
+
+	// slideDeclares is whether the slide template declares top-level sections;
+	// when it does not, a depth-2-6 heading in the slide body stays ordinary
+	// Markdown (slide-sections, markdown-allowed-subset).
+	slideDeclares := len(cat.SectionNames(slideTemplate)) > 0
 
 	// childCounts[depth][parentInstanceKey][childName] counts the child
 	// instances declared directly under one parent instance, so a parent's
@@ -307,16 +317,7 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 	// topCounts counts the slide's top-level instances by declared name.
 	topCounts := map[string]int{}
 
-	type frame struct {
-		section     *Section // pointer into the tree, so child appends stick
-		parentTmpl  string   // template whose declarations scope this frame's children
-		childDecls  map[string]sectionDecl
-		childNames  []string
-		path        string // this instance's containment path
-		parentKey   string // path of the frame's parent instance ("" at top level)
-		headingLine int
-	}
-	var stack []frame
+	var stack []sectionFrame
 	var roots []Section
 
 	var notes *Notes
@@ -349,7 +350,7 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 			// heading is caught at the top of the next iteration.
 			notesStart := i + 1
 			notesEnd := len(lines)
-			if next := nextHeading(lines, notesStart); next != -1 {
+			if next := nextMarker(lines, notesStart, nil, slideDeclares); next != -1 {
 				notesSeen = true
 				notesEnd = next
 			}
@@ -361,31 +362,34 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				BodyLine:    notesStart + 1,
 				Body:        strings.Join(lines[notesStart:notesEnd], "\n"),
 			}
-			i = nextHeading(lines, notesStart)
+			i = nextMarker(lines, notesStart, nil, slideDeclares)
 			continue
 		}
 
+		// A heading is a section marker only where its enclosing template
+		// declares child sections; anywhere else it stays in the enclosing body
+		// as ordinary Markdown content (slide-sections,
+		// markdown-allowed-subset).
+		parentIdx, isMarker := sectionMarkerParent(stack, depth, slideDeclares)
+		if !isMarker {
+			i++
+			continue
+		}
 		if name == "" {
 			return nil, nil, parseError(file, headingLine, "section heading needs a name")
 		}
-
-		// Find the enclosing parent: the nearest open frame shallower than
-		// this heading. Deeper or equal frames are closed.
-		for len(stack) > 0 && stack[len(stack)-1].section.Level >= depth {
-			stack = stack[:len(stack)-1]
-		}
+		// Close the frames this marker supersedes: it is a child of the nearest
+		// open instance shallower than it, or a top-level section when there is
+		// none.
+		stack = stack[:parentIdx+1]
 		parentPath := ""
-		if len(stack) > 0 {
-			parentPath = stack[len(stack)-1].path
+		if parentIdx >= 0 {
+			parentPath = stack[parentIdx].path
 		}
+		topLevel := parentIdx < 0
 
 		var d sectionDecl
-		parentTmpl := slideTemplate
-		childDecls := map[string]sectionDecl{}
-		var childNames []string
-		topLevel := len(stack) == 0
-		switch {
-		case topLevel:
+		if topLevel {
 			// Top-level: the slide template declares this section.
 			if !containsStr(cat.SectionNames(slideTemplate), name) {
 				return nil, nil, unknownName(file, headingLine, "", "section", name, sortedCopy(cat.SectionNames(slideTemplate)))
@@ -397,19 +401,11 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				return nil, nil, parseError(file, headingLine,
 					"section %q: at most %d allowed, found %d", name, d.max, topCounts[name])
 			}
-			parentTmpl = slideTemplate
-			childNames = cat.SectionNames(slideTemplate)
-			for _, n := range childNames {
-				a, mn, mx, ok := cat.SectionDecl(slideTemplate, n)
-				childDecls[n] = sectionDecl{accepted: a, min: mn, max: mx, ok: ok}
-			}
-		default:
-			// Nested: the parent's own template declares this child.
-			parent := &stack[len(stack)-1]
-			parentTmpl = parent.parentTmpl
-			childDecls = parent.childDecls
-			childNames = parent.childNames
-			dd, err := resolveChildTemplate(file, cat, parent.parentTmpl, name, headingLine, containmentPath(instanceNames(parent.path), instanceIndexes(parent.path)))
+		} else {
+			// Nested: the enclosing instance's own resolved template declares
+			// this child (slide-sections).
+			parent := stack[parentIdx]
+			dd, err := resolveChildTemplate(file, cat, parent.template, name, headingLine, containmentPath(instanceNames(parent.path), instanceIndexes(parent.path)))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -480,18 +476,6 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 			}
 		}
 
-		// The section body runs to the next heading; a fence found in it is
-		// misplaced and is reported at the fence line before any
-		// template-resolution complaint.
-		next := nextHeading(lines, contentStart)
-		bodyEnd := len(lines)
-		if next != -1 {
-			bodyEnd = next
-		}
-		if err := checkNoFence(file, lines, contentStart, bodyEnd, path); err != nil {
-			return nil, nil, err
-		}
-
 		// A template: is required on a section instance iff len(accepted) > 1.
 		// Exactly one accepted template resolves automatically. When the
 		// section has no fence at all, the requirement is reported at the
@@ -510,35 +494,35 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				Msg: fmt.Sprintf("%q is reserved and cannot be used as a section template", NotesSection)}
 		}
 
-		section.BodyLine = contentStart + 1
-		section.Body = strings.Join(lines[contentStart:bodyEnd], "\n")
-
+		// Attach the instance to the tree and open its frame, so its body can
+		// be bounded at the next section marker in its own resolved template's
+		// context (slide-sections).
 		if topLevel {
 			roots = append(roots, section)
-			stack = append(stack, frame{
-				section:     &roots[len(roots)-1],
-				childDecls:  declsFor(cat, parentTmpl),
-				childNames:  cat.SectionNames(parentTmpl),
-				parentTmpl:  parentTmpl,
-				path:        path,
-				parentKey:   "",
-				headingLine: headingLine,
-			})
+			stack = append(stack, newSectionFrame(&roots[len(roots)-1], cat, path))
 		} else {
-			parent := &stack[len(stack)-1]
+			parent := &stack[parentIdx]
 			parent.section.Children = append(parent.section.Children, section)
-			stack = append(stack, frame{
-				section:     &parent.section.Children[len(parent.section.Children)-1],
-				childDecls:  declsFor(cat, parentTmpl),
-				childNames:  cat.SectionNames(parentTmpl),
-				parentTmpl:  parentTmpl,
-				path:        path,
-				parentKey:   parent.path,
-				headingLine: headingLine,
-			})
+			stack = append(stack, newSectionFrame(&parent.section.Children[len(parent.section.Children)-1], cat, path))
 		}
 
-		i = next
+		// The section body runs to the next section marker for this frame. A
+		// deeper heading inside a template that declares no child sections is
+		// body content, not a marker; a fence found in the body is misplaced
+		// and is reported at the fence line.
+		bodyEnd := len(lines)
+		if next := nextMarker(lines, contentStart, stack, slideDeclares); next != -1 {
+			bodyEnd = next
+		}
+		if err := checkNoFence(file, lines, contentStart, bodyEnd, path); err != nil {
+			return nil, nil, err
+		}
+
+		frame := &stack[len(stack)-1]
+		frame.section.BodyLine = contentStart + 1
+		frame.section.Body = strings.Join(lines[contentStart:bodyEnd], "\n")
+
+		i = bodyEnd
 	}
 
 	// Per-parent min repeats are checked last. A child's own template declares
@@ -898,13 +882,70 @@ func checkNoFence(file string, lines []string, from, to int, path string) error 
 	return nil
 }
 
-// nextHeading returns the index of the first heading at any depth 1-6 at or
-// after from, or -1 when there is none. Any depth counts: a deeper heading may
-// open a child section or stay a Markdown subheading depending on its enclosing
-// template (slide-sections, markdown-allowed-subset).
-func nextHeading(lines []string, from int) int {
+// sectionFrame is one open section instance while parseSections walks the
+// heading sequence: a pointer into the built tree, the template the instance
+// resolved to, whether that template declares child sections, and the
+// instance's containment path.
+type sectionFrame struct {
+	section          *Section
+	template         string
+	declaresChildren bool
+	path             string
+}
+
+// newSectionFrame opens the frame for one section instance attached to the
+// tree, deriving its child-section state from the template the instance
+// resolved to (slide-sections).
+func newSectionFrame(section *Section, cat Catalogue, path string) sectionFrame {
+	return sectionFrame{
+		section:          section,
+		template:         section.Template,
+		declaresChildren: len(cat.SectionNames(section.Template)) > 0,
+		path:             path,
+	}
+}
+
+// sectionMarkerParent reports whether a heading of the given depth is a section
+// marker in the current context, and the index into stack of its enclosing
+// section frame (-1 at the slide's top level). stack is the open-section stack,
+// shallowest first; slideDeclares says whether the slide template declares
+// top-level sections. Frames at the same or a deeper level are superseded by
+// the heading.
+//
+// A depth-1 heading is always a marker: `#` is reserved for top-level sections
+// and the reserved `# notes` section (markdown-allowed-subset, speaker-notes).
+// A depth-2-6 heading at the slide's top level is a marker only when the slide
+// template declares child sections; otherwise it stays in the slide body. A
+// deeper heading inside an instance is a marker only when that instance's
+// resolved template declares child sections; otherwise it stays in the
+// instance's body as an ordinary Markdown subheading (slide-sections,
+// markdown-allowed-subset).
+func sectionMarkerParent(stack []sectionFrame, depth int, slideDeclares bool) (parent int, ok bool) {
+	n := len(stack)
+	for n > 0 && stack[n-1].section.Level >= depth {
+		n--
+	}
+	if n == 0 {
+		if depth == 1 {
+			return -1, true
+		}
+		return -1, slideDeclares
+	}
+	return n - 1, stack[n-1].declaresChildren
+}
+
+// nextMarker returns the index of the next section marker at or after from in
+// the context of stack, or -1 when the rest of the lines are body content. A
+// heading that is not a marker (a deeper heading inside a template that
+// declares no child sections) is skipped, so it stays in the enclosing body
+// (slide-sections, markdown-allowed-subset).
+func nextMarker(lines []string, from int, stack []sectionFrame, slideDeclares bool) int {
 	for i := from; i < len(lines); i++ {
-		if _, _, ok := headingLevel(lines[i]); ok {
+		depth, _, isHeading := headingLevel(lines[i])
+		if !isHeading {
+			continue
+		}
+		if _, ok := sectionMarkerParent(stack, depth, slideDeclares); ok {
 			return i
 		}
 	}
