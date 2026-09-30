@@ -69,6 +69,11 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/refresh.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/upgrade.go",
+      "properties": {}
     }
   ],
   "in": [
