@@ -178,7 +178,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil); invalid {
 		return verr, true
 	}
-	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine); invalid {
+	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
 		return verr, true
 	}
 
@@ -239,7 +239,7 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix); invalid {
 			return verr, true
 		}
-		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine); invalid {
+		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
 			return verr, true
 		}
 		if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
@@ -316,13 +316,16 @@ func checkBody(file, body string, startLine int, declaresChildSections bool, pre
 //
 // CheckBody reports the same positioned template.ValueError shape CheckValues
 // does, with the implied `body` path, so the violation adapts through
-// adaptValueError unchanged.
-func checkBodyRule(file string, rule template.BodyRule, body string, startLine int) (ValidationError, bool) {
+// adaptValueError unchanged. prefix, when non-empty, is the enclosing section
+// instance's containment chain and is prepended to that value path, so a nested
+// body-rule violation reads `columns[0] › blocks[0] › body`
+// (nested-section-validation); the slide body passes nil.
+func checkBodyRule(file string, rule template.BodyRule, body string, startLine int, prefix []string) (ValidationError, bool) {
 	ve, invalid := template.CheckBody(rule, body, template.WithBodyLine(startLine))
 	if !invalid {
 		return ValidationError{}, false
 	}
-	return adaptValueError(file, ve, nil), true
+	return adaptValueError(file, ve, prefix), true
 }
 
 // themeResolves reports whether name resolves in the caller's theme registry.
