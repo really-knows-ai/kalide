@@ -73,6 +73,50 @@ func TestDemoProject(t *testing.T) {
 		t.Errorf("served deck page contains 'eypres':\n%s", body)
 	}
 
+	// The 4-nested slide composes a container `group` section holding a child
+	// `column` section (template-language, item-context). The served deck must
+	// splice the child's rendered markup INSIDE the group wrapper, not merely
+	// emit both class names somewhere on the page: assert containment by
+	// extracting the outer HTML of `.demo-group` and then of the
+	// `.demo-group__item` within it, and checking the column markup lies in the
+	// inner fragment.
+	if !strings.Contains(body, `<h2 class="demo-heading">Nested groups</h2>`) {
+		t.Errorf("served deck page does not carry the 4-nested slide's heading:\n%s", body)
+	}
+	const groupOpen = `<div class="demo-group">`
+	groupHTML, ok := elementFragment(body, groupOpen, "div")
+	if !ok {
+		t.Fatalf("served deck page does not carry a %s wrapper:\n%s", groupOpen, body)
+	}
+	const itemOpen = `<div class="demo-group__item">`
+	itemHTML, ok := elementFragment(groupHTML, itemOpen, "div")
+	if !ok {
+		t.Fatalf("demo-group wrapper does not carry a %s child wrapper:\n%s", itemOpen, groupHTML)
+	}
+	if !strings.Contains(itemHTML, `<div class="demo-column">`) {
+		t.Errorf("nested column markup is not inside demo-group__item:\n%s", itemHTML)
+	}
+	if !strings.Contains(itemHTML, "Nested column") {
+		t.Errorf("nested column's title is not inside demo-group__item:\n%s", itemHTML)
+	}
+	if !strings.Contains(itemHTML, "Nia Fields") {
+		t.Errorf("nested column's person is not inside demo-group__item:\n%s", itemHTML)
+	}
+	// The group layout reads the reserved `.item` descriptor through a guarded
+	// `{{ with .item }}` and renders its values as meta (item-context); the
+	// instance is the single top-level `columns` section, resolved to `group`.
+	for _, want := range []string{
+		`data-item-section="columns"`,
+		`data-item-template="group"`,
+		`data-item-number="1"`,
+		`data-item-count="1"`,
+		`columns 1 of 1`,
+	} {
+		if !strings.Contains(groupHTML, want) {
+			t.Errorf("demo-group wrapper does not render .item-derived meta %s:\n%s", want, groupHTML)
+		}
+	}
+
 	// templates/media/** is served locally: examples/demo/templates/media
 	// holds badge.svg.
 	mediaResp, err := h.Get(server.MediaPath + "badge.svg")
@@ -120,6 +164,45 @@ func TestDemoProject(t *testing.T) {
 	// clean exit within this test rather than only at cleanup time.
 	h.Stop()
 	off.Stop()
+}
+
+// elementFragment returns the outer HTML of the first element in doc whose
+// opening tag is exactly openTag (a literal such as `<div class="demo-group">`),
+// matched to its corresponding close tag by counting nested `<tag` starts. tag
+// is the element's name (for openTag `<div …>`, tag is "div"). The bool is false
+// when openTag is absent or its element is unbalanced before doc ends.
+//
+// It is a deliberately small scanner for the generated deck markup, used to
+// prove containment (a child's markup inside its parent's fragment) rather than
+// mere co-presence of class names on the page.
+func elementFragment(doc, openTag, tag string) (string, bool) {
+	start := strings.Index(doc, openTag)
+	if start < 0 {
+		return "", false
+	}
+	rest := doc[start:]
+	open := "<" + tag
+	closeTag := "</" + tag
+	depth := 0
+	i := 0
+	for i < len(rest) {
+		o := strings.Index(rest[i:], open)
+		c := strings.Index(rest[i:], closeTag)
+		if c < 0 {
+			return "", false
+		}
+		if o >= 0 && o < c {
+			depth++
+			i += o + len(open)
+			continue
+		}
+		depth--
+		i += c + len(closeTag)
+		if depth == 0 {
+			return rest[:i], true
+		}
+	}
+	return "", false
 }
 
 // copyDemoProject copies the examples/demo fixture tree into the harness's

@@ -57,11 +57,14 @@ func writeDeckPropertiesLibrary(t *testing.T, h *Harness) {
 			"    max: 1\n" +
 			"body:\n" +
 			"  mode: optional\n",
+		// The footer instance arrives pre-rendered as trusted HTML (one element
+		// per instance), so the slide layout splices it rather than ranging
+		// data maps and reading `.slide` again (template-language).
 		"templates/slides/main/layout.html.tmpl": "<section class=\"e2e-slide\">\n" +
 			"  <h1 class=\"e2e-heading\">{{.heading}}</h1>\n" +
 			"  <span class=\"e2e-deck-title\">{{.deck.title}}</span>\n" +
 			"  <span class=\"e2e-audience\">{{index .deck.properties \"audience\"}}</span>\n" +
-			"  {{range .footer}}<div class=\"e2e-footer\">{{.slide.number}} / {{.slide.total}}</div>{{end}}\n" +
+			"  {{range .footer}}{{.}}{{end}}\n" +
 			"</section>\n",
 		"templates/slides/main/example.md": "---\n" +
 			"template: main\n" +
