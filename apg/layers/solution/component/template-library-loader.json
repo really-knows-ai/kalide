@@ -79,6 +79,11 @@
       "kind": "implemented-by",
       "target": "internal/template/registrylibrary.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/resolve.go",
+      "properties": {}
     }
   ],
   "in": [
