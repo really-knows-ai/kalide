@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "requirements.requirement.dict-list-helpers",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.raw-source-context",
+      "properties": {}
     }
   ],
   "in": []
