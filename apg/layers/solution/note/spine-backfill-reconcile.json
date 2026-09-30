@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "solution.component.renderer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.init-seed",
+      "properties": {}
     }
   ],
   "in": []

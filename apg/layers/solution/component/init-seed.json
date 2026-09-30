@@ -41,6 +41,11 @@
       "kind": "realised-by",
       "source": "domain.service.scaffold-template-library",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
+      "properties": {}
     }
   ]
 }
