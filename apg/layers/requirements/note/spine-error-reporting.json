@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-error-reporting",
+  "body": "Spine completion [autonomous]. requirements.requirement.error-reporting drove only domain.value.validation-error; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.validate-deck (fail-fast validation produces the single path-qualified error). domain.service.validate-deck is already realised-by solution.component.deck-validator. Added `implemented-by` solution.component.deck-validator -> internal/validate.Format (renders the canonical `file:line › path: message — fix` form; internal/validate.Validate was already anchored). Path: error-reporting -> validate-deck -> deck-validator -> internal/validate.Format. Existing `drives` to domain.value.validation-error kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
