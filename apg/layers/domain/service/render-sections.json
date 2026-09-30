@@ -41,6 +41,11 @@
       "kind": "drives",
       "source": "requirements.requirement.deck-data-in-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.group-less-domains-audit",
+      "properties": {}
     }
   ]
 }
