@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-tap-bucket-location",
+  "body": "Spine completion [autonomous]. requirements.requirement.tap-bucket-location drove only domain.value.package-manifest; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.install-kalide (the tap and bucked live in the repo the package channels install from). domain.service.install-kalide is already realised-by solution.component.homebrew-formula (implemented-by Formula/kalide.rb) and solution.component.scoop-manifest (implemented-by bucket/kalide.json and bucket/README.md). Path: tap-bucket-location -> install-kalide -> homebrew-formula -> Formula/kalide.rb. No new implemented-by anchor was needed; existing `drives` to domain.value.package-manifest kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
