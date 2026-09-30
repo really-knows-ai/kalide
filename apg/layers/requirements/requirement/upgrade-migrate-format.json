@@ -31,6 +31,11 @@
       "kind": "drives",
       "target": "domain.value.format-migration",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.upgrade-project",
+      "properties": {}
     }
   ],
   "in": [
