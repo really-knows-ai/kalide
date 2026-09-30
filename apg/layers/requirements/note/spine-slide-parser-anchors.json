@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "requirements.requirement.section-frontmatter",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.slide-template-required",
+      "properties": {}
     }
   ],
   "in": []
