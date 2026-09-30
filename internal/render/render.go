@@ -342,10 +342,13 @@ type sectionCtx struct {
 // validation already rejected an unknown key.
 //
 // secCtx is non-nil exactly when out is a SECTION INSTANCE map (top-level or
-// nested): the reserved `deck`/`slide` entries are merged into it
-// (template-context, section-template-context). The slide-frontmatter call
-// passes nil, since that map is the slide LAYOUT map and phase-03's slideData
-// already sets `deck`/`slide` on it directly.
+// nested): the reserved `deck`/`slide` entries are merged into it and, when
+// the instance has a sibling descriptor, the reserved `item` entry too
+// (template-context, section-template-context, item-context). The
+// slide-frontmatter call passes nil, since that map is the slide LAYOUT map
+// and slideData sets `deck`/`slide` on it directly; a slide layout has no
+// siblings, so it never gains an `item` entry. A section-template-as-type
+// field value keeps `deck`/`slide` but is data-only and carries no `item`.
 func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sectionCtx) (map[string]any, error) {
 	out := make(map[string]any, len(t.Fields))
 	for i := range t.Fields {
@@ -366,6 +369,9 @@ func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sec
 	if secCtx != nil {
 		out["deck"] = deckContext(secCtx.cfg)
 		out["slide"] = slideContext(secCtx.meta, secCtx.total)
+		if secCtx.item != nil {
+			out["item"] = secCtx.item
+		}
 	}
 	return out, nil
 }
