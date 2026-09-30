@@ -539,22 +539,29 @@ func emptyExampleSlideContext() map[string]any {
 }
 
 // ContextKeys returns the sorted reserved render-context keys a library example
-// layout may read, as dotted paths: the `.deck` keys from
-// emptyExampleDeckContext as deck.title/deck.author/deck.date/deck.properties,
-// and the `.slide` keys from emptyExampleSlideContext as
-// slide.number/slide.total (template-context, deck-data-in-templates). It
-// derives them from those two functions, which stay the single source of truth
-// for the reserved render context, so callers that must enumerate the context
+// layout may read: the fixed `.deck`/`.slide` leaf keys from
+// emptyExampleDeckContext as deck.title/deck.author/deck.date/deck.properties
+// and emptyExampleSlideContext as slide.number/slide.total (template-context,
+// deck-data-in-templates), plus the reserved source-context namespaces `.raw`
+// (the author's original source values) and `.data` (the authored section tree
+// as data), whose members are template-specific and so cannot be enumerated as
+// leaf keys (raw-source-context, section-data-context). The `.deck`/`.slide`
+// keys derive from those two functions, which stay the single source of truth
+// for the fixed namespace shapes; `raw`/`data` are the dynamic source-values and
+// authored-section-tree views. Callers that must enumerate the context
 // vocabulary (notably the agent-guide drift self-test) do not duplicate the
 // list. The returned slice is a fresh allocation.
 func ContextKeys() []string {
-	out := make([]string, 0, len(emptyExampleDeckContext())+len(emptyExampleSlideContext()))
-	for key := range emptyExampleDeckContext() {
+	deck := emptyExampleDeckContext()
+	slide := emptyExampleSlideContext()
+	out := make([]string, 0, len(deck)+len(slide)+2)
+	for key := range deck {
 		out = append(out, "deck."+key)
 	}
-	for key := range emptyExampleSlideContext() {
+	for key := range slide {
 		out = append(out, "slide."+key)
 	}
+	out = append(out, ".raw", ".data")
 	sort.Strings(out)
 	return out
 }
