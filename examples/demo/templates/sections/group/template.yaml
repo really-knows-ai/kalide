@@ -1,0 +1,13 @@
+description: a container section grouping one or more columns under a title
+fields:
+  - name: title
+    type: text
+    max_length: 60
+sections:
+  - name: items
+    accepted:
+      - column
+    min: 1
+    max: 4
+body:
+  mode: optional
