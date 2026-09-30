@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "service",
+  "name": "verify-changes",
+  "body": "Verify changes: the continuous verification gate for every push and pull request (not a release) — GitHub Actions `.github/workflows/ci.yml` (`name: CI`, triggered on `push` and `pull_request`), realised by solution.component.ci-workflow. It verifies the repository's code and publishes nothing; it does not run on a tag. The `test` job runs on `macos-14` (darwin/arm64, a supported target — the host suite compiles a host binary, so the runner must be a target the project builds) and performs, in order: the gofmt gate (`gofmt -l .` must print nothing), `go vet ./...`, `make build`, the module-path guard (the Go module path must be exactly `github.com/really-knows-ai/kalide` and no package under the repo root may be imported under a different module path — catching stray nested modules and stale paths; this enforces requirements.requirement.source-repo's AC), and `go test ./...` (unit, integration and e2e). A `native-e2e` job then `needs: test` and calls the reusable `.github/workflows/native-e2e.yml` (solution.component.native-e2e-ci), delegating native end-to-end verification to one GitHub-hosted native runner per supported target (requirements.requirement.native-ci-verification). Distinct from domain.service.publish-release, which is defined only for a consented tag (build one binary per supported target, verify each natively, publish with checksums, update the package manifests); this gate runs on every push/PR and publishes nothing.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
