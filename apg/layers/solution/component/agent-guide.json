@@ -29,6 +29,11 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/libraryguide.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/seed/AGENTS.md",
+      "properties": {}
     }
   ],
   "in": [
