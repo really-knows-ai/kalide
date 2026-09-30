@@ -109,6 +109,11 @@
       "kind": "drives",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
     }
   ]
 }

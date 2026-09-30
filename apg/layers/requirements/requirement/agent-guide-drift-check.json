@@ -56,6 +56,11 @@
       "kind": "drives",
       "target": "domain.group.authoring",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.templating",
+      "properties": {}
     }
   ],
   "in": [
