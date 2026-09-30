@@ -20,10 +20,9 @@ import (
 // so this test drives the reserved `.deck`/`.slide` context AND the reserved
 // `.item` descriptor (item-context) into every section instance, at every
 // depth, through the real library→parser→render pipeline. Every section layout
-// reads `.item` through a `{{ with .item }}` guard: the descriptor is present
-// when the real renderer executes the layout, but a library example's
-// load-time context carries no `item` (checkLibraryExample), so the guard keeps
-// each layout executable in isolation too (template-language).
+// reads `.item` directly: the load-time example context supplies the one-item
+// descriptor (checkLibraryExample), exactly as the real renderer does, so the
+// layouts need no guard. A slide layout, by contrast, has no `.item`.
 const (
 	sectionProbeSlideTemplateYAML = `description: slide with a footer section and a nested column/people/person section
 fields:
@@ -71,7 +70,7 @@ body:
   mode: disallowed
 `
 
-	sectionProbeFooterLayout = `<footer class="probe-footer"{{ with .item }} data-index="{{ .index }}" data-number="{{ .number }}" data-count="{{ .count }}" data-first="{{ .first }}" data-last="{{ .last }}" data-section="{{ .section }}" data-template="{{ .template }}" data-parent="{{ if .parent }}present{{ else }}absent{{ end }}"{{ end }}>{{ .slide.number }} / {{ .slide.total }}</footer>`
+	sectionProbeFooterLayout = `<footer class="probe-footer" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}">{{ .slide.number }} / {{ .slide.total }}</footer>`
 
 	sectionProbeFooterExample = "```\n```\n"
 
@@ -88,7 +87,7 @@ body:
   mode: optional
 `
 
-	sectionProbeColumnLayout = `<div class="probe-column"{{ with .item }} data-index="{{ .index }}" data-number="{{ .number }}" data-count="{{ .count }}" data-first="{{ .first }}" data-last="{{ .last }}" data-section="{{ .section }}" data-template="{{ .template }}" data-parent="{{ if .parent }}present{{ else }}absent{{ end }}"{{ end }}><span class="column-title">{{ .title }}</span><span class="column-deck-title">{{ .deck.title }}</span><span class="column-slide-number">{{ .slide.number }}</span>{{ range .people }}{{ . }}{{ end }}</div>`
+	sectionProbeColumnLayout = `<div class="probe-column" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}"><span class="column-title">{{ .title }}</span><span class="column-deck-title">{{ .deck.title }}</span><span class="column-slide-number">{{ .slide.number }}</span>{{ range .people }}{{ . }}{{ end }}</div>`
 
 	sectionProbeColumnExample = "```\ntitle: Example column\n```\n# people\n```\ntemplate: probeperson\nname: Ada\n```\n"
 
@@ -101,7 +100,7 @@ body:
   mode: disallowed
 `
 
-	sectionProbePersonLayout = `<span class="person-name">{{ .name }}</span><span class="person-deck-title">{{ .deck.title }}</span><span class="person-slide-number">{{ .slide.number }}</span>{{ with .item }}<span class="person-item" data-index="{{ .index }}" data-number="{{ .number }}" data-count="{{ .count }}" data-first="{{ .first }}" data-last="{{ .last }}" data-section="{{ .section }}" data-template="{{ .template }}" data-parent-title="{{ .parent.title }}"></span>{{ end }}`
+	sectionProbePersonLayout = `<span class="person-name">{{ .name }}</span><span class="person-deck-title">{{ .deck.title }}</span><span class="person-slide-number">{{ .slide.number }}</span><span class="person-item" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent-title="{{ .item.parent.title }}"></span>`
 
 	sectionProbePersonExample = "```\nname: Ada\n```\n"
 )
