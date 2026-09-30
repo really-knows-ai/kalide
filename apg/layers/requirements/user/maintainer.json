@@ -4,6 +4,12 @@
   "name": "maintainer",
   "body": "Kalide maintainer (the user view of requirements.stakeholder.kalide-maintainers): develops kalide in the public repo really-knows-ai/kalide, cuts releases and publishes the release assets, keeps the Homebrew/Scoop (and the Linux direct-download) install channels working for all users, and brings existing decks and template libraries forward with `kalide upgrade`. Requirement roots: distribution (the release/packaging pipeline and channels — brand-identity, changelog, github-releases, homebrew-install, install-docs, license, linux-install, native-ci-verification, package-manifest-update, readme-install-front-loading, readme-presentation, scoop-install, source-repo, supported-platforms, tap-bucket-location, version-command) and deck-library-upgrade (bringing an existing project forward — upgrade-refresh-owned-scaffold, upgrade-migrate-format). Pushing to the remote and tag creation require explicit, per-action human consent (global.constraint.humans-push-and-tag). The individual is represented on the solution tier by solution.person.maintainer through domain.entity.maintainer (represents).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "represents",
+      "target": "domain.entity.maintainer",
+      "properties": {}
+    }
+  ],
   "in": []
 }
