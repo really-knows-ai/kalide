@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "maintainer",
-  "body": "The maintainer as a domain actor — the same individual as requirements.user.maintainer and solution.person.maintainer: develops kalide in the public repo really-knows-ai/kalide, cuts releases and publishes the release assets, keeps the Homebrew/Scoop (and Linux download) install channels working for all users, and brings existing decks and template libraries forward with `kalide upgrade`. Pushing to the remote and tag creation proceed under explicit, per-action human consent (global.constraint.humans-push-and-tag). requirements.user.maintainer represents this entity, and this entity represents solution.person.maintainer. Realised by solution.container.release-pipeline, the solution element the role operates.",
+  "body": "The maintainer as a domain actor — the same individual as requirements.user.maintainer and solution.person.maintainer: develops kalide in the public repo really-knows-ai/kalide, cuts releases and publishes the release assets, keeps the Homebrew/Scoop (and Linux download) install channels working for all users, and brings existing decks and template libraries forward with `kalide upgrade`. Pushing to the remote and tag creation proceed under explicit, per-action human consent (global.constraint.humans-push-and-tag). requirements.user.maintainer represents this entity, and this entity represents solution.person.maintainer, so it is linked to the solution tier only through `represents` -> solution.person.maintainer; it has no realised-by (a person is not realised by software).",
   "properties": {
     "kind": "entity"
   },
