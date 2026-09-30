@@ -28,6 +28,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-closest-match-suggestions",
+      "properties": {}
     }
   ]
 }

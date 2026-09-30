@@ -4,6 +4,12 @@
   "name": "spine-closest-match-suggestions",
   "body": "Spine completion [autonomous]. requirements.requirement.closest-match-suggestions drove only domain.value.validation-error; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.validate-deck (the requirement is contained by whole-deck-validation and the suggestion is part of the validation error). Added `implemented-by` solution.component.deck-validator -> internal/suggest.Closest (the did-you-mean engine, called from the deck loader, the template registry, the theme registry and the validator). Path: closest-match-suggestions -> validate-deck -> deck-validator -> internal/suggest.Closest. Existing `drives` to domain.value.validation-error kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.closest-match-suggestions",
+      "properties": {}
+    }
+  ],
   "in": []
 }
