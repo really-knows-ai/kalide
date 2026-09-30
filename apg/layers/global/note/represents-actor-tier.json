@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "requirements.user.maintainer",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.person.deck-author",
+      "properties": {}
     }
   ],
   "in": []
