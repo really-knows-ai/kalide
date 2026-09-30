@@ -49,6 +49,11 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.refreshReport.refreshMember",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/cli/upgrade.go",
+      "properties": {}
     }
   ],
   "in": [
