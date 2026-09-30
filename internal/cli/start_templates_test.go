@@ -24,6 +24,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -126,7 +127,8 @@ func TestStartAndTemplates(t *testing.T) {
 	})
 
 	t.Run("templates show prints the documentation sections for a slide template", func(t *testing.T) {
-		chdirFixtureLibrary(t)
+		dir := chdirFixtureLibrary(t)
+		writeShowFixtures(t, dir)
 
 		code, stdout, stderr := runCLI("templates", "hello")
 		if code != 0 {
@@ -143,10 +145,37 @@ func TestStartAndTemplates(t *testing.T) {
 		if !strings.Contains(stdout, "title (type: text; required") {
 			t.Errorf("Run(templates hello) stdout = %q, want the required title field", stdout)
 		}
+		if strings.Contains(stdout, "Child sections:") {
+			t.Errorf("Run(templates hello) stdout = %q, want a slide template's section table headed %q", stdout, "Sections:")
+		}
+
+		// A slide template's declared sections use the "declares" verb: the
+		// `content` fixture declares a `blocks` section accepting the item
+		// section, 1–3 times.
+		code, stdout, stderr = runCLI("templates", "content")
+		if code != 0 {
+			t.Fatalf("Run(templates content) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates content) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "content (slide)") {
+			t.Errorf("Run(templates content) stdout = %q, want the name and slide usage", stdout)
+		}
+		if !strings.Contains(stdout, "Sections:") {
+			t.Errorf("Run(templates content) stdout = %q, want a slide template's %q heading", stdout, "Sections:")
+		}
+		if !strings.Contains(stdout, "blocks (declares item; repeats 1–3)") {
+			t.Errorf("Run(templates content) stdout = %q, want the declared section row %q", stdout, "blocks (declares item; repeats 1–3)")
+		}
+		if strings.Contains(stdout, "Can hold") {
+			t.Errorf("Run(templates content) stdout = %q, want a slide template's section rows to use %q", stdout, "declares")
+		}
 	})
 
 	t.Run("templates show a section-usage template", func(t *testing.T) {
-		chdirFixtureLibrary(t)
+		dir := chdirFixtureLibrary(t)
+		writeShowFixtures(t, dir)
 
 		code, stdout, stderr := runCLI("templates", "item")
 		if code != 0 {
@@ -155,10 +184,40 @@ func TestStartAndTemplates(t *testing.T) {
 		if !strings.Contains(stdout, "item (section)") {
 			t.Errorf("Run(templates item) stdout = %q, want the name and section usage", stdout)
 		}
-		for _, section := range []string{"Fields:", "Sections:", "Body:", "Example:"} {
+		for _, section := range []string{"Fields:", "Child sections:", "Body:", "Example:"} {
 			if !strings.Contains(stdout, section) {
 				t.Errorf("Run(templates item) stdout = %q, want section %q", stdout, section)
 			}
+		}
+		if !strings.Contains(stdout, "Child sections:\n  none") {
+			t.Errorf("Run(templates item) stdout = %q, want the empty child-section heading", stdout)
+		}
+		if strings.Contains(stdout, "Sections:") {
+			t.Errorf("Run(templates item) stdout = %q, want a section template's child sections headed %q", stdout, "Child sections:")
+		}
+
+		// A container section template lists the children it can hold, each
+		// labelled "Can hold" with the accepted template and repeat bounds:
+		// the `group` fixture can hold `items` children accepting the item
+		// section, 1–2 times.
+		code, stdout, stderr = runCLI("templates", "group")
+		if code != 0 {
+			t.Fatalf("Run(templates group) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates group) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "group (section)") {
+			t.Errorf("Run(templates group) stdout = %q, want the name and section usage", stdout)
+		}
+		if !strings.Contains(stdout, "Child sections:") {
+			t.Errorf("Run(templates group) stdout = %q, want a section template's %q heading", stdout, "Child sections:")
+		}
+		if !strings.Contains(stdout, "items (Can hold item; repeats 1–2)") {
+			t.Errorf("Run(templates group) stdout = %q, want the child-section row %q", stdout, "items (Can hold item; repeats 1–2)")
+		}
+		if strings.Contains(stdout, "declares") {
+			t.Errorf("Run(templates group) stdout = %q, want a section template's child rows to use %q", stdout, "Can hold")
 		}
 	})
 
@@ -211,4 +270,64 @@ func mustFixtureRegistry(t *testing.T) *template.Registry {
 		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
 	}
 	return reg
+}
+
+// writeShowFixtures adds two templates to the copied fixture library at dir
+// that exercise the usage-dependent child-section documentation:
+//
+//   - `content`, a slide template declaring a `blocks` section that accepts
+//     the item section, 1–3 times (the slide side prints Sections:/declares);
+//   - `group`, a container section template that can hold `items` children
+//     accepting the item section, 1–2 times (the section side prints
+//     Child sections:/Can hold).
+//
+// Their examples use the same heading-depth nesting the loader validates
+// recursively, so adding them does not break `kalide templates <name>`'s
+// library load.
+func writeShowFixtures(t *testing.T, dir string) {
+	t.Helper()
+	const contentManifest = `description: a content slide declaring a blocks section
+fields:
+  - name: heading
+    type: text
+    required: true
+sections:
+  - name: blocks
+    accepted: [item]
+    min: 1
+    max: 3
+body:
+  mode: optional
+`
+	const contentExample = "---\ntemplate: content\nheading: Content\n---\n\n# blocks\n```\ntitle: First item\n```\n"
+	const groupManifest = `description: a container section holding item children
+fields:
+  - name: title
+    type: text
+sections:
+  - name: items
+    accepted: [item]
+    min: 1
+    max: 2
+body:
+  mode: optional
+`
+	const groupExample = "```\ntemplate: group\ntitle: Container\n```\n\n# items\n```\ntitle: Nested item\n```\n"
+
+	for _, f := range []struct{ path, data string }{
+		{"templates/slides/content/template.yaml", contentManifest},
+		{"templates/slides/content/layout.html.tmpl", "<section>{{.heading}}{{range .blocks}}{{.}}{{end}}</section>"},
+		{"templates/slides/content/example.md", contentExample},
+		{"templates/sections/group/template.yaml", groupManifest},
+		{"templates/sections/group/layout.html.tmpl", "<div>{{with .title}}{{.}}{{end}}{{range .items}}{{.}}{{end}}</div>"},
+		{"templates/sections/group/example.md", groupExample},
+	} {
+		p := filepath.Join(dir, f.path)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(p), err)
+		}
+		if err := os.WriteFile(p, []byte(f.data), 0o644); err != nil {
+			t.Fatalf("write %s: %v", p, err)
+		}
+	}
 }
