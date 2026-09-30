@@ -39,6 +39,11 @@
       "kind": "implemented-by",
       "target": "internal/template/checkbody.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/checkvalues.go",
+      "properties": {}
     }
   ],
   "in": [
