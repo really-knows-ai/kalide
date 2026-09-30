@@ -54,6 +54,11 @@
       "kind": "implemented-by",
       "target": "internal/template/manifest.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/registry.go",
+      "properties": {}
     }
   ],
   "in": [
