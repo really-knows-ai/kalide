@@ -151,6 +151,44 @@ func TestValidateIntegration(t *testing.T) {
 		}
 	})
 
+	// Deck-level nested errors through Validate carry the full containment
+	// chain in the canonical ` › ` form (nested-section-validation). The
+	// earlier slides are valid, so the fail-fast walk reaches the third
+	// slide (slides/3-columns.md).
+
+	t.Run("nested field error carries the full instance chain", func(t *testing.T) {
+		dir := writeNestedErrorDeck(t, nestedFieldErrorSlide)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatal("Validate() invalid = false, want the nested unknown-field error")
+		}
+		// A field error retains its field segment and carries the enclosing
+		// instance chain. Field errors carry no source line (the parser does
+		// not retain per-value YAML positions), so there is no :line suffix
+		// (whole-deck-validation).
+		want := `slides/3-columns.md › columns[2] › blocks[1] › lable: unknown field "lable" — did you mean "label"?`
+		if got := Format(verr); got != want {
+			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+
+	t.Run("nested max violation carries the aggregate parent path", func(t *testing.T) {
+		dir := writeNestedErrorDeck(t, nestedMaxErrorSlide)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatal("Validate() invalid = false, want the nested max error")
+		}
+		// The max is counted per parent instance: the error is positioned on
+		// the offending child heading and its path is the parent instance's
+		// chain extended by the bare child name, without a child index.
+		want := `slides/3-columns.md:48 › columns[2] › blocks: section "blocks": at most 2 allowed, found 3`
+		if got := Format(verr); got != want {
+			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+
 	cases := []struct {
 		name  string
 		files map[string]string
@@ -287,6 +325,136 @@ label: second
 ` + "```" + `
 `
 
+// nestedValidSlide is a valid content slide with one columns instance holding
+// one block child; it stands in for the earlier slides of the nested-error
+// decks below, so Validate fails fast on the third slide.
+const nestedValidSlide = `---
+template: content
+heading: One
+---
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+`
+
+// nestedFieldErrorSlide is a valid deck's third slide except that its third
+// columns instance (columns[2]) has a second block (blocks[1]) carrying an
+// unknown field `lable`. It pins the full instance chain a nested field error
+// carries.
+const nestedFieldErrorSlide = `---
+template: content
+heading: Field
+---
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+lable: bad
+` + "```" + `
+`
+
+// nestedMaxErrorSlide is a valid deck's third slide except that its third
+// columns instance (columns[2]) holds three blocks, one over the container's
+// per-parent maximum of two. The third block's heading is on slide line 48.
+const nestedMaxErrorSlide = `---
+template: content
+heading: Max
+---
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+# columns
+` + "```" + `
+template: group
+title: G
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: a
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: b
+` + "```" + `
+
+## blocks
+` + "```" + `
+template: block
+label: c
+` + "```" + `
+`
+
 // nestedLibraryFiles returns a complete, otherwise-valid on-disk templates/
 // library with a container section template (`group`) that declares `blocks`
 // children accepting `block`, plus a `content` slide template that declares
@@ -318,6 +486,20 @@ func nestedLibraryFiles() map[string]string {
 		"templates/sections/block/layout.html.tmpl": "<span class=\"block\">{{.label}}</span>",
 		"templates/sections/block/example.md":       "```\nlabel: first\n```\n",
 	}
+}
+
+// writeNestedErrorDeck writes a deck whose templates/ is the nested fixture
+// library and whose third slide is thirdSlide (slides/3-columns.md). The
+// first two slides are valid, so Validate's fail-fast, slide-ordered walk
+// reaches the third slide's nested error.
+func writeNestedErrorDeck(t *testing.T, thirdSlide string) string {
+	t.Helper()
+	files := nestedLibraryFiles()
+	files["kalide.yaml"] = "title: Nested Error Deck\ntheme: plain\n"
+	files["slides/1-a.md"] = nestedValidSlide
+	files["slides/2-b.md"] = nestedValidSlide
+	files["slides/3-columns.md"] = thirdSlide
+	return writeDeck(t, files)
 }
 
 // writeDeck writes one deck file tree to a fresh t.TempDir() and returns the
