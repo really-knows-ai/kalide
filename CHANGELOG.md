@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-01
+
+### Added
+
+- Layout helpers `section`, `dict` and `list`. `{{ section "name" (dict ...)
+  [body] }}` renders another section template inline from a layout, passing
+  field values built with `dict` (and `list`) and an optional body. The layout
+  helper set is now `media`, `section`, `dict` and `list`.
+- A reserved `.raw` context in every slide and section instance, carrying the
+  author's original source field and body values, and a reserved `.data`
+  context exposing the authored section tree as data, where each entry carries
+  its own `.raw`, `.item` and `.data`. `raw` and `data` are now reserved names
+  and cannot be declared as a field or section.
+- Section-helper calls are checked at load time: the target template must
+  resolve, literal `dict` fields must match its schema, and child-section and
+  body rules are enforced, with errors path-qualified to the calling template.
+  Helper-call cycles are rejected. Helper calls count towards cycle detection
+  but not towards the six-heading nesting depth bound.
+
+### Changed
+
+- The load-time `example.md` context now carries `.raw`, `.data` and `.item`,
+  so layouts using them validate the same way they render.
+- An omitted required field that declares a default is now satisfied, and the
+  default is applied at every site (load-time examples and rendering).
+- Validation errors no longer repeat the template prefix.
+- Both embedded authoring guides (deck and library `AGENTS.md`) document the
+  layout helpers and the `.raw`/`.data` contexts.
+- Internal: load time and render time share one `template.RawContext` /
+  `DataContext` builder, and section-helper reachability uses a memoised
+  `Registry.HelperTargets`.
+
 ## [0.9.0] - 2026-09-30
 
 ### Added
