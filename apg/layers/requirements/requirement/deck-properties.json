@@ -33,6 +33,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.deck-data-in-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-deck-properties",
+      "properties": {}
     }
   ]
 }

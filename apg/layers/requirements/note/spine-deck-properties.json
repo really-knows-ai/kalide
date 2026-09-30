@@ -4,6 +4,12 @@
   "name": "spine-deck-properties",
   "body": "Spine completion [autonomous]. requirements.requirement.deck-properties drove only domain.value.deck-config and domain.value.deck-properties; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.entity.deck (the deck config that carries the `properties:` block). domain.entity.deck is already realised-by solution.component.deck-loader. Added `implemented-by` solution.component.deck-loader -> internal/deck.parseProperties (the typed-scalar properties parser; internal/deck.LoadConfig was already anchored). Path: deck-properties -> deck -> deck-loader -> internal/deck.parseProperties. Existing `drives` to the two value nodes kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-properties",
+      "properties": {}
+    }
+  ],
   "in": []
 }
