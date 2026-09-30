@@ -49,6 +49,11 @@
       "kind": "implemented-by",
       "target": "internal/template/format.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/manifest.go",
+      "properties": {}
     }
   ],
   "in": [
