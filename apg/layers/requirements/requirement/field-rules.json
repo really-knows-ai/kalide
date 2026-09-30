@@ -28,6 +28,11 @@
       "kind": "depends-on",
       "source": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-field-rules",
+      "properties": {}
     }
   ]
 }
