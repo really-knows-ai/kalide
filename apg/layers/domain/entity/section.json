@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "domain.note.nested-sections-domain",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.section-helper",
+      "properties": {}
     }
   ]
 }
