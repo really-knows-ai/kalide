@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "item-context",
-  "body": "The `.item` sibling descriptor available to every slide layout and section template at every nesting depth: the current instance's index (0-based), number (1-based), count, first/last flags, section name, resolved template, and its parent instance's fields. It is nil/absent for a slide, which has no siblings. Data, not a helper.",
+  "body": "The `.item` sibling descriptor available to every slide layout and section template at every nesting depth: the current instance's index (0-based), number (1-based), count, first/last flags, section name, resolved template, and its parent instance's fields. It is nil/absent for a slide, which has no siblings. A section invoked by the `section` helper gets a one-item descriptor: `section`/`template` are the target name, index 0, count 1, first/last true, and `parent` is the calling instance's fields (nil when the call is made from a slide layout) (section-helper). Data, not a helper.",
   "properties": {},
   "out": [],
   "in": [
