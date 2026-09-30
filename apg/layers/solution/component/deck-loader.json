@@ -24,6 +24,11 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/deck.parseSlideFilename",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/deck/config.go",
+      "properties": {}
     }
   ],
   "in": [
