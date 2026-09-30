@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "solution.note.nested-sections-coverage-reconcile",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.navigation-mode",
+      "properties": {}
     }
   ]
 }
