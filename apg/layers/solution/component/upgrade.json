@@ -101,6 +101,11 @@
       "kind": "details",
       "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.upgrade-body-current-code",
+      "properties": {}
     }
   ]
 }
