@@ -11,6 +11,11 @@
       "kind": "realised-by",
       "target": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "represents",
+      "target": "solution.person.deck-author",
+      "properties": {}
     }
   ],
   "in": [
