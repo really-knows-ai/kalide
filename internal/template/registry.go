@@ -188,10 +188,11 @@ func LoadTemplate(content fs.FS, t *Template) error {
 //  5. each example's STRUCTURED data satisfies its schema and the section
 //     repeat limits (no Markdown or slide parsing).
 //
-// Every failure carries the `template "<name>":` prefix — the helper checks of
-// step 2 as well as the walk errors of step 4 — so checkLibraryBuild
-// (templates-dir-validation step 4) path-qualifies it to the offending
-// template.yaml.
+// Every failure carries exactly one `template "<name>":` prefix — the helper
+// checks of step 2 carry their own, and step 4 adds it to the walk errors that
+// lack one while leaving a HelperRefs error's prefix untouched — so
+// checkLibraryBuild (templates-dir-validation step 4) path-qualifies it to the
+// offending template.yaml.
 func (r *Registry) Validate() error {
 	for _, t := range r.Templates() {
 		if err := checkDefinition(t); err != nil {
@@ -208,12 +209,22 @@ func (r *Registry) Validate() error {
 	}
 	for _, t := range r.Templates() {
 		if _, err := NewSection(r.Lookup).Walk(t); err != nil {
-			// Name the template the composition walk started from so the
-			// templates loader (checkLibraryBuild, step 4) can path-qualify
-			// the failure to that template's template.yaml:
-			// manifestTemplateErrorName reads the `template "name": …`
-			// prefix. The wrapped error still satisfies errors.As for
-			// *SectionCycleError and *SectionDepthError.
+			// Section.Walk surfaces a HelperRefs failure unchanged, and every
+			// HelperCalls error already carries the `template "<name>":`
+			// prefix (the same single prefix checkSections returns at step 2),
+			// so wrapping it again would double that prefix. If the error is
+			// already in the `template "name": …` shape
+			// manifestTemplateErrorName recognises, return it as-is.
+			//
+			// A cycle, depth or undefined-name walk error carries no prefix,
+			// so name the template the composition walk started from: the
+			// templates loader (checkLibraryBuild, step 4) path-qualifies the
+			// failure to that template's template.yaml via the same
+			// `template "name": …` prefix. The wrapped error still satisfies
+			// errors.As for *SectionCycleError and *SectionDepthError.
+			if _, named := manifestTemplateErrorName(err); named {
+				return err
+			}
 			return fmt.Errorf("template %q: %w", t.Name, err)
 		}
 	}

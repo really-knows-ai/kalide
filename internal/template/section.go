@@ -307,9 +307,10 @@ func (e *SectionDepthError) Error() string {
 // A layout whose helper calls cannot be read statically — a non-literal
 // target name, or source that does not parse with the canonical layout func
 // map — makes HelperRefs fail; Walk surfaces that error unchanged. It already
-// names the declaring template and layout line, and wrapping it in Validate's
-// `template "name":` prefix leaves errors.As for *SectionCycleError and
-// *SectionDepthError (and for the HelperCalls error itself) intact.
+// names the declaring template and layout line, and Registry.Validate passes
+// it through unchanged rather than adding a second `template "name":` prefix,
+// so errors.As for *SectionCycleError and *SectionDepthError (and for the
+// HelperCalls error itself) stays intact.
 func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	if tmpl == nil {
 		return nil, nil
