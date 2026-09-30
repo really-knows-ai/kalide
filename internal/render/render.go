@@ -310,13 +310,34 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 // (template-language). The returned HTML is what the parent receives, so
 // section markup composes bottom-up at every depth and at the top level.
 //
-// secCtx is the instance's execution context: its field values are converted
-// with the reserved `.deck`/`.slide`/`.item` entries (values), its body is
+// secCtx is the instance's execution context. Its own reserved `.raw` context —
+// the source view of its authored frontmatter and body — and `.data` context —
+// its authored child sections as data, each child's `.item.parent` being this
+// instance's source field values, as dataContext's parent rule requires — are
+// built here and merged into the instance map by values, next to the converted
+// field values and the reserved `deck`/`slide`/`item` entries, at every
+// composition depth (raw-source-context, section-data-context). Its body is
 // rendered, and its resolved template's layout runs in the shared namespace
-// (renderer.root) with `deck`/`slide`/`item` plus the instance's own fields.
-// A child's `.item.parent` is this instance's field values (item-context); at
-// the top level the parent is the slide, so the descriptor carries nil.
+// (renderer.root) with `deck`/`slide`/`item`/`raw`/`data` plus the instance's
+// own fields. A child's rendered `.item.parent` is this instance's field values
+// (item-context); at the top level the parent is the slide, so the descriptor
+// carries nil.
+//
+// The instance's field values are also published as the renderer's caller
+// context for the duration of its layout execution and restored afterwards, so
+// a `{{ section … }}` call the layout makes resolves its target's `.item.parent`
+// from this instance and inherits its deck/slide context (item-context,
+// template-context). A call made from a slide layout sees a nil parent, since
+// RenderSlide publishes the slide context with no calling instance.
 func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, secCtx *sectionCtx) (htmltmpl.HTML, error) {
+	// Every section instance, at every composition depth, carries its own
+	// reserved `.raw` (its authored source field values and body) and `.data`
+	// (its authored children as data, parented on its own source field values)
+	// next to its converted field values and `deck`/`slide`/`item`. They are
+	// built before values so values merges them into the instance map.
+	secCtx.raw = r.rawContext(sec.Frontmatter, tmpl, sec.Body)
+	secCtx.data = r.dataContext(sec.Children, secCtx.raw)
+
 	data, err := r.values(sec.Frontmatter, tmpl, secCtx)
 	if err != nil {
 		return "", err
@@ -359,6 +380,20 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 		list, _ := data[child.Name].([]htmltmpl.HTML)
 		data[child.Name] = append(list, rendered)
 	}
+
+	// Publish this instance as the caller context for the duration of its
+	// layout execution: a nested `{{ section … }}` call the layout makes reads
+	// these field values as its target's `.item.parent` and inherits this
+	// instance's deck/slide context (item-context, template-context). The
+	// previous context is restored once the layout returns, so an enclosing
+	// layout keeps resolving against itself.
+	prevFields, prevCtx := r.callerFields, r.callerCtx
+	r.callerFields = data
+	r.callerCtx = secCtx
+	defer func() {
+		r.callerFields = prevFields
+		r.callerCtx = prevCtx
+	}()
 
 	var buf bytes.Buffer
 	if err := r.root.ExecuteTemplate(&buf, layoutName(tmpl), data); err != nil {
