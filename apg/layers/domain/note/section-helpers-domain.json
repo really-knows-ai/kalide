@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.constraint.template-context-reserved",
+      "properties": {}
     }
   ],
   "in": []
