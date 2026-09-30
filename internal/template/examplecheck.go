@@ -78,6 +78,13 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 		"slide": emptyExampleSlideContext(),
 	}
 
+	// A section template's layout is itself a section instance, so a
+	// `{{ section … }}` call it makes reads this example's field values as its
+	// `.item.parent` (item-context). A slide template's parent is the slide, not
+	// a section, so its calls carry nil. The `template` key is the section
+	// instance's template selector, not a field, so it is dropped here exactly
+	// as validateExampleBlock drops it from the executed context.
+	var callerFields map[string]any
 	if len(def.Fields) > 0 || len(def.Sections) > 0 {
 		block, err := parseExampleBlock(string(lt.ExampleBytes), lt.Kind, 1)
 		if err != nil {
@@ -86,10 +93,36 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 		if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, ctx); err != nil {
 			return err
 		}
+		if lt.Kind == KindSection {
+			callerFields = make(map[string]any, len(block.Frontmatter))
+			for k, v := range block.Frontmatter {
+				if k == "template" {
+					continue
+				}
+				callerFields[k] = v
+			}
+		}
+	}
+
+	// Step 3 parsed lt.Layout with LayoutFuncMap's parse-resolvable `section`
+	// stub; re-parse its source with that entry overridden by the load-time
+	// helper so a layout that calls `{{ section … }}` executes here by
+	// rendering the target instead of failing LoadLibrary's step-7 execution
+	// (templates-dir-validation step 7).
+	funcMap := LayoutFuncMap(lib.Media, "/"+MediaDir)
+	funcMap["section"] = exampleSectionHelper(lib, callerFields)
+
+	layoutName := lt.Layout.Name()
+	if layoutName == "" {
+		layoutName = lt.Name
+	}
+	layout, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(lt.LayoutText)
+	if err != nil {
+		return libraryErrorf(lt.LayoutPath, 0, "parse: %v", err)
 	}
 
 	var buf strings.Builder
-	if err := lt.Layout.Execute(&buf, ctx); err != nil {
+	if err := layout.Execute(&buf, ctx); err != nil {
 		return libraryErrorf(lt.LayoutPath, 0, "execute: %v", err)
 	}
 	return nil
