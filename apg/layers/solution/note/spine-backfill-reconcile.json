@@ -34,6 +34,11 @@
       "kind": "details",
       "target": "solution.component.init-seed",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.agent-guide",
+      "properties": {}
     }
   ],
   "in": []
