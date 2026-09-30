@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "domain.group.actors",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.user.deck-author",
+      "properties": {}
     }
   ],
   "in": []

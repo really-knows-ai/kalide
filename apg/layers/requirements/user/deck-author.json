@@ -61,6 +61,11 @@
       "kind": "details",
       "source": "global.note.represents-unused",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.represents-actor-tier",
+      "properties": {}
     }
   ]
 }
