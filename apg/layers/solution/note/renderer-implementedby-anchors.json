@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "renderer-implementedby-anchors",
+  "body": "Boy-scout pass before merge (item 2) [with user]. Added four implemented-by edges from solution.component.renderer to the render-time units in internal/render/render.go that the section-helper / .raw / .data work added; each code FQN was resolved in the code graph before the edge was added:\n- go.github.com/really-knows-ai/kalide/internal/render.renderer.sectionHelper (render.go:438-557) — the render-time `section` helper, delegating resolution/validation to template.ResolveSectionCall;\n- go.github.com/really-knows-ai/kalide/internal/render.renderer.rawContext (render.go:718-752) — the render-time `.raw` builder;\n- go.github.com/really-knows-ai/kalide/internal/render.renderer.dataContext (render.go:754-807) — the render-time `.data` builder;\n- go.github.com/really-knows-ai/kalide/internal/render.reachableTemplates (render.go:1008-1067) — pulls helper-only targets into the shared layout namespace (it calls template.Section.HelperRefs).\n\nThese accompany the existing renderer anchors (internal/render.RenderSlide, deckContext, itemContext, parseLayouts, renderer.renderSection, renderer.slideData and the file internal/render/render.go). The shared `.raw`/`.data` builders that will move into internal/template (item 3; see the UPDATE in solution.note.section-helpers-solution) are deliberately NOT anchored: they do not exist yet and the plan will declare them.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
