@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "solution.system.kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.container.browser-frontend",
+      "properties": {}
     }
   ],
   "in": []
