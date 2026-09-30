@@ -95,19 +95,25 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // template layouts document: text fields carry rendered inline HTML (plain
 // fields carry escaped text), number and date fields carry their formatted
 // display string, `body` carries the rendered Markdown body HTML, and each
-// declared section name carries a slice of instance maps in source order. The
-// format functions and `media` are exposed to the layout through funcMap, so a
-// library layout may format a value or resolve a media URL itself
-// (template-media, template-language).
+// declared section name carries a slice of TRUSTED HTML in source order — one
+// element per instance, each rendered bottom-up through its own
+// layout.html.tmpl — so a layout splices a child with
+// `{{ range .blocks }}{{ . }}{{ end }}` rather than ranging over data maps
+// (template-language). The format functions and `media` are exposed to the
+// layout through funcMap, so a library layout may format a value or resolve a
+// media URL itself (template-media, template-language).
 //
-// The layout also carries the two reserved context entries (template-context):
+// The layout also carries the reserved context entries (template-context):
 // `deck` is the deck-wide data from cfg — title, author, date and the author's
 // properties — and `slide` is the current slide's render-time metadata: the
 // string position label number and the integer total. cfg is the deck
 // configuration the slide belongs to, meta is its modelled deck position
 // (deck.Slide, supplying PositionLabel), and total is the deck's slide-file
 // count (deck.Deck.Total). A nil cfg yields a well-formed but empty deck
-// context. Neither entry is a helper: the v1 helper set stays exactly `media`.
+// context. The reserved `item` entry is absent from the slide layout — a slide
+// has no siblings — but every section instance, at every depth, executes with
+// it (item-context). None of these entries is a helper: the v1 helper set
+// stays exactly `media`.
 //
 // When parsed has a `# notes` section, RenderSlide appends an
 // `<aside class="notes">` inside the slide with its rendered body; the embedded
@@ -139,17 +145,21 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 		return "", &RenderError{File: parsed.File, Err: fmt.Errorf("template %q is a %s template, not a slide template", parsed.Template, slideTmpl.Usage)}
 	}
 
-	r := &renderer{reg: reg, formats: template.BuiltinFormats}
-
-	data, err := r.slideData(parsed, slideTmpl, cfg, meta, total)
+	if funcMap == nil {
+		funcMap = template.LayoutFuncMap(nil, "")
+	}
+	// The shared layout namespace is parsed before any section data is built:
+	// each section instance executes its own layout.html.tmpl through it
+	// (renderSection), so it must exist before slideData renders the sections
+	// bottom-up into trusted HTML (template-language).
+	root, err := parseLayouts(slideTmpl, reg, funcMap)
 	if err != nil {
 		return "", &RenderError{File: parsed.File, Err: err}
 	}
 
-	if funcMap == nil {
-		funcMap = template.LayoutFuncMap(nil, "")
-	}
-	root, err := parseLayouts(slideTmpl, reg, funcMap)
+	r := &renderer{reg: reg, formats: template.BuiltinFormats, root: root}
+
+	data, err := r.slideData(parsed, slideTmpl, cfg, meta, total)
 	if err != nil {
 		return "", &RenderError{File: parsed.File, Err: err}
 	}
