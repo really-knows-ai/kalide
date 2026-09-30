@@ -414,6 +414,29 @@ func checkDeclaredName(kind, tmpl, name string) error {
 // checkSections rejects a section declaration that accepts no template, a
 // template that is not defined, or a slide-usage template (sections accept only
 // section-usage templates), and rejects impossible repeat bounds.
+//
+// It then applies the load-time checks for every `section` helper call in the
+// template's layout (requirements.requirement.section-helper-load-checks). A
+// helper call is a static reference, so the same check pass that validates the
+// declared sections validates it:
+//
+//   - the target must resolve to a defined section-usage template — an unknown
+//     name or a slide template is an error with a closest-match suggestion;
+//   - each literal `dict` key must be a field the target declares;
+//   - the target's required fields must be present among those keys or carry a
+//     default (when `fields` is omitted every required field must be
+//     defaulted);
+//   - a target declaring a child section with min > 0 is rejected, because v1
+//     passes no child sections through the helper;
+//   - a literal body whose heading names a declared child section of the target
+//     is rejected, for the same reason.
+//
+// A non-literal `fields` or `body` expression is a permitted pass-through and
+// is not checked here: its keys and body are validated against the target's
+// field and body rules when the target renders (field-rules). Every error
+// carries the `template "<name>":` prefix, so the templates loader's
+// path-qualification (checkLibraryBuild, templates-dir-validation step 4) maps
+// it back to the declaring template.yaml.
 func (r *Registry) checkSections(t *Template) error {
 	for i := range t.Sections {
 		d := &t.Sections[i]
@@ -437,6 +460,82 @@ func (r *Registry) checkSections(t *Template) error {
 			}
 			if st.Usage == UsageSlide {
 				return fmt.Errorf("template %q: section %q accepts %q, which is a slide-usage template; sections accept only section-usage templates", t.Name, d.Name, name)
+			}
+		}
+	}
+
+	calls, err := NewSection(r.Lookup).HelperCalls(t)
+	if err != nil {
+		return err
+	}
+	for i := range calls {
+		call := &calls[i]
+
+		target, ok := r.Lookup(call.Name)
+		if !ok || target == nil {
+			msg := fmt.Sprintf("template %q: section helper call on layout line %d names %q, which is not a defined template", t.Name, call.Line, call.Name)
+			if closest := suggest.Closest(call.Name, r.TemplateNames()); closest != "" {
+				msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+			}
+			return errors.New(msg)
+		}
+		if target.Usage == UsageSlide {
+			return fmt.Errorf("template %q: section helper call on layout line %d names %q, which is a slide-usage template; the section helper requires a section-usage template", t.Name, call.Line, call.Name)
+		}
+
+		// A literal `dict` fields argument is checkable at load; an omitted
+		// one supplies nothing; a non-literal expression is a pass-through.
+		if call.FieldsLiteral || !call.HasFields {
+			fields := make(map[string]struct{}, len(target.Fields))
+			for fi := range target.Fields {
+				fields[target.Fields[fi].Name] = struct{}{}
+			}
+			supplied := make(map[string]struct{}, len(call.FieldKeys))
+			if call.FieldsLiteral {
+				for _, key := range call.FieldKeys {
+					if _, declared := fields[key]; !declared {
+						return fmt.Errorf("template %q: section helper call on layout line %d supplies field %q, which section template %q does not declare", t.Name, call.Line, key, call.Name)
+					}
+					supplied[key] = struct{}{}
+				}
+			}
+			for fi := range target.Fields {
+				f := &target.Fields[fi]
+				if !f.Required || f.Default != nil {
+					continue
+				}
+				if _, present := supplied[f.Name]; !present {
+					return fmt.Errorf("template %q: section helper call on layout line %d omits required field %q of section template %q, which has no default", t.Name, call.Line, f.Name, call.Name)
+				}
+			}
+		}
+
+		for si := range target.Sections {
+			child := &target.Sections[si]
+			if child.Min > 0 {
+				return fmt.Errorf("template %q: section helper call on layout line %d names section template %q, which declares child section %q with a minimum of %d; the section helper passes no child sections", t.Name, call.Line, call.Name, child.Name, child.Min)
+			}
+		}
+
+		// A literal body is parsed at load: a heading naming a declared child
+		// section of the target is the same rejection the body rule produces
+		// when the body is validated, since no child section passes through the
+		// helper.
+		if call.BodyLiteral {
+			inFence := false
+			for _, line := range strings.Split(call.Body, "\n") {
+				if strings.HasPrefix(strings.TrimSpace(line), "```") {
+					inFence = !inFence
+					continue
+				}
+				if inFence {
+					continue
+				}
+				if _, name, ok := exampleHeadingLevel(line); ok {
+					if _, declared := declaredSection(target, name); declared {
+						return fmt.Errorf("template %q: section helper call on layout line %d supplies a body whose heading names child section %q of section template %q; the section helper passes no child sections", t.Name, call.Line, name, call.Name)
+					}
+				}
 			}
 		}
 	}
