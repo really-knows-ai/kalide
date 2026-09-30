@@ -26,6 +26,11 @@
       "kind": "details",
       "source": "solution.note.workflow-file-ownership",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.verify-changes",
+      "properties": {}
     }
   ]
 }
