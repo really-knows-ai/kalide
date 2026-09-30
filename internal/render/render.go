@@ -629,9 +629,13 @@ func parseLayouts(slideTmpl *template.Template, reg *template.Registry, funcMap 
 
 // reachableTemplates returns tmpl followed by every template reachable from it
 // through declared sections and section-template-as-type fields, each once, in
-// declaration order. Missing names are skipped: validation has already rejected
-// an undefined name, and a layout simply cannot invoke a template that does not
-// exist.
+// declaration order. The section recursion is at every depth: a child section
+// template declared by another section template is reached through that
+// template's own Sections, so every nested child section template is included
+// and parsed into the shared namespace and can later execute its own layout
+// (template-language, section-template-context). Missing names are skipped:
+// validation has already rejected an undefined name, and a layout simply
+// cannot invoke a template that does not exist.
 func reachableTemplates(root *template.Template, reg *template.Registry) []*template.Template {
 	seen := make(map[string]bool)
 	var out []*template.Template
@@ -645,7 +649,7 @@ func reachableTemplates(root *template.Template, reg *template.Registry) []*temp
 		out = append(out, t)
 		for i := range t.Sections {
 			for _, name := range t.Sections[i].Accepted {
-				if st, ok := reg.Lookup(name); ok {
+				if st, ok := reg.Lookup(name); ok && st != nil {
 					add(st)
 				}
 			}
