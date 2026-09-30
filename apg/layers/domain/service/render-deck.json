@@ -12,11 +12,6 @@
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.renderer",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
       "target": "solution.component.deck-page",
       "properties": {}
     },

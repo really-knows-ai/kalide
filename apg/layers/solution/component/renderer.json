@@ -39,11 +39,6 @@
     },
     {
       "kind": "realised-by",
-      "source": "domain.service.render-deck",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
       "source": "domain.group.templating",
       "properties": {}
     },
