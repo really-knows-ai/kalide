@@ -4,6 +4,12 @@
   "name": "cli-templates-and-deck-renderer",
   "body": "ITEM-4 SCOPE FIX: cli-templates and deck-renderer re-scoped to the code they name [autonomous].\n\nSOURCE / INCONSISTENCY: both components were introduced during the nested-sections reconciliation anchored to a single function each — solution.component.cli-templates → internal/cli.printTemplateSections, solution.component.deck-renderer → internal/render.RenderDeck — so neither was scoped to the command/file it is named for.\n\nRESOLUTION:\n- solution.component.cli-templates is kept, scoped truthfully as the templates command: it now owns internal/cli/templates.go, the file holding the command handler runTemplates and every printer it uses (printTemplateList, printTemplateDetails, printTemplateFields, printTemplateSections, printTemplateBody, printTemplateExample and helpers), in addition to the existing printTemplateSections function anchor. It is the CLI presentation half of domain.service.template-registry; init / init-library / start / version stay on solution.component.cli-commands.\n- solution.component.deck-renderer is kept and confirmed honest: it owns internal/render/deck.go, the whole-deck assembly file (RenderDeck, renderDeckSlide, themeStylesheet, insertBeforeSectionClose), not just the RenderDeck function. solution.component.renderer owns internal/render/render.go (per-slide/section execution).\n\nNo realised-by edge changed; no requirement or constraint prose changed.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.cli-templates",
+      "properties": {}
+    }
+  ],
   "in": []
 }
