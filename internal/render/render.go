@@ -529,6 +529,61 @@ func (r *renderer) rawContext(data map[string]any, t *template.Template, body st
 	return out
 }
 
+// dataContext builds the reserved `.data` execution-context entry for a slide's
+// or section instance's authored child sections (section-data-context): the same
+// authored instances the rendered-HTML list groups under each declared section
+// name, exposed in parallel as DATA. The result is keyed by declared section
+// name; each key maps to a source-ordered list with one entry per authored
+// instance of that section, and each entry is a map carrying:
+//
+//   - `raw`: the instance's original source field values and body source
+//     (rawContext) — the source view of its fields, alongside the converted
+//     values the rendered instance exposes under their own names;
+//   - `item`: the instance's sibling descriptor (itemContext) — its zero-based
+//     `index` and one-based `number` among the same-name siblings, their
+//     `count`, `first`/`last`, the declared `section` name, the resolved
+//     `template` name, and `parent` — the enclosing instance's source field
+//     values, or nil for a top-level section whose parent is the slide;
+//   - `data`: the instance's own child sections as data, keyed and shaped the
+//     same way (the recursion), so the whole authored section tree is
+//     addressable as data.
+//
+// sections is one parent's authored child sections, in source order, exactly as
+// the parsed slide tree carries them (slide.Slide.Sections or
+// slide.Section.Children); the walk mirrors slideData/renderSection's instance
+// model — siblings grouped by declared name and counted per name, each
+// instance's template resolved from the registry. parent is the enclosing
+// instance's source field values (the same map exposed as that instance's
+// `.raw`), or nil for a slide's top-level sections; a nested instance's own
+// children read its `.raw` as their parent, so `.item.parent` in the data view
+// is the enclosing instance's source fields.
+//
+// Only authored instances appear: a section invoked by the `section` helper is a
+// direct render call, never part of the parsed tree, so it is absent from
+// `.data` exactly as it is absent from the rendered-HTML list. `.data` is data,
+// not a helper, so exposing it adds nothing to the layout function set
+// (template-context, section-data-context).
+func (r *renderer) dataContext(sections []slide.Section, parent map[string]any) map[string]any {
+	out := make(map[string]any, len(sections))
+	counts := make(map[string]int, len(sections))
+	for i := range sections {
+		counts[sections[i].Name]++
+	}
+	for i := range sections {
+		sec := &sections[i]
+		tmpl, _ := r.reg.Lookup(sec.Template)
+		raw := r.rawContext(sec.Frontmatter, tmpl, sec.Body)
+		entry := map[string]any{
+			"raw":  raw,
+			"item": itemContext(sec.Index, counts[sec.Name], sec.Name, sec.Template, parent),
+			"data": r.dataContext(sec.Children, raw),
+		}
+		list, _ := out[sec.Name].([]map[string]any)
+		out[sec.Name] = append(list, entry)
+	}
+	return out
+}
+
 // fieldValue converts one validated field value to its layout representation.
 // data is the mapping the value came from, so a number or date field can find
 // its `<field>_format` sibling; it may be nil for a list element, which carries
