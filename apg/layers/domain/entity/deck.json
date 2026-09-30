@@ -28,6 +28,11 @@
       "kind": "drives",
       "source": "requirements.requirement.deck-config",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.deck-properties",
+      "properties": {}
     }
   ]
 }
