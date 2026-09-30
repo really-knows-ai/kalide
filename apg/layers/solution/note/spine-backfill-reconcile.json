@@ -84,6 +84,11 @@
       "kind": "details",
       "target": "solution.component.theme-registry",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.file-watcher",
+      "properties": {}
     }
   ],
   "in": []
