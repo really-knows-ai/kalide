@@ -161,6 +161,84 @@ func exampleRawContext(data map[string]any, t *Template, body string) map[string
 	return out
 }
 
+// exampleDataContext builds the reserved `.data` execution-context entry for a
+// load-time example execution (templates-dir-validation step 7), mirroring the
+// renderer's dataContext (internal/render/render.go) so the load-time context
+// matches the render-time one (section-data-context, raw-source-context,
+// item-context, template-context). It exposes the authored child sections the
+// example's parsed tree carries, as DATA, in parallel with the rendered-HTML
+// section list the layout sees under each declared section name.
+//
+// The result is keyed by declared section name; each key maps to a
+// source-ordered list with one entry per authored instance of that section, and
+// each entry is a map carrying:
+//
+//   - `raw`: the instance's original source field values and body source
+//     (exampleRawContext) — the source view of its fields;
+//   - `item`: the instance's sibling descriptor, matching the render side's
+//     itemContext shape — its zero-based `index` and one-based `number` among
+//     the same-name siblings, their `count`, `first`/`last`, the declared
+//     `section` name, the resolved `template` name, and `parent` — the
+//     enclosing instance's source field values, or nil at the example's top
+//     level;
+//   - `data`: the instance's own child sections as data, keyed and shaped the
+//     same way (the recursion), with the instance's `raw` as the children's
+//     parent, so the whole authored example tree is addressable as data.
+//
+// sections is one parent's authored child sections in source order, exactly as
+// parseExampleBlock produces them (exampleBlock.Sections); def is the parent's
+// resolved template, whose declarations name the accepted templates an instance
+// without an explicit `template:` selector resolves to; resolve looks up a
+// template by name; parent is the enclosing instance's source field values (the
+// same map exposed as that instance's `.raw`), or nil at the top level. A nil
+// resolve yields an unresolved template rather than a panic.
+//
+// Only authored instances appear: a section invoked by the `section` helper is a
+// direct call, never part of the parsed tree, so it is absent from `.data`
+// exactly as it is absent from the rendered-HTML list.
+func exampleDataContext(sections []exampleSection, def *Template, resolve func(string) (*Template, bool), parent map[string]any) map[string]any {
+	out := make(map[string]any, len(sections))
+	counts := make(map[string]int, len(sections))
+	for i := range sections {
+		counts[sections[i].Name]++
+	}
+	sect := NewSection(resolve)
+	for i := range sections {
+		sec := &sections[i]
+		// The instance's resolved template: an explicit `template:` selector,
+		// otherwise the single accepted template when the section accepts
+		// exactly one — the same resolution validateExampleBlock enforces.
+		name, named := exampleTemplateName(sec.Frontmatter)
+		if !named {
+			if d, ok := sect.Declared(def, sec.Name); ok && len(d.Accepted) == 1 {
+				name = d.Accepted[0]
+			}
+		}
+		var tmpl *Template
+		if resolve != nil {
+			tmpl, _ = resolve(name)
+		}
+		raw := exampleRawContext(sec.Frontmatter, tmpl, sec.Body)
+		entry := map[string]any{
+			"raw": raw,
+			"item": map[string]any{
+				"index":    sec.Index,
+				"number":   sec.Index + 1,
+				"count":    counts[sec.Name],
+				"first":    sec.Index == 0,
+				"last":     sec.Index == counts[sec.Name]-1,
+				"section":  sec.Name,
+				"template": name,
+				"parent":   parent,
+			},
+			"data": exampleDataContext(sec.Sections, tmpl, resolve, raw),
+		}
+		list, _ := out[sec.Name].([]map[string]any)
+		out[sec.Name] = append(list, entry)
+	}
+	return out
+}
+
 // exampleSectionHelper is the template-local `section` func the load-time
 // example execution binds (templates-dir-validation step 7). It is a factory
 // returning the func bound into a layout's func map, closing over lib and the
