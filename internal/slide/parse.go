@@ -298,9 +298,10 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 // enforce the parent's declared min/max. It returns the top-level sections and
 // the reserved `# notes` section, if any.
 //
-// A heading is a section marker only where its enclosing template declares
-// child sections; anywhere else a depth-1-6 heading stays in the enclosing body
-// as ordinary Markdown content, and `# notes` stays top-level only
+// A depth-1 heading always opens a top-level section (or the reserved
+// `# notes`); a deeper heading is a section marker only where its enclosing
+// template declares child sections, and anywhere else a depth-2-6 heading stays
+// in the enclosing body as an ordinary Markdown subheading
 // (slide-sections, markdown-allowed-subset).
 //
 // Section names, child names and template resolution are all validated here, so
