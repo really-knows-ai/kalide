@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-number-date-formats",
+  "body": "Spine completion [autonomous]. requirements.requirement.number-date-formats drove only domain.value.format; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.template-registry (the named number/date display formats are defined by the template author and held by the registry). Added `implemented-by` solution.component.template-registry -> internal/template.NewFormat (builds the format table) — internal/template.Format.Resolve applies it. Path: number-date-formats -> template-registry -> solution.component.template-registry -> internal/template.NewFormat. Existing `drives` to domain.value.format kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
