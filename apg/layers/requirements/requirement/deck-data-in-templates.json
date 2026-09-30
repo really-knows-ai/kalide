@@ -16,6 +16,11 @@
       "kind": "drives",
       "target": "domain.value.deck-properties",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.render-sections",
+      "properties": {}
     }
   ],
   "in": [
