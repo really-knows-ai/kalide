@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "markdown-validator",
-  "body": "Markdown validator: CommonMark AST check against the allowed subset; measures words/paragraphs/list items/subheadings; strips styles for plain/max_length; renders allowed Markdown to HTML.",
+  "body": "Markdown validator: CommonMark AST check against the allowed subset; measures words/paragraphs/list items/subheadings; strips styles for plain/max_length; renders allowed Markdown to HTML. A body supplied to the `section` helper is checked by the same rules against the target template's body rule (section-helper).",
   "properties": {},
   "out": [
     {
