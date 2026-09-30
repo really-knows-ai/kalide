@@ -288,6 +288,27 @@ func slideContext(s deck.Slide, total int) map[string]any {
 	}
 }
 
+// itemContext builds the reserved `.item` descriptor a section instance is
+// executed with (item-context): the instance's zero-based `index` and one-based
+// `number` among the sibling instances of the same declared section name, the
+// `count` of those siblings, whether it is `first` or `last`, the declared
+// `section` name, the resolved `template` name, and `parent` — the enclosing
+// section instance's field values, or nil at the top level. A slide layout has
+// no sibling place, so no descriptor is built for it and its execution context
+// carries no `item` entry (template-context, section-template-context).
+func itemContext(index, count int, section, tmpl string, parent map[string]any) map[string]any {
+	return map[string]any{
+		"index":    index,
+		"number":   index + 1,
+		"count":    count,
+		"first":    index == 0,
+		"last":     index == count-1,
+		"section":  section,
+		"template": tmpl,
+		"parent":   parent,
+	}
+}
+
 // sectionCtx carries the reserved `.deck`/`.slide` context (template-context,
 // section-template-context) threaded into values/fieldValue when they are
 // constructing a SECTION INSTANCE — top-level (slideData), nested through a
