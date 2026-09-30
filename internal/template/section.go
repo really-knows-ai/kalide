@@ -44,6 +44,64 @@ func NewSection(resolve func(name string) (*Template, bool)) *Section {
 	return &Section{resolve: resolve}
 }
 
+// HelperCall is one `{{ section "name" [fields] [body] }}` invocation found in
+// a template's layout: the target section-template name, the literal keys and
+// body the call supplies, and markers recording which arguments are present and
+// whether each is a literal value or an opaque expression. Section.HelperCalls
+// extracts these records from a parsed layout; the registry's build-time checks
+// consume them (requirements.requirement.section-helper-load-checks).
+//
+// Only a literal argument can be inspected at load time. A literal `dict`
+// fields argument exposes the field names the call supplies, and a string-
+// literal body exposes the body Markdown to parse. A non-literal expression — a
+// variable, a `.raw`/`.item.parent` pass-through or a range value — is a
+// permitted pass-through: it loads here and its keys and required fields are
+// checked against the target's field and body rules when the target renders
+// (field-rules).
+type HelperCall struct {
+	// Name is the target section-template name written as the first
+	// argument, the `"name"` in `{{ section "name" … }}`.
+	Name string
+
+	// HasFields reports whether the call supplies a fields argument. It is
+	// what distinguishes an omitted fields argument from a literal one that
+	// supplies no keys.
+	HasFields bool
+
+	// FieldsLiteral reports whether the fields argument is a literal `dict`
+	// call. When it is true FieldKeys holds that call's literal string keys;
+	// when it is false the argument is either absent or a non-literal
+	// expression whose keys cannot be known until render.
+	FieldsLiteral bool
+
+	// FieldKeys are the literal string keys of a literal `dict` fields
+	// argument, in source order. It is nil when FieldsLiteral is false.
+	FieldKeys []string
+
+	// HasBody reports whether the call supplies a body argument. It is what
+	// distinguishes an omitted body argument from a literal empty one.
+	HasBody bool
+
+	// BodyLiteral reports whether the body argument is a string literal.
+	// When it is true Body holds that literal Markdown; when it is false the
+	// argument is either absent or a non-literal expression that is checked
+	// against the target's body rule when the target renders.
+	BodyLiteral bool
+
+	// Body is the literal body argument's Markdown, exactly as written in
+	// the layout. It is empty when BodyLiteral is false.
+	Body string
+
+	// Template is the name of the template whose layout declares this call.
+	// It is carried so a build-time helper failure can be path-qualified to
+	// that template's template.yaml.
+	Template string
+
+	// Line is the 1-based line of the call within the declaring layout's
+	// source, or 0 when no position was resolved.
+	Line int
+}
+
 // Declarations returns tmpl's declared sections keyed by section name, each
 // entry a SectionDecl carrying the accepted section templates and the min/max
 // repeat limits. It is the name → SectionDecl resolution the composition engine
