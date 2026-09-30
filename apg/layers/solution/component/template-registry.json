@@ -69,6 +69,11 @@
       "kind": "implemented-by",
       "target": "internal/template/template.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.LayoutFuncMap",
+      "properties": {}
     }
   ],
   "in": [
