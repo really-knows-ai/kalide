@@ -227,15 +227,17 @@ type renderer struct {
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
-// field values, its rendered body, its top-level sections, and the reserved
-// `deck` and `slide` entries (template-context). cfg, meta and total are
-// threaded from RenderSlide/RenderDeck. Each top-level section instance is
-// rendered bottom-up through its own layout, deepest first, and grouped by its
-// declared name as a list of trusted HTML — one element per instance, in
-// source order — so the slide layout receives rendered section markup, not data
-// maps, at the top level too (template-language). The layout map's `deck`/
-// `slide` entries are set directly; a top-level section instance's own
-// `deck`/`slide`/`item` entries are set by values/renderSection.
+// field values, its rendered body, its top-level sections, the reserved
+// `deck`/`slide` entries (template-context), and the slide's own reserved
+// `.raw`/`.data` context (raw-source-context, section-data-context). cfg, meta
+// and total are threaded from RenderSlide/RenderDeck. Each top-level section
+// instance is rendered bottom-up through its own layout, deepest first, and
+// grouped by its declared name as a list of trusted HTML — one element per
+// instance, in source order — so the slide layout receives rendered section
+// markup, not data maps, at the top level too (template-language). The layout
+// map's `deck`/`slide`/`raw`/`data` entries are set directly; a top-level
+// section instance's own `deck`/`slide`/`item`/`raw`/`data` entries are set by
+// values/renderSection.
 //
 // single-binary: the slide context is built in-process with no external
 // lookup — from the parsed slide, the registry and cfg only, with no
@@ -294,10 +296,23 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// The reserved `deck` and `slide` entries are injected into the layout map
 	// here; the layout has no sibling place, so it carries no `item`. Each
 	// section instance's map carries its own `deck`/`slide`/`item` copy, set
-	// by values/renderSection. A declared field or section named deck, slide
-	// or item is rejected at load time, so none can collide with a field value.
+	// by values/renderSection. A declared field or section named deck, slide,
+	// item, raw or data is rejected at load time, so none can collide with a
+	// field value.
 	data["deck"] = deckContext(cfg)
 	data["slide"] = slideContext(meta, total)
+
+	// The reserved `.raw` entry is the source view of the slide's OWN authored
+	// frontmatter and body (raw-source-context), alongside the converted field
+	// values and rendered body the same map already carries under its own
+	// names; the reserved `.data` entry is the slide's authored top-level
+	// sections as data, one entry per authored instance, parented on the slide
+	// (nil) (section-data-context). Both reflect AUTHORED instances only: a
+	// `{{ section … }}` call is a direct render call, never part of the parsed
+	// tree, so its sectionHelper render contributes no entry to `.data` and no
+	// element to the rendered-HTML section list built above.
+	data["raw"] = r.rawContext(s.Frontmatter, tmpl, s.Body)
+	data["data"] = r.dataContext(s.Sections, nil)
 	return data, nil
 }
 
