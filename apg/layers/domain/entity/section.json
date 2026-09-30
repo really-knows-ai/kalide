@@ -53,6 +53,11 @@
       "kind": "drives",
       "source": "requirements.requirement.section-helper",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.section-helpers-domain",
+      "properties": {}
     }
   ]
 }

@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "domain.service.render-sections",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.section",
+      "properties": {}
     }
   ],
   "in": []
