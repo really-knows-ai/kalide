@@ -367,6 +367,123 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	return htmltmpl.HTML(buf.String()), nil
 }
 
+// sectionHelper is the render-time `section` layout helper (section-helper):
+// it executes a target section template as a one-item group, exactly as
+// renderSection executes one authored section instance, but for a call written
+// in a layout rather than an instance present in the parsed tree. It is bound
+// into the shared layout function map, so a
+// `{{ section "<name>" [fields] [body] }}` call parses and executes against it
+// instead of the parse-resolvable stub (RenderSlide/parseLayouts).
+//
+// The variadic arguments mirror the load-time exampleSectionHelper
+// (internal/template): at most a fields map and a body string, each optional;
+// a fields argument that is not a map or a body argument that is not a string
+// is a programming error. Resolution and validation are delegated in full to
+// template.ResolveSectionCall — the target must be a defined section-usage
+// template, the supplied fields are defaults-first validated against the
+// target's schema, and a present body is validated against the target's body
+// rule — so the render-time helper reuses the phase-02 resolution rather than
+// duplicating it. The caller's own field values (renderer.callerFields) are
+// passed as the call's parent, so the target's one-item `.item.parent` is the
+// calling instance's fields; it is nil when the call is made from a slide
+// layout, whose parent is the slide (item-context).
+//
+// The effective values are converted with values exactly as renderSection
+// converts an instance's: a text field becomes inline HTML, a number or date is
+// formatted, and the reserved `deck`/`slide`/`item` entries are merged in with
+// `.item` the one-item descriptor ResolveSectionCall built. The call's body,
+// when present, is rendered to block HTML and exposed as `body`
+// (template-language). The reserved `.raw` entry is the source view of what the
+// call supplied — the supplied fields plus the body — and `.data` is empty
+// because the helper passes no child sections, so a call adds no entry to the
+// caller's `.data` and no element to its rendered section list
+// (raw-source-context, section-data-context).
+//
+// Before the target layout executes, the renderer's caller context is set to
+// this instance — its effective field values become a nested call's
+// `.item.parent`, and its deck/slide context is inherited — and restored
+// afterwards, so a `{{ section … }}` call the target's own layout makes
+// resolves against this instance (item-context, template-context). The target's
+// layout runs through the shared namespace (renderer.root), so it is a
+// layout already parsed with this same helper bound, not a fresh parse. The
+// result is the target's trusted HTML, which the calling layout splices
+// unescaped.
+func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error) {
+	var fields map[string]any
+	if len(args) >= 1 && args[0] != nil {
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("section helper %q: fields must be a map, got %T", name, args[0])
+		}
+		fields = m
+	}
+	var body string
+	if len(args) >= 2 && args[1] != nil {
+		s, ok := args[1].(string)
+		if !ok {
+			return "", fmt.Errorf("section helper %q: body must be a string, got %T", name, args[1])
+		}
+		body = s
+	}
+
+	// ResolveSectionCall applies the target's defaults first, validates the
+	// effective fields with CheckValues, checks the body against the target's
+	// body rule, and builds the one-item .item descriptor whose parent is the
+	// calling instance's fields (nil from a slide layout).
+	call, err := template.ResolveSectionCall(r.reg.Lookup, name, fields, body, r.callerFields)
+	if err != nil {
+		return "", fmt.Errorf("section helper %q: %w", name, err)
+	}
+
+	// The target is the sole instance of its own one-item group, so it
+	// executes with the calling slide's deck/slide context and its own .item
+	// descriptor; it has no authored children of its own to render.
+	caller := r.callerCtx
+	if caller == nil {
+		caller = &sectionCtx{}
+	}
+	secCtx := &sectionCtx{
+		cfg:   caller.cfg,
+		meta:  caller.meta,
+		total: caller.total,
+		item:  call.Item,
+	}
+	data, err := r.values(call.Values, call.Template, secCtx)
+	if err != nil {
+		return "", fmt.Errorf("section helper %q: %w", name, err)
+	}
+	if strings.TrimSpace(call.Body) != "" {
+		rendered, err := renderBody(call.Body)
+		if err != nil {
+			return "", fmt.Errorf("section helper %q: %w", name, err)
+		}
+		data["body"] = rendered
+	}
+	// .raw is the source view of what the call supplied (the supplied fields
+	// plus the body); .data is empty, because the helper passes no child
+	// sections and so contributes no authored instance to the data view.
+	data["raw"] = r.rawContext(fields, call.Template, call.Body)
+	data["data"] = map[string]any{}
+
+	// A nested {{ section … }} call in the target's layout reads this
+	// instance's field values as its .item.parent and inherits the same
+	// deck/slide context. Restore the previous context once it returns, so
+	// the caller's own layout keeps resolving against itself.
+	prevFields, prevCtx := r.callerFields, r.callerCtx
+	r.callerFields = call.Values
+	r.callerCtx = secCtx
+	defer func() {
+		r.callerFields = prevFields
+		r.callerCtx = prevCtx
+	}()
+
+	var buf bytes.Buffer
+	if err := r.root.ExecuteTemplate(&buf, layoutName(call.Template), data); err != nil {
+		return "", fmt.Errorf("section helper %q: execute target layout: %w", name, err)
+	}
+	return htmltmpl.HTML(buf.String()), nil
+}
+
 // deckContext builds the reserved `deck` execution context
 // (deck-data-in-templates): the deck-wide config values under title, author
 // and date, plus the author-declared properties under properties. title is
