@@ -29,6 +29,11 @@
       "kind": "implemented-by",
       "target": "internal/deck/config.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/deck/slides.go",
+      "properties": {}
     }
   ],
   "in": [
