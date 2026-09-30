@@ -25,6 +25,11 @@
       "kind": "details",
       "source": "domain.note.group-less-domains-audit",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.section-helpers-domain",
+      "properties": {}
     }
   ]
 }
