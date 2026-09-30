@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.spine-field-rules",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.required-default-consistency",
+      "properties": {}
     }
   ]
 }

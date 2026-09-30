@@ -4,6 +4,12 @@
   "name": "required-default-consistency",
   "body": "source: section-helpers boy-scout pass before merge (item 1), from the observation recorded in section-helpers/plan.note-15. Inconsistency [with user, per the change request]: template.CheckValues (internal/template/checkvalues.go, mapValues required branch) reported a missing required field even when the field declared a Default, so an authored slide/section instance or a template `example.md` that omitted a defaulted required field failed; template.ResolveSectionCall (defaults first, then CheckValues) and the registry's load-time helper check Registry.checkSections (`if !f.Required || f.Default != nil`) both already treated required+default as satisfied. The three call sites disagreed.\n\nResolution [with user]: unify the rule — a required field that declares a default is satisfied when omitted and the default is applied, everywhere a `fields` map is validated: authored slide and section instances, template `example.md` files, and section helper `fields`. Spec edits: requirements.requirement.field-rules body + AC now state the rule and name the four sites; domain.value.field records the same rule. The two already-consistent requirements are unchanged: requirements.requirement.section-helper-load-checks (\"present among those keys or carry a default\") and requirements.requirement.section-helper (\"when omitted, the target's defaults apply\"). The code change (CheckValues must skip the required error when Default != nil) is the implementer's, not a spec change.\n\nChecked elsewhere: the markdown validator (internal/mdcheck) does NOT enforce required fields — it is a CommonMark-AST subset checker with no access to the field schema (grep for Required/Default in internal/mdcheck finds only an unrelated test name). Required-field enforcement in the deck-validation path comes from template.CheckValues, called by internal/validate.checkFields and by the example checks, so one CheckValues rule covers all of them. No constraint carries a contradictory required/default rule: requirements.requirement.template-build-checks says a helper target's \"required fields must be present or defaulted\", consistent. No code-anchor change: internal/template.CheckValues is already anchored to solution.component.template-registry (requirements.note.spine-field-rules).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.field-rules",
+      "properties": {}
+    }
+  ],
   "in": []
 }
