@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.service.render-sections",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
     }
   ],
   "in": [

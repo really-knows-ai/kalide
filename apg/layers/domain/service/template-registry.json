@@ -96,6 +96,11 @@
       "kind": "details",
       "source": "domain.note.section-helpers-domain",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.dict-list-helpers",
+      "properties": {}
     }
   ]
 }
