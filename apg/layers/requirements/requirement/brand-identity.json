@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.brand-identity",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.distribution",
+      "properties": {}
     }
   ],
   "in": [
