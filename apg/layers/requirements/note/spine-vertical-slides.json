@@ -4,6 +4,12 @@
   "name": "spine-vertical-slides",
   "body": "Spine completion [autonomous]. requirements.requirement.vertical-slides drove only domain.value.slide-position; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.load-deck (slide filename parsing yields the ordered (number, letter) positions). domain.service.load-deck is already realised-by solution.component.deck-loader. Added `implemented-by` solution.component.deck-loader -> internal/deck.LoadSlides and internal/deck.parseSlideFilename (the vertical letter suffix parsing and the `3a`-without-`3` / duplicate checks). Path: vertical-slides -> load-deck -> deck-loader -> internal/deck.parseSlideFilename. Existing `drives` to domain.value.slide-position kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.vertical-slides",
+      "properties": {}
+    }
+  ],
   "in": []
 }
