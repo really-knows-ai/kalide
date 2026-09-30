@@ -34,11 +34,6 @@
     },
     {
       "kind": "realised-by",
-      "source": "domain.service.template-registry",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
       "source": "domain.service.serve-deck",
       "properties": {}
     },
