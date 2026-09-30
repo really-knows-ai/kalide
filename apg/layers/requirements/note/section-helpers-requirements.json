@@ -79,6 +79,11 @@
       "kind": "details",
       "target": "requirements.requirement.agent-authoring",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
     }
   ],
   "in": []
