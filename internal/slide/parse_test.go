@@ -86,6 +86,24 @@ func testCatalogue() fakeCatalogue {
 		"column":   {usage: "section"},
 		"fig":      {usage: "section"},
 		"card":     {usage: "section"},
+
+		// Nested composition: a slide template whose "columns" section accepts
+		// the container section template "group", which itself declares child
+		// sections ("blocks") accepting the leaf section template "block"
+		// (template-composition, slide-sections). "limitedgroup"/"needsgroup"
+		// are the same shape with a per-parent max/min on "blocks", so a
+		// parent's repeat bounds can be exercised over its own children alone.
+		"grouped": {usage: "slide", sections: []string{"columns"},
+			accepted: map[string][]string{"columns": {"group", "limitedgroup", "needsgroup"}}},
+		"group": {usage: "section", sections: []string{"blocks"},
+			accepted: map[string][]string{"blocks": {"block"}}},
+		"limitedgroup": {usage: "section", sections: []string{"blocks"},
+			accepted: map[string][]string{"blocks": {"block"}},
+			max:      map[string]int{"blocks": 2}},
+		"needsgroup": {usage: "section", sections: []string{"blocks"},
+			accepted: map[string][]string{"blocks": {"block"}},
+			min:      map[string]int{"blocks": 2}},
+		"block": {usage: "section"},
 	}
 }
 
@@ -166,6 +184,7 @@ func TestParse(t *testing.T) {
 	t.Run("frontmatter", testParseFrontmatter)
 	t.Run("template", testParseTemplate)
 	t.Run("structure", testParseStructure)
+	t.Run("nested sections", testParseNestedSections)
 	t.Run("sections", testParseSections)
 	t.Run("repeats", testParseRepeats)
 	t.Run("section fence", testParseSectionFence)
@@ -317,6 +336,294 @@ func testParseStructure(t *testing.T) {
 		t.Errorf("Notes = line %d body %q line %d, want line 17 body %q line 18",
 			slide.Notes.HeadingLine, slide.Notes.Body, slide.Notes.BodyLine, "notes here")
 	}
+}
+
+// testParseNestedSections covers the heading-depth nesting contract of
+// internal/slide.Parse (slide-sections, nested-section-validation): a heading
+// one level deeper than the most recent shallower heading opens a child of
+// that section; a child may carry its own plain-fence frontmatter; a child
+// heading is scoped to the *resolved* template of its enclosing instance, so
+// an undeclared child name is rejected with a closest-match suggestion; a
+// parent's min/max is counted over its own child instances and the error
+// carries the aggregate parent path (`columns[2] › blocks`); a depth-(n+1)
+// heading inside a template that declares NO child sections stays ordinary
+// Markdown in the enclosing body; and a depth-skipping sequence (`#` then
+// `###`) is still a child of the shallower heading.
+func testParseNestedSections(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-group.md"
+
+	t.Run("heading-depth nesting", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"column body",
+			"",
+			"## blocks",
+			"```",
+			"template: block",
+			"```",
+			"block body",
+		), cat)
+
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		columns := slide.Sections[0]
+		if columns.Name != "columns" || columns.Level != 1 || columns.Index != 0 {
+			t.Errorf("columns = %q level %d index %d, want %q level 1 index 0", columns.Name, columns.Level, columns.Index, "columns")
+		}
+		if columns.Body != "column body\n" || columns.BodyLine != 9 {
+			t.Errorf("columns.Body = %q line %d, want %q line 9", columns.Body, columns.BodyLine, "column body\n")
+		}
+		if len(columns.Children) != 1 {
+			t.Fatalf("len(columns.Children) = %d, want 1", len(columns.Children))
+		}
+		blocks := columns.Children[0]
+		if blocks.Name != "blocks" || blocks.Level != 2 || blocks.Index != 0 {
+			t.Errorf("blocks = %q level %d index %d, want %q level 2 index 0", blocks.Name, blocks.Level, blocks.Index, "blocks")
+		}
+		if blocks.Template != "block" {
+			t.Errorf("blocks.Template = %q, want %q (resolved from the single accepted template)", blocks.Template, "block")
+		}
+		if blocks.Body != "block body" || blocks.BodyLine != 15 {
+			t.Errorf("blocks.Body = %q line %d, want %q line 15", blocks.Body, blocks.BodyLine, "block body")
+		}
+	})
+
+	t.Run("per-child frontmatter", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"```",
+			"template: block",
+			"weight: 3",
+			"```",
+			"block body",
+		), cat)
+
+		blocks := slide.Sections[0].Children[0]
+		if blocks.FenceLine != 11 || blocks.TemplateLine != 12 {
+			t.Errorf("blocks fence = %d template key = %d, want fence 11 template key 12", blocks.FenceLine, blocks.TemplateLine)
+		}
+		if blocks.Frontmatter["weight"] != 3 {
+			t.Errorf("blocks.Frontmatter[weight] = %v (%T), want 3", blocks.Frontmatter["weight"], blocks.Frontmatter["weight"])
+		}
+	})
+
+	t.Run("depth-skipping heading is a child of the shallower heading", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"### blocks",
+			"```",
+			"template: block",
+			"```",
+		), cat)
+
+		columns := slide.Sections[0]
+		if len(columns.Children) != 1 {
+			t.Fatalf("len(columns.Children) = %d, want 1 (the ### heading nests under #)", len(columns.Children))
+		}
+		if got := columns.Children[0]; got.Name != "blocks" || got.Level != 3 || got.Index != 0 {
+			t.Errorf("child = %q level %d index %d, want %q level 3 index 0", got.Name, got.Level, got.Index, "blocks")
+		}
+	})
+
+	t.Run("unknown child name suggests the closest declared name", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocsk",
+		), cat)
+		wantParseErrorPath(t, err, file, 10, "columns[0]",
+			`unknown section "blocsk"`, `did you mean "blocks"?`)
+	})
+
+	t.Run("child name scoped to the resolved template, not the declaring slide", func(t *testing.T) {
+		// "blocks" is declared by the group section template, never by the
+		// grouped slide template; scoping the child to the slide's own
+		// declarations would wrongly reject it.
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+		), cat)
+		if got := slide.Sections[0].Children; len(got) != 1 || got[0].Name != "blocks" {
+			t.Fatalf("columns.Children = %+v, want the single %q child", got, "blocks")
+		}
+	})
+
+	t.Run("per-parent max carries the aggregate parent path", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+		), cat)
+		wantParseErrorPath(t, err, file, 14, "columns[0] › blocks",
+			`section "blocks": at most 2 allowed, found 3`)
+	})
+
+	t.Run("per-parent max counts only one parent's children", func(t *testing.T) {
+		// Three columns instances each hold two blocks; the max is 2 per
+		// parent, so no instance exceeds it even though the slide has six
+		// blocks children in total.
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+		), cat)
+		if len(slide.Sections) != 3 {
+			t.Fatalf("len(Sections) = %d, want 3", len(slide.Sections))
+		}
+		for i := range slide.Sections {
+			if got := len(slide.Sections[i].Children); got != 2 {
+				t.Errorf("Sections[%d].Children = %d, want 2", i, got)
+			}
+		}
+	})
+
+	t.Run("per-parent min carries the aggregate parent path", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: needsgroup",
+			"```",
+			"",
+			"## blocks",
+		), cat)
+		wantParseErrorPath(t, err, file, 5, "columns[0] › blocks",
+			`section "blocks": requires at least 2, found 1`)
+	})
+
+	t.Run("deeper heading in a template with no child sections stays in the body", func(t *testing.T) {
+		// columns resolves to "column", which declares no child sections, so
+		// the ## heading is ordinary Markdown in the column's body.
+		slide := parseOK(t, file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"column body",
+			"",
+			"## subheading",
+			"",
+			"sub text",
+		), cat)
+
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		col := slide.Sections[0]
+		if len(col.Children) != 0 {
+			t.Fatalf("columns.Children = %+v, want none (column declares no child sections)", col.Children)
+		}
+		const wantBody = "column body\n\n## subheading\n\nsub text"
+		if col.Body != wantBody {
+			t.Errorf("columns.Body = %q, want %q", col.Body, wantBody)
+		}
+	})
+
+	t.Run("notes is top-level only", func(t *testing.T) {
+		// `# notes` after a nested child is a top-level reserved section, and
+		// a deeper heading never starts notes.
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"# notes",
+			"note body",
+		), cat)
+		if slide.Notes == nil || slide.Notes.HeadingLine != 12 || slide.Notes.Body != "note body" {
+			t.Fatalf("Notes = %+v, want the top-level section at line 12 body %q", slide.Notes, "note body")
+		}
+	})
 }
 
 // testParseSections covers section-name declaration and section-template
