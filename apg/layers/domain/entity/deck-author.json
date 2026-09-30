@@ -6,7 +6,13 @@
   "properties": {
     "kind": "entity"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
