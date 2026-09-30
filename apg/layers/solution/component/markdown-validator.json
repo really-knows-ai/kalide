@@ -51,6 +51,11 @@
       "kind": "realised-by",
       "source": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
+      "properties": {}
     }
   ]
 }
