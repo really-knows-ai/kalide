@@ -24,6 +24,11 @@
       "kind": "details",
       "target": ".github/workflows/ci.yml",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": ".github/workflows/native-e2e.yml",
+      "properties": {}
     }
   ],
   "in": []
