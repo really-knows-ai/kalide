@@ -11,19 +11,22 @@ import (
 // This file implements Section, the composition, variant and controlled-effects
 // engine: it resolves a template's declared sections, enforces their min/max
 // repeat limits over the section instances an author declared, walks the
-// section-template composition tree bounded at six heading levels (terminating
-// safely on a reference cycle and reporting an over-deep chain), and resolves
-// the layout variant each enum field selects.
+// section-template composition reference graph bounded at six heading levels
+// (terminating safely on a reference cycle and reporting an over-deep chain),
+// and resolves the layout variant each enum field selects.
 //
 // Composition (template-composition): a slide template declares named sections,
 // each accepting one or more section-usage templates with min/max repeat limits;
 // a section template declares sections of its own, so composition nests. Nesting
 // depth is bounded by the content syntax — heading depth is nesting depth — so no
-// composition chain may exceed the six Markdown heading levels `#`…`######`
-// (requirements.constraint.section-depth-limit). Sections never accept slide
-// templates — the registry's build-time checks reject that, as they reject
-// reference cycles; Walk here is what lets those checks terminate on a cyclic
-// resolver instead of looping forever.
+// composition chain of declared sections may exceed the six Markdown heading
+// levels `#`…`######` (requirements.constraint.section-depth-limit). A layout's
+// `section` helper calls are composition references too, so they join the same
+// graph for reference-cycle rejection, but they are not headings and do not
+// extend that heading-level chain. Sections never accept slide templates — the
+// registry's build-time checks reject that, as they reject reference cycles;
+// Walk here is what lets those checks terminate on a cyclic resolver instead of
+// looping forever.
 //
 // Variants (template-variants): layout variants are selected only by enum
 // fields (the field's value changes the layout). Variants reports those
@@ -273,19 +276,40 @@ func (e *SectionDepthError) Error() string {
 }
 
 // Walk returns every distinct section template reachable from tmpl through the
-// composition of its declared sections, in depth-first declaration order. It
-// descends the composition tree, counting every path — a template reachable at
-// two depths is examined at both, so a shallow reach never masks a deeper
-// chain — and stops at the six-heading-level bound
+// composition reference graph, in depth-first declaration order: the targets
+// of tmpl's declared sections first, then the targets of its `section` helper
+// calls (HelperRefs). It descends every path — a template reachable at two
+// depths is examined at both, so a shallow reach never masks a deeper chain —
+// and stops a declared-section chain at the six-heading-level bound
 // (requirements.constraint.section-depth-limit).
+//
+// The two reference kinds are deliberately split, not conflated:
+//
+//   - A declared-section acceptance is a heading: descending it nests the
+//     child template one heading level deeper, exactly as before, so these are
+//     the edges the six-heading-level bound counts.
+//   - A `section` helper call is a composition reference but NOT a heading
+//     (requirements.constraint.section-depth-limit). It joins the graph so a
+//     helper-closed reference cycle is rejected with the full chain in
+//     *SectionCycleError (requirements.constraint.section-cycle-error-chain),
+//     but descending it does not extend the depth count — the target sits at
+//     the caller's heading level, so only its own declared sections add a
+//     level.
 //
 // A name already on the current descent path is a reference cycle and is
 // reported as *SectionCycleError (never an infinite loop); a name already
-// returned through another branch is included in the result once. A chain
-// deeper than six heading levels is reported as *SectionDepthError with the
-// over-deep chain. A name the resolver does not define is an error. Whether a
-// section accepts a slide-usage template is checked by the registry's
-// build-time checks, not here.
+// returned through another branch is included in the result once. A chain of
+// declared-section edges deeper than six heading levels is reported as
+// *SectionDepthError with the over-deep chain. A referenced name the resolver
+// does not define is an error. Whether a section accepts a slide-usage
+// template is checked by the registry's build-time checks, not here.
+//
+// A layout whose helper calls cannot be read statically — a non-literal
+// target name, or source that does not parse with the canonical layout func
+// map — makes HelperRefs fail; Walk surfaces that error unchanged. It already
+// names the declaring template and layout line, and wrapping it in Validate's
+// `template "name":` prefix leaves errors.As for *SectionCycleError and
+// *SectionDepthError (and for the HelperCalls error itself) intact.
 func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	if tmpl == nil {
 		return nil, nil
@@ -298,8 +322,33 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	emitted := make(map[string]bool)
 	onPath := make(map[string]bool)
 
-	var walk func(t *Template, path []string) error
-	walk = func(t *Template, path []string) error {
+	var walk func(t *Template, depth int, path []string) error
+
+	// descend follows one reference edge: reject a name already on the path
+	// as a cycle, resolve the target, record it once, then walk it. depth is
+	// the target's heading level, so a declared-section edge passes depth+1
+	// (it is a heading) while a helper edge passes depth unchanged (it is
+	// not).
+	descend := func(name string, depth int, path []string) error {
+		if onPath[name] {
+			cycle := make([]string, len(path), len(path)+1)
+			copy(cycle, path)
+			return &SectionCycleError{Path: append(cycle, name)}
+		}
+		nested, ok := s.resolve(name)
+		if !ok || nested == nil {
+			return fmt.Errorf("section template %q is not defined", name)
+		}
+		if !emitted[name] {
+			emitted[name] = true
+			out = append(out, nested)
+		}
+		// Recurse even into an already-emitted template: a deeper path
+		// through it must still be counted against the bound.
+		return walk(nested, depth, path)
+	}
+
+	walk = func(t *Template, depth int, path []string) error {
 		if t == nil {
 			return nil
 		}
@@ -307,38 +356,35 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 		path = append(path, t.Name)
 		defer delete(onPath, t.Name)
 
-		if len(path) > sectionDepthLimit {
+		if depth > sectionDepthLimit {
 			chain := make([]string, len(path))
 			copy(chain, path)
 			return &SectionDepthError{Path: chain, Limit: sectionDepthLimit}
 		}
 
+		// Declared-section acceptances are headings: one level deeper.
 		for i := range t.Sections {
 			for _, name := range t.Sections[i].Accepted {
-				if onPath[name] {
-					cycle := make([]string, len(path), len(path)+1)
-					copy(cycle, path)
-					return &SectionCycleError{Path: append(cycle, name)}
-				}
-				nested, ok := s.resolve(name)
-				if !ok || nested == nil {
-					return fmt.Errorf("section template %q is not defined", name)
-				}
-				if !emitted[name] {
-					emitted[name] = true
-					out = append(out, nested)
-				}
-				// Recurse even into an already-emitted template: a deeper
-				// path through it must still be counted against the bound.
-				if err := walk(nested, path); err != nil {
+				if err := descend(name, depth+1, path); err != nil {
 					return err
 				}
+			}
+		}
+
+		// Section-helper calls are references, not headings: same level.
+		refs, err := s.HelperRefs(t)
+		if err != nil {
+			return err
+		}
+		for _, name := range refs {
+			if err := descend(name, depth, path); err != nil {
+				return err
 			}
 		}
 		return nil
 	}
 
-	if err := walk(tmpl, nil); err != nil {
+	if err := walk(tmpl, 1, nil); err != nil {
 		return nil, err
 	}
 	return out, nil
