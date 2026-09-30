@@ -53,6 +53,11 @@
       "kind": "details",
       "source": "requirements.note.spine-deck-config",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
     }
   ]
 }
