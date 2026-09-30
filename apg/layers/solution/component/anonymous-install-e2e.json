@@ -26,6 +26,11 @@
       "kind": "realised-by",
       "source": "domain.service.install-kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.test-harness-test-code-anchors",
+      "properties": {}
     }
   ]
 }
