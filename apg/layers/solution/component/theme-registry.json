@@ -36,6 +36,11 @@
       "kind": "details",
       "source": "solution.note.theme-library-reach",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
+      "properties": {}
     }
   ]
 }
