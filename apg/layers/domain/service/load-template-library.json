@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "domain.note.theme-library-reach",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.raw-source-context",
+      "properties": {}
     }
   ]
 }
