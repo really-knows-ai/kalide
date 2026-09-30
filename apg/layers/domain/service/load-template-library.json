@@ -56,6 +56,11 @@
       "kind": "drives",
       "source": "requirements.requirement.section-data-context",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.section-helper",
+      "properties": {}
     }
   ]
 }
