@@ -19,6 +19,11 @@
       "kind": "implemented-by",
       "target": "TRADEMARKS.md",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/assets/reveal/LICENSE",
+      "properties": {}
     }
   ],
   "in": [
