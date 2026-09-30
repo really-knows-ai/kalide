@@ -81,6 +81,11 @@
       "kind": "contains",
       "target": "solution.component.upgrade",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.cli-templates",
+      "properties": {}
     }
   ],
   "in": [

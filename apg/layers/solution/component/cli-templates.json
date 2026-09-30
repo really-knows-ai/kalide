@@ -5,5 +5,11 @@
   "body": "CLI templates command: `kalide templates [name]` prints a template's fields (type, required, default, limits, formats, description), its child sections — for a slide template the sections it declares, for a section template the sections it can hold — each with the section templates it accepts and its min/max repeats, its body rules and its example, under usage-dependent headings (slide: `Sections:`/declares; section: `Child sections:`/Can hold). Realised by internal/cli.printTemplateSections; the CLI presentation half of domain.service.template-registry. The remaining CLI commands (init, init-library, start, version) stay on solution.component.cli-commands.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    }
+  ]
 }
