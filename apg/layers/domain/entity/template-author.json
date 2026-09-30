@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "template-author",
-  "body": "The template author as a domain actor — the same individual as requirements.user.template-author and solution.person.template-author: the brand/template owner who authors a project `templates/` library (slide/section templates with schema, standard Go html/template layout and example; themes; media) outside the binary, works entirely from the resolved library with templates loaded at run time (global.constraint.no-embedded-template-assets), and runs kalide start/templates against it. requirements.user.template-author represents this entity, and this entity represents solution.person.template-author. Realised by solution.container.cli-binary, the solution element the role operates.",
+  "body": "The template author as a domain actor — the same individual as requirements.user.template-author and solution.person.template-author: the brand/template owner who authors a project `templates/` library (slide/section templates with schema, standard Go html/template layout and example; themes; media) outside the binary, works entirely from the resolved library with templates loaded at run time (global.constraint.no-embedded-template-assets), and runs kalide start/templates against it. requirements.user.template-author represents this entity, and this entity represents solution.person.template-author, so it is linked to the solution tier only through `represents` -> solution.person.template-author; it has no realised-by (a person is not realised by software).",
   "properties": {
     "kind": "entity"
   },
