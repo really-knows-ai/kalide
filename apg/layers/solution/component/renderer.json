@@ -76,6 +76,11 @@
       "kind": "realised-by",
       "source": "domain.entity.section",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.section-helpers-solution",
+      "properties": {}
     }
   ]
 }
