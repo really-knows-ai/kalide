@@ -14,6 +14,11 @@
       "kind": "implemented-by",
       "target": "brand/logo_light.svg",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "brand/LICENSE",
+      "properties": {}
     }
   ],
   "in": [
