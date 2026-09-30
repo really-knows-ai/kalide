@@ -9,6 +9,11 @@
       "kind": "implemented-by",
       "target": "brand/logo_dark.svg",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "brand/logo_light.svg",
+      "properties": {}
     }
   ],
   "in": [
