@@ -49,6 +49,11 @@
       "kind": "implemented-by",
       "target": "internal/server/media.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/server/reload.go",
+      "properties": {}
     }
   ],
   "in": [
