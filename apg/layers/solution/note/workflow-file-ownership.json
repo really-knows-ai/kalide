@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.ci-workflow",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
     }
   ],
   "in": []

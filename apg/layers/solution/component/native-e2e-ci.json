@@ -41,6 +41,11 @@
       "kind": "details",
       "source": "requirements.note.agent-guide-test-anchor-removed",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.workflow-file-ownership",
+      "properties": {}
     }
   ]
 }
