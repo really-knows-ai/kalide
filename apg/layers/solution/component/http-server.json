@@ -54,6 +54,11 @@
       "kind": "implemented-by",
       "target": "internal/server/reload.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/server/server.go",
+      "properties": {}
     }
   ],
   "in": [
