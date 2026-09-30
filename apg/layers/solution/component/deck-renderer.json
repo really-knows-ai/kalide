@@ -4,7 +4,13 @@
   "name": "deck-renderer",
   "body": "Deck renderer: assembles the whole-deck reveal.js document — applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors and notes — over the per-slide documents. Realised by internal/render.RenderDeck, the top-level entry internal/server.Reloader.renderDefault calls. The render tier splits by role: solution.component.renderer executes templates and section instances bottom-up; deck-renderer assembles the resulting deck document.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/render.RenderDeck",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "contains",
