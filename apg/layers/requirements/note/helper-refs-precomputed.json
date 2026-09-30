@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.section-helper-load-checks",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.template-registry-integrity",
+      "properties": {}
     }
   ],
   "in": []
