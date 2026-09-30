@@ -64,7 +64,7 @@ func checkLibraryExamples(lib *Library) error {
 // After validation the reserved source contexts are published into the example
 // execution context alongside deck/slide (raw-source-context,
 // section-data-context, template-context, item-context): `.raw` is the
-// example's original source field values and body (exampleRawContext) and
+// example's original source field values and body (RawContext) and
 // `.data` is its authored child sections as data (exampleDataContext), both
 // mirroring the render-time rawContext/dataContext, so an unguarded
 // `{{ section "…" … .raw.body }}` or `{{ .data.<section> }}` access executes
@@ -117,7 +117,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 			}
 			source[k] = v
 		}
-		ctx["raw"] = exampleRawContext(source, def, block.Body)
+		ctx["raw"] = RawContext(source, def, block.Body)
 		ctx["data"] = exampleDataContext(block.Sections, def, resolve, nil)
 
 		if lt.Kind == KindSection {
