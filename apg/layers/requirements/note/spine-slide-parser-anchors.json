@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.requirement.slide-sections",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.section-frontmatter",
+      "properties": {}
     }
   ],
   "in": []

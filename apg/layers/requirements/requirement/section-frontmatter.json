@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "requirements.note.nested-sections-requirements",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-slide-parser-anchors",
+      "properties": {}
     }
   ]
 }
