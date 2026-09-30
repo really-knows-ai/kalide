@@ -21,6 +21,11 @@
       "kind": "drives",
       "source": "requirements.requirement.section-template-context",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-context",
+      "properties": {}
     }
   ]
 }
