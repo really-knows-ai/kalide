@@ -51,10 +51,10 @@ func writeSectionHelpersLibrary(t *testing.T, h *Harness) {
 		"templates/sections/footer/example.md":       "# footer\n",
 
 		// callout: declares the `label` field the call supplies and renders the
-		// body the caller passes through as `.raw.body`. The `.raw`/`.body`
-		// guards keep the layout executable under the loader's step-7 example
-		// execution, whose context carries no `.raw` and no body
-		// (checkLibraryExample); the real renderer executes it with both.
+		// body the caller passes through as `.raw.body`. The loader's step-7
+		// example execution now supplies the reserved `.raw` context
+		// (checkLibraryExample), so the layout reads `.raw.body` unguarded; the
+		// real renderer executes it with the passed-through source body.
 		"templates/sections/callout/template.yaml": "description: a callout that renders a helper-supplied label and body\n" +
 			"fields:\n" +
 			"  - name: label\n" +
@@ -65,15 +65,16 @@ func writeSectionHelpersLibrary(t *testing.T, h *Harness) {
 		"templates/sections/callout/layout.html.tmpl": "<div class=\"e2e-callout\">" +
 			"<span class=\"e2e-callout-label\">{{.label}}</span>" +
 			"<div class=\"e2e-callout-body\">{{if .body}}{{.body}}{{else}}absent{{end}}</div>" +
-			"<span class=\"e2e-callout-raw-body\">{{if .raw}}{{.raw.body}}{{else}}absent{{end}}</span>" +
+			"<span class=\"e2e-callout-raw-body\">{{.raw.body}}</span>" +
 			"</div>\n",
 		"templates/sections/callout/example.md": "```\nlabel: Example label\n```\nExample callout body.\n",
 
-		// main: the slide. Its layout makes the two helper calls. The `{{ if
-		// .raw }}` guard keeps the layout executable under the loader's step-7
-		// example execution, which supplies no `.raw`; the real renderer supplies
-		// the slide's `.raw`, so the body pass-through executes on the served
-		// page.
+		// main: the slide. Its layout makes the two helper calls, passing the
+		// slide's original body through as `.raw.body`. The loader's step-7
+		// example execution now supplies the reserved `.raw` context, so the
+		// call is unguarded (the CR's own example shape) and loads cleanly; the
+		// real renderer supplies the slide's `.raw`, so the body pass-through
+		// executes on the served page.
 		"templates/slides/main/template.yaml": "description: a slide composing a footer and a body-passing callout through the section helper\n" +
 			"fields:\n" +
 			"  - name: heading\n" +
@@ -85,7 +86,7 @@ func writeSectionHelpersLibrary(t *testing.T, h *Harness) {
 		"templates/slides/main/layout.html.tmpl": "<section class=\"e2e-section-helper-slide\">\n" +
 			"  <h1 class=\"e2e-heading\">{{.heading}}</h1>\n" +
 			"  {{ section \"footer\" }}\n" +
-			"  {{ if .raw }}{{ section \"callout\" (dict \"label\" \"Proposition\") .raw.body }}{{ end }}\n" +
+			"  {{ section \"callout\" (dict \"label\" \"Proposition\") .raw.body }}\n" +
 			"</section>\n",
 		"templates/slides/main/example.md": "---\n" +
 			"template: main\n" +
