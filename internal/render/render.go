@@ -330,7 +330,7 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// tree, so its sectionHelper render contributes no entry to `.data` and no
 	// element to the rendered-HTML section list built above.
 	data["raw"] = r.rawContext(s.Frontmatter, tmpl, s.Body)
-	data["data"] = r.dataContext(s.Sections, nil)
+	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil)
 	return data, nil
 }
 
@@ -346,10 +346,12 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 // secCtx is the instance's execution context. Its own reserved `.raw` context —
 // the source view of its authored frontmatter and body — and `.data` context —
 // its authored child sections as data, each child's `.item.parent` being this
-// instance's source field values, as dataContext's parent rule requires — are
-// built here and merged into the instance map by values, next to the converted
-// field values and the reserved `deck`/`slide`/`item` entries, at every
-// composition depth (raw-source-context, section-data-context). Its body is
+// instance's source field values, as template.DataContext's parent rule requires
+// — are built here, `.raw` by rawContext and `.data` by template.DataContext
+// over this instance's child context nodes, and merged into the instance map by
+// values, next to the converted field values and the reserved
+// `deck`/`slide`/`item` entries, at every composition depth
+// (raw-source-context, section-data-context). Its body is
 // rendered, and its resolved template's layout runs in the shared namespace
 // (renderer.root) with `deck`/`slide`/`item`/`raw`/`data` plus the instance's
 // own fields. A child's rendered `.item.parent` is this instance's field values
@@ -369,7 +371,7 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	// next to its converted field values and `deck`/`slide`/`item`. They are
 	// built before values so values merges them into the instance map.
 	secCtx.raw = r.rawContext(sec.Frontmatter, tmpl, sec.Body)
-	secCtx.data = r.dataContext(sec.Children, secCtx.raw)
+	secCtx.data = template.DataContext(r.contextNodes(sec.Children), secCtx.raw)
 
 	data, err := r.values(sec.Frontmatter, tmpl, secCtx)
 	if err != nil {
@@ -649,7 +651,8 @@ type sectionCtx struct {
 
 	// data is the instance's reserved `.data` context
 	// (section-data-context): the instance's authored child sections as data,
-	// built by the caller with dataContext. It is nil when the map under
+	// built by the caller with template.DataContext over its contextNodes. It
+	// is nil when the map under
 	// construction is not a section instance, on the same terms as raw, and
 	// values then adds no `data` entry. A section instance with no authored
 	// children carries a non-nil but empty map, so a section template always
@@ -751,59 +754,55 @@ func (r *renderer) rawContext(data map[string]any, t *template.Template, body st
 	return out
 }
 
-// dataContext builds the reserved `.data` execution-context entry for a slide's
-// or section instance's authored child sections (section-data-context): the same
-// authored instances the rendered-HTML list groups under each declared section
-// name, exposed in parallel as DATA. The result is keyed by declared section
-// name; each key maps to a source-ordered list with one entry per authored
-// instance of that section, and each entry is a map carrying:
-//
-//   - `raw`: the instance's original source field values and body source
-//     (rawContext) — the source view of its fields, alongside the converted
-//     values the rendered instance exposes under their own names;
-//   - `item`: the instance's sibling descriptor (itemContext) — its zero-based
-//     `index` and one-based `number` among the same-name siblings, their
-//     `count`, `first`/`last`, the declared `section` name, the resolved
-//     `template` name, and `parent` — the enclosing instance's source field
-//     values, or nil for a top-level section whose parent is the slide;
-//   - `data`: the instance's own child sections as data, keyed and shaped the
-//     same way (the recursion), so the whole authored section tree is
-//     addressable as data.
+// contextNodes adapts the render-time slide section tree into the neutral
+// []template.ContextNode the shared template.DataContext walks
+// (section-data-context, raw-source-context, item-context, template-context).
+// It replaces the old render-time `.data` builder: it no longer builds the
+// `.data` map itself, only the neutral tree, which template.DataContext then
+// walks — the same walk the load-time example execution performs over its own
+// exampleSection tree (mapped through the parallel exampleContextNodes adapter)
+// — so the load-time and render-time `.data` views cannot drift. A node's `raw`
+// view is built by template.RawContext from its Source, Body and Template when
+// DataContext walks the tree.
 //
 // sections is one parent's authored child sections, in source order, exactly as
 // the parsed slide tree carries them (slide.Slide.Sections or
-// slide.Section.Children); the walk mirrors slideData/renderSection's instance
-// model — siblings grouped by declared name and counted per name, each
-// instance's template resolved from the registry. parent is the enclosing
-// instance's source field values (the same map exposed as that instance's
-// `.raw`), or nil for a slide's top-level sections; a nested instance's own
-// children read its `.raw` as their parent, so `.item.parent` in the data view
-// is the enclosing instance's source fields.
+// slide.Section.Children). Each node's Template is the instance's resolved
+// template, looked up in the registry by its declared `Template` name. When the
+// declared name is non-empty but the registry cannot resolve it, the node
+// still carries a name-only template, so DataContext's `item.template` label
+// stays the declared name instead of dropping to "" — matching the previous
+// builder's itemContext(…, sec.Template, …). A name-only template declares no
+// fields, so its source view copies none, exactly as an unresolved template did
+// before.
 //
-// Only authored instances appear: a section invoked by the `section` helper is a
-// direct render call, never part of the parsed tree, so it is absent from
-// `.data` exactly as it is absent from the rendered-HTML list. `.data` is data,
-// not a helper, so exposing it adds nothing to the layout function set
-// (template-context, section-data-context).
-func (r *renderer) dataContext(sections []slide.Section, parent map[string]any) map[string]any {
-	out := make(map[string]any, len(sections))
-	counts := make(map[string]int, len(sections))
-	for i := range sections {
-		counts[sections[i].Name]++
+// Only authored instances become nodes: a section invoked by the `section`
+// helper is a direct render call, never part of the parsed tree, so it is
+// absent from `.data` exactly as it is absent from the rendered-HTML list.
+func (r *renderer) contextNodes(sections []slide.Section) []template.ContextNode {
+	if len(sections) == 0 {
+		return nil
 	}
+	nodes := make([]template.ContextNode, len(sections))
 	for i := range sections {
 		sec := &sections[i]
 		tmpl, _ := r.reg.Lookup(sec.Template)
-		raw := r.rawContext(sec.Frontmatter, tmpl, sec.Body)
-		entry := map[string]any{
-			"raw":  raw,
-			"item": itemContext(sec.Index, counts[sec.Name], sec.Name, sec.Template, parent),
-			"data": r.dataContext(sec.Children, raw),
+		// A name the registry could not return still labels the item, as the
+		// previous builder did; a name-only template declares no fields, so
+		// the source view copies none, exactly as before.
+		if tmpl == nil && sec.Template != "" {
+			tmpl = &template.Template{Name: sec.Template}
 		}
-		list, _ := out[sec.Name].([]map[string]any)
-		out[sec.Name] = append(list, entry)
+		nodes[i] = template.ContextNode{
+			Name:     sec.Name,
+			Index:    sec.Index,
+			Template: tmpl,
+			Source:   sec.Frontmatter,
+			Body:     sec.Body,
+			Children: r.contextNodes(sec.Children),
+		}
 	}
-	return out
+	return nodes
 }
 
 // fieldValue converts one validated field value to its layout representation.
