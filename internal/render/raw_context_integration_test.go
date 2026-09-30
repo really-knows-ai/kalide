@@ -25,10 +25,12 @@ import (
 //   - `rawprobele` (section) reads its own `.raw.name` and its `.item`, so the
 //     descriptor's position among same-name siblings is visible at two depths.
 //
-// Every layout guards `.raw`, `.data` and `.item` with `{{ if }}`: a
-// library example's load-time context carries only deck/slide plus the field
-// values (checkLibraryExample), so the guard keeps each layout executable in
-// isolation too, while the real renderer executes it with the full context.
+// The layouts read `.raw`, `.data` and (for the section templates) `.item`
+// directly: checkLibraryExample now supplies those reserved contexts to the
+// load-time example execution, exactly as the renderer does, so no guard is
+// needed to keep a layout executable in isolation. Guards remain only where
+// they select on OPTIONAL CONTENT — an empty body or an absent child/rendered
+// section — so the assertions below can tell "absent" from a source value.
 const (
 	rawProbeSlideTemplateYAML = `description: slide probing the reserved raw/data context through its layout
 fields:
@@ -46,14 +48,14 @@ body:
 
 	rawProbeSlideLayout = `<section class="raw-probe">` +
 		`<h1 class="slide-title">{{.title}}</h1>` +
-		`<span class="slide-raw-title">{{if .raw}}{{.raw.title}}{{else}}absent{{end}}</span>` +
+		`<span class="slide-raw-title">{{.raw.title}}</span>` +
 		`<div class="slide-body">{{.body}}</div>` +
-		`<span class="slide-raw-body">{{if .raw}}{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}{{else}}absent{{end}}</span>` +
+		`<span class="slide-raw-body">{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}</span>` +
 		`<span class="slide-blocks-count">{{if .blocks}}{{len .blocks}}{{else}}0{{end}}</span>` +
-		`<span class="slide-data-keys">{{if .data}}{{range $k, $v := .data}}{{$k}};{{end}}{{end}}</span>` +
-		`<span class="slide-data-block-count">{{if .data}}{{if .data.blocks}}{{len .data.blocks}}{{else}}0{{end}}{{else}}0{{end}}</span>` +
+		`<span class="slide-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`<span class="slide-data-block-count">{{if .data.blocks}}{{len .data.blocks}}{{else}}0{{end}}</span>` +
 		`{{range .blocks}}{{.}}{{end}}` +
-		`{{if .data}}{{range .data.blocks}}` +
+		`{{range .data.blocks}}` +
 		`<span class="data-block" data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}">` +
 		`<span class="data-block-raw-title">{{.raw.title}}</span>` +
 		`<span class="data-block-raw-body">{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}</span>` +
@@ -65,7 +67,7 @@ body:
 		`</span>` +
 		`{{end}}` +
 		`</span>` +
-		`{{end}}{{end}}` +
+		`{{end}}` +
 		`{{section "rawprobeblock" (dict "title" "Helper block")}}` +
 		`</section>`
 
@@ -91,11 +93,11 @@ body:
   mode: optional
 `
 
-	rawProbeBlockLayout = `<div class="raw-block"{{if .item}} data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}"{{end}}>` +
+	rawProbeBlockLayout = `<div class="raw-block" data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}">` +
 		`<span class="block-title">{{.title}}</span>` +
-		`<span class="block-raw-title">{{if .raw}}{{.raw.title}}{{else}}absent{{end}}</span>` +
+		`<span class="block-raw-title">{{.raw.title}}</span>` +
 		`<div class="block-body">{{if .body}}{{.body}}{{else}}absent{{end}}</div>` +
-		`<span class="block-raw-body">{{if .raw}}{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}{{else}}absent{{end}}</span>` +
+		`<span class="block-raw-body">{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}</span>` +
 		`<span class="block-leaf-count">{{if .leaves}}{{len .leaves}}{{else}}0{{end}}</span>` +
 		`{{if .leaves}}{{range .leaves}}{{.}}{{end}}{{end}}` +
 		`</div>`
@@ -114,10 +116,10 @@ body:
   mode: disallowed
 `
 
-	rawProbeLeafLayout = `<span class="raw-leaf"{{if .item}} data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" data-template="{{.item.template}}"{{end}}>` +
+	rawProbeLeafLayout = `<span class="raw-leaf" data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" data-template="{{.item.template}}">` +
 		`<span class="leaf-name">{{.name}}</span>` +
-		`<span class="leaf-raw-name">{{if .raw}}{{.raw.name}}{{else}}absent{{end}}</span>` +
-		`<span class="leaf-parent-title">{{if .item}}{{.item.parent.title}}{{else}}absent{{end}}</span>` +
+		`<span class="leaf-raw-name">{{.raw.name}}</span>` +
+		`<span class="leaf-parent-title">{{.item.parent.title}}</span>` +
 		`</span>`
 
 	rawProbeLeafExample = "```\nname: Ada\n```\n"
