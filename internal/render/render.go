@@ -381,9 +381,11 @@ func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sec
 // its `<field>_format` sibling; it may be nil for a list element, which carries
 // no selector of its own. secCtx carries the reserved `.deck`/`.slide` context
 // through a section-template-as-type field's nested construction and a list
-// item's recursion, so a nested section instance (and each item of a list of
-// that type) is built with the same context as the section instance it lives
-// in, at every composition depth (section-template-context).
+// item's recursion, so a nested section-template-as-type value (and each item
+// of a list of that type) is built with the same slide context as the section
+// instance it lives in, at every composition depth (section-template-context).
+// Such a value is data-only and its layout is never executed, so it carries no
+// `.item` descriptor (template-language).
 func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, secCtx *sectionCtx) (any, error) {
 	switch f.Type {
 	case template.FieldText:
@@ -428,7 +430,17 @@ func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, s
 		if !ok {
 			return raw, nil
 		}
-		return r.values(m, nested, secCtx)
+		// A section template used as a field type stays data-only: its value
+		// is a map of typed field values, never HTML, and its layout is
+		// never executed. It keeps the instance's reserved `.deck`/`.slide`
+		// context (a section-template-as-type value is still a section
+		// template's data) but not `.item`: a field value is not an instance
+		// among sibling sections (template-language, section-template-context).
+		var nestedCtx *sectionCtx
+		if secCtx != nil {
+			nestedCtx = &sectionCtx{cfg: secCtx.cfg, meta: secCtx.meta, total: secCtx.total}
+		}
+		return r.values(m, nested, nestedCtx)
 
 	default:
 		// boolean, enum, link and image values render as written.
