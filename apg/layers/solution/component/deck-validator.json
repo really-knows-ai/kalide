@@ -66,6 +66,11 @@
       "kind": "details",
       "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.suggest-ownership-feedback-4",
+      "properties": {}
     }
   ]
 }
