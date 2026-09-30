@@ -586,18 +586,21 @@ type SectionCall struct {
 // or a slide-usage template is rejected, because sections never accept slide
 // templates.
 //
-// Field handling applies the target's declared defaults FIRST and then validates
-// the effective map with CheckValues:
+// Field handling materialises the target's declared defaults FIRST and then
+// validates the effective map with CheckValues:
 //
-//   - every declared field the call leaves out takes its Field.Default when it
-//     has one, so a required field that carries a default is satisfied and only
-//     an undefaulted required field is still reported missing (the note-15
-//     mismatch);
-//   - a key the target does not declare, or a supplied value that breaks a
-//     field rule, is reported as CheckValues reports it.
+//   - applyFieldDefaults copies the call's supplied fields and fills in every
+//     declared field the call leaves out with its Field.Default when it has one,
+//     so the target executes with the values the renderer would give it;
+//   - CheckValues reports a key the target does not declare or a supplied value
+//     that breaks a field rule.
 //
-// This is the same defaults-first rule the registry's build-time helper check
-// applies (section-helper-load-checks).
+// The defaulted values are carried for execution, not to satisfy the required
+// check: CheckValues independently agrees that an omitted required field
+// carrying a default is satisfied (it is schema-only and never needs the
+// default), so only an undefaulted required field is still reported missing.
+// This matches the registry's build-time helper check (section-helper-load-checks),
+// which likewise requires each required field to be supplied or carry a default.
 //
 // The body is checked against the target's body rule with CheckBody, and because
 // the helper passes no child sections through, a body whose heading names a
