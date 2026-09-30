@@ -48,6 +48,15 @@ type Registry struct {
 	mu        sync.RWMutex
 	content   fs.FS
 	templates map[string]*Template
+
+	// helperTargets memoises HelperTargets, keyed by template name: a present
+	// key holds a template's computed section-helper reference names —
+	// including nil for a layout with no helper calls, which is distinct from
+	// an absent key that has not been computed yet. It is lazily filled on
+	// first use and guarded by mu. It never needs invalidation: registered
+	// templates are treated as immutable and Register refuses to re-register a
+	// name, so a template's layout text cannot change after it is cached.
+	helperTargets map[string][]string
 }
 
 // NewRegistry returns an empty registry. content is the fs.FS holding each
@@ -224,6 +233,70 @@ func (r *Registry) Lookup(name string) (*Template, bool) {
 	defer r.mu.RUnlock()
 	t, ok := r.templates[name]
 	return t, ok
+}
+
+// HelperTargets returns the section-template names the named template's layout
+// references through the `section` helper, in source order and de-duplicated —
+// the helper-call edges the render path follows when it decides which layouts
+// belong in a slide's shared namespace.
+//
+// It is the registry-level, lazily memoised accessor over Section.HelperRefs:
+// the first call for a name re-parses that template's Layout.Text with the
+// canonical layout func map (media/section/dict/list) and caches the result, so
+// a renderer walking a whole slide need not re-parse every reachable layout per
+// RenderSlide. Repeated calls return the identical cached slice.
+//
+// It is computed on first use rather than during Validate because the render
+// path may use a registry that was never Validated: `kalide start` builds the
+// served registry with NewRegistryFromLibrary and validates deck content, not
+// the template registry. Computing lazily therefore covers every construction
+// path — NewRegistry/Register/Validate, NewRegistryFromLibrary and LoadTemplate
+// — whether or not Validate ever ran.
+//
+// A HelperRefs error is swallowed deliberately, exactly as the renderer
+// swallows it: load has already validated every layout, the only way HelperRefs
+// can fail is a layout that does not re-parse with the canonical func map, and
+// the renderer's own Parse reports that same text. The result is cached even
+// when empty, so a layout with no helper calls is re-parsed at most once. An
+// unknown name yields nil and is not cached (there is no layout to parse).
+//
+// The returned slice is the cached one, not a copy: the caller must not mutate
+// it. The accessor is safe for concurrent use — the cache is guarded by the
+// registry mutex — and needs no invalidation because registered templates are
+// immutable and a name can never be re-registered (Register rejects a
+// duplicate).
+func (r *Registry) HelperTargets(name string) []string {
+	r.mu.RLock()
+	if r.helperTargets != nil {
+		if refs, ok := r.helperTargets[name]; ok {
+			r.mu.RUnlock()
+			return refs
+		}
+	}
+	r.mu.RUnlock()
+
+	t, ok := r.Lookup(name)
+	if !ok || t == nil {
+		return nil
+	}
+	refs, err := NewSection(r.Lookup).HelperRefs(t)
+	if err != nil {
+		refs = nil
+	}
+
+	r.mu.Lock()
+	if r.helperTargets == nil {
+		r.helperTargets = make(map[string][]string)
+	}
+	if existing, cached := r.helperTargets[name]; cached {
+		// Another goroutine computed the same entry while we were parsing;
+		// return its slice so every caller shares one backing array.
+		refs = existing
+	} else {
+		r.helperTargets[name] = refs
+	}
+	r.mu.Unlock()
+	return refs
 }
 
 // Templates returns every registered template, sorted by name. The slice is a
