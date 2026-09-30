@@ -26,6 +26,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.cli-init",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.verify-changes",
+      "properties": {}
     }
   ],
   "in": [
