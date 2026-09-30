@@ -347,8 +347,9 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 // the source view of its authored frontmatter and body — and `.data` context —
 // its authored child sections as data, each child's `.item.parent` being this
 // instance's source field values, as template.DataContext's parent rule requires
-// — are built here, `.raw` by rawContext and `.data` by template.DataContext
-// over this instance's child context nodes, and merged into the instance map by
+// — are built here by the shared builders, `.raw` by template.RawContext and
+// `.data` by template.DataContext over this instance's child context nodes, and
+// merged into the instance map by
 // values, next to the converted field values and the reserved
 // `deck`/`slide`/`item` entries, at every composition depth
 // (raw-source-context, section-data-context). Its body is
@@ -369,8 +370,10 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	// reserved `.raw` (its authored source field values and body) and `.data`
 	// (its authored children as data, parented on its own source field values)
 	// next to its converted field values and `deck`/`slide`/`item`. They are
-	// built before values so values merges them into the instance map.
-	secCtx.raw = r.rawContext(sec.Frontmatter, tmpl, sec.Body)
+	// built before values so values merges them into the instance map, and
+	// by the same shared builders the load-time example execution uses, so the
+	// two halves cannot drift (template-context).
+	secCtx.raw = template.RawContext(sec.Frontmatter, tmpl, sec.Body)
 	secCtx.data = template.DataContext(r.contextNodes(sec.Children), secCtx.raw)
 
 	data, err := r.values(sec.Frontmatter, tmpl, secCtx)
