@@ -51,6 +51,11 @@
       "kind": "depends-on",
       "target": "requirements.requirement.theme-media-references",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.authoring",
+      "properties": {}
     }
   ],
   "in": [
