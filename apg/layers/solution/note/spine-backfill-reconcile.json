@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.upgrade",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.deck-renderer",
+      "properties": {}
     }
   ],
   "in": []
