@@ -8,11 +8,6 @@
   },
   "out": [
     {
-      "kind": "realised-by",
-      "target": "solution.container.cli-binary",
-      "properties": {}
-    },
-    {
       "kind": "represents",
       "target": "solution.person.template-author",
       "properties": {}
