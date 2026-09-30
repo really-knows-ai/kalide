@@ -11,6 +11,11 @@
       "kind": "contains",
       "target": "domain.entity.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.entity.template-author",
+      "properties": {}
     }
   ],
   "in": []
