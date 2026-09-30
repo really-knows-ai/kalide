@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-30
+
+### Added
+
+- `kalide upgrade`: brings an existing deck or library in the current directory
+  forward to the running binary, entirely offline. It refreshes kalide-owned
+  scaffold files (seed starters, default theme, `AGENTS.md` guides) that the
+  author has not edited — identified against an embedded catalog of known
+  scaffold versions — and applies kalide's ordered library-format migrations.
+  It never overwrites author content: an edited file is left untouched and
+  reported, and a deleted seed starter stays deleted. It takes no path argument
+  and has no `--force`. If the upgraded library fails validation, both the
+  refresh and the migration are undone.
+- Nested sections: section headings now nest by depth (`#` through `######`). A
+  heading one level deeper opens a child section declared by the parent
+  instance's resolved template, and child instances are counted per parent
+  against the declared `min`/`max`. `sections:` is accepted in any template
+  manifest, so a section template can declare its own child sections, up to six
+  levels of composition; over-deep chains and cycles are errors naming the
+  offending template chain.
+- Sections render bottom-up: a parent section's layout receives its children as
+  already-rendered HTML lists.
+- A new reserved `.item` context in every section instance: `.item.index`,
+  `.item.number`, `.item.count`, `.item.first`, `.item.last`, `.item.section`,
+  `.item.template` and `.item.parent`. `item` is now a reserved name and cannot
+  be declared as a field or section.
+- Theme CSS may reach another theme's directory with the reserved
+  `theme:<name>/` prefix, so one theme can build on another. Both `media:` and
+  `theme:<name>/` now work in `@import` as well as `url()`, and imports are
+  followed across trees, bounded and cycle-safe; references are rewritten to
+  served URLs at serve time.
+- The demo project gains a nested `group` section template and a nested-sections
+  slide.
+
+### Changed
+
+- Validation errors for sections, fields and body rules inside nested sections
+  carry an indexed containment path locating the offending instance.
+- `example.md` validation recurses into nested section examples, and the gallery
+  and `kalide templates` label child-section relationships by usage.
+- `##`/`###` headings are ordinary body subheadings only where the enclosing
+  template declares no child sections; otherwise every heading is a section
+  marker. `# notes` is recognised only as a top-level heading.
+- An unprefixed relative reference in theme CSS resolves from the referencing
+  stylesheet's own location and is confined to its own tree.
+- Both embedded authoring guides (deck and library `AGENTS.md`) are rewritten to
+  document `kalide upgrade`, nested sections, `.item`, and the `theme:`/`media:`
+  prefixes.
+
 ## [0.8.0] - 2026-09-29
 
 ### Added
@@ -125,7 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/really-knows-ai/kalide/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/really-knows-ai/kalide/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/really-knows-ai/kalide/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/really-knows-ai/kalide/compare/v0.6.0...v0.7.0
