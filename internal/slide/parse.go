@@ -427,8 +427,8 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 			}
 			childCounts[depth][parent.path][name]++
 			if d.max > 0 && childCounts[depth][parent.path][name] > d.max {
-				return nil, nil, parseError(file, headingLine,
-					"section %q: at most %d allowed, found %d", name, d.max, childCounts[depth][parent.path][name])
+				return nil, nil, &ParseError{File: file, Line: headingLine, Path: chainPath(parent.path, name, -1),
+					Msg: fmt.Sprintf("section %q: at most %d allowed, found %d", name, d.max, childCounts[depth][parent.path][name])}
 			}
 		}
 		siblingIndex := topCounts[name] - 1
