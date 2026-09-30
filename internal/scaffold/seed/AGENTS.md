@@ -264,6 +264,12 @@ sections:
 `name` and `accepted` are required; a section may accept only section
 templates, never slide templates.
 
+`sections:` is accepted in **any** template's manifest — a slide template and,
+equally, a section template. A section template that declares `sections:` gives
+its own instances nested child sections: a heading one level deeper than the
+section heading resolves against that section template's declarations rather
+than the slide's (see **Sections**).
+
 ### Body rules
 
 Every template has an implied `body` field whose content is the Markdown after
