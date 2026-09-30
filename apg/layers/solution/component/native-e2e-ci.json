@@ -26,6 +26,11 @@
       "kind": "realised-by",
       "source": "domain.service.publish-release",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.test-harness-test-code-anchors",
+      "properties": {}
     }
   ]
 }

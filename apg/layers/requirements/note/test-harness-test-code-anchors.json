@@ -4,6 +4,12 @@
   "name": "test-harness-test-code-anchors",
   "body": "source: section-helpers boy-scout pass before merge (item 4). Inconsistency: solution.component.native-e2e-ci anchors e2e/native_test.go (go.github.com/really-knows-ai/kalide/e2e.TestNativeRelease) and solution.component.anonymous-install-e2e anchors e2e/install_test.go (go.github.com/really-knows-ai/kalide/e2e.TestAnonymousPackageInstall); a broad reading of the no-test-code-anchor rule would flag them, but both components exist to own exactly that test code.\n\nResolution [with user]: scope the rule to PRODUCTION components — a test-harness/CI component may anchor its own test files, because exercising them is its subject matter. Neither is a production component: native-e2e-ci is realised by domain.service.publish-release (requirement native-ci-verification) and anonymous-install-e2e by domain.service.install-kalide (homebrew-install / linux-install / scoop-install), and both component bodies define them as the e2e tests themselves. The governing record requirements.note.agent-guide-test-anchor-removed is updated with the scope; agent-guide is a production component, so its removed test anchor (internal/scaffold/agentsguide_test.go) stays removed. Note both e2e test files are code_type src, not test, so a code_type-based gate would not flag them either; the rule is prose/review-scoped.\n\nOpen question (not changed): workflow File nodes exist — .github/workflows/native-e2e.yml (currently unowned) and .github/workflows/release.yml (owned by solution.component.release-workflow, which wires anonymous-install-e2e's `package-install-e2e` job). Whether the CI components should additionally anchor their workflow files (option B in the change request) is left to the coordinator; option A (scope the rule) was chosen as most consistent with the spec, whose rule already says \"no production component anchors test code\" and whose coverage gate only requires non-test Go files under internal/ and cmd/ to be owned.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.native-e2e-ci",
+      "properties": {}
+    }
+  ],
   "in": []
 }
