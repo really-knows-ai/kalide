@@ -43,6 +43,11 @@
       "kind": "details",
       "source": "requirements.note.nested-sections-requirements",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-markdown-allowed-subset",
+      "properties": {}
     }
   ]
 }
