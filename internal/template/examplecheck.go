@@ -65,8 +65,9 @@ func checkLibraryExamples(lib *Library) error {
 // execution context alongside deck/slide (raw-source-context,
 // section-data-context, template-context, item-context): `.raw` is the
 // example's original source field values and body (RawContext) and
-// `.data` is its authored child sections as data (exampleDataContext), both
-// mirroring the render-time rawContext/dataContext, so an unguarded
+// `.data` is its authored child sections as data (exampleContextNodes adapted
+// to the neutral tree and walked by DataContext), both mirroring the
+// render-time rawContext/dataContext, so an unguarded
 // `{{ section "…" … .raw.body }}` or `{{ .data.<section> }}` access executes
 // at step 7 instead of failing LoadLibrary. A section template's own layout is
 // itself a section instance, so it additionally gets the one-item `.item`
@@ -118,7 +119,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 			source[k] = v
 		}
 		ctx["raw"] = RawContext(source, def, block.Body)
-		ctx["data"] = exampleDataContext(block.Sections, def, resolve, nil)
+		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
 
 		if lt.Kind == KindSection {
 			// A section template's own layout is a section instance, so its
@@ -135,7 +136,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 				"section":  lt.Name,
 				"template": lt.Name,
 				// A typed nil map, matching the shape itemContext,
-				// ResolveSectionCall and exampleDataContext publish for an
+				// ResolveSectionCall and DataContext publish for an
 				// absent parent: `{{if .parent}}` is false and a chained
 				// `.parent.<field>` evaluates to no value rather than failing.
 				"parent": map[string]any(nil),
@@ -200,48 +201,41 @@ func exampleRawContext(data map[string]any, t *Template, body string) map[string
 	return out
 }
 
-// exampleDataContext builds the reserved `.data` execution-context entry for a
-// load-time example execution (templates-dir-validation step 7), mirroring the
-// renderer's dataContext (internal/render/render.go) so the load-time context
-// matches the render-time one (section-data-context, raw-source-context,
-// item-context, template-context). It exposes the authored child sections the
-// example's parsed tree carries, as DATA, in parallel with the rendered-HTML
-// section list the layout sees under each declared section name.
-//
-// The result is keyed by declared section name; each key maps to a
-// source-ordered list with one entry per authored instance of that section, and
-// each entry is a map carrying:
-//
-//   - `raw`: the instance's original source field values and body source
-//     (exampleRawContext) — the source view of its fields;
-//   - `item`: the instance's sibling descriptor, matching the render side's
-//     itemContext shape — its zero-based `index` and one-based `number` among
-//     the same-name siblings, their `count`, `first`/`last`, the declared
-//     `section` name, the resolved `template` name, and `parent` — the
-//     enclosing instance's source field values, or nil at the example's top
-//     level;
-//   - `data`: the instance's own child sections as data, keyed and shaped the
-//     same way (the recursion), with the instance's `raw` as the children's
-//     parent, so the whole authored example tree is addressable as data.
+// exampleContextNodes adapts the load-time example tree into the neutral
+// []ContextNode the shared DataContext walks (section-data-context,
+// raw-source-context, item-context, template-context). It replaces the old
+// load-time `.data` builder: it no longer builds the `.data` map itself, only
+// the neutral tree, which DataContext then walks — the same walk the render
+// side performs over its own slide.Section tree (mapped through a parallel
+// adapter) — so the load-time and render-time `.data` views cannot drift. A
+// node's `raw` view is built by RawContext from its Source, Body and Template
+// when DataContext walks the tree.
 //
 // sections is one parent's authored child sections in source order, exactly as
 // parseExampleBlock produces them (exampleBlock.Sections); def is the parent's
 // resolved template, whose declarations name the accepted templates an instance
 // without an explicit `template:` selector resolves to; resolve looks up a
-// template by name; parent is the enclosing instance's source field values (the
-// same map exposed as that instance's `.raw`), or nil at the top level. A nil
-// resolve yields an unresolved template rather than a panic.
+// template by name. A nil resolve yields unresolved nodes rather than a panic.
 //
-// Only authored instances appear: a section invoked by the `section` helper is a
-// direct call, never part of the parsed tree, so it is absent from `.data`
-// exactly as it is absent from the rendered-HTML list.
-func exampleDataContext(sections []exampleSection, def *Template, resolve func(string) (*Template, bool), parent map[string]any) map[string]any {
-	out := make(map[string]any, len(sections))
-	counts := make(map[string]int, len(sections))
-	for i := range sections {
-		counts[sections[i].Name]++
+// Each node's Template is the instance's resolved template — an explicit
+// `template:` selector, otherwise the single accepted template when the section
+// accepts exactly one, the same resolution validateExampleBlock enforces. When
+// that names a template but resolve cannot return it (a nil resolver, or a name
+// outside the library), the node still carries a name-only template, so
+// DataContext's `item.template` label stays the declared name instead of
+// dropping to "" — matching this builder's previous item.template. A name-only
+// template declares no fields, so its source view copies none, exactly as an
+// unresolved template did before.
+//
+// Only authored instances become nodes: a section invoked by the `section`
+// helper is a direct call, never part of the parsed tree, so it is absent from
+// `.data` exactly as it is absent from the rendered-HTML list.
+func exampleContextNodes(sections []exampleSection, def *Template, resolve func(string) (*Template, bool)) []ContextNode {
+	if len(sections) == 0 {
+		return nil
 	}
 	sect := NewSection(resolve)
+	nodes := make([]ContextNode, len(sections))
 	for i := range sections {
 		sec := &sections[i]
 		// The instance's resolved template: an explicit `template:` selector,
@@ -257,25 +251,22 @@ func exampleDataContext(sections []exampleSection, def *Template, resolve func(s
 		if resolve != nil {
 			tmpl, _ = resolve(name)
 		}
-		raw := exampleRawContext(sec.Frontmatter, tmpl, sec.Body)
-		entry := map[string]any{
-			"raw": raw,
-			"item": map[string]any{
-				"index":    sec.Index,
-				"number":   sec.Index + 1,
-				"count":    counts[sec.Name],
-				"first":    sec.Index == 0,
-				"last":     sec.Index == counts[sec.Name]-1,
-				"section":  sec.Name,
-				"template": name,
-				"parent":   parent,
-			},
-			"data": exampleDataContext(sec.Sections, tmpl, resolve, raw),
+		// A name the resolver could not return still labels the item, as the
+		// previous builder did; a name-only template declares no fields, so
+		// the source view copies none, exactly as before.
+		if tmpl == nil && name != "" {
+			tmpl = &Template{Name: name}
 		}
-		list, _ := out[sec.Name].([]map[string]any)
-		out[sec.Name] = append(list, entry)
+		nodes[i] = ContextNode{
+			Name:     sec.Name,
+			Index:    sec.Index,
+			Template: tmpl,
+			Source:   sec.Frontmatter,
+			Body:     sec.Body,
+			Children: exampleContextNodes(sec.Sections, tmpl, resolve),
+		}
 	}
-	return out
+	return nodes
 }
 
 // exampleSectionHelper is the template-local `section` func the load-time
