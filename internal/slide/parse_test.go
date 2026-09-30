@@ -94,7 +94,7 @@ func testCatalogue() fakeCatalogue {
 		// are the same shape with a per-parent max/min on "blocks", so a
 		// parent's repeat bounds can be exercised over its own children alone.
 		"grouped": {usage: "slide", sections: []string{"columns"},
-			accepted: map[string][]string{"columns": {"group", "limitedgroup", "needsgroup"}}},
+			accepted: map[string][]string{"columns": {"group", "limitedgroup", "needsgroup", "multigroup"}}},
 		"group": {usage: "section", sections: []string{"blocks"},
 			accepted: map[string][]string{"blocks": {"block"}}},
 		"limitedgroup": {usage: "section", sections: []string{"blocks"},
@@ -103,7 +103,10 @@ func testCatalogue() fakeCatalogue {
 		"needsgroup": {usage: "section", sections: []string{"blocks"},
 			accepted: map[string][]string{"blocks": {"block"}},
 			min:      map[string]int{"blocks": 2}},
+		"multigroup": {usage: "section", sections: []string{"blocks"},
+			accepted: map[string][]string{"blocks": {"block", "brick"}}},
 		"block": {usage: "section"},
+		"brick": {usage: "section"},
 	}
 }
 
@@ -893,6 +896,123 @@ func testParseSectionFence(t *testing.T) {
 			"```",
 		), cat)
 		wantParseErrorPath(t, err, file, 7, "columns[0]", "frontmatter fence is only allowed immediately after a section heading")
+	})
+
+	// A child section carries its own frontmatter fence, at its own depth
+	// (section-frontmatter, slide-sections). The fence's rules are unchanged
+	// at depth and the errors carry the child's containment path.
+
+	t.Run("child frontmatter fence resolves at depth", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"```",
+			"template: block",
+			"weight: 4",
+			"```",
+			"child body",
+		), cat)
+		blocks := slide.Sections[0].Children[0]
+		if blocks.FenceLine != 11 || blocks.TemplateLine != 12 || blocks.Template != "block" {
+			t.Errorf("blocks = %q (fence %d, key %d), want %q (fence 11, key 12)", blocks.Template, blocks.FenceLine, blocks.TemplateLine, "block")
+		}
+		if blocks.Frontmatter["weight"] != 4 {
+			t.Errorf("blocks.Frontmatter[weight] = %v (%T), want 4", blocks.Frontmatter["weight"], blocks.Frontmatter["weight"])
+		}
+	})
+
+	t.Run("language tag on a child's fence errors with the child path", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"```yaml",
+			"weight: 4",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 11, "columns[0] › blocks[0]",
+			`section frontmatter fence must not have a language tag ("yaml")`)
+	})
+
+	t.Run("template required at a child's fence when >1 accepted", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: multigroup",
+			"```",
+			"",
+			"## blocks",
+			"```",
+			"weight: 4",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 11, "columns[0] › blocks[0]",
+			`section "blocks": a template: is required when the section accepts more than one template`)
+	})
+
+	t.Run("template optional at a child's fence with exactly one accepted", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"```",
+			"weight: 4",
+			"```",
+		), cat)
+		blocks := slide.Sections[0].Children[0]
+		if blocks.Template != "block" {
+			t.Errorf("blocks.Template = %q, want %q (the single accepted template)", blocks.Template, "block")
+		}
+		if blocks.TemplateLine != 0 {
+			t.Errorf("blocks.TemplateLine = %d, want 0 (no explicit template: key)", blocks.TemplateLine)
+		}
+	})
+
+	t.Run("fence not directly after a child heading errors with the child path", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"```",
+			"weight: 4",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 12, "columns[0] › blocks[0]",
+			"frontmatter fence is only allowed immediately after a section heading")
 	})
 }
 
