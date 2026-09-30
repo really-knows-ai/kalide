@@ -266,7 +266,8 @@ func testParseTemplate(t *testing.T) {
 }
 
 // testParseStructure covers the body-before-first-section boundary and the
-// parsed Slide/Section/Notes shape.
+// parsed Slide/Section/Notes shape, including a nested tree whose Section
+// values carry their Level, Index and Children (slide-sections).
 func testParseStructure(t *testing.T) {
 	cat := testCatalogue()
 	const file = "slides/1-intro.md"
@@ -312,6 +313,12 @@ func testParseStructure(t *testing.T) {
 	if columns.Name != "columns" || columns.HeadingLine != 9 {
 		t.Errorf("Section[0] = %q line %d, want %q line 9", columns.Name, columns.HeadingLine, "columns")
 	}
+	if columns.Level != 1 || columns.Index != 0 {
+		t.Errorf("Section[0] level %d index %d, want level 1 index 0", columns.Level, columns.Index)
+	}
+	if len(columns.Children) != 0 {
+		t.Errorf("Section[0].Children = %+v, want none", columns.Children)
+	}
 	if columns.Template != "column" {
 		t.Errorf("columns.Template = %q, want %q (resolved from the single accepted template)", columns.Template, "column")
 	}
@@ -320,6 +327,9 @@ func testParseStructure(t *testing.T) {
 	}
 	if gallery.Name != "gallery" || gallery.HeadingLine != 12 {
 		t.Errorf("Section[1] = %q line %d, want %q line 12", gallery.Name, gallery.HeadingLine, "gallery")
+	}
+	if gallery.Level != 1 || gallery.Index != 0 {
+		t.Errorf("Section[1] level %d index %d, want level 1 index 0", gallery.Level, gallery.Index)
 	}
 	if gallery.FenceLine != 13 || gallery.TemplateLine != 14 || gallery.Template != "fig" {
 		t.Errorf("gallery template = %q (fence %d, key %d), want %q (fence 13, key 14)",
@@ -336,6 +346,49 @@ func testParseStructure(t *testing.T) {
 		t.Errorf("Notes = line %d body %q line %d, want line 17 body %q line 18",
 			slide.Notes.HeadingLine, slide.Notes.Body, slide.Notes.BodyLine, "notes here")
 	}
+
+	t.Run("nested tree carries level, index and children", func(t *testing.T) {
+		nested := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: group",
+			"```",
+			"",
+			"## blocks",
+			"```",
+			"template: block",
+			"```",
+			"",
+			"## blocks",
+			"```",
+			"template: block",
+			"```",
+		), cat)
+
+		if len(nested.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(nested.Sections))
+		}
+		columns := nested.Sections[0]
+		if columns.Level != 1 || columns.Index != 0 {
+			t.Errorf("columns level %d index %d, want level 1 index 0", columns.Level, columns.Index)
+		}
+		if len(columns.Children) != 2 {
+			t.Fatalf("len(columns.Children) = %d, want 2", len(columns.Children))
+		}
+		for i := range columns.Children {
+			child := columns.Children[i]
+			if child.Name != "blocks" || child.Level != 2 || child.Index != i {
+				t.Errorf("Children[%d] = %q level %d index %d, want %q level 2 index %d", i, child.Name, child.Level, child.Index, "blocks", i)
+			}
+			if len(child.Children) != 0 {
+				t.Errorf("Children[%d].Children = %+v, want none", i, child.Children)
+			}
+		}
+	})
 }
 
 // testParseNestedSections covers the heading-depth nesting contract of
