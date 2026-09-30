@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-field-rules",
+  "body": "Spine completion [autonomous]. requirements.requirement.field-rules drove only domain.value.field; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.template-registry (the field rules are part of the template schema the registry owns). Added `implemented-by` solution.component.template-registry -> internal/template.CheckValues (enforces required/default/max_length/min/max etc. for field values). Path: field-rules -> template-registry -> solution.component.template-registry -> internal/template.CheckValues. Existing `drives` to domain.value.field kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
