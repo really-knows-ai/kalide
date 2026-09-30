@@ -309,17 +309,29 @@ func itemContext(index, count int, section, tmpl string, parent map[string]any) 
 	}
 }
 
-// sectionCtx carries the reserved `.deck`/`.slide` context (template-context,
-// section-template-context) threaded into values/fieldValue when they are
-// constructing a SECTION INSTANCE — top-level (slideData), nested through a
-// section-template-as-type field, or a list item of that type. A nil sectionCtx
-// means the map under construction is the slide LAYOUT map, which already
-// carries its own `deck`/`slide` entries (slideData) and must not gain a
-// second, redundant pair here.
+// sectionCtx carries the reserved `.deck`/`.slide`/`.item` context
+// (template-context, section-template-context, item-context) threaded into
+// values/fieldValue when they are constructing a SECTION INSTANCE — top-level
+// (slideData), nested through a section-template-as-type field, or a list item
+// of that type. A nil sectionCtx means the map under construction is the slide
+// LAYOUT map, which already carries its own `deck`/`slide` entries (slideData)
+// and must not gain a second, redundant pair here.
 type sectionCtx struct {
 	cfg   *deck.Config
 	meta  deck.Slide
 	total int
+
+	// item is the reserved `.item` descriptor for the instance whose map is
+	// under construction (item-context), or nil when the map is not a section
+	// instance: the slide LAYOUT map and a section-template-as-type field
+	// value are data-only and carry no sibling descriptor.
+	item map[string]any
+
+	// parent is the enclosing section instance's field values, the value a
+	// nested instance's descriptor exposes as `.item.parent`
+	// (item-context). It is nil at the top level, where the parent is the
+	// slide, not a section instance.
+	parent map[string]any
 }
 
 // values converts one map of validated field data against t's field schema,
