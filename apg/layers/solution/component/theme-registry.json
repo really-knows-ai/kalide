@@ -14,6 +14,11 @@
       "kind": "implemented-by",
       "target": "internal/theme/load.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/theme/theme.go",
+      "properties": {}
     }
   ],
   "in": [
