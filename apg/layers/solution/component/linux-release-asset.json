@@ -9,6 +9,11 @@
       "kind": "implemented-by",
       "target": ".github/workflows/release.yml",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "Makefile",
+      "properties": {}
     }
   ],
   "in": [
