@@ -51,6 +51,11 @@
       "kind": "details",
       "source": "solution.note.nested-sections-solution",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.render-sections",
+      "properties": {}
     }
   ]
 }
