@@ -24,6 +24,11 @@
       "kind": "details",
       "target": "solution.person.template-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.person.maintainer",
+      "properties": {}
     }
   ],
   "in": []

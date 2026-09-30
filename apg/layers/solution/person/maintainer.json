@@ -11,5 +11,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "global.note.represents-unused",
+      "properties": {}
+    }
+  ]
 }
