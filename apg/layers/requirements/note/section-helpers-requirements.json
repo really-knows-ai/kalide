@@ -69,6 +69,11 @@
       "kind": "details",
       "target": "requirements.constraint.section-cycle-error-chain",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.library-agent-guide",
+      "properties": {}
     }
   ],
   "in": []
