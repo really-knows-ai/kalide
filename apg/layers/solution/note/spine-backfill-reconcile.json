@@ -59,6 +59,11 @@
       "kind": "details",
       "target": "solution.component.templates-gallery",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.slide-parser",
+      "properties": {}
     }
   ],
   "in": []
