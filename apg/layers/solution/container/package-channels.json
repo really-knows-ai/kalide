@@ -48,6 +48,11 @@
       "kind": "contains",
       "source": "solution.system.kalide",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.spine-tier3-anchors",
+      "properties": {}
     }
   ]
 }
