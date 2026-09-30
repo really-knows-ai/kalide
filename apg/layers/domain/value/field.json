@@ -20,6 +20,11 @@
       "kind": "details",
       "source": "domain.note.section-helpers-domain",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.required-default-consistency",
+      "properties": {}
     }
   ]
 }
