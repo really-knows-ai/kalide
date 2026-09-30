@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.body",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.validate-deck",
+      "properties": {}
     }
   ],
   "in": [
