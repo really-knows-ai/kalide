@@ -51,5 +51,11 @@
       "properties": {}
     }
   ],
-  "in": []
+  "in": [
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-stakeholder-reachability",
+      "properties": {}
+    }
+  ]
 }
