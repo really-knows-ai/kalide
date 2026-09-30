@@ -101,6 +101,11 @@
       "kind": "drives",
       "source": "requirements.requirement.dict-list-helpers",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.section-helper",
+      "properties": {}
     }
   ]
 }
