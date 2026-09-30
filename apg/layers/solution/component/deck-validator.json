@@ -34,6 +34,11 @@
       "kind": "implemented-by",
       "target": "internal/validate/examples.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/validate/links.go",
+      "properties": {}
     }
   ],
   "in": [
