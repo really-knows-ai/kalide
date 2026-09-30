@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "requirements.stakeholder.deck-creators",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.stakeholder.brand-owner",
+      "properties": {}
     }
   ],
   "in": []
