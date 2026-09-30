@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.section-helper-load-checks",
+      "properties": {}
     }
   ],
   "in": [
