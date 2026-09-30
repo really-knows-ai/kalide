@@ -27,11 +27,6 @@
     },
     {
       "kind": "implemented-by",
-      "target": "internal/suggest/suggest.go",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "internal/validate/examples.go",
       "properties": {}
     },
