@@ -11,6 +11,11 @@
       "kind": "drives",
       "target": "domain.value.slide-position",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-deck",
+      "properties": {}
     }
   ],
   "in": [
