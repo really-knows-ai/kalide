@@ -41,6 +41,11 @@
       "kind": "realised-by",
       "target": "solution.system.kalide",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.render-sections",
+      "properties": {}
     }
   ],
   "in": [

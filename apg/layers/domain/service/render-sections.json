@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "domain.note.group-less-domains-audit",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "domain.group.presentation",
+      "properties": {}
     }
   ]
 }
