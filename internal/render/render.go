@@ -527,7 +527,7 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 		meta:  caller.meta,
 		total: caller.total,
 		item:  call.Item,
-		raw:   r.rawContext(fields, call.Template, call.Body),
+		raw:   template.RawContext(fields, call.Template, call.Body),
 		data:  map[string]any{},
 	}
 	data, err := r.values(call.Values, call.Template, secCtx)
