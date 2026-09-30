@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -462,6 +463,70 @@ func TestServer(t *testing.T) {
 		}
 	})
 
+	t.Run("gallery renders the real demo group's nested column", func(t *testing.T) {
+		// The demo library's group example (examples/demo/templates/sections/
+		// group/example.md) uses the natural `# items` child heading. This
+		// asserts galleryEntries renders that container example with the
+		// nested column's markup INSIDE the group wrapper and its item
+		// wrapper — containment, not merely both class names present — so the
+		// gallerySectionExample heading-depth shift is exercised against the
+		// real demo library, catching the regression where `# items` parses as
+		// a sibling of the synthetic wrapper section.
+		if _, err := os.Stat(demoProjectDir); err != nil {
+			t.Skipf("examples/demo not found at %s: %v", demoProjectDir, err)
+		}
+
+		fsys := os.DirFS(demoProjectDir)
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
+			t.Fatalf("template.LoadLibrary(examples/demo): %v", err)
+		}
+		reg, err := template.NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+		}
+		funcMap := template.LayoutFuncMap(lib.Media, MediaPath)
+
+		entries := galleryEntries(reg, funcMap)
+		var group *galleryEntry
+		for i := range entries {
+			if entries[i].Name == "group" {
+				group = &entries[i]
+				break
+			}
+		}
+		if group == nil {
+			t.Fatal("galleryEntries did not include the demo `group` section template")
+		}
+
+		example := string(group.Example)
+		if strings.Contains(example, "Example unavailable") {
+			t.Fatalf("demo group card reports an unavailable example:\n%s", example)
+		}
+
+		// Containment order: the group wrapper opens, then its item wrapper,
+		// then the nested column markup.
+		groupIdx := strings.Index(example, `class="demo-group"`)
+		itemIdx := strings.Index(example, `class="demo-group__item"`)
+		colIdx := strings.Index(example, `class="demo-column"`)
+		if groupIdx < 0 || itemIdx < 0 || colIdx < 0 {
+			t.Fatalf("demo group card did not render the nested column (group@%d item@%d column@%d):\n%s",
+				groupIdx, itemIdx, colIdx, example)
+		}
+		if !(groupIdx < itemIdx && itemIdx < colIdx) {
+			t.Fatalf("nested column is not inside the group's item wrapper (group@%d item@%d column@%d):\n%s",
+				groupIdx, itemIdx, colIdx, example)
+		}
+		// The item wrapper directly wraps the column's rendered HTML, and the
+		// nested column's own title actually rendered (a non-empty child).
+		if !regexp.MustCompile(`demo-group__item">\s*<div class="demo-column"`).MatchString(example) {
+			t.Errorf("demo group's item wrapper does not directly wrap the nested column markup:\n%s", example)
+		}
+		if !strings.Contains(example, "demo-column__title") || !strings.Contains(example, "Platform") {
+			t.Errorf("demo group's nested column did not render its own content:\n%s", example)
+		}
+	})
+
 	t.Run("broken templates library serves the error page", func(t *testing.T) {
 		dir := t.TempDir()
 		// kalide.yaml and slides/ are valid, but templates/ is entirely
@@ -604,15 +669,18 @@ body:
 		"templates/sections/column/template.yaml":    {Data: []byte(columnManifest)},
 		"templates/sections/column/layout.html.tmpl": {Data: []byte("<div>{{.title}}</div>")},
 		"templates/sections/column/example.md":       {Data: []byte("```\ntitle: Sample\n```\n")},
-		// group is a container section. Its nested example uses a `## items`
-		// child: the library's heading-depth example parser takes the first
-		// heading's depth as the fragment's base, so `items` is still the
-		// group's declared child, while gallerySectionExample embeds the
-		// fragment beneath its synthetic `# example` heading — depth 2 nests
-		// under that instance (depth 1) instead of opening a sibling of it.
+		// group is a container section. Its nested example uses the natural
+		// `# items` child heading, matching
+		// examples/demo/templates/sections/group/example.md: the library's
+		// heading-depth example parser takes the fragment's first heading as
+		// its top-level instance regardless of its actual depth, so `items`
+		// is the group's declared child, while gallerySectionExample deepens
+		// the fragment's headings beneath its synthetic `# example` wrapper
+		// so `items` nests under that instance instead of opening a sibling
+		// of it.
 		"templates/sections/group/template.yaml":    {Data: []byte(groupManifest)},
 		"templates/sections/group/layout.html.tmpl": {Data: []byte("<div>{{.title}}{{range .items}}{{.}}{{end}}</div>")},
-		"templates/sections/group/example.md":       {Data: []byte("```\ntemplate: group\ntitle: Group\n```\n\n## items\n```\ntitle: First column\n```\n")},
+		"templates/sections/group/example.md":       {Data: []byte("```\ntemplate: group\ntitle: Group\n```\n\n# items\n```\ntitle: First column\n```\n")},
 		"templates/themes/default/theme.css":        {Data: []byte("body{}")},
 	}
 
