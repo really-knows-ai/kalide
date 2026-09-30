@@ -34,6 +34,11 @@
       "kind": "details",
       "target": "domain.constraint.template-context-reserved",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.value.body",
+      "properties": {}
     }
   ],
   "in": []
