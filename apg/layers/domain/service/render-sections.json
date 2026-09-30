@@ -51,6 +51,11 @@
       "kind": "contains",
       "source": "domain.group.presentation",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.section-helper",
+      "properties": {}
     }
   ]
 }
