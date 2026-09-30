@@ -1,6 +1,7 @@
 package template
 
 import (
+	"fmt"
 	htmltemplate "html/template"
 	"io/fs"
 	"path"
@@ -90,6 +91,35 @@ func cleanMediaPath(p string) (string, error) {
 		return "", libraryErrorf(MediaDir, 0, "media: path must not be empty")
 	}
 	return clean, nil
+}
+
+// DictFunc is the `dict` layout constructor: `{{ dict "k1" "v1" "k2" "v2" }}`
+// builds a map[string]any from alternating key/value arguments, the syntax a
+// layout uses to pass named fields to the `section` helper. Every key must be
+// a string — html/template would render a non-string key as a literal number,
+// so a key such as `1` is rejected rather than silently mis-typed — and the
+// argument count must be even. A malformed call returns an error, not a
+// partial map, so it fails the whole template execution the way any
+// html/template function error does; an empty call returns an empty, non-nil
+// map.
+func DictFunc(kv ...any) (map[string]any, error) {
+	if len(kv)%2 != 0 {
+		return nil, fmt.Errorf(
+			"dict: expected an even number of arguments (key/value pairs), got %d", len(kv))
+	}
+	out := make(map[string]any, len(kv)/2)
+	for i := 0; i < len(kv); i += 2 {
+		key, ok := kv[i].(string)
+		if !ok {
+			return nil, fmt.Errorf(
+				"dict: key %d must be a string, got %s", i/2+1, describeValue(kv[i]))
+		}
+		if _, dup := out[key]; dup {
+			return nil, fmt.Errorf("dict: duplicate key %q", key)
+		}
+		out[key] = kv[i+1]
+	}
+	return out, nil
 }
 
 // LayoutFuncMap returns the complete, documented html/template func map every
