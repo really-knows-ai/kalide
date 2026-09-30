@@ -33,6 +33,11 @@
       "kind": "details",
       "source": "domain.note.actor-entities",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.represents-actor-tier",
+      "properties": {}
     }
   ]
 }

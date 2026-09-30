@@ -4,6 +4,12 @@
   "name": "represents-actor-tier",
   "body": "`represents` is mandatory: the actor-tier chain (spine-backfill) [with user]. Supersedes global.note.represents-unused, which recorded 0 `represents` edges and claimed the model did not use the kind — that state was wrong and is retired.\n\nDecision [with user]: `represents` is NOT optional. Every requirements.user must be represented by a solution.person, and every solution.person must represent a requirements.user.\n\nSchema determination [autonomous]: a direct `represents` from a User to a Person is refused. Exact refusal:\n  apg: invalid `represents` edge `requirements.user.deck-author` -> `solution.person.deck-author` — allowed shapes: requirements.user -> domain.entity; domain.entity -> solution.person\n`CALL show_connection('Represents')` confirms the only shapes are User->Entity and Entity->Person. The schema-legal form of the user<->person identity is therefore the two-hop chain requirements.user.* -> domain.entity.* -> solution.person.* — the model's previously-recorded option (b), not a workaround.\n\nResolution [with user/autonomous]: added the actor domain tier — domain.group.actors (attribute generic) containing domain.entity.deck-author, domain.entity.template-author and domain.entity.maintainer — plus requirements.user.maintainer (see requirements.note.maintainer-user) and six `represents` edges:\n  requirements.user.deck-author -> domain.entity.deck-author -> solution.person.deck-author\n  requirements.user.template-author -> domain.entity.template-author -> solution.person.template-author\n  requirements.user.maintainer -> domain.entity.maintainer -> solution.person.maintainer\n\nResult (queried on this branch): 3/3 Users have a represents chain to a Person and 3/3 Persons have one from a User — 0 gaps in both directions.\n\nRealisation note: each actor entity also carries a realised-by to the solution container through which the role acts (the two authors -> solution.container.cli-binary; the maintainer -> solution.container.release-pipeline) and the group -> solution.system.kalide. The identity linkage to the Person is carried by `represents` (the only legal Entity->Person edge), not by `realised-by`, which cannot target a Person. See domain.note.actor-entities and global.note.spine-widened-invariants-audit (represents pass).",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "domain.group.actors",
+      "properties": {}
+    }
+  ],
   "in": []
 }
