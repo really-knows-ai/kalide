@@ -12,11 +12,6 @@
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/template.NewRegistryFromLibrary",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/template.checkDeclaredName",
       "properties": {}
     }
