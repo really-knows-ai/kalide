@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "constraint",
   "name": "template-context-reserved",
-  "body": "The `deck`, `slide` and `item` context keys must be reserved top-level template-context names available in every slide layout and every section instance at every composition depth (`item` is nil/absent at slide level); a template declaring a field or section named `deck`, `slide` or `item` is a templates error at load time, and exposing this context must add no layout helper (the v1 helper set stays exactly `media`).",
+  "body": "The `deck`, `slide`, `item`, `raw` and `data` context keys must be reserved top-level template-context names available in every slide layout and every section instance at every composition depth (`item` is nil/absent at slide level; `raw` and `data` are the source and authored-section data views, raw-source-context and section-data-context); a template declaring a field or section named `deck`, `slide`, `item`, `raw` or `data` is a templates error at load time. Exposing this context adds no layout helper: the helper set is the documented one (`media`, `section`, `dict`, `list`), independent of the context keys.",
   "properties": {
     "attaches-to": "domain.group.templating"
   },
