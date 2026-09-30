@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.cli-templates",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.deck-renderer",
+      "properties": {}
     }
   ],
   "in": []
