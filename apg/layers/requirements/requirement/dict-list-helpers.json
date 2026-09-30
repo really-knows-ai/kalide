@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "dict-list-helpers",
+  "body": "The layout function set gains two constructors, usable anywhere in a layout (in a slide layout and in a section template, at any composition depth): `dict k1 v1 …` returns a map of the given key/value pairs, and `list a b …` returns a sequence. Every `dict` key must be a string, no key may repeat, and a `dict` call that violates either rule is rejected; `list` exists so a list-type field's value can be given as a literal sequence rather than a YAML sequence. Both are ordinary html/template functions, available wherever `media` is, that read nothing outside their arguments and add no data access of their own.\n\nAC: `{{ dict \"label\" \"Proposition\" \"tone\" \"info\" }}` yields a two-entry map; `{{ list \"a\" \"b\" }}` yields a two-element sequence accepted as a list field's value; a `dict` with a non-string key or a repeated key is rejected; a `dict` result is accepted as the `section` helper's `fields` argument.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
