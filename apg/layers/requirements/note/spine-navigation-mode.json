@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-navigation-mode",
+  "body": "Spine completion [autonomous]. requirements.requirement.navigation-mode drove only domain.value.deck-config; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.render-deck (the deck renderer passes the `navigation` value straight through as reveal.js `navigationMode`). domain.service.render-deck is already realised-by solution.component.deck-renderer, which is implemented-by internal/render.RenderDeck. Path: navigation-mode -> render-deck -> deck-renderer -> internal/render.RenderDeck. No new implemented-by anchor was needed; existing `drives` to domain.value.deck-config kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
