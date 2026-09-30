@@ -4,6 +4,12 @@
   "name": "spine-inter-slide-links",
   "body": "Spine completion [autonomous]. requirements.requirement.inter-slide-links drove only domain.value.link-target; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.validate-deck (inter-slide link checking is the final validation pass). domain.service.validate-deck is already realised-by solution.component.deck-validator. Added `implemented-by` solution.component.deck-validator -> internal/validate.checkLinks (checks `#label` targets, http(s) and rejects other schemes). Path: inter-slide-links -> validate-deck -> deck-validator -> internal/validate.checkLinks. Existing `drives` to domain.value.link-target kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.inter-slide-links",
+      "properties": {}
+    }
+  ],
   "in": []
 }
