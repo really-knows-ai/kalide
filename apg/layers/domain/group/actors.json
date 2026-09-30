@@ -6,6 +6,12 @@
   "properties": {
     "attribute": "generic"
   },
-  "out": [],
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.entity.deck-author",
+      "properties": {}
+    }
+  ],
   "in": []
 }
