@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-markdown-disallowed-errors",
+  "body": "Spine completion [autonomous]. requirements.requirement.markdown-disallowed-errors drove only domain.value.body; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.validate-deck. domain.service.validate-deck already realises solution.component.markdown-validator, which previously had no implemented-by anchor. Added `implemented-by` solution.component.markdown-validator -> internal/mdcheck.walk and internal/mdcheck.checkDisallowed (the AST walk that reports each excluded construct with file/line); internal/mdcheck.Check is anchored on the sibling markdown-allowed-subset note. Path: markdown-disallowed-errors -> validate-deck -> markdown-validator -> internal/mdcheck.checkDisallowed. Existing `drives` to domain.value.body kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
