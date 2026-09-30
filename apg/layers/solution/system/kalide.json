@@ -61,6 +61,11 @@
       "kind": "details",
       "source": "global.note.spine-widened-invariants-audit",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.actors",
+      "properties": {}
     }
   ]
 }

@@ -21,6 +21,11 @@
       "kind": "contains",
       "target": "domain.entity.maintainer",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.system.kalide",
+      "properties": {}
     }
   ],
   "in": []
