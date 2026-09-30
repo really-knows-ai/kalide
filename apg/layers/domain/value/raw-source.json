@@ -5,5 +5,11 @@
   "body": "The author's ORIGINAL values exposed to every slide layout and section template under the reserved `.raw` context, alongside the converted field values: `.raw.<field>` is a text field's source Markdown before inline rendering, `.raw.body` the original body source before block rendering; absent when the author supplied nothing. A data value, not a helper; the converted values stay under their own field names. A section invoked by the `section` helper sees `.raw` as the values the call supplied.",
   "properties": {},
   "out": [],
-  "in": []
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.raw-source-context",
+      "properties": {}
+    }
+  ]
 }
