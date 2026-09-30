@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "domain.group.upgrade",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.group.validation",
+      "properties": {}
     }
   ],
   "in": []
