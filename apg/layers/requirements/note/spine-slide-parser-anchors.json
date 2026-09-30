@@ -4,6 +4,12 @@
   "name": "spine-slide-parser-anchors",
   "body": "Spine completion [autonomous]. Four requirements — slide-sections, section-frontmatter, slide-template-required and speaker-notes — each drove domain.entity.section or domain.entity.slide, both already realised-by solution.component.slide-parser, but slide-parser carried no `implemented-by` edge, so every path dead-ended before code. Added `implemented-by` solution.component.slide-parser -> internal/slide.Parse (the entry point: `---` slide frontmatter at line 1, must name a slide `template:`, body, sections), internal/slide.parseSections (heading-depth nesting and section ordering), internal/slide.parseBlock (plain-fence section frontmatter), internal/slide.resolveSectionTemplate (declared section template resolution) and internal/slide.matchFence (the section frontmatter fence vs a language-tagged fence). Paths: slide-sections -> section -> slide-parser -> internal/slide.parseSections; section-frontmatter -> section -> slide-parser -> internal/slide.parseBlock (and matchFence); slide-template-required -> slide -> slide-parser -> internal/slide.Parse; speaker-notes -> slide -> slide-parser -> internal/slide.parseSections (the reserved `# notes` handling). No requirement body was changed — this is a spine-only fix.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.slide-sections",
+      "properties": {}
+    }
+  ],
   "in": []
 }
