@@ -13,13 +13,17 @@ import (
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
-// The section-context-probe library adds a slide template declaring two
-// sections — a `footer` section (the motivating `{{.slide.number}} / {{.slide.total}}`
-// footer) and a `columns` section accepting a `probecolumn` section template,
-// which nests a `people` list of `probeperson` section-template items one
-// level deeper (section-template-context's composition example) — so this
-// test drives the reserved `.deck`/`.slide` context into every section
-// instance, at every depth, through the real library→parser→render pipeline.
+// The section-context-probe library adds a slide template declaring a `footer`
+// section (the motivating `{{.slide.number}} / {{.slide.total}}` footer) and a
+// `columns` section accepting a `probecolumn` section template, which itself
+// declares a `people` child section accepting `probeperson` one level deeper —
+// so this test drives the reserved `.deck`/`.slide` context AND the reserved
+// `.item` descriptor (item-context) into every section instance, at every
+// depth, through the real library→parser→render pipeline. Every section layout
+// reads `.item` through a `{{ with .item }}` guard: the descriptor is present
+// when the real renderer executes the layout, but a library example's
+// load-time context carries no `item` (checkLibraryExample), so the guard keeps
+// each layout executable in isolation too (template-language).
 const (
 	sectionProbeSlideTemplateYAML = `description: slide with a footer section and a nested column/people/person section
 fields:
@@ -41,22 +45,8 @@ body:
 
 	sectionProbeSlideLayout = `<section>
   <h1>{{.title}}</h1>
-  {{ range .footer }}
-  <footer class="probe-footer">{{.slide.number}} / {{.slide.total}}</footer>
-  <span class="footer-deck-title">{{.deck.title}}</span>
-  {{ end }}
-  {{ range .columns }}
-  <div class="probe-column">
-    <span class="column-title">{{.title}}</span>
-    <span class="column-deck-title">{{.deck.title}}</span>
-    <span class="column-slide-number">{{.slide.number}}</span>
-    {{ range .people }}
-    <span class="person-name">{{.name}}</span>
-    <span class="person-deck-title">{{.deck.title}}</span>
-    <span class="person-slide-number">{{.slide.number}}</span>
-    {{ end }}
-  </div>
-  {{ end }}
+  {{ range .footer }}{{ . }}{{ end }}
+  {{ range .columns }}{{ . }}{{ end }}
 </section>
 `
 
@@ -71,6 +61,9 @@ An example slide with sections.
 
 # columns
 ` + "```\ntemplate: probecolumn\ntitle: Example column\n```" + `
+
+## people
+` + "```\ntemplate: probeperson\nname: Ada\n```" + `
 `
 
 	sectionProbeFooterTemplateYAML = `description: footer section probing the reserved slide-position context
@@ -78,39 +71,28 @@ body:
   mode: disallowed
 `
 
-	sectionProbeFooterLayout = `<footer class="probe-footer">{{.slide.number}} / {{.slide.total}}</footer>`
+	sectionProbeFooterLayout = `<footer class="probe-footer"{{ with .item }} data-index="{{ .index }}" data-number="{{ .number }}" data-count="{{ .count }}" data-first="{{ .first }}" data-last="{{ .last }}" data-section="{{ .section }}" data-template="{{ .template }}" data-parent="{{ if .parent }}present{{ else }}absent{{ end }}"{{ end }}>{{ .slide.number }} / {{ .slide.total }}</footer>`
 
 	sectionProbeFooterExample = "```\n```\n"
 
-	sectionProbeColumnTemplateYAML = `description: column section nesting a list of person section instances one level deeper
+	sectionProbeColumnTemplateYAML = `description: column section holding a nested people child section
 fields:
   - name: title
     type: text
+sections:
   - name: people
-    type: list
-    item:
-      name: person
-      type: section-template
-      section_template: probeperson
+    accepted:
+      - probeperson
+    max: 4
 body:
   mode: optional
 `
 
-	sectionProbeColumnLayout = `<div class="probe-column">
-  <span class="column-title">{{.title}}</span>
-  <span class="column-deck-title">{{.deck.title}}</span>
-  <span class="column-slide-number">{{.slide.number}}</span>
-  {{ range .people }}
-  <span class="person-name">{{.name}}</span>
-  <span class="person-deck-title">{{.deck.title}}</span>
-  <span class="person-slide-number">{{.slide.number}}</span>
-  {{ end }}
-</div>
-`
+	sectionProbeColumnLayout = `<div class="probe-column"{{ with .item }} data-index="{{ .index }}" data-number="{{ .number }}" data-count="{{ .count }}" data-first="{{ .first }}" data-last="{{ .last }}" data-section="{{ .section }}" data-template="{{ .template }}" data-parent="{{ if .parent }}present{{ else }}absent{{ end }}"{{ end }}><span class="column-title">{{ .title }}</span><span class="column-deck-title">{{ .deck.title }}</span><span class="column-slide-number">{{ .slide.number }}</span>{{ range .people }}{{ . }}{{ end }}</div>`
 
-	sectionProbeColumnExample = "```\ntitle: Example column\npeople:\n  - name: Ada\n```\n"
+	sectionProbeColumnExample = "```\ntitle: Example column\n```\n# people\n```\ntemplate: probeperson\nname: Ada\n```\n"
 
-	sectionProbePersonTemplateYAML = `description: person section nested one level deeper inside a column's people list
+	sectionProbePersonTemplateYAML = `description: person section nested one level deeper inside a column's people section
 fields:
   - name: name
     type: text
@@ -119,20 +101,22 @@ body:
   mode: disallowed
 `
 
-	sectionProbePersonLayout = `<span class="person-name">{{.name}}</span><span class="person-deck-title">{{.deck.title}}</span><span class="person-slide-number">{{.slide.number}}</span>`
+	sectionProbePersonLayout = `<span class="person-name">{{ .name }}</span><span class="person-deck-title">{{ .deck.title }}</span><span class="person-slide-number">{{ .slide.number }}</span>{{ with .item }}<span class="person-item" data-index="{{ .index }}" data-number="{{ .number }}" data-count="{{ .count }}" data-first="{{ .first }}" data-last="{{ .last }}" data-section="{{ .section }}" data-template="{{ .template }}" data-parent-title="{{ .parent.title }}"></span>{{ end }}`
 
 	sectionProbePersonExample = "```\nname: Ada\n```\n"
 )
 
 // TestSectionInstanceContextPipeline drives the reserved `.deck`/`.slide`
-// context (template-context, section-template-context) through the
-// library→parser→render pipeline into a slide layout AND every section
-// instance it declares, including a section nested one level deeper: the
+// context (template-context, section-template-context) AND the reserved `.item`
+// descriptor (item-context) through the library→parser→render pipeline into a
+// slide layout and every section instance it declares, at every depth: the
 // motivating footer section renders `{{.slide.number}} / {{.slide.total}}`
-// (e.g. `2a / 3`), `{{.deck.title}}` renders from a top-level section AND
-// the deeper-nested person instance, and a section instance's own fields
-// (title, name) stay directly addressable alongside the reserved entries. It
-// reads the real filesystem, so it is skipped under -short.
+// (e.g. `2a / 3`); a top-level section instance reads `.deck.title`,
+// `.slide.number` and its own `.item` (index/number/count/first/last/section/
+// template, with a nil parent, since a top-level instance's parent is the
+// slide); and a nested child section reads the same `.item` one level down plus
+// `.item.parent.title`, the enclosing instance's field values. It reads the
+// real filesystem, so it is skipped under -short.
 func TestSectionInstanceContextPipeline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test reads a real deck directory from disk")
@@ -149,19 +133,32 @@ func TestSectionInstanceContextPipeline(t *testing.T) {
 	page := renderSectionProbeDeck(t, dir)
 
 	for _, want := range []string{
-		// The motivating footer: string position label over the integer total.
-		`<footer class="probe-footer">2a / 3</footer>`,
-		// .deck.title from the footer section, the column section, and the
+		// The motivating footer: string position label over the integer total,
+		// plus its top-level `.item` (one of one; parent absent).
+		`<footer class="probe-footer" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="footer" data-template="probefooter" data-parent="absent">2a / 3</footer>`,
+		// .deck.title and .slide.number from the top-level column and the
 		// person section nested one level deeper inside the column.
-		`<span class="footer-deck-title">Section Context Deck</span>`,
 		`<span class="column-deck-title">Section Context Deck</span>`,
 		`<span class="person-deck-title">Section Context Deck</span>`,
-		// .slide.number from the column section and the nested person.
 		`<span class="column-slide-number">2a</span>`,
 		`<span class="person-slide-number">2a</span>`,
-		// Section instance fields stay directly addressable alongside deck/slide.
-		`<span class="column-title">Example column</span>`,
+		// Section instance fields stay directly addressable alongside
+		// deck/slide/item.
+		`<span class="column-title">First column</span>`,
+		`<span class="column-title">Second column</span>`,
 		`<span class="person-name">Ada</span>`,
+		`<span class="person-name">Grace</span>`,
+		`<span class="person-name">Linus</span>`,
+		// Top-level `.item`: index/number/count/first/last/section/template,
+		// with a nil parent (the parent is the slide).
+		`<div class="probe-column" data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="columns" data-template="probecolumn" data-parent="absent"><span class="column-title">First column</span>`,
+		`<div class="probe-column" data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="columns" data-template="probecolumn" data-parent="absent"><span class="column-title">Second column</span>`,
+		// Nested `.item`: the same descriptor one level down, where
+		// `.item.parent.title` resolves the enclosing column instance's field
+		// values.
+		`<span class="person-item" data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="people" data-template="probeperson" data-parent-title="First column"></span>`,
+		`<span class="person-item" data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="people" data-template="probeperson" data-parent-title="First column"></span>`,
+		`<span class="person-item" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="people" data-template="probeperson" data-parent-title="Second column"></span>`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page does not contain %q:\n%s", want, page)
@@ -170,17 +167,17 @@ func TestSectionInstanceContextPipeline(t *testing.T) {
 }
 
 // sectionProbeSlide is one slide file using the section-context-probe layout,
-// declaring both the footer section and a column section with one nested
-// person.
+// declaring a footer section and two column sections, the first holding two
+// nested people child sections and the second one, so the `.item` descriptor's
+// index/number/count/first/last are exercised at two depths.
 func sectionProbeSlide(title string) string {
 	return "---\ntemplate: sectioncontextprobe\ntitle: " + title + "\n---\n" +
 		"# footer\n```\ntemplate: probefooter\n```\n" +
-		"\n# columns\n```\n" +
-		"template: probecolumn\n" +
-		"title: Example column\n" +
-		"people:\n" +
-		"  - name: Ada\n" +
-		"```\n"
+		"\n# columns\n```\ntemplate: probecolumn\ntitle: First column\n```\n" +
+		"## people\n```\ntemplate: probeperson\nname: Ada\n```\n" +
+		"## people\n```\ntemplate: probeperson\nname: Grace\n```\n" +
+		"\n# columns\n```\ntemplate: probecolumn\ntitle: Second column\n```\n" +
+		"## people\n```\ntemplate: probeperson\nname: Linus\n```\n"
 }
 
 // writeSectionProbeDeck writes a fresh temporary deck directory: kalideYAML as
