@@ -4,6 +4,12 @@
   "name": "spine-supported-platforms",
   "body": "Spine completion [autonomous]. requirements.requirement.supported-platforms drove only domain.value.target-platform; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.publish-release (the release workflow builds exactly one binary per target for which a GitHub-hosted native runner exists). domain.service.publish-release is already realised-by solution.component.release-workflow (implemented-by .github/workflows/release.yml) and solution.component.native-e2e-ci. Path: supported-platforms -> publish-release -> release-workflow -> .github/workflows/release.yml. No new implemented-by anchor was needed; existing `drives` to domain.value.target-platform kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.supported-platforms",
+      "properties": {}
+    }
+  ],
   "in": []
 }
