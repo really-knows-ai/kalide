@@ -39,6 +39,11 @@
       "kind": "implemented-by",
       "target": "internal/slide/parse.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/suggest.Closest",
+      "properties": {}
     }
   ],
   "in": [
