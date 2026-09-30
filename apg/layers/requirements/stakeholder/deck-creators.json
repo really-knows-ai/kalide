@@ -44,6 +44,11 @@
       "kind": "contains",
       "target": "requirements.requirement.slide-template-required",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
     }
   ],
   "in": []
