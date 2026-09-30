@@ -1,0 +1,22 @@
+{{/*
+  group — container section-usage template layout.
+
+  Context: map[string]any keyed by the section's fields. Each declared child
+  section (`items`) arrives as a slice of TRUSTED HTML, one element per child
+  instance in source order, so the layout splices each child's rendered markup
+  with `{{ range .items }}{{ . }}{{ end }}` rather than ranging over data maps
+  (template-language). At library-load example validation the same range sees
+  the nested instance maps instead, and `{{ . }}` still renders without error.
+
+  The reserved `.item` descriptor (item-context) is read through a `{{ with
+  .item }}` guard: the descriptor is present when the instance is rendered by
+  the real renderer, but a library example's load-time context carries no
+  `item`, so the guard keeps this layout executable in isolation
+  (template-context, section-template-context, item-context).
+*/}}
+<div class="demo-group">
+  {{ with .title }}<h3 class="demo-group__title">{{ . }}</h3>{{ end }}
+  {{ with .item }}<p class="demo-group__meta" data-item-section="{{ .section }}" data-item-template="{{ .template }}" data-item-number="{{ .number }}" data-item-count="{{ .count }}">{{ .section }} {{ .number }} of {{ .count }}</p>{{ end }}
+  {{ with .body }}<div class="demo-group__body">{{ . }}</div>{{ end }}
+  {{ range .items }}<div class="demo-group__item">{{ . }}</div>{{ end }}
+</div>
