@@ -1,0 +1,11 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "raw-source-context",
+  "body": "Every layout and every section template, at every composition depth, is additionally given a reserved `raw` context carrying the author's ORIGINAL values alongside the converted ones: `.raw.<field>` is a text field's source Markdown exactly as authored (before inline-Markdown rendering), and `.raw.body` is the original body source of the slide or section (before block rendering); a field or body the author did not supply is absent or empty. The converted values stay directly addressable under their own field names exactly as today; `.raw` only adds the source view, and it is data, not a helper (exposing it adds nothing to the layout function set). `raw` is a reserved top-level name: a template declaring a field or section named `raw` is a templates error (requirements.constraint.reserved-template-names, domain.constraint.template-context-reserved). A section instance invoked by the `section` helper sees `.raw` as the values the call supplied.\n\nAC: `{{.raw.title}}` renders a text field's source Markdown while `{{.title}}` renders its inline HTML; `{{.raw.body}}` renders the slide's or section's original body Markdown; `.raw` is data, not a layout function; loading a template that declares a field or section named `raw` is a templates error.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [],
+  "in": []
+}
