@@ -4,6 +4,12 @@
   "name": "spine-upgrade-migrate-format",
   "body": "Spine completion [autonomous]. requirements.requirement.upgrade-migrate-format drove only domain.value.format-migration, domain.value.library-manifest and domain.value.version; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.upgrade-project (the migrate half of `kalide upgrade`). domain.service.upgrade-project is already realised-by solution.component.upgrade. Added `implemented-by` solution.component.upgrade -> internal/scaffold.migrateLibrary, internal/scaffold.runMigrations, internal/scaffold.registeredMigrations and internal/scaffold.checkSupportedLibraryFormat (the migration framework and the unknown/newer-format refusal). Path: upgrade-migrate-format -> upgrade-project -> upgrade -> internal/scaffold.migrateLibrary. Existing `drives` to the three values kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.upgrade-migrate-format",
+      "properties": {}
+    }
+  ],
   "in": []
 }

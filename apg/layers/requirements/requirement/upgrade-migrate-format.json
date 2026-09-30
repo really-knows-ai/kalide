@@ -53,6 +53,11 @@
       "kind": "details",
       "source": "requirements.note.upgrade-reconciliation-final-review",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.spine-upgrade-migrate-format",
+      "properties": {}
     }
   ]
 }
