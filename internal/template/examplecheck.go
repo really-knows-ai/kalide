@@ -128,6 +128,39 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 	return nil
 }
 
+// exampleRawContext builds the reserved `.raw` execution-context entry for a
+// load-time example execution (templates-dir-validation step 7), mirroring the
+// renderer's rawContext (internal/render/render.go) so the load-time context
+// matches the render-time one (raw-source-context, template-context). It holds
+// the source value of every declared field the author supplied, keyed by the
+// field's own name, and the example's original body source under `body` when
+// the author supplied one.
+//
+// data is the example's pre-conversion source map — a slide's or section's
+// decoded example frontmatter, minus the reserved `template` selector — and t
+// is the resolved template whose field schema names the declared fields. Only
+// declared fields are copied: an undeclared key (including the `template`
+// selector and any `<field>_format` sibling) is not a field. A field the author
+// did not supply is absent, and a field's declared default is not copied,
+// because a default is not an authored source value; a body the author did not
+// supply is likewise absent. A nil t or data yields a well-formed
+// (possibly body-only) context, so a caller may pass them freely.
+func exampleRawContext(data map[string]any, t *Template, body string) map[string]any {
+	out := make(map[string]any, 1)
+	if t != nil {
+		for i := range t.Fields {
+			name := t.Fields[i].Name
+			if v, present := data[name]; present {
+				out[name] = v
+			}
+		}
+	}
+	if body != "" {
+		out["body"] = body
+	}
+	return out
+}
+
 // exampleSectionHelper is the template-local `section` func the load-time
 // example execution binds (templates-dir-validation step 7). It is a factory
 // returning the func bound into a layout's func map, closing over lib and the
