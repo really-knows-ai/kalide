@@ -44,6 +44,11 @@
       "kind": "implemented-by",
       "target": "internal/template/checkvalues.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/format.go",
+      "properties": {}
     }
   ],
   "in": [
