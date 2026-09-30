@@ -4,7 +4,13 @@
   "name": "changelog",
   "body": "Changelog: repo-root `CHANGELOG.md` (Keep-a-Changelog format with an `Unreleased` section), maintained by hand alongside the release workflow; the release adds the released version's entry.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "CHANGELOG.md",
+      "properties": {}
+    }
+  ],
   "in": [
     {
       "kind": "realised-by",
