@@ -37,6 +37,7 @@ import (
 	"fmt"
 	htmltmpl "html/template"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -283,6 +284,13 @@ func gallerySlideExample(t *template.Template, reg *template.Registry, funcMap h
 // layout using `media` renders the served templates/media URL. The real
 // registry is never mutated, mirroring
 // internal/validate.ValidateBuiltinExamples' treatment of a section example.
+//
+// The example fragment is placed under the synthetic `# <gallerySectionName>`
+// heading, so a container template's own top-level section headings would parse
+// as siblings of the wrapper section. A container template's fragment is
+// therefore passed through galleryNestExample first, deepening its headings one
+// level so they become the wrapper section's children; a non-container
+// fragment is embedded unchanged, preserving its body-subheading rendering.
 func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	name := galleryFreeName(reg)
 	wrapper := &template.Template{
@@ -312,7 +320,7 @@ func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap
 		return "", fmt.Errorf("build synthetic slide context: %w", err)
 	}
 
-	src := "---\ntemplate: " + name + "\n---\n# " + gallerySectionName + "\n" + t.Example.Markdown
+	src := "---\ntemplate: " + name + "\n---\n# " + gallerySectionName + "\n" + galleryExampleFragment(t)
 	parsed, err := slide.Parse(galleryExampleFile(t), []byte(src), rebuilt)
 	if err != nil {
 		return "", err
@@ -323,6 +331,56 @@ func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap
 	// every depth including the wrapped section instance itself
 	// (section-template-context).
 	return render.RenderSlide(parsed, t.Name, nil, deck.Slide{}, 0, rebuilt, funcMap)
+}
+
+// galleryATXHeading matches a CommonMark ATX heading of depth 1-6 with up to
+// three leading spaces or tabs, mirroring internal/slide's atxHeadingRe so the
+// depth shift recognises exactly the lines that parser treats as headings. Its
+// group 1 is the `#` run.
+var galleryATXHeading = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
+
+// galleryExampleFragment returns the section example source to embed beneath the
+// synthetic `# <gallerySectionName>` wrapper heading. For a container template
+// (one that declares child sections) the fragment's headings are deepened one
+// level so its top-level section instances nest under the wrapper section
+// instead of opening siblings of it (gallerySectionExample). A non-container
+// template's fragment is returned unchanged, so its body subheadings keep their
+// existing rendered depth.
+func galleryExampleFragment(t *template.Template) string {
+	if len(t.Sections) == 0 {
+		return t.Example.Markdown
+	}
+	return galleryNestExample(t.Example.Markdown)
+}
+
+// galleryNestExample shifts every ATX heading in a section example fragment down
+// one level by inserting one `#` after any leading indentation, leaving
+// non-heading lines untouched. Lines inside ``` fenced blocks — the fragment's
+// own frontmatter and any section frontmatter — are skipped, so YAML comments
+// and content that happen to start with `#` are never rewritten. A heading
+// already at depth 6 is left as is: slides support at most six levels.
+func galleryNestExample(src string) string {
+	lines := strings.Split(src, "\n")
+	inFence := false
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), slide.SectionFence) {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		loc := galleryATXHeading.FindStringSubmatchIndex(line)
+		if loc == nil {
+			continue
+		}
+		hashStart, hashEnd := loc[2], loc[3]
+		if hashEnd-hashStart >= 6 {
+			continue
+		}
+		lines[i] = line[:hashStart] + "#" + line[hashStart:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // registryWithTemplate returns a copy of reg with extra registered, so the
