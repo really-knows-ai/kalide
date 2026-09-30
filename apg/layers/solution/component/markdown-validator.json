@@ -24,6 +24,11 @@
       "kind": "implemented-by",
       "target": "internal/mdcheck/check.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/mdcheck/issue.go",
+      "properties": {}
     }
   ],
   "in": [
