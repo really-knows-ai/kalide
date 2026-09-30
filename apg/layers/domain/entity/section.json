@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "section",
-  "body": "A section: named by a heading in a slide, with optional plain-fence YAML frontmatter and a body; instantiates a section template. Heading depth is nesting depth: a depth-n heading starts a child section of the most recent depth-(n-1) section, from `#` down to `######` (slide-sections). Nesting also arises from section-typed fields (structured YAML data).",
+  "body": "A section: an instance of a section template. It is named by a heading in a slide, with optional plain-fence YAML frontmatter and a body — heading depth is nesting depth: a depth-n heading starts a child section of the most recent depth-(n-1) section, from `#` down to `######` (slide-sections) — or created directly by the `section` layout helper, whose `fields` are validated like a fence's YAML and whose body against the target's body rule (section-helper). Nesting also arises from section-typed fields (structured YAML data) and from declared child sections; a helper-invoked instance carries no child sections in v1 (section-helper-load-checks).",
   "properties": {
     "kind": "entity"
   },
