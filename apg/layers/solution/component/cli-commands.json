@@ -34,6 +34,11 @@
       "kind": "implemented-by",
       "target": "internal/cli/init.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/cli/initlibrary.go",
+      "properties": {}
     }
   ],
   "in": [
