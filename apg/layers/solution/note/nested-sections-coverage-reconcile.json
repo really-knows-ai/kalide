@@ -49,6 +49,11 @@
       "kind": "details",
       "target": "domain.service.render-deck",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.render-sections",
+      "properties": {}
     }
   ],
   "in": []
