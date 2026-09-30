@@ -131,6 +131,11 @@
       "kind": "details",
       "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.section-helpers-solution",
+      "properties": {}
     }
   ]
 }
