@@ -14,6 +14,11 @@
       "kind": "contains",
       "target": "requirements.requirement.cli-init",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-start",
+      "properties": {}
     }
   ],
   "in": []
