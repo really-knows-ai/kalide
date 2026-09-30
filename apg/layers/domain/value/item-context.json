@@ -20,6 +20,11 @@
       "kind": "contains",
       "source": "domain.group.templating",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.group-less-domains-audit",
+      "properties": {}
     }
   ]
 }

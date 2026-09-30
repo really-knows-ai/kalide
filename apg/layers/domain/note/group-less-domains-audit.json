@@ -4,6 +4,12 @@
   "name": "group-less-domains-audit",
   "body": "Widened-invariant audit of domain structure (I7 + containment completeness). Three findings:\n\n(1) item-context containment — FIXED [autonomous]. Inconsistency: domain.value.item-context (added by the nested-sections change; see domain.note.nested-sections-domain) was the only domain.value.* node with no containing domain.group — the other 21 values all sit in a group. The nested-sections note's \"attaches by a drives edge only\" described the realised-by spine (values carry no realised-by), not group membership. Resolution: added contains domain.group.templating -> domain.value.item-context. Evidence: domain.constraint.template-context-reserved attaches-to domain.group.templating and (per requirements.note.nested-sections-requirements) now covers the reserved `item` context; the sibling reserved-context value domain.value.slide-metadata also lives in domain.group.templating.\n\n(2) render-sections containment — LEFT OPEN. Inconsistency: domain.service.render-sections (added by solution.note.nested-sections-coverage-reconcile) is the only domain.service.* node with no containing domain.group — the other 12 services are all contained. Ambiguity: domain.group.presentation (\"rendering a valid deck to reveal.js HTML, serving, watching and live-reloading\") owns domain.service.render-deck, the deck renderer it was split from; domain.group.templating owns domain.service.template-registry and is the one group that realises solution.component.renderer, which realises render-sections. Options: (a) contains domain.group.presentation -> domain.service.render-sections (rendering-pipeline grouping); (b) contains domain.group.templating -> domain.service.render-sections (section-template/context grouping). No edge added — needs the human gate [with user].\n\n(3) upgrade/validation groups without an entity — JUSTIFIED. Inconsistency: domain.group.upgrade and domain.group.validation contain no domain.entity (the other four groups each contain >=1). The model treats them as capability/process groups: their bodies describe a capability (\"bringing an existing kalide project forward...\", \"checking a deck against templates and rules fail-fast\"), and neither carries a `root` (authoring=deck, templating=template, distribution=release), so there is no aggregate entity to own. Left as-is; no entity invented [autonomous].",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "domain.value.item-context",
+      "properties": {}
+    }
+  ],
   "in": []
 }
