@@ -39,6 +39,11 @@
       "kind": "implemented-by",
       "target": "internal/render/render.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/render.renderer.sectionHelper",
+      "properties": {}
     }
   ],
   "in": [
