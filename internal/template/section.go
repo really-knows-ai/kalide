@@ -2,7 +2,10 @@ package template
 
 import (
 	"fmt"
+	htmltemplate "html/template"
+	"sort"
 	"strings"
+	"text/template/parse"
 )
 
 // This file implements Section, the composition, variant and controlled-effects
@@ -381,4 +384,260 @@ func (s *Section) Variants(tmpl *Template, values map[string]any) []Variant {
 		out = append(out, Variant{Field: f.Name, Value: value})
 	}
 	return out
+}
+
+// HelperCalls statically extracts every `{{ section "name" [fields] [body] }}`
+// invocation from tmpl's layout, in source order.
+//
+// Registry templates carry only their layout source text (Template.Layout.Text)
+// and no stored parse tree, so HelperCalls re-parses that text with the
+// canonical layout func map (LayoutFuncMap) — the same map the library loader's
+// step-3 layout parse and the renderer's parseLayouts use — so a layout that
+// calls `media`, `section`, `dict` or `list` parses here too. It walks the
+// text/template/parse trees of the layout and of every `{{ define }}` /
+// `{{ block }}` body it contains (parsed.Templates), descending through
+// `if`/`range`/`with` branches, so a call anywhere in the layout is found.
+//
+// The arguments after the target name are positional: the second argument is
+// the optional `fields` expression and the third the optional `body`
+// expression, matching the `[fields] [body]` grammar. `fields` is a literal
+// dict call when it is a parenthesized `(dict "key" value …)` pipeline all of
+// whose key arguments are string literals; FieldsLiteral is then true and
+// FieldKeys holds those keys in source order. Otherwise — a variable, a
+// `.raw`/`.item.parent` pass-through or a range value, or a dict with a
+// non-literal key — it is a non-literal pass-through: FieldsLiteral is false
+// and FieldKeys is nil, to be checked against the target's field rules at
+// render. `body` is a string literal only when the third argument is a quoted
+// string; BodyLiteral is then true and Body holds its text. A non-literal
+// fields or body expression is NOT an error here: pass-through is intended and
+// is validated when the target renders (section-helper-load-checks).
+//
+// The target name, by contrast, must be a string literal: a load check resolves
+// the target template statically by name, so a call whose name is not a literal
+// (for example `{{ section .name }}`) cannot be checked and is rejected with an
+// error naming the layout and line. A layout that does not parse with the
+// canonical func map is likewise an error. HelperCall.Template is tmpl.Name and
+// HelperCall.Line is the call's 1-based line in the layout source (0 only when
+// no position could be resolved).
+func (s *Section) HelperCalls(tmpl *Template) ([]HelperCall, error) {
+	if tmpl == nil || strings.TrimSpace(tmpl.Layout.Text) == "" {
+		return nil, nil
+	}
+	text := tmpl.Layout.Text
+	layoutName := tmpl.Layout.Name
+	if layoutName == "" {
+		layoutName = tmpl.Name
+	}
+	parsed, err := htmltemplate.New(layoutName).Funcs(LayoutFuncMap(nil, "")).Parse(text)
+	if err != nil {
+		return nil, fmt.Errorf("template %q: parse layout: %w", tmpl.Name, err)
+	}
+
+	var found []positionedCall
+	seen := make(map[*parse.Tree]bool)
+	for _, t := range parsed.Templates() {
+		if t == nil || t.Tree == nil || seen[t.Tree] {
+			continue
+		}
+		seen[t.Tree] = true
+		if err := s.walkHelperList(t.Tree.Root, tmpl.Name, text, &found); err != nil {
+			return nil, err
+		}
+	}
+
+	sort.SliceStable(found, func(i, j int) bool { return found[i].pos < found[j].pos })
+	calls := make([]HelperCall, len(found))
+	for i := range found {
+		calls[i] = found[i].call
+	}
+	return calls, nil
+}
+
+// positionedCall pairs an extracted HelperCall with the byte position of its
+// `section` command, so calls gathered from several parse trees — the layout
+// root plus its `define`/`block` bodies — can be returned in source order.
+type positionedCall struct {
+	call HelperCall
+	pos  int
+}
+
+// walkHelperList visits every node of a template body in source order.
+func (s *Section) walkHelperList(list *parse.ListNode, tmplName, text string, out *[]positionedCall) error {
+	if list == nil {
+		return nil
+	}
+	for _, n := range list.Nodes {
+		if err := s.walkHelperNode(n, tmplName, text, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// walkHelperNode descends one parse node, entering the bodies of control
+// actions (`if`/`range`/`with`, including their else branches), parenthesized
+// pipelines, chain nodes and `template` argument pipelines.
+func (s *Section) walkHelperNode(n parse.Node, tmplName, text string, out *[]positionedCall) error {
+	switch x := n.(type) {
+	case *parse.ListNode:
+		return s.walkHelperList(x, tmplName, text, out)
+	case *parse.ActionNode:
+		return s.walkHelperPipe(x.Pipe, tmplName, text, out)
+	case *parse.IfNode:
+		return s.walkHelperBranch(&x.BranchNode, tmplName, text, out)
+	case *parse.RangeNode:
+		return s.walkHelperBranch(&x.BranchNode, tmplName, text, out)
+	case *parse.WithNode:
+		return s.walkHelperBranch(&x.BranchNode, tmplName, text, out)
+	case *parse.TemplateNode:
+		return s.walkHelperPipe(x.Pipe, tmplName, text, out)
+	case *parse.PipeNode:
+		return s.walkHelperPipe(x, tmplName, text, out)
+	case *parse.CommandNode:
+		return s.walkHelperCommand(x, tmplName, text, out)
+	case *parse.ChainNode:
+		return s.walkHelperNode(x.Node, tmplName, text, out)
+	default:
+		return nil
+	}
+}
+
+// walkHelperBranch visits a control action's condition pipeline and both its
+// body and else-body lists.
+func (s *Section) walkHelperBranch(b *parse.BranchNode, tmplName, text string, out *[]positionedCall) error {
+	if b == nil {
+		return nil
+	}
+	if err := s.walkHelperPipe(b.Pipe, tmplName, text, out); err != nil {
+		return err
+	}
+	if err := s.walkHelperList(b.List, tmplName, text, out); err != nil {
+		return err
+	}
+	return s.walkHelperList(b.ElseList, tmplName, text, out)
+}
+
+// walkHelperPipe visits each command of a pipeline, so a section call as a
+// chained or parenthesized command is found.
+func (s *Section) walkHelperPipe(p *parse.PipeNode, tmplName, text string, out *[]positionedCall) error {
+	if p == nil {
+		return nil
+	}
+	for _, cmd := range p.Cmds {
+		if err := s.walkHelperCommand(cmd, tmplName, text, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// walkHelperCommand records a section call when the command invokes the
+// `section` helper and then recurses into every argument, so nested pipelines
+// (a `dict` fields argument or a parenthesized expression) are visited too.
+func (s *Section) walkHelperCommand(cmd *parse.CommandNode, tmplName, text string, out *[]positionedCall) error {
+	if cmd == nil {
+		return nil
+	}
+	call, found, err := extractSectionHelperCall(cmd, tmplName, text)
+	if err != nil {
+		return err
+	}
+	if found {
+		*out = append(*out, positionedCall{call: call, pos: int(cmd.Position())})
+	}
+	for _, arg := range cmd.Args {
+		if err := s.walkHelperNode(arg, tmplName, text, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractSectionHelperCall recognises a `section` command and builds its
+// HelperCall, or reports found=false for any other command. A missing or
+// non-literal target name is an error: the load-time checks need a static name.
+func extractSectionHelperCall(cmd *parse.CommandNode, tmplName, text string) (HelperCall, bool, error) {
+	if cmd == nil || len(cmd.Args) == 0 {
+		return HelperCall{}, false, nil
+	}
+	ident, ok := cmd.Args[0].(*parse.IdentifierNode)
+	if !ok || ident.Ident != "section" {
+		return HelperCall{}, false, nil
+	}
+
+	line := layoutLine(text, cmd)
+	call := HelperCall{Template: tmplName, Line: line}
+	args := cmd.Args[1:]
+	if len(args) == 0 {
+		return HelperCall{}, false, fmt.Errorf(
+			"template %q: layout line %d: section helper call is missing its target name", tmplName, line)
+	}
+	name, ok := args[0].(*parse.StringNode)
+	if !ok {
+		return HelperCall{}, false, fmt.Errorf(
+			"template %q: layout line %d: section helper target name must be a string literal, got %s",
+			tmplName, line, args[0].String())
+	}
+	call.Name = name.Text
+
+	if len(args) >= 2 {
+		call.HasFields = true
+		if keys, ok := literalDictKeys(args[1]); ok {
+			call.FieldsLiteral = true
+			call.FieldKeys = keys
+		}
+	}
+	if len(args) >= 3 {
+		call.HasBody = true
+		if body, ok := args[2].(*parse.StringNode); ok {
+			call.BodyLiteral = true
+			call.Body = body.Text
+		}
+	}
+	return call, true, nil
+}
+
+// literalDictKeys reports whether n is a parenthesized `(dict …)` pipeline all
+// of whose key arguments (the even-indexed arguments after `dict`) are string
+// literals, and returns those keys. A non-dict pipeline, or a dict with a
+// non-literal key, cannot be checked fully, so it is not a literal dict.
+func literalDictKeys(n parse.Node) ([]string, bool) {
+	pipe, ok := n.(*parse.PipeNode)
+	if !ok || pipe == nil || len(pipe.Cmds) != 1 || pipe.Cmds[0] == nil {
+		return nil, false
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) == 0 {
+		return nil, false
+	}
+	ident, ok := cmd.Args[0].(*parse.IdentifierNode)
+	if !ok || ident.Ident != "dict" {
+		return nil, false
+	}
+	keys := make([]string, 0, (len(cmd.Args)-1+1)/2)
+	for i := 1; i < len(cmd.Args); i += 2 {
+		key, ok := cmd.Args[i].(*parse.StringNode)
+		if !ok {
+			return nil, false
+		}
+		keys = append(keys, key.Text)
+	}
+	return keys, true
+}
+
+// layoutLine returns the 1-based line of n within text. parse node positions
+// are byte offsets into the parsed source, so the line is the number of
+// newlines before that offset plus one.
+func layoutLine(text string, n parse.Node) int {
+	if n == nil {
+		return 0
+	}
+	pos := int(n.Position())
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(text) {
+		pos = len(text)
+	}
+	return 1 + strings.Count(text[:pos], "\n")
 }
