@@ -15,6 +15,11 @@
       "kind": "details",
       "source": "domain.note.nested-sections-domain",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
     }
   ]
 }
