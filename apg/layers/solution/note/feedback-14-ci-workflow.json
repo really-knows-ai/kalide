@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "solution.component.ci-workflow",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.service.publish-release",
+      "properties": {}
     }
   ],
   "in": []

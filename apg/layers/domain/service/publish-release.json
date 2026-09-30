@@ -41,6 +41,11 @@
       "kind": "drives",
       "source": "requirements.requirement.supported-platforms",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.feedback-14-ci-workflow",
+      "properties": {}
     }
   ]
 }
