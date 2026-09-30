@@ -21,6 +21,11 @@
       "kind": "represents",
       "source": "domain.entity.template-author",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.represents-actor-tier",
+      "properties": {}
     }
   ]
 }
