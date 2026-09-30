@@ -29,6 +29,11 @@
       "kind": "details",
       "target": "requirements.requirement.section-data-context",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
     }
   ],
   "in": []
