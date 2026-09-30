@@ -73,6 +73,11 @@
       "kind": "details",
       "source": "requirements.note.upgrade-reconciliation-final-review",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.user.maintainer",
+      "properties": {}
     }
   ]
 }
