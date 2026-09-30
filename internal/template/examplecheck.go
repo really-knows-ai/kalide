@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	htmltemplate "html/template"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,6 +93,115 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 		return libraryErrorf(lt.LayoutPath, 0, "execute: %v", err)
 	}
 	return nil
+}
+
+// exampleSectionHelper is the template-local `section` func the load-time
+// example execution binds (templates-dir-validation step 7). It is a factory
+// returning the func bound into a layout's func map, closing over lib and the
+// calling instance's field values — callerFields is nil when the call is made
+// from a slide layout, whose parent is the slide, not a section
+// (item-context). It lives here rather than in internal/render because
+// internal/template cannot import internal/render; the render-time renderer
+// binds its own equivalent.
+//
+// The returned func resolves the call with ResolveSectionCall — the same
+// resolution/validation the render-time helper reuses, so the target must be a
+// section-usage template, the call's fields are defaults-first validated with
+// CheckValues, the body is validated with CheckBody, and a body heading naming
+// one of the target's child sections is rejected — and executes the target's
+// layout against that resolution's result.
+//
+// The target's execution context mirrors checkLibraryExample's slide/section
+// context so the target sees a consistent shape: the effective field values as
+// top-level entries, the reserved `deck`/`slide` entries (the empty example
+// stand-ins), the one-item `.item` descriptor (index 0, number/count 1,
+// first/last true, section/template the target name, parent callerFields), and
+// the reserved `.raw` source view of what the call supplied plus the supplied
+// body. The body is set only when the call supplies one. The helper passes no
+// child sections, so no child section keys are published.
+//
+// The target's layout is re-parsed under LayoutFuncMap with the `section` entry
+// overridden by this same factory bound to the target's own field values, so a
+// target layout that itself calls `{{ section … }}` both parses and executes —
+// the nested call's `.item.parent` is this target's fields. The returned value
+// is the target's rendered HTML as html/template.HTML, trusted exactly as the
+// renderer returns it, so the caller's layout splices it unescaped.
+func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name string, args ...any) (htmltemplate.HTML, error) {
+	resolve := func(name string) (*Template, bool) {
+		other, _, ok := lib.TemplateByName(name)
+		if !ok || other == nil || other.Definition == nil {
+			return nil, false
+		}
+		return other.Definition, true
+	}
+
+	return func(name string, args ...any) (htmltemplate.HTML, error) {
+		var fields map[string]any
+		if len(args) >= 1 && args[0] != nil {
+			m, ok := args[0].(map[string]any)
+			if !ok {
+				return "", fmt.Errorf("section helper %q: fields must be a map, got %T", name, args[0])
+			}
+			fields = m
+		}
+		var body string
+		if len(args) >= 2 && args[1] != nil {
+			s, ok := args[1].(string)
+			if !ok {
+				return "", fmt.Errorf("section helper %q: body must be a string, got %T", name, args[1])
+			}
+			body = s
+		}
+
+		call, err := ResolveSectionCall(resolve, name, fields, body, callerFields)
+		if err != nil {
+			return "", fmt.Errorf("section helper %q: %w", name, err)
+		}
+
+		// The target executes with its effective field values addressable at the
+		// top level, the reserved deck/slide context and its one-item .item
+		// descriptor — the same shape checkLibraryExample gives a section
+		// template's own layout. .raw is the source view of what the call
+		// supplied (the fields plus the body when present).
+		ctx := make(map[string]any, len(call.Values)+5)
+		for k, v := range call.Values {
+			ctx[k] = v
+		}
+		ctx["deck"] = emptyExampleDeckContext()
+		ctx["slide"] = emptyExampleSlideContext()
+		ctx["item"] = call.Item
+		raw := make(map[string]any, len(fields)+1)
+		for k, v := range fields {
+			raw[k] = v
+		}
+		if body != "" {
+			raw["body"] = body
+		}
+		ctx["raw"] = raw
+		if strings.TrimSpace(body) != "" {
+			ctx["body"] = body
+		}
+
+		// A target layout that itself calls {{ section … }} must both parse and
+		// execute: bind this same factory, closing over the target's own field
+		// values as the nested call's caller fields (.item.parent).
+		funcMap := LayoutFuncMap(lib.Media, "/"+MediaDir)
+		funcMap["section"] = exampleSectionHelper(lib, call.Values)
+
+		layoutName := call.Template.Layout.Name
+		if layoutName == "" {
+			layoutName = call.Template.Name
+		}
+		parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(call.Template.Layout.Text)
+		if err != nil {
+			return "", fmt.Errorf("section helper %q: parse target layout: %w", name, err)
+		}
+		var buf strings.Builder
+		if err := parsed.Execute(&buf, ctx); err != nil {
+			return "", fmt.Errorf("section helper %q: execute target layout: %w", name, err)
+		}
+		return htmltemplate.HTML(buf.String()), nil
+	}
 }
 
 // exampleBlock is one parsed `---`/fence-delimited frontmatter plus body plus
