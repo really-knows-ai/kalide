@@ -291,7 +291,7 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // stand-ins), the one-item `.item` descriptor (index 0, number/count 1,
 // first/last true, section/template the target name, parent callerFields), the
 // reserved `.raw` source view of what the call supplied plus the supplied body
-// (exampleRawContext, matching the renderer's rawContext), and the reserved
+// (RawContext, the shared source-view builder both halves use), and the reserved
 // `.data` entry as an EMPTY map — the helper passes no child sections, so the
 // target has no authored children and contributes no entry to the caller's
 // `.data`, exactly as at render time (section-data-context). The body is set
@@ -340,7 +340,7 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 		// descriptor — the same shape checkLibraryExample gives a section
 		// template's own layout. .raw is the source view of what the call
 		// supplied — the declared fields plus the body when present, built by
-		// exampleRawContext so it matches the renderer's rawContext — and .data
+		// the shared RawContext — and .data
 		// is an empty map, because the helper passes no child sections: the
 		// target has no authored children, exactly as at render time, and the
 		// call appends nothing to the caller's .data.
@@ -351,7 +351,7 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 		ctx["deck"] = emptyExampleDeckContext()
 		ctx["slide"] = emptyExampleSlideContext()
 		ctx["item"] = call.Item
-		ctx["raw"] = exampleRawContext(fields, call.Template, call.Body)
+		ctx["raw"] = RawContext(fields, call.Template, call.Body)
 		ctx["data"] = map[string]any{}
 		if strings.TrimSpace(body) != "" {
 			ctx["body"] = body
