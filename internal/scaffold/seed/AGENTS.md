@@ -114,13 +114,23 @@ a position, or two slides sharing a label, are errors.
 
 ### Sections
 
-A top-level `# name` heading starts a **section** inside the slide. Section
-names and their repeat limits are declared by the slide's template; an
-undeclared name is an error with a closest-match suggestion. Only one level of
-sections exists; `##` and `###` are ordinary Markdown subheadings.
+A `# name` heading starts a **section** inside the slide. Headings nest by
+depth: `#` through `######` is nesting depth, not a Markdown subheading level. A
+`# name` heading opens a top-level section; a heading one level deeper opens a
+child of the most recent shallower heading, naming a section declared by that
+parent instance's resolved template; a heading at the same or a shallower depth
+closes the open sections back to its parent. Section names and their repeat
+limits are declared by the enclosing template — the slide template for a
+top-level section, the parent instance's resolved template for a child — and an
+undeclared name is an error with a closest-match suggestion. Each parent's child
+instances are counted per name against the declared `min`/`max`.
+
+Where the enclosing template declares no child sections, a deeper heading stays
+in the enclosing body as an ordinary Markdown subheading — allowed `##`/`###`
+only where that template's body rule permits subheadings.
 
 A section's frontmatter is an optional plain fence (three backticks, no
-language tag) immediately after its heading:
+language tag) immediately after its heading, at any depth:
 
 ```markdown
 # people
@@ -138,10 +148,11 @@ Ada is the first programmer.
 
 ### Speaker notes
 
-A reserved `# notes` section holds speaker notes. At most one is allowed, it
-must be the **last** section, and it does not count toward any section's repeat
-limits. `notes` is reserved and cannot be declared as a section name. Notes are
-never shown to the audience.
+A reserved `# notes` section holds speaker notes: it is recognised only as a
+top-level (`#`) heading. At most one is allowed, it must be the **last**
+section, and it does not count toward any section's repeat limits. `notes` is
+reserved and cannot be declared as a section name. Notes are never shown to the
+audience.
 
 ## The template library
 
