@@ -10,8 +10,10 @@ import (
 
 // This file is the unit-test deliverable for plan.phase-03.task-18: the
 // load-time example context (templates-dir-validation step 7,
-// checkLibraryExample) published by exampleRawContext / exampleDataContext and
-// the section template's one-item `.item`. It proves that an example layout
+// checkLibraryExample) published by the shared RawContext / DataContext
+// builders (DataContext walking the neutral tree exampleContextNodes adapts
+// from the example sections) and the section template's one-item `.item`. It
+// proves that an example layout
 // reads the reserved `.raw`/`.data`/`.item` context UNGUARDED — no
 // `{{ if .raw }}` / `{{ with .body }}` / `{{ if .item }}` wrapper — and still
 // loads cleanly, which is exactly the CR's unguarded pass-through
@@ -32,14 +34,14 @@ import (
 //   - a section template whose own example layout reads `.item` and the
 //     reserved `.raw` unguarded loads, and its `.raw` excludes a field's
 //     declared default (a default is not an authored source value);
-//   - exampleRawContext directly: declared supplied fields are copied, a
+//   - RawContext directly: declared supplied fields are copied, a
 //     declared default is excluded, an undeclared key is excluded, and `body`
 //     is present only when the author supplied one;
-//   - exampleDataContext directly: entries are keyed by declared section name
-//     and source-ordered within a key, one entry per instance with per-name
-//     sibling counts, each carrying its own `raw`/`item`/`data`, and the
-//     recursion sets a child's `item.parent` to the enclosing instance's
-//     source values.
+//   - DataContext directly (over exampleContextNodes): entries are keyed by
+//     declared section name and source-ordered within a key, one entry per
+//     instance with per-name sibling counts, each carrying its own
+//     `raw`/`item`/`data`, and the recursion sets a child's `item.parent` to
+//     the enclosing instance's source values.
 
 // unguardedExampleLibraryFS is a minimal, otherwise-valid in-memory library
 // whose layouts read the reserved load-time context with no guard:
@@ -174,7 +176,7 @@ func TestUnguardedExampleRawAndDataContextValues(t *testing.T) {
 		source[k] = v
 	}
 
-	raw := exampleRawContext(source, def, block.Body)
+	raw := RawContext(source, def, block.Body)
 	if got := raw["title"]; got != "Main Title" {
 		t.Errorf(`raw["title"] = %v, want the authored %q`, got, "Main Title")
 	}
@@ -185,7 +187,7 @@ func TestUnguardedExampleRawAndDataContextValues(t *testing.T) {
 		t.Errorf(`raw["body"] = %q, want the example's source body %q`, got, "Main source body.")
 	}
 
-	data := exampleDataContext(block.Sections, def, resolve, nil)
+	data := DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
 	blocks := contextEntryList(t, data["blocks"], `data["blocks"]`)
 	if len(blocks) != 2 {
 		t.Fatalf(`len(data["blocks"]) = %d, want 2 authored instances`, len(blocks))
@@ -299,7 +301,7 @@ func TestSectionExampleReservedContext(t *testing.T) {
 		}
 		source[k] = v
 	}
-	raw := exampleRawContext(source, badge.Definition, block.Body)
+	raw := RawContext(source, badge.Definition, block.Body)
 	if _, has := raw["label"]; has {
 		t.Errorf("raw = %v, want the defaulted, unauthored label excluded", raw)
 	}
@@ -308,11 +310,11 @@ func TestSectionExampleReservedContext(t *testing.T) {
 	}
 }
 
-// TestExampleRawContext tests the reserved `.raw` context builder directly: it
+// TestRawContext tests the shared reserved `.raw` context builder directly: it
 // copies only the declared fields the author supplied (a declared default and an
 // undeclared key are both absent) and includes `body` only when the author
 // supplied one.
-func TestExampleRawContext(t *testing.T) {
+func TestRawContext(t *testing.T) {
 	def := &Template{
 		Name:  "probe",
 		Usage: UsageSection,
@@ -323,47 +325,48 @@ func TestExampleRawContext(t *testing.T) {
 	}
 
 	t.Run("copies supplied declared fields and excludes defaults and undeclared keys", func(t *testing.T) {
-		got := exampleRawContext(map[string]any{
+		got := RawContext(map[string]any{
 			"title":        "Authored",
 			"other":        "undeclared",
 			"title_format": "plain",
 		}, def, "")
 		want := map[string]any{"title": "Authored"}
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("exampleRawContext() = %v, want %v", got, want)
+			t.Errorf("RawContext() = %v, want %v", got, want)
 		}
 	})
 
 	t.Run("includes body only when the author supplied one", func(t *testing.T) {
-		if got := exampleRawContext(nil, def, ""); len(got) != 0 {
-			t.Errorf("exampleRawContext(nil, def, \"\") = %v, want empty (default excluded, no body)", got)
+		if got := RawContext(nil, def, ""); len(got) != 0 {
+			t.Errorf("RawContext(nil, def, \"\") = %v, want empty (default excluded, no body)", got)
 		}
-		got := exampleRawContext(nil, def, "Some body.")
+		got := RawContext(nil, def, "Some body.")
 		want := map[string]any{"body": "Some body."}
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("exampleRawContext(nil, def, body) = %v, want %v", got, want)
+			t.Errorf("RawContext(nil, def, body) = %v, want %v", got, want)
 		}
 	})
 
 	t.Run("a nil template or data yields a well-formed context", func(t *testing.T) {
-		if got := exampleRawContext(nil, nil, ""); got == nil || len(got) != 0 {
-			t.Errorf("exampleRawContext(nil, nil, \"\") = %v, want a non-nil empty map", got)
+		if got := RawContext(nil, nil, ""); got == nil || len(got) != 0 {
+			t.Errorf("RawContext(nil, nil, \"\") = %v, want a non-nil empty map", got)
 		}
-		got := exampleRawContext(nil, nil, "Only body.")
+		got := RawContext(nil, nil, "Only body.")
 		want := map[string]any{"body": "Only body."}
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("exampleRawContext(nil, nil, body) = %v, want %v", got, want)
+			t.Errorf("RawContext(nil, nil, body) = %v, want %v", got, want)
 		}
 	})
 }
 
-// TestExampleDataContext tests the reserved `.data` context builder directly:
+// TestDataContext tests the shared reserved `.data` context builder directly,
+// over the neutral tree exampleContextNodes adapts from the example sections:
 // authored instances are keyed by declared section name (one entry per
 // instance, source-ordered, with per-name sibling counts), each entry carries
 // its own `raw`/`item`/`data`, an explicit `template:` selector resolves the
 // entry's template and is not copied into `raw`, and the recursion sets a
 // child's `item.parent` to the enclosing instance's source values.
-func TestExampleDataContext(t *testing.T) {
+func TestDataContext(t *testing.T) {
 	itemTmpl := &Template{Name: "item", Usage: UsageSection, Fields: []Field{{Name: "name", Type: FieldText}}}
 	columnTmpl := &Template{
 		Name:     "column",
@@ -391,9 +394,9 @@ func TestExampleDataContext(t *testing.T) {
 			{Name: "widgets", Index: 0, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"template": "widget", "name": "W"}}},
 			{Name: "blocks", Index: 1, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"text": "B"}}},
 		}
-		got := exampleDataContext(sections, hostTmpl, resolve, nil)
+		got := DataContext(exampleContextNodes(sections, hostTmpl, resolve), nil)
 		if len(got) != 2 {
-			t.Fatalf("exampleDataContext() keys = %v, want exactly blocks and widgets", contextKeys(got))
+			t.Fatalf("DataContext() keys = %v, want exactly blocks and widgets", contextKeys(got))
 		}
 
 		blocks := contextEntryList(t, got["blocks"], `data["blocks"]`)
@@ -455,7 +458,7 @@ func TestExampleDataContext(t *testing.T) {
 				Sections:    []exampleSection{child},
 			},
 		}
-		got := exampleDataContext([]exampleSection{column}, hostTmpl, resolve, nil)
+		got := DataContext(exampleContextNodes([]exampleSection{column}, hostTmpl, resolve), nil)
 		entries := contextEntryList(t, got["columns"], `data["columns"]`)
 		if len(entries) != 1 {
 			t.Fatalf(`len(data["columns"]) = %d, want 1`, len(entries))
@@ -489,7 +492,7 @@ func TestExampleDataContext(t *testing.T) {
 		sections := []exampleSection{
 			{Name: "blocks", Index: 0, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"text": "A"}}},
 		}
-		got := exampleDataContext(sections, hostTmpl, nil, nil)
+		got := DataContext(exampleContextNodes(sections, hostTmpl, nil), nil)
 		entries := contextEntryList(t, got["blocks"], `data["blocks"]`)
 		if len(entries) != 1 {
 			t.Fatalf(`len(data["blocks"]) = %d, want 1`, len(entries))
