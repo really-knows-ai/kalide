@@ -24,6 +24,11 @@
       "kind": "implemented-by",
       "target": "cmd/kalide/main.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/cli/cli.go",
+      "properties": {}
     }
   ],
   "in": [
