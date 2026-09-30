@@ -9,6 +9,11 @@
       "kind": "contains",
       "target": "requirements.requirement.embedded-assets",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.project-templates",
+      "properties": {}
     }
   ],
   "in": []
