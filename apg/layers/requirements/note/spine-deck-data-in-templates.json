@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-deck-data-in-templates",
+  "body": "Spine completion [autonomous]. requirements.requirement.deck-data-in-templates drove only domain.value.deck-properties; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.render-sections (the deck context is built and passed into every slide layout and section instance). render-sections was already realised-by solution.component.renderer. Added `implemented-by` solution.component.renderer -> internal/render.deckContext (builds the reserved `deck` context: title/author/date/properties). Path: deck-data-in-templates -> render-sections -> renderer -> internal/render.deckContext. Existing `drives` to domain.value.deck-properties kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
