@@ -74,6 +74,11 @@
       "kind": "implemented-by",
       "target": "internal/template/loadlibrary.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/registrylibrary.go",
+      "properties": {}
     }
   ],
   "in": [
