@@ -11,6 +11,11 @@
       "kind": "realised-by",
       "target": "solution.container.release-pipeline",
       "properties": {}
+    },
+    {
+      "kind": "represents",
+      "target": "solution.person.maintainer",
+      "properties": {}
     }
   ],
   "in": [
