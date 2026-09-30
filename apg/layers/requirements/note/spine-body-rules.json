@@ -4,6 +4,12 @@
   "name": "spine-body-rules",
   "body": "Spine completion [autonomous]. requirements.requirement.body-rules drove only domain.value.body-rule; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.template-registry (templating; the body rule is part of the template schema the registry owns). Added `implemented-by` solution.component.template-registry -> internal/template.CheckBody (invoked by the validator's body-rule check and by the registry's example check). Path: body-rules -> template-registry -> solution.component.template-registry -> internal/template.CheckBody. Existing `drives` to domain.value.body-rule kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.body-rules",
+      "properties": {}
+    }
+  ],
   "in": []
 }
