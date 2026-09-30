@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "deck-author",
-  "body": "The deck author as a domain actor — the same individual as requirements.user.deck-author and solution.person.deck-author: writes slide content in Markdown/YAML, runs kalide init/start/templates, and presents the deck live in a browser; not a developer. requirements.user.deck-author represents this entity, and this entity represents solution.person.deck-author. Realised by solution.container.cli-binary, the solution element the role operates.",
+  "body": "The deck author as a domain actor — the same individual as requirements.user.deck-author and solution.person.deck-author: writes slide content in Markdown/YAML, runs kalide init/start/templates, and presents the deck live in a browser; not a developer. requirements.user.deck-author represents this entity, and this entity represents solution.person.deck-author, so it is linked to the solution tier only through `represents` -> solution.person.deck-author; it has no realised-by (a person is not realised by software).",
   "properties": {
     "kind": "entity"
   },
