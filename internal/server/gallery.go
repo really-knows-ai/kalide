@@ -274,17 +274,6 @@ func gallerySlideExample(t *template.Template, reg *template.Registry, funcMap h
 // internal/validate.ValidateBuiltinExamples' treatment of a section example.
 func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	name := galleryFreeName(reg)
-	// The section's layout is parsed and executed under its Layout.Name when
-	// set (a library-sourced section's Layout.Name is its full manifest path,
-	// e.g. "templates/sections/item/layout.html.tmpl"), falling back to its
-	// template name otherwise — the same rule internal/render's layoutName
-	// applies. The wrapper's synthetic layout must invoke that same handle,
-	// not the bare template name, or `{{ template }}` looks up a name that
-	// was never registered under.
-	sectionLayoutName := t.Name
-	if t.Layout.Name != "" {
-		sectionLayoutName = t.Layout.Name
-	}
 	wrapper := &template.Template{
 		Name:        name,
 		Description: "Synthetic slide wrapping one section template's example.",
@@ -297,13 +286,13 @@ func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap
 		}},
 		Body: template.BodyRule{Mode: template.BodyOptional},
 		// The wrapper exists only to give the section example a slide to live
-		// in; its layout renders the one section instance through the section
-		// template's own layout, invoked by its actual registered handle
-		// (sectionLayoutName) rather than a hardcoded bare name.
+		// in; its layout splices the one section instance's already-rendered
+		// trusted HTML (the renderer executes each section through its own
+		// layout) rather than invoking the section layout itself.
 		Layout: template.Layout{
 			Name: name,
 			Text: `<section class="ey-slide">{{ range .` + gallerySectionName +
-				` }}{{ template "` + sectionLayoutName + `" . }}{{ end }}</section>`,
+				` }}{{ . }}{{ end }}</section>`,
 		},
 	}
 
