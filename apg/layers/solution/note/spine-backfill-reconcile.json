@@ -54,6 +54,11 @@
       "kind": "details",
       "target": "solution.component.http-server",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.templates-gallery",
+      "properties": {}
     }
   ],
   "in": []
