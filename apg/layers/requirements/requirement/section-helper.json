@@ -38,6 +38,11 @@
       "kind": "details",
       "source": "requirements.note.section-helpers-requirements",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.feedback-11-load-time-traceability",
+      "properties": {}
     }
   ]
 }
