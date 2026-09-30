@@ -74,6 +74,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-context",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.requirement.template-language",
+      "properties": {}
     }
   ],
   "in": []
