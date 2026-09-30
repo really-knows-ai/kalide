@@ -1,0 +1,11 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "actors",
+  "body": "Actor roles: the domain representation of each individual who acts on kalide — the deck author, the template author and the maintainer. Each actor entity is the same individual as its requirements.user.* counterpart and its solution.person.* counterpart; the actor tier is linked by `represents` (requirements.user.* -> domain.entity.* -> solution.person.*). The group exists because the binary's `represents` schema allows only `requirements.user -> domain.entity` and `domain.entity -> solution.person` — a direct user->person edge is refused — so the user<->person identity must pass through a domain actor entity. The actors are realised by the solution containers through which each role acts (the CLI binary for the two authors, the release pipeline for the maintainer); the actor identity itself is carried by `represents`, whose entity->person half targets the solution person.",
+  "properties": {
+    "attribute": "generic"
+  },
+  "out": [],
+  "in": []
+}
