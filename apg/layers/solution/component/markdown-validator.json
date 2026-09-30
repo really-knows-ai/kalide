@@ -19,6 +19,11 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/mdcheck.checkDisallowed",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/mdcheck/check.go",
+      "properties": {}
     }
   ],
   "in": [
