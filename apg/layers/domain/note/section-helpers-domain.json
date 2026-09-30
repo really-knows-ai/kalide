@@ -14,6 +14,11 @@
       "kind": "details",
       "target": "domain.entity.section",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "domain.entity.template",
+      "properties": {}
     }
   ],
   "in": []

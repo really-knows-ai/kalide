@@ -53,6 +53,11 @@
       "kind": "details",
       "source": "domain.note.nested-sections-domain",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.section-helpers-domain",
+      "properties": {}
     }
   ]
 }
