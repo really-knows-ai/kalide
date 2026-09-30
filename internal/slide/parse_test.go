@@ -732,7 +732,9 @@ func testParseSections(t *testing.T) {
 }
 
 // testParseRepeats covers min/max repeat limits, including that max <= 0 is
-// unbounded.
+// unbounded and that a nested child's count is enforced per parent instance
+// with the aggregate parent path (`columns[2] › blocks`) (nested-section-
+// validation).
 func testParseRepeats(t *testing.T) {
 	cat := testCatalogue()
 	const file = "slides/1-intro.md"
@@ -796,6 +798,156 @@ func testParseRepeats(t *testing.T) {
 		if len(slide.Sections) != 3 {
 			t.Fatalf("len(Sections) = %d, want 3 (unbounded)", len(slide.Sections))
 		}
+	})
+
+	// A nested child is counted among one parent instance's children, not
+	// over the whole slide, so both bounds are per parent and the error
+	// carries the aggregate parent path (nested-section-validation).
+
+	t.Run("nested max counts one parent's children", func(t *testing.T) {
+		// The third columns instance holds three blocks; its parent path is
+		// columns[2] and the error extends it by the bare child name.
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+		), cat)
+		wantParseErrorPath(t, err, file, 24, "columns[2] › blocks",
+			`section "blocks": at most 2 allowed, found 3`)
+	})
+
+	t.Run("nested max counts each parent independently", func(t *testing.T) {
+		// Six blocks children in total, but never more than two under any one
+		// columns instance, so the per-parent max of 2 is never exceeded.
+		slide := parseOK(t, file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"# columns",
+			"```",
+			"template: limitedgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+		), cat)
+		if len(slide.Sections) != 3 {
+			t.Fatalf("len(Sections) = %d, want 3", len(slide.Sections))
+		}
+		for i := range slide.Sections {
+			if got := len(slide.Sections[i].Children); got != 2 {
+				t.Errorf("Sections[%d].Children = %d, want 2", i, got)
+			}
+		}
+	})
+
+	t.Run("nested min is per parent and carries the aggregate path", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: needsgroup",
+			"```",
+			"",
+			"## blocks",
+		), cat)
+		wantParseErrorPath(t, err, file, 5, "columns[0] › blocks",
+			`section "blocks": requires at least 2, found 1`)
+	})
+
+	t.Run("nested min measured against the parent instance heading", func(t *testing.T) {
+		// The second columns instance is the one short of its minimum; the
+		// error is positioned on that parent's heading and names its path.
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: needsgroup",
+			"```",
+			"",
+			"## blocks",
+			"",
+			"## blocks",
+			"",
+			"# columns",
+			"```",
+			"template: needsgroup",
+			"```",
+			"",
+			"## blocks",
+		), cat)
+		wantParseErrorPath(t, err, file, 14, "columns[1] › blocks",
+			`section "blocks": requires at least 2, found 1`)
+	})
+
+	t.Run("deeper nested min is reported before a shallower parent's", func(t *testing.T) {
+		// checkMinChildren walks the tree depth-first, and a node's own
+		// missing children are reported before recursing into the ones it
+		// has, so the first columns instance's unmet minimum wins.
+		_, err := Parse(file, src(
+			"---",
+			"template: grouped",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: needsgroup",
+			"```",
+			"",
+			"# columns",
+			"```",
+			"template: needsgroup",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 5, "columns[0] › blocks",
+			`section "blocks": requires at least 2, found 0`)
 	})
 }
 
