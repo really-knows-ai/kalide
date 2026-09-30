@@ -21,6 +21,11 @@
       "kind": "realised-by",
       "source": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.nested-sections-coverage-reconcile",
+      "properties": {}
     }
   ]
 }
