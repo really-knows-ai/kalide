@@ -4,6 +4,12 @@
   "name": "spine-deck-config",
   "body": "Spine completion [autonomous]. requirements.requirement.deck-config drove only domain.value.deck-config; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.entity.deck (the aggregate root that owns kalide.yaml). domain.entity.deck is already realised-by solution.component.deck-loader, which is implemented-by internal/deck.LoadConfig. Path: deck-config -> deck -> deck-loader -> internal/deck.LoadConfig. No new implemented-by anchor was needed; existing `drives` to domain.value.deck-config kept.",
   "properties": {},
-  "out": [],
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.deck-config",
+      "properties": {}
+    }
+  ],
   "in": []
 }
