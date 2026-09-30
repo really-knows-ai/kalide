@@ -29,6 +29,12 @@ import (
 // resolves a `#label` link (that is the phase-5 validator). It uses
 // internal/mdcheck for inline text rules and internal/suggest for
 // "did you mean …?" hints.
+//
+// Because it is schema-only, CheckValues also does not materialise a Default.
+// It does, however, treat an omitted required field that declares a Default as
+// satisfied rather than reporting it missing; the caller applies the default.
+// The rule is uniform across slide frontmatter, section instances, example.md
+// and section-helper fields.
 
 // PathSegment is one step in a value's location: a field or section name,
 // optionally indexed because the value is a list element or a section
@@ -191,6 +197,10 @@ func WithImageExists(fn func(path string) bool) Option {
 // its single item type, and the same type/rule/unknown-field rules apply
 // everywhere. Checks are deterministic: unknown keys are reported in sorted
 // order and declared fields in declaration order.
+//
+// A required field that is omitted is not reported missing when it declares a
+// Default; CheckValues stays schema-only and leaves applying that default to
+// the caller.
 func CheckValues(data map[string]any, tmpl *Template, resolve func(name string) (*Template, bool), opts ...Option) Result {
 	var cfg checkConfig
 	for _, opt := range opts {
@@ -264,7 +274,12 @@ func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]
 		value, present := data[f.Name]
 		fieldPath := appendSeg(path, PathSegment{Name: f.Name})
 		if !present {
-			if f.Required {
+			// A required field that declares a Default is satisfied when
+			// omitted: the callers materialise the default (renderer.values at
+			// render time, ResolveSectionCall.applyFieldDefaults for a
+			// section-helper call, validateExampleBlockAt for the load-time
+			// example), so the schema-only check stays silent here.
+			if f.Required && f.Default == nil {
 				c.add(fieldPath, "required", nil,
 					fmt.Sprintf("required: field %q is required but missing", f.Name),
 					fmt.Sprintf("add a %s: value", f.Name))
