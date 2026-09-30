@@ -110,3 +110,73 @@ func RawContext(source map[string]any, t *Template, body string) map[string]any 
 	}
 	return out
 }
+
+// DataContext builds the reserved `.data` execution-context entry for a parent
+// instance's authored child sections (section-data-context): the same authored
+// instances the rendered-HTML list groups under each declared section name,
+// exposed in parallel as DATA. This is the single shared builder both halves
+// use — the load-time example execution (templates-dir-validation step 7,
+// examplecheck.go) and the render-time execution (internal/render) — so the
+// two data views cannot drift (template-context).
+//
+// The result is keyed by declared section name; each key maps to a
+// source-ordered list with one entry per authored instance of that section, and
+// each entry is a map carrying:
+//
+//   - `raw`: the instance's original source field values and body source
+//     (RawContext) — the source view of its fields, alongside the converted
+//     values the rendered instance exposes under their own names;
+//   - `item`: the instance's sibling descriptor, matching the render side's
+//     itemContext shape — its zero-based `index` and one-based `number` among
+//     the same-name siblings, their `count`, `first`/`last`, the declared
+//     `section` name, the resolved `template` name, and `parent` — the
+//     enclosing instance's source field values, or a typed nil map at the top
+//     level, where the parent is the slide, not a section instance
+//     (item-context);
+//   - `data`: the instance's own child sections as data, keyed and shaped the
+//     same way (the recursion), with the instance's `raw` as the children's
+//     parent, so the whole authored tree is addressable as data.
+//
+// nodes is one parent's authored children in source order, each a neutral
+// ContextNode carrying its declared name, its sibling index, its resolved
+// template and its own children; parent is the enclosing instance's source
+// field values (the same map that instance exposes as its `.raw`), or nil at
+// the top level. A nil node template yields an empty `template` name and a
+// source view that copies no fields, leaving any body. A nil or empty nodes
+// slice yields a non-nil empty map.
+//
+// Only authored instances appear: a section invoked by the `section` helper is
+// a direct call, never part of the parsed tree, so it is absent from `.data`
+// exactly as it is absent from the rendered-HTML list.
+func DataContext(nodes []ContextNode, parent map[string]any) map[string]any {
+	out := make(map[string]any, len(nodes))
+	counts := make(map[string]int, len(nodes))
+	for i := range nodes {
+		counts[nodes[i].Name]++
+	}
+	for i := range nodes {
+		node := &nodes[i]
+		raw := RawContext(node.Source, node.Template, node.Body)
+		tmplName := ""
+		if node.Template != nil {
+			tmplName = node.Template.Name
+		}
+		entry := map[string]any{
+			"raw": raw,
+			"item": map[string]any{
+				"index":    node.Index,
+				"number":   node.Index + 1,
+				"count":    counts[node.Name],
+				"first":    node.Index == 0,
+				"last":     node.Index == counts[node.Name]-1,
+				"section":  node.Name,
+				"template": tmplName,
+				"parent":   parent,
+			},
+			"data": DataContext(node.Children, raw),
+		}
+		list, _ := out[node.Name].([]map[string]any)
+		out[node.Name] = append(list, entry)
+	}
+	return out
+}
