@@ -33,11 +33,6 @@
       "properties": {}
     },
     {
-      "kind": "drives",
-      "target": "domain.service.render-deck",
-      "properties": {}
-    },
-    {
       "kind": "contains",
       "target": "requirements.requirement.item-context",
       "properties": {}
