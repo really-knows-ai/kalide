@@ -54,10 +54,13 @@ const themesURLPrefix = "/assets/templates/themes/"
 // (theme.LoadDir) and must be non-nil — callers always construct one from the
 // project's on-disk theme library, so a nil themeReg is a caller error and
 // RenderDeck reports it rather than silently substituting a default. funcMap is
-// the library's layout func map (template.LayoutFuncMap: `media` bound to the
-// served templates/media URL base, plus the format functions), threaded into
-// every slide's RenderSlide call so a library layout using `media` renders
-// (template-media, template-language). RenderDeck derives the deck's slide-file
+// the library's layout func map (template.LayoutFuncMap: the helpers `media`
+// — bound to the served templates/media URL base — `section`, `dict` and
+// `list`, plus the format functions), threaded into every slide's RenderSlide
+// call so a library layout using any helper renders (template-media,
+// template-language, section-helper); RenderSlide rebinds the render-time
+// `section` helper over the func map's parse-resolvable stub. RenderDeck derives
+// the deck's slide-file
 // count once (deck.Deck.Total) and threads cfg plus each slide's modelled
 // position into RenderSlide, so every slide layout executes with the reserved
 // `deck` and `slide` context (deck-data-in-templates, slide-metadata).

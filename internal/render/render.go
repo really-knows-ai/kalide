@@ -86,8 +86,11 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // deck. reg is the populated template registry the slide was validated against
 // — typically built from the project's templates/ library
 // (template.NewRegistryFromLibrary). funcMap is the library's layout func map
-// (template.LayoutFuncMap, `media` bound to the served templates/media URL base,
-// plus the number/date format functions); a nil funcMap falls back to
+// (template.LayoutFuncMap): the four helpers — `media` (bound to the served
+// templates/media URL base), `section`, `dict` and `list` — plus the
+// number/date format functions. RenderSlide rebinds the render-time `section`
+// helper over the parse-resolvable stub LayoutFuncMap registers before any
+// layout executes (section-helper). A nil funcMap falls back to
 // template.LayoutFuncMap(nil, ""), under which `media` always fails as if no
 // templates/media directory existed.
 //
@@ -99,9 +102,11 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // element per instance, each rendered bottom-up through its own
 // layout.html.tmpl — so a layout splices a child with
 // `{{ range .blocks }}{{ . }}{{ end }}` rather than ranging over data maps
-// (template-language). The format functions and `media` are exposed to the
-// layout through funcMap, so a library layout may format a value or resolve a
-// media URL itself (template-media, template-language).
+// (template-language). The format functions and the four helpers are exposed
+// to the layout through funcMap, so a library layout may format a value,
+// resolve a media URL, construct a `dict`/`list` argument, or call another
+// section through `section` itself (template-media, template-language,
+// section-helper).
 //
 // The layout also carries the reserved context entries (template-context):
 // `deck` is the deck-wide data from cfg — title, author, date and the author's
@@ -112,8 +117,16 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // count (deck.Deck.Total). A nil cfg yields a well-formed but empty deck
 // context. The reserved `item` entry is absent from the slide layout — a slide
 // has no siblings — but every section instance, at every depth, executes with
-// it (item-context). None of these entries is a helper: the v1 helper set
-// stays exactly `media`.
+// it (item-context). None of these reserved entries is a helper: the layout
+// helper set is the four funcMap helpers `media`, `section`, `dict` and
+// `list`. RenderSlide constructs the renderer before parsing anything and
+// parseLayouts binds its renderer-backed `section` helper into the shared
+// namespace, overriding the parse-resolvable stub from LayoutFuncMap, so every
+// reachable layout that calls `{{ section "<name>" [fields] [body] }}` both
+// parses and executes against the render-time implementation (section-helper).
+// Because the slide layout is the top of the composition tree, a call it makes
+// has the slide as its parent, not a section: callerFields stays nil while
+// callerCtx carries the slide's deck/slide context (section-template-context).
 //
 // When parsed has a `# notes` section, RenderSlide appends an
 // `<aside class="notes">` inside the slide with its rendered body; the embedded
@@ -939,10 +952,10 @@ func dateString(raw any) string {
 // shared namespace: RenderSlide executes the slide layout through it and hands
 // it to the renderer so every section instance, at any depth, executes its own
 // layout.html.tmpl against the same namespace (template-language). funcMap is
-// the library's layout func map (template.LayoutFuncMap): `media` plus the
-// number/date format functions, installed on the namespace so every library
-// layout using `media` or a format function parses and executes
-// (template-media, template-language).
+// the library's layout func map (template.LayoutFuncMap): the helpers `media`,
+// `section`, `dict` and `list` plus the number/date format functions, installed
+// on the namespace so every library layout using a helper or a format function
+// parses and executes (template-media, template-language).
 //
 // r's renderer-backed `section` helper is installed on the namespace here, at
 // the per-template func-map binding point, overriding the parse-resolvable stub
