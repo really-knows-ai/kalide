@@ -307,8 +307,20 @@ func templateBoundText(n float64) string {
 // printTemplateSections writes the declared sections, one per line, in
 // declaration order: the section name, the section-usage templates it accepts
 // and its repeat bounds.
+//
+// The heading and the row verb depend on the template's usage: a slide
+// template's `Sections:` are the child sections it declares (verb
+// "declares"), while a section template's `Child sections:` are the child
+// sections it can hold (verb "Can hold").
 func printTemplateSections(w io.Writer, t *template.Template) {
-	fmt.Fprintln(w, "Sections:")
+	heading := "Sections:"
+	verb := "declares"
+	if t.Usage == template.UsageSection {
+		heading = "Child sections:"
+		verb = "Can hold"
+	}
+
+	fmt.Fprintln(w, heading)
 	if len(t.Sections) == 0 {
 		fmt.Fprintln(w, "  none")
 		fmt.Fprintln(w)
@@ -320,7 +332,7 @@ func printTemplateSections(w io.Writer, t *template.Template) {
 		if len(d.Accepted) > 0 {
 			accepted = strings.Join(d.Accepted, ", ")
 		}
-		fmt.Fprintf(w, "  %s (accepts %s; repeats %s)\n", d.Name, accepted, templateSectionRepeats(d))
+		fmt.Fprintf(w, "  %s (%s %s; repeats %s)\n", d.Name, verb, accepted, templateSectionRepeats(d))
 	}
 	fmt.Fprintln(w)
 }
