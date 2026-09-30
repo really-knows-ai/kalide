@@ -453,6 +453,47 @@ func (s *Section) HelperCalls(tmpl *Template) ([]HelperCall, error) {
 	return calls, nil
 }
 
+// HelperRefs returns the section-template names tmpl's layout references
+// through the `section` helper, in source order, as the helper-call edges of
+// the template composition reference graph. Section.Walk joins these edges to
+// the declared-section edges so a helper-closed reference cycle is rejected
+// with the chain in *SectionCycleError (template-composition,
+// requirements.constraint.section-cycle-error-chain).
+//
+// It is built on HelperCalls: every extracted call contributes its target
+// Name, so a call anywhere in the layout — the root, a `define`/`block` body or
+// a control-action branch — is a reference. A non-literal target name is the
+// error HelperCalls reports, and a layout that does not parse with the
+// canonical layout func map is likewise an error.
+//
+// Repeated names are de-duplicated, keeping the first occurrence's position, so
+// the result is the edge set of the reference graph rather than its call list:
+// two calls to the same target are one edge for cycle rejection. That is
+// deliberate — the per-call detail (literal dict keys, literal body and the
+// literal/non-literal markers) stays available through HelperCalls, which the
+// registry's load-time checks consume; HelperRefs exists only to feed the
+// reference-graph walk.
+func (s *Section) HelperRefs(tmpl *Template) ([]string, error) {
+	calls, err := s.HelperCalls(tmpl)
+	if err != nil {
+		return nil, err
+	}
+	if len(calls) == 0 {
+		return nil, nil
+	}
+	out := make([]string, 0, len(calls))
+	seen := make(map[string]bool, len(calls))
+	for i := range calls {
+		name := calls[i].Name
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out, nil
+}
+
 // positionedCall pairs an extracted HelperCall with the byte position of its
 // `section` command, so calls gathered from several parse trees — the layout
 // root plus its `define`/`block` bodies — can be returned in source order.
