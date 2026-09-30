@@ -113,8 +113,8 @@ A field entry has `name` and `type`, and may set `required`, `default`,
 - Number formats: `compact`, `exact`, `percent`. Date formats: `long`, `short`.
   An author selects one with the reserved sibling key `<field>_format`;
   otherwise the field's `default_format` applies.
-- Reserved names: `body`, `notes`, `deck`, `slide` and the `_format` suffix
-  cannot be used as field or section names.
+- Reserved names: `body`, `notes`, `deck`, `slide`, `item` and the `_format`
+  suffix cannot be used as field or section names.
 
 ### Sections
 
@@ -129,6 +129,22 @@ sections:
 `name` and `accepted` are required. A section accepts only section-usage
 templates, never slide templates. A section instance's `template:` key is
 required only when the section accepts more than one template.
+
+**Any** template may declare `sections:` — a slide template, and equally a
+section template, whose instances then accept nested child sections. Heading
+depth is nesting depth: `#` through `######`, not a Markdown subheading level. A
+`# name` heading opens a top-level section; a heading one level deeper opens a
+child of the most recent shallower heading, naming a section declared by that
+parent instance's resolved template (the slide template for a top-level
+section); a heading at the same or a shallower depth closes the open sections
+back to its parent. Each parent's child instances are counted per name against
+the declaration's `min`/`max`, and an undeclared child name is an error with a
+closest-match suggestion.
+
+Where the enclosing template declares no child sections, a deeper heading stays
+in the enclosing body as an ordinary Markdown subheading (allowed `##`/`###`
+only where that template's body rule permits subheadings). The reserved
+`# notes` section is top-level only.
 
 ### Body rules
 
@@ -186,6 +202,14 @@ Reserved context names, provided as **data**, not helpers:
   `{{ .deck.properties.audience }}` for a plain key.
 - `.slide` — `.slide.number` (a string, for example `"1"` or `"1a"`) and
   `.slide.total` (an integer).
+- `.item` — present only inside a **section** instance, never in a slide
+  layout. It describes the instance among its same-name siblings:
+  `.item.index` (zero-based), `.item.number` (one-based), `.item.count`,
+  `.item.first` and `.item.last` (booleans), `.item.section` (the declared
+  section name), `.item.template` (the resolved section template name) and
+  `.item.parent` (the enclosing section instance's field values, or nil at the
+  top level). A slide layout and a `section-template`-typed field value carry no
+  `item` entry.
 
 The v1 layout **helper** set is exactly `media`:
 
@@ -202,8 +226,9 @@ directory.
 The built-in number and date format functions (`compact`, `exact`, `percent`,
 `long`, `short`) are also available.
 
-`deck` and `slide` are reserved top-level names and cannot be declared as
-fields or sections.
+`deck`, `slide` and `item` are reserved top-level names and cannot be declared
+as fields or sections. `notes`, `body` and the `_format` suffix are reserved
+too.
 
 ## Themes
 
