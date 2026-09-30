@@ -9,6 +9,11 @@
       "kind": "details",
       "target": "solution.component.changelog",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.component.license-notice",
+      "properties": {}
     }
   ],
   "in": []
