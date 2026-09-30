@@ -529,10 +529,13 @@ func mustWriteFile(t *testing.T, path, data string) {
 }
 
 // mustGalleryFixtureLibrary loads a small in-memory templates/ library
-// (title, content, column) standing in for the deleted Go-authored builtins:
-// content composes 2..4 "columns" of "column" and carries a 2-paragraph body
-// limit, matching the gallery documentation the "templates gallery lists
-// every fixture template with docs" subtest asserts.
+// (title, content, column, group) standing in for the deleted Go-authored
+// builtins: content composes 2..4 "columns" of "column" and carries a
+// 2-paragraph body limit, matching the gallery documentation the "templates
+// gallery lists every fixture template with docs" subtest asserts; group is a
+// container section template that can hold 1..3 "items" children accepting
+// "column", so the gallery's usage-dependent Child sections/Can hold
+// documentation is exercised alongside the slide side's Sections/declares.
 func mustGalleryFixtureLibrary(t *testing.T) (*template.Library, *template.Registry, *theme.Registry) {
 	t.Helper()
 	const contentManifest = `description: Content slide with composed columns
@@ -554,6 +557,18 @@ fields:
   - name: title
     type: text
 `
+	const groupManifest = `description: A container section holding columns
+fields:
+  - name: title
+    type: text
+sections:
+  - name: items
+    accepted: [column]
+    min: 1
+    max: 3
+body:
+  mode: optional
+`
 	fsys := fstest.MapFS{
 		"templates/library.yaml":                     {Data: []byte("name: gallery-fixture\nformat: 1\n")},
 		"templates/slides/title/template.yaml":       {Data: []byte("description: Title slide\nfields:\n  - name: title\n    type: text\n    required: true\n")},
@@ -565,7 +580,16 @@ fields:
 		"templates/sections/column/template.yaml":    {Data: []byte(columnManifest)},
 		"templates/sections/column/layout.html.tmpl": {Data: []byte("<div>{{.title}}</div>")},
 		"templates/sections/column/example.md":       {Data: []byte("```\ntitle: Sample\n```\n")},
-		"templates/themes/default/theme.css":         {Data: []byte("body{}")},
+		// group is a container section. Its nested example uses a `## items`
+		// child: the library's heading-depth example parser takes the first
+		// heading's depth as the fragment's base, so `items` is still the
+		// group's declared child, while gallerySectionExample embeds the
+		// fragment beneath its synthetic `# example` heading — depth 2 nests
+		// under that instance (depth 1) instead of opening a sibling of it.
+		"templates/sections/group/template.yaml":    {Data: []byte(groupManifest)},
+		"templates/sections/group/layout.html.tmpl": {Data: []byte("<div>{{.title}}{{range .items}}{{.}}{{end}}</div>")},
+		"templates/sections/group/example.md":       {Data: []byte("```\ntemplate: group\ntitle: Group\n```\n\n## items\n```\ntitle: First column\n```\n")},
+		"templates/themes/default/theme.css":        {Data: []byte("body{}")},
 	}
 
 	lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
