@@ -63,11 +63,6 @@
       "kind": "details",
       "source": "solution.note.spine-tier3-anchors",
       "properties": {}
-    },
-    {
-      "kind": "realised-by",
-      "source": "domain.entity.maintainer",
-      "properties": {}
     }
   ]
 }
