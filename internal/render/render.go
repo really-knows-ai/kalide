@@ -329,7 +329,7 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// `{{ section … }}` call is a direct render call, never part of the parsed
 	// tree, so its sectionHelper render contributes no entry to `.data` and no
 	// element to the rendered-HTML section list built above.
-	data["raw"] = r.rawContext(s.Frontmatter, tmpl, s.Body)
+	data["raw"] = template.RawContext(s.Frontmatter, tmpl, s.Body)
 	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil)
 	return data, nil
 }
