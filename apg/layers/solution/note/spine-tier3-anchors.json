@@ -19,6 +19,11 @@
       "kind": "details",
       "target": "solution.component.linux-release-asset",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "solution.system.kalide",
+      "properties": {}
     }
   ],
   "in": []
