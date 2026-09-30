@@ -1,0 +1,9 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "section-helpers-solution",
+  "body": "Tier-3 reconciled for the layout-helper/source-context change. solution.component.renderer extended: owns the section/dict/list helpers, executes helper-invoked section templates bottom-up, builds the one-item .item (parent = the caller's fields), and exposes .raw/.data. solution.component.template-registry extended: the central function map is media/section/dict/list, and the load-time static section-helper checks (target exists and is section-usage, literal dict keys declared, required fields present/defaulted, min>0 child rejected) plus helper-call references in cycle rejection. solution.component.template-library-loader extended: step-3 layout parse uses the four-helper map and step-4 build checks include helper-call analysis and cycle inclusion. solution.component.markdown-validator notes the helper body is checked by the same body rules. Code anchors confirmed via the graph before authoring: internal/template/media.go (LayoutFuncMap — the single func-map source; the v1 helper is exactly media), internal/template/registry.go (ReservedNames = body/notes/deck/slide/item/_format; checkSections/checkFieldType/checkExample; Section.Walk cycle), internal/template/section.go (Section.Walk follows declared Sections only), internal/render/render.go (renderer.slideData/renderSection build the layout map; parseLayouts/reachableTemplates; itemContext; deckContext/slideContext; values/fieldValue — no .raw/.data and no section/dict/list helper today), internal/render/deck.go (whole-deck assembly, unchanged). No new code FQN is introduced: the change lands in files already anchored by these components. [autonomous]",
+  "properties": {},
+  "out": [],
+  "in": []
+}
