@@ -8,6 +8,7 @@ sections:
   - name: columns
     accepted:
       - column
+      - group
     max: 4
 body:
   mode: optional
