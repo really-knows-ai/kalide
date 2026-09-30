@@ -24,9 +24,9 @@ package scaffold
 //     complete format reference), including the reserved `media:` prefix;
 //   - library-guide scope: the templates/ library layout, the library.yaml
 //     keys, the template.yaml schema and body modes, the layout language, the
-//     reserved names deck/slide, the `media` helper, the reserved context keys,
-//     every field type, the themes/media rules and the reserved `media:`
-//     prefix.
+//     reserved context names deck/slide/item/raw/data, the four layout helpers,
+//     the reserved context keys, every field type, the themes/media rules and
+//     the reserved `media:` prefix.
 //
 // Negative assertion: the kalide.yaml config keys and the init/version CLI are
 // deliberately OUTSIDE the library-guide scope, so their absence from
@@ -63,9 +63,15 @@ package scaffold
 // message) must be declared, with a reason, in agentGuideIllustrativeSnippets;
 // any fenced snippet that is neither validated nor declared there fails the
 // test, so no snippet is ever silently skipped.
+//
+// Inline template snippets are validated too: every single-line backtick code
+// span carrying a Go template action (`{{ … }}`) is parsed with the canonical
+// template.LayoutFuncMap, so the `section`/`dict`/`list` layout examples the
+// guides show are load-checked even though they are inline rather than fenced.
 
 import (
 	"fmt"
+	htmltemplate "html/template"
 	"regexp"
 	"sort"
 	"strings"
@@ -164,6 +170,29 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 		}
 	})
 
+	t.Run("negative: a guide that omits a layout helper is detected", func(t *testing.T) {
+		// The drift test must fail, not pass vacuously, when a helper the
+		// implementation exposes is missing from a guide. Build a synthetic
+		// guide carrying every helper but the last as a real inline code span
+		// and assert the missing one is not satisfied: that is exactly the
+		// membership decision agentGuideAssertGuideCarries reds on.
+		helpers := agentGuideLayoutHelpers(t)
+		if len(helpers) < 2 {
+			t.Fatalf("template.LayoutFuncMap exposes %d helper(s), want at least 2 to exercise a missing helper", len(helpers))
+		}
+		var b strings.Builder
+		for _, h := range helpers[:len(helpers)-1] {
+			fmt.Fprintf(&b, "`%s` ", h)
+		}
+		synthetic := b.String()
+		for i, h := range helpers {
+			want := i < len(helpers)-1
+			if got := agentGuideContainsToken(synthetic, h); got != want {
+				t.Errorf("agentGuideContainsToken(synthetic guide, %q) = %v, want %v; a helper absent from a guide must not be satisfied", h, got, want)
+			}
+		}
+	})
+
 	t.Run("context-aware matching rejects substring-only presence", func(t *testing.T) {
 		// The negative cases are the feedback-17 regressions: a token present
 		// only inside a longer word, or only in ordinary prose, must NOT count,
@@ -236,6 +265,11 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 		agentGuideAssertSnippetsLoad(t, "deck guide (seed/AGENTS.md)", deckGuide)
 		agentGuideAssertSnippetsLoad(t, "library guide (libraryguide/AGENTS.md)", libraryGuide)
 	})
+
+	t.Run("the guides' inline template snippets parse with the layout func map", func(t *testing.T) {
+		agentGuideAssertInlineSnippetsParse(t, "deck guide (seed/AGENTS.md)", deckGuide)
+		agentGuideAssertInlineSnippetsParse(t, "library guide (libraryguide/AGENTS.md)", libraryGuide)
+	})
 }
 
 // agentGuideTexts reads the two embedded guides as strings through the same
@@ -295,13 +329,50 @@ func agentGuideLayoutHelpers(t *testing.T) []string {
 	return helpers
 }
 
+// agentGuideLibraryReservedContextNames returns the reserved top-level
+// template-context names the library guide owns: deck, slide, item, raw and
+// data. deck/slide/raw/data are the namespace roots of template.ContextKeys;
+// item is the section-only context name ContextKeys does not enumerate (it is
+// present only inside a section instance), so it is added explicitly. Every
+// result is cross-checked against template.ReservedNames, so a context name the
+// implementation no longer reserves fails here rather than being silently
+// demanded of the guide.
+func agentGuideLibraryReservedContextNames(t *testing.T) []string {
+	t.Helper()
+
+	names := make(map[string]bool)
+	for _, key := range template.ContextKeys() {
+		key = strings.TrimPrefix(key, ".")
+		if i := strings.IndexByte(key, '.'); i >= 0 {
+			key = key[:i]
+		}
+		names[key] = true
+	}
+	names["item"] = true
+
+	reserved := make(map[string]bool)
+	for _, name := range template.ReservedNames() {
+		reserved[name] = true
+	}
+	out := make([]string, 0, len(names))
+	for name := range names {
+		if !reserved[name] {
+			t.Errorf("library-guide reserved context name %q is not in template.ReservedNames", name)
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // agentGuideLibraryScopeGroups returns the token families the library guide
 // owns (agent-guide-drift-check, library-agent-guide): the templates/ library
 // layout, the library.yaml keys, the template.yaml schema and body modes, the
-// layout language, the reserved deck/slide names, the `media` helper, the
-// reserved context keys, every field type, the themes/media rules and the
-// reserved `media:` prefix. It deliberately omits the kalide.yaml config keys
-// and the init/version CLI, which are deck-guide-only.
+// layout language, the reserved context names deck/slide/item/raw/data, the
+// layout helpers, the reserved context keys, every field type, the themes/media
+// rules and the reserved `media:` prefix. It deliberately omits the kalide.yaml
+// config keys and the init/version CLI, which are deck-guide-only.
 func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 	t.Helper()
 
@@ -318,7 +389,7 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "template.yaml top-level key", tokens: template.ManifestTopLevelKeys()},
 		{name: "body mode", tokens: template.BodyModes()},
 		{name: "layout language token", tokens: []string{template.LayoutFile, "html/template"}},
-		{name: "reserved name", tokens: []string{"deck", "slide"}},
+		{name: "reserved name", tokens: agentGuideLibraryReservedContextNames(t)},
 		{name: "layout helper", tokens: agentGuideLayoutHelpers(t)},
 		{name: "context key", tokens: template.ContextKeys()},
 		{name: "field type", tokens: template.ManifestFieldTypes()},
@@ -676,6 +747,33 @@ func agentGuideAssertSnippetsLoad(t *testing.T, guideName, guide string) {
 			t.Errorf("%s: fenced snippet (info %q, first line %q) is neither validated nor declared in agentGuideIllustrativeSnippets",
 				where, snippet.info, agentGuideFirstContentLine(snippet.body))
 		}
+	}
+}
+
+// agentGuideAssertInlineSnippetsParse parses every single-line inline backtick
+// code span of guide that carries a Go template action (`{{ … }}`) with the
+// canonical template.LayoutFuncMap. This load-checks the layout examples the
+// guides show inline — the `section`, `dict` and `list` helper calls among them
+// — the same func map the loader's parse check binds, so a helper example the
+// func map cannot parse fails the drift test rather than passing unexamined. A
+// guide with no inline template snippet fails, so the check cannot pass
+// vacuously.
+func agentGuideAssertInlineSnippetsParse(t *testing.T, guideName, guide string) {
+	t.Helper()
+
+	funcs := template.LayoutFuncMap(nil, "/media")
+	checked := 0
+	for _, span := range agentGuideInlineCodeSpans(guide) {
+		if !strings.Contains(span, "{{") {
+			continue
+		}
+		checked++
+		if _, err := htmltemplate.New("inline").Funcs(funcs).Parse(span); err != nil {
+			t.Errorf("%s: inline template snippet %q does not parse under the layout func map: %v", guideName, span, err)
+		}
+	}
+	if checked == 0 {
+		t.Errorf("%s: no inline template snippet found, want the guide's layout examples to be extractable", guideName)
 	}
 }
 
