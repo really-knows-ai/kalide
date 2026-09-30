@@ -321,7 +321,7 @@ Values arrive in two forms:
 - Every **other field** is a typed value (number, date, boolean, enum string,
   list, image/link URL), and `html/template` auto-escapes string values.
 
-Three reserved context names are provided, as **data**, not helpers:
+Five reserved context names are provided, as **data**, not helpers:
 
 - `.deck` — the deck-wide configuration: `.deck.title` (always present),
   `.deck.author` and `.deck.date` (empty strings when omitted), and
@@ -339,12 +339,23 @@ Three reserved context names are provided, as **data**, not helpers:
   name) and `.item.parent` (the enclosing section instance's field values, or
   nil at the top level). A slide layout and a `section-template`-typed field
   value carry no `item` entry.
+- `.raw` — the author's **original source** values, before rendering:
+  `.raw.<field>` is a text field's source Markdown exactly as authored (before
+  inline-Markdown rendering), and `.raw.body` is the original body source
+  (before block rendering). A declared default is not a source value, so a
+  field the author did not supply is absent or empty. `.raw` is data, not a
+  helper. A section instance the `section` helper renders sees `.raw` as the
+  values the call supplied.
+- `.data` — the authored section tree as data, parallel to the pre-rendered
+  section lists: `.data.<section>` is a list with one entry per authored
+  instance of that declared section, in source order, and each entry carries
+  its own `.raw`, `.item` and `.data` (its children, keyed the same way). Range
+  over `.sectionName` to splice rendered HTML; read `.data.<section>` to
+  inspect the same instances as source data. A section-helper call is a direct
+  render call, not an authored instance, so it appends no entry to `.data` and
+  no element to the rendered section list. `.data` is data, not a helper.
 
-The v1 layout **helper** set is exactly `media`:
-
-```
-{{ media "logo.svg" }}
-```
+The v1 layout **helper** set is exactly `media`, `section`, `dict` and `list`.
 
 `media`'s argument is a path relative to the resolved library's `media/`
 directory. It returns the URL the server serves that file under. The argument
@@ -352,12 +363,44 @@ must not be absolute and must not contain `..`; a missing file, an absolute
 path or a `..` segment is an error naming the layout's file and line. `media`
 never resolves into a theme directory.
 
+```
+{{ media "logo.svg" }}
+```
+
+`section` renders a section template directly, exactly as if an instance of it
+had been written in Markdown:
+
+- `{{ section "footer" }}` renders the `footer` section template with its
+  declared defaults and no body;
+- `{{ section "number-heading" (dict "number" .item.number "heading" .raw.title) }}`
+  renders it with those field values, built by `dict` from the call's context;
+- `{{ section "callout" (dict "label" "Proposition") .raw.body }}` renders it
+  with a literal field and the slide's original body passed through as a
+  **non-literal** body expression.
+
+`section` takes the target template name, an optional `fields` map of source
+values validated against the target's field schema, and an optional `body`
+string validated against the target's body rule; omitted fields take the
+target's defaults. The rendered instance is treated as a **one-item group**:
+`.item` reports `index` 0, `number` and `count` 1, `first` and `last` true,
+`section` and `template` the target name, and `parent` the calling instance's
+fields (nil when the call is made from a slide layout). **No child sections
+pass through the helper in v1**: a target declaring a mandatory child section,
+or a body whose heading names one of the target's child sections, is an error.
+
+`dict k1 v1 …` builds a `map[string]any` from alternating key/value arguments,
+for passing structured source values to `section`. Keys must be strings; an odd
+argument count, a non-string key or a repeated key is an error.
+
+`list a b …` builds a sequence from its arguments, the layout syntax for a
+literal list-typed value.
+
 The built-in number and date format functions (`compact`, `exact`, `percent`,
 `long`, `short`) are also available to layouts for rendering.
 
-`deck`, `slide` and `item` are reserved top-level names: a template may not
-declare a field or section named `deck`, `slide` or `item`. `notes`, `body` and
-the `_format` suffix are reserved too.
+`deck`, `slide`, `item`, `raw` and `data` are reserved top-level names: a
+template may not declare a field or section named `deck`, `slide`, `item`,
+`raw` or `data`. `notes`, `body` and the `_format` suffix are reserved too.
 
 ## Themes
 
