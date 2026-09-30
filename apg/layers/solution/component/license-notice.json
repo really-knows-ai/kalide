@@ -14,6 +14,11 @@
       "kind": "implemented-by",
       "target": "NOTICE",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "TRADEMARKS.md",
+      "properties": {}
     }
   ],
   "in": [
