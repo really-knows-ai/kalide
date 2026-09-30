@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "spine-upgrade-refresh-owned-scaffold",
+  "body": "Spine completion [autonomous]. requirements.requirement.upgrade-refresh-owned-scaffold drove only domain.value.agent-guide, domain.value.kalide-owned-scaffold and domain.value.library-agent-guide; `realised-by` applies only from a domain group|entity|service, so the spine dead-ended. Added `drives` -> domain.service.upgrade-project (the refresh half of `kalide upgrade`). domain.service.upgrade-project is already realised-by solution.component.upgrade. Added `implemented-by` solution.component.upgrade -> internal/scaffold.refreshScaffold, internal/scaffold.writeMember, internal/scaffold.detectSeedDeck and internal/scaffold.refreshReport.refreshMember (the conservative refresh and the no-arg-seed-deck predicate). Path: upgrade-refresh-owned-scaffold -> upgrade-project -> upgrade -> internal/scaffold.refreshScaffold. Existing `drives` to the three values kept.",
+  "properties": {},
+  "out": [],
+  "in": []
+}
