@@ -493,6 +493,42 @@ func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sec
 	return out, nil
 }
 
+// rawContext builds the reserved `.raw` execution-context entry for a slide or
+// section instance (raw-source-context): the author's ORIGINAL source values,
+// alongside the converted ones the same map carries under the field names. It
+// holds the source value of every declared field the author supplied — for a
+// text field, the Markdown exactly as written, before inline-Markdown
+// rendering — keyed by the field's own name, and the instance's original body
+// source under `body` when the author supplied one. The converted values stay
+// directly addressable under their own names; `.raw` only adds this source
+// view, and it is data, not a helper, so exposing it adds nothing to the layout
+// function set (template-context).
+//
+// data is the instance's pre-conversion source map — a slide's or section's
+// decoded frontmatter, or a section helper call's supplied fields — and t is
+// the resolved template whose field schema names the declared fields. Only
+// declared fields are copied: the reserved `template:` selector, a
+// `<field>_format` sibling and any other undeclared key are not fields. A field
+// the author did not supply is absent, and a field's declared default is not
+// copied, because a default is not an authored source value; a body the author
+// did not supply is likewise absent. A nil t or data yields a well-formed
+// (possibly body-only) context, so a caller may pass them freely.
+func (r *renderer) rawContext(data map[string]any, t *template.Template, body string) map[string]any {
+	out := make(map[string]any, 1)
+	if t != nil {
+		for i := range t.Fields {
+			name := t.Fields[i].Name
+			if v, present := data[name]; present {
+				out[name] = v
+			}
+		}
+	}
+	if body != "" {
+		out["body"] = body
+	}
+	return out
+}
+
 // fieldValue converts one validated field value to its layout representation.
 // data is the mapping the value came from, so a number or date field can find
 // its `<field>_format` sibling; it may be nil for a list element, which carries
