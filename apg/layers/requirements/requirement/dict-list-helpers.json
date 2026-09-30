@@ -28,6 +28,11 @@
       "kind": "details",
       "source": "requirements.note.section-helpers-requirements",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.dict-list-helpers-traceability-reconcile",
+      "properties": {}
     }
   ]
 }
