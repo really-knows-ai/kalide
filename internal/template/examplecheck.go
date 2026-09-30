@@ -680,6 +680,17 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 
 // validateExampleBlockAt is validateExampleBlock with the owning instance's
 // containment path threaded through for nested errors.
+//
+// The author-supplied fields are validated with the schema-only CheckValues
+// (task-5), which treats an omitted required field that declares a Default as
+// satisfied; after it passes, applyFieldDefaults materialises each declared
+// field's Default into ctx alongside the supplied values, mirroring
+// renderer.values at render time, so the executed example context carries the
+// same values the renderer would. This happens at every composition depth,
+// because the recursion below runs each nested instance through this same
+// function. The `.raw` source view is built from the authored frontmatter, not
+// here, so a default never leaks into it (a default is not an authored source
+// value).
 func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any, container string) error {
 	fm := block.Frontmatter
 	if fm == nil {
@@ -697,7 +708,11 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 		e := res.Errors[0]
 		return exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
 	}
-	for k, v := range fields {
+	// applyFieldDefaults is the same default-filling idiom ResolveSectionCall
+	// uses for a section-helper call and renderer.values mirrors at render time:
+	// a supplied value wins, an omitted declared field with a Default gets it,
+	// and the caller's map is copied. CheckValues stays schema-only.
+	for k, v := range applyFieldDefaults(def, fields) {
 		ctx[k] = v
 	}
 
