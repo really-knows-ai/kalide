@@ -193,13 +193,15 @@ type renderer struct {
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
-// field values, its rendered body, its sections grouped by declared name, and
-// the reserved `deck` and `slide` entries (template-context). cfg, meta and
-// total are threaded from RenderSlide/RenderDeck. The layout map's `deck`/
-// `slide` entries are set directly below; each section-instance map (and any
-// nested section-template-as-type value or list item within it) carries the
-// same reserved entries via the secCtx threaded into values/fieldValue
-// (section-template-context).
+// field values, its rendered body, its top-level sections, and the reserved
+// `deck` and `slide` entries (template-context). cfg, meta and total are
+// threaded from RenderSlide/RenderDeck. Each top-level section instance is
+// rendered bottom-up through its own layout, deepest first, and grouped by its
+// declared name as a list of trusted HTML — one element per instance, in
+// source order — so the slide layout receives rendered section markup, not data
+// maps, at the top level too (template-language). The layout map's `deck`/
+// `slide` entries are set directly; a top-level section instance's own
+// `deck`/`slide`/`item` entries are set by values/renderSection.
 //
 // single-binary: the slide context is built in-process with no external
 // lookup — from the parsed slide, the registry and cfg only, with no
@@ -220,14 +222,18 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 		data["body"] = body
 	}
 
-	// Section instances are grouped by their declared name, preserving source
-	// order, so a layout ranges over them in the order the author wrote them.
-	// Each instance is built with the reserved `.deck`/`.slide` context
-	// (template-context, section-template-context): a section instance
-	// carries the same deck-wide and slide-position data a layout does, at
-	// every composition depth.
-	secCtx := &sectionCtx{cfg: cfg, meta: meta, total: total}
-	groups := make(map[string][]map[string]any)
+	// Top-level section instances are rendered through their own layouts,
+	// bottom-up, and grouped by their declared name as lists of trusted HTML,
+	// preserving source order, so a layout ranges over them in the order the
+	// author wrote them and splices rendered markup rather than data maps
+	// (template-language). Each instance executes with the reserved
+	// `.deck`/`.slide`/`.item` context (template-context,
+	// section-template-context, item-context); a top-level instance's
+	// `.item.parent` is nil, since its parent is the slide, not a section.
+	counts := make(map[string]int, len(s.Sections))
+	for i := range s.Sections {
+		counts[s.Sections[i].Name]++
+	}
 	for i := range s.Sections {
 		sec := &s.Sections[i]
 		if sec.Template == "" {
@@ -237,28 +243,25 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 		if !ok || secTmpl == nil {
 			continue
 		}
-		inst, err := r.values(sec.Frontmatter, secTmpl, secCtx)
+		secCtx := &sectionCtx{
+			cfg:   cfg,
+			meta:  meta,
+			total: total,
+			item:  itemContext(sec.Index, counts[sec.Name], sec.Name, sec.Template, nil),
+		}
+		rendered, err := r.renderSection(sec, secTmpl, secCtx)
 		if err != nil {
 			return nil, err
 		}
-		if strings.TrimSpace(sec.Body) != "" {
-			body, err := renderBody(sec.Body)
-			if err != nil {
-				return nil, err
-			}
-			inst["body"] = body
-		}
-		groups[sec.Name] = append(groups[sec.Name], inst)
-	}
-	for name, instances := range groups {
-		data[name] = instances
+		list, _ := data[sec.Name].([]htmltmpl.HTML)
+		data[sec.Name] = append(list, rendered)
 	}
 
 	// The reserved `deck` and `slide` entries are injected into the layout map
-	// here. Each section-instance map (top-level via secCtx above, nested
-	// through fieldValue/values) carries its own copy, set by values
-	// (template-context). A declared field or section named deck or slide is
-	// rejected at load time, so neither can collide with a field value.
+	// here; the layout has no sibling place, so it carries no `item`. Each
+	// section instance's map carries its own `deck`/`slide`/`item` copy, set
+	// by values/renderSection. A declared field or section named deck, slide
+	// or item is rejected at load time, so none can collide with a field value.
 	data["deck"] = deckContext(cfg)
 	data["slide"] = slideContext(meta, total)
 	return data, nil
