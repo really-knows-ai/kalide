@@ -157,7 +157,16 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 		return "", &RenderError{File: parsed.File, Err: err}
 	}
 
-	r := &renderer{reg: reg, formats: template.BuiltinFormats, root: root}
+	r := &renderer{
+		reg:     reg,
+		formats: template.BuiltinFormats,
+		root:    root,
+		// The slide layout executes at the top of the composition tree, so a
+		// `{{ section … }}` call it makes has the slide, not a section, as its
+		// parent: callerFields stays nil (zero value) while callerCtx carries
+		// the slide's deck/slide context (section-template-context).
+		callerCtx: &sectionCtx{cfg: cfg, meta: meta, total: total},
+	}
 
 	data, err := r.slideData(parsed, slideTmpl, cfg, meta, total)
 	if err != nil {
@@ -186,10 +195,35 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 // the parsed layout namespace every layout, at any composition depth, executes
 // against. root is set by RenderSlide before any section data is built, so a
 // section instance can execute its own layout.html.tmpl (template-language).
+//
+// It also carries the CALLING instance's context, so the render-time `section`
+// helper — bound once into the shared layout namespace — can resolve a
+// `{{ section … }}` call made while some layout executes: the calling
+// instance's field values, which the target reads as `.item.parent`
+// (item-context), and the deck/slide context the helper-rendered target
+// template executes with (template-context). The slide layout has no section
+// parent, so callerFields is nil there; callerCtx is set for the slide too,
+// carrying its deck/slide context.
 type renderer struct {
 	reg     *template.Registry
 	formats *template.Format
 	root    *htmltmpl.Template
+
+	// callerFields is the field values of the section instance whose layout is
+	// currently executing — the value a `{{ section … }}` call made there
+	// passes as the target's `.item.parent` (item-context). It is nil while
+	// the slide layout executes, whose parent is the slide, not a section, so
+	// a call made from a slide layout resolves with a nil parent.
+	callerFields map[string]any
+
+	// callerCtx is the deck/slide execution context of the instance whose
+	// layout is currently executing: a `{{ section … }}` call made there
+	// renders its target with the same reserved `cfg`/`meta`/`total`
+	// deck/slide entries (template-context), so the helper-rendered template
+	// sees the slide's deck and metadata at every composition depth. It is set
+	// for the slide layout as well (with a nil parent), so a call from a slide
+	// carries the slide's context.
+	callerCtx *sectionCtx
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
