@@ -39,6 +39,11 @@
       "kind": "implemented-by",
       "target": "internal/validate/links.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/validate/validate.go",
+      "properties": {}
     }
   ],
   "in": [
