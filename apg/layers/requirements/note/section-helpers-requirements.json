@@ -59,6 +59,11 @@
       "kind": "details",
       "target": "requirements.requirement.template-composition",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "target": "requirements.constraint.reserved-template-names",
+      "properties": {}
     }
   ],
   "in": []
