@@ -46,6 +46,11 @@
       "kind": "details",
       "source": "solution.note.nested-sections-solution",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.nested-sections-coverage-reconcile",
+      "properties": {}
     }
   ]
 }
