@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-01
+
+### Fixed
+
+- `kalide upgrade` again refreshes the deck and library `AGENTS.md` guides for
+  projects created or last upgraded by v0.9.0. The known-version catalog had
+  lost the v0.9.0 guide digests (they were overwritten by the v0.10.0 guide
+  digests), so those unmodified guides were reported as author content and
+  skipped. The v0.9.0 digests are restored so `refreshed` includes
+  `AGENTS.md`, and a regression test guards them.
+- The README now documents the v0.10 template features it had missed: the
+  `section`/`dict`/`list` layout helpers and the reserved `.raw`/`.data`/`.item`
+  contexts.
+
 ## [0.10.0] - 2026-10-01
 
 ### Added
@@ -206,7 +220,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/really-knows-ai/kalide/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/really-knows-ai/kalide/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/really-knows-ai/kalide/compare/v0.7.0...v0.7.1
