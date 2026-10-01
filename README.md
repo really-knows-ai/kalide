@@ -22,7 +22,7 @@ offline, and there is no separate tool to install or run alongside it.
 - [Commands](#commands)
 - [How a deck is laid out](#how-a-deck-is-laid-out)
 - [The templates/ library](#the-templates-library)
-  - [The `.deck` and `.slide` context](#the-deck-and-slide-context)
+  - [The reserved template context](#the-reserved-template-context)
 - [What `kalide init` refuses to do](#what-kalide-init-refuses-to-do)
 - [Working offline](#working-offline)
 - [Making a PDF](#making-a-pdf)
@@ -311,13 +311,12 @@ templates/
 library, so its documentation output can never drift from what actually
 renders.
 
-### The `.deck` and `.slide` context
+### The reserved template context
 
 Every slide layout, and every section instance nested inside it at any
-depth, is executed with two reserved, read-only names alongside its own
-fields: `.deck` and `.slide`. Neither is authored — they are supplied by
-`kalide` at render time — and both are **data**, not helpers: the v1
-template helper set stays exactly `media`.
+depth, is executed with reserved, read-only names alongside its own fields:
+`.deck`, `.slide`, `.item`, `.raw` and `.data`. None is authored — they are
+supplied by `kalide` at render time — and all five are **data**, not helpers.
 
 - **`.deck`** carries the deck-wide settings from `kalide.yaml`:
   - `.deck.title` — always present.
@@ -334,10 +333,44 @@ template helper set stays exactly `media`.
     example `"1"` for a horizontal slide or `"1a"` for the vertical slide
     beneath it.
   - `.slide.total` — the deck's total slide count, as an integer.
+- **`.item`** describes this section instance among its same-name siblings
+  under the same parent. It is present only inside a **section** instance's
+  context — never in a slide layout, and never for a
+  `section-template`-typed field value:
+  - `.item.index` — the instance's zero-based position among its same-name
+    siblings, and `.item.number` — the same position, one-based.
+  - `.item.count` — how many same-name siblings there are.
+  - `.item.first` and `.item.last` — whether this is the first or the last
+    of them.
+  - `.item.section` — the declared section name the instance was authored
+    under, and `.item.template` — the resolved section template's name.
+  - `.item.parent` — the enclosing section instance's field values, or nil
+    at the top level, where the parent is the slide.
+- **`.raw`** is the author's **original source** values, before conversion:
+  - `.raw.<field>` — a declared field's value exactly as authored, so a
+    text field's Markdown is the source as written, before inline-Markdown
+    rendering.
+  - `.raw.body` — the instance's original body source, before block
+    rendering, when the author supplied one.
+  A declared default is not a source value, so a field the author did not
+  supply is absent; a body the author did not supply is likewise absent. A
+  section instance rendered by the `section` helper sees `.raw` as the
+  values the call supplied.
+- **`.data`** is the authored section tree as data, parallel to the
+  pre-rendered section lists:
+  - `.data.<section>` — a list with one entry per authored instance of that
+    declared section, in source order.
+  - each entry carries its own `.raw`, `.item` and `.data` (its children,
+    keyed the same way), so the whole authored tree is addressable as data.
+  Range over the section name to splice rendered HTML; read
+  `.data.<section>` to inspect the same instances as source data. A
+  section-helper call is a direct render call, not an authored instance, so
+  it appends no entry to `.data` and no element to the rendered section
+  list.
 
-Both are available identically in a slide layout and in every section
-template instance it nests, at every level of composition — the motivating
-case is a reusable footer section rendering:
+`.deck` and `.slide` are available identically in a slide layout and in
+every section template instance it nests, at every level of composition —
+the motivating case is a reusable footer section rendering:
 
 ```
 {{ .slide.number }} / {{ .slide.total }}
@@ -346,6 +379,43 @@ case is a reusable footer section rendering:
 which renders `2a / 12` on the second vertical slide of a twelve-slide
 deck, regardless of how deeply the footer section is nested inside other
 sections.
+
+`deck`, `slide`, `item`, `raw` and `data` are **reserved names**: a template
+may not declare a field or section named `deck`, `slide`, `item`, `raw` or
+`data`. `notes`, `body` and the `_format` suffix are reserved too.
+
+The layout **helper** set is exactly `media`, `section`, `dict` and `list` —
+functions a layout calls, unlike the reserved context values above:
+
+- **`media`** resolves a path relative to the library's `media/` directory
+  and returns the URL the running server serves it under. The path must not
+  be absolute and must not contain `..`; a missing file is an error. `media`
+  never resolves into a theme directory. For example `{{ media "logo.svg" }}`.
+- **`section`** renders a section template directly, exactly as if an
+  instance of it had been written in Markdown. Its form is
+  `{{ section "name" (dict ...) [body] }}`:
+  - `{{ section "name" }}` renders the `name` section template with its
+    declared defaults and no body.
+  - the optional `(dict ...)` supplies the instance's field values.
+  - the optional `[body]` supplies its body source, for example
+    `{{ section "callout" (dict "label" "Proposition") .raw.body }}`.
+  Omitted fields take the target's defaults. The target's fields are
+  validated against its schema and the body against its body rule. The
+  rendered instance is treated as a **one-item group**: `.item` reports
+  `index` 0, `number` and `count` 1, `first` and `last` true, `section` and
+  `template` the target name, and `parent` the calling instance's fields. A
+  section-helper call is a direct render call, not an authored instance, so
+  it appends nothing to `.data` or to the rendered section list.
+- **`dict`** builds a map from alternating key/value arguments, the syntax
+  for passing named fields to `section`, for example
+  `{{ dict "number" .item.number "heading" .raw.title }}`. Keys must be
+  strings; an odd argument count, a non-string key or a repeated key is an
+  error.
+- **`list`** returns its arguments as a sequence, the layout syntax for a
+  literal list-typed field value, for example `{{ list "a" "b" }}`.
+
+The built-in number and date format functions (`compact`, `exact`, `percent`,
+`long` and `short`) are also available to layouts.
 
 `examples/demo` in this repository is a small, deliberately non-EY reference
 project that exercises the format end to end: a `demo` library with a
