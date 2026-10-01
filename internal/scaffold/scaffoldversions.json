@@ -16,8 +16,12 @@
           "versions": ["v0.8.0"]
         },
         {
+          "digest": "4ee150bbf809ab5d42952a78b5f5892378ce2988231f669faf77682d48cc2d70",
+          "versions": ["v0.9.0"]
+        },
+        {
           "digest": "2ef9099e3b1e03e150b3fe56111d8d6e4a880cd014a9331fd2e3243414eba25a",
-          "versions": ["unreleased"]
+          "versions": ["v0.10.0", "unreleased"]
         }
       ]
     },
@@ -26,7 +30,7 @@
       "digests": [
         {
           "digest": "c39d54176f5718b9168636f9bea87a728f79bc3b2733427004f8025d4bae640e",
-          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     },
@@ -35,7 +39,7 @@
       "digests": [
         {
           "digest": "0ae29fe642f0ddccbfc5d5af35e77af15e602bc080b75c3402ae80e82b626dc2",
-          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     },
@@ -44,7 +48,7 @@
       "digests": [
         {
           "digest": "c657f5eff5f3a1eb45cc3f2c080ff380b9eec1b09bc31f34961f8e01569fa412",
-          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     },
@@ -53,7 +57,7 @@
       "digests": [
         {
           "digest": "182361141673e0ea87115d99049fca2fdfcc531740ecb2a6aad643a5cdeaf0a1",
-          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     },
@@ -62,7 +66,7 @@
       "digests": [
         {
           "digest": "de01256085de54b001cad6769c63df00f30c7954a87246a1e41bb49053706dfc",
-          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     },
@@ -71,7 +75,7 @@
       "digests": [
         {
           "digest": "0ae29fe642f0ddccbfc5d5af35e77af15e602bc080b75c3402ae80e82b626dc2",
-          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.5.0", "v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     },
@@ -91,8 +95,12 @@
           "versions": ["v0.8.0"]
         },
         {
+          "digest": "53513b1643dcffa67d633ca5aa45177c1ac2f37a85aacd802a6ab70b2bf44511",
+          "versions": ["v0.9.0"]
+        },
+        {
           "digest": "df286a0bfc47f86f647341f657bb1f0c91321ec9bd251b6c3a56132eb9943298",
-          "versions": ["unreleased"]
+          "versions": ["v0.10.0", "unreleased"]
         }
       ]
     },
@@ -101,7 +109,7 @@
       "digests": [
         {
           "digest": "de01256085de54b001cad6769c63df00f30c7954a87246a1e41bb49053706dfc",
-          "versions": ["v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "unreleased"]
+          "versions": ["v0.6.0", "v0.7.0", "v0.7.1", "v0.8.0", "v0.9.0", "v0.10.0", "unreleased"]
         }
       ]
     }
