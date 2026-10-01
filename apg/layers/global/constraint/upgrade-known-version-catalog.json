@@ -15,6 +15,11 @@
       "kind": "details",
       "source": "global.note.embedded-catalog-law-amendment",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "global.note.upgrade-catalog-roll-forward",
+      "properties": {}
     }
   ]
 }
