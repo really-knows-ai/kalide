@@ -302,3 +302,128 @@ func TestCatalogLookup(t *testing.T) {
 		}
 	})
 }
+
+// catalogV090DeckAGENTSDigest and catalogV090LibraryAGENTSDigest are the SHA-256
+// digests of the AGENTS.md guides the v0.9.0 release shipped. They are named
+// literals, not derived shippers: the catalogue records digests only, never
+// historical contents (global.constraint.upgrade-known-version-catalog), and the
+// running tree ships the newer v0.10.0 bytes, so no shipped file hashes to these
+// (catalogShippedDigest derives only the current version). They are the
+// regression TestCatalogRollForwardV090 guards: the v0.9.0 release shipped these
+// AGENTS.md bytes, and the catalogue must carry them under their OWN identities
+// so a project left at v0.9.0 is refreshable.
+const (
+	catalogV090DeckAGENTSDigest    = "4ee150bbf809ab5d42952a78b5f5892378ce2988231f669faf77682d48cc2d70"
+	catalogV090LibraryAGENTSDigest = "53513b1643dcffa67d633ca5aa45177c1ac2f37a85aacd802a6ab70b2bf44511"
+)
+
+// TestCatalogRollForwardV090 is the unit regression guard for the v0.9.0
+// AGENTS.md digests' roll-forward into scaffoldversions.json
+// (global.constraint.upgrade-known-version-catalog): the v0.9.0 release shipped
+// exactly catalogV090DeckAGENTSDigest for deck:AGENTS.md and
+// catalogV090LibraryAGENTSDigest for library:AGENTS.md, and both must be
+// catalogued under their own identity, never under the other's.
+//
+// catalogLookup resolves caller bytes through the per-identity digest map
+// digestsForIdentity enumerates and versionsForDigest reads. A historical
+// release's bytes are not shipped — the catalogue holds digests only — so there
+// is no SHA-256 preimage to hand catalogLookup for these two digests; the
+// digest-keyed recognition is asserted through that same map, which is exactly
+// the membership catalogLookup tests. The two live AGENTS.md identities are
+// additionally driven through catalogLookup itself with the current shipped
+// bytes to prove the identity scoping is real, not a property of the map alone.
+func TestCatalogRollForwardV090(t *testing.T) {
+	// The v0.9.0 (identity, digest) pairs, each with the other AGENTS.md
+	// identity its digest must never resolve under.
+	v090 := []struct {
+		identity      string
+		digest        string
+		otherIdentity string
+	}{
+		{catalogDeckAGENTS, catalogV090DeckAGENTSDigest, catalogLibraryAGENTS},
+		{catalogLibraryAGENTS, catalogV090LibraryAGENTSDigest, catalogDeckAGENTS},
+	}
+
+	t.Run("each v0.9.0 AGENTS.md digest is catalogued under its own identity", func(t *testing.T) {
+		for _, tc := range v090 {
+			digests := knownCatalog.digestsForIdentity(tc.identity)
+			if !slices.Contains(digests, tc.digest) {
+				t.Errorf("digestsForIdentity(%q) = %v, want the v0.9.0 digest %s catalogued under it",
+					tc.identity, digests, tc.digest)
+			}
+			versions := knownCatalog.versionsForDigest(tc.identity, tc.digest)
+			if !slices.Contains(versions, "v0.9.0") {
+				t.Errorf("versionsForDigest(%q, %s) = %v, want the v0.9.0 release label",
+					tc.identity, tc.digest, versions)
+			}
+		}
+	})
+
+	t.Run("the v0.9.0 digests are historical, not the current shipped bytes", func(t *testing.T) {
+		// Non-vacuity: were a current shipped AGENTS.md to hash to a v0.9.0
+		// digest, the "own identity" case above would pass for the wrong reason.
+		for _, tc := range v090 {
+			if current := catalogShippedDigest(t, tc.identity); current == tc.digest {
+				t.Errorf("the running %s bytes hash to the v0.9.0 digest %s; the roll-forward case is not exercising a historical release",
+					tc.identity, tc.digest)
+			}
+		}
+	})
+
+	t.Run("a v0.9.0 digest never resolves under the other AGENTS.md identity", func(t *testing.T) {
+		for _, tc := range v090 {
+			if slices.Contains(knownCatalog.digestsForIdentity(tc.otherIdentity), tc.digest) {
+				t.Errorf("digestsForIdentity(%q) unexpectedly carries %s's v0.9.0 digest %s; identity scoping is broken",
+					tc.otherIdentity, tc.identity, tc.digest)
+			}
+			if versions := knownCatalog.versionsForDigest(tc.otherIdentity, tc.digest); len(versions) != 0 {
+				t.Errorf("versionsForDigest(%q, %s) = %v, want none: the digest is catalogued for %q only",
+					tc.otherIdentity, tc.digest, versions, tc.identity)
+			}
+		}
+	})
+
+	t.Run("negative: a mutated v0.9.0 digest resolves to nothing", func(t *testing.T) {
+		// Flipping one hex digit moves the digest off every catalogued version,
+		// so both the listing and the digest-keyed lookup (the map catalogLookup
+		// tests) must report it unknown; were either to accept the mutant, this
+		// guard would pass vacuously.
+		for _, tc := range v090 {
+			mutated := tc.digest
+			if mutated[0] == '0' {
+				mutated = "1" + mutated[1:]
+			} else {
+				mutated = "0" + mutated[1:]
+			}
+			if mutated == tc.digest {
+				t.Fatalf("mutating %s produced the same digest; the negative self-check is vacuous", tc.digest)
+			}
+			if slices.Contains(knownCatalog.digestsForIdentity(tc.identity), mutated) {
+				t.Errorf("digestsForIdentity(%q) unexpectedly carries the mutated digest %s", tc.identity, mutated)
+			}
+			if versions := knownCatalog.versionsForDigest(tc.identity, mutated); len(versions) != 0 {
+				t.Errorf("versionsForDigest(%q, %s) = %v, want none for a mutated digest", tc.identity, mutated, versions)
+			}
+		}
+	})
+
+	t.Run("catalogLookup scopes the live AGENTS.md identities", func(t *testing.T) {
+		// Drive the identity-scoped lookup itself on the two identities the
+		// v0.9.0 entries belong to: each identity's current shipped bytes resolve
+		// only through their own identity, never the other's.
+		deck := catalogShippedBytes(t, catalogDeckAGENTS)
+		library := catalogShippedBytes(t, catalogLibraryAGENTS)
+		if !catalogLookup(catalogDeckAGENTS, deck) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogDeckAGENTS)
+		}
+		if !catalogLookup(catalogLibraryAGENTS, library) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogLibraryAGENTS)
+		}
+		if catalogLookup(catalogDeckAGENTS, library) {
+			t.Errorf("catalogLookup(%q, the library AGENTS.md bytes) = true; the AGENTS.md identities are not scoped", catalogDeckAGENTS)
+		}
+		if catalogLookup(catalogLibraryAGENTS, deck) {
+			t.Errorf("catalogLookup(%q, the deck AGENTS.md bytes) = true; the AGENTS.md identities are not scoped", catalogLibraryAGENTS)
+		}
+	})
+}
