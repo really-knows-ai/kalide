@@ -124,12 +124,12 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Resolve the deck's template library and its themes through the loader's
-	// single root-resolution point (external-template-library) before anything
-	// else: a configured `templates:` path wins and is authoritative, else the
-	// local templates/ directory is used. The resolved root may sit outside the
-	// deck (e.g. `../shared-lib`), so the library and its themes are loaded from
-	// the operating-system path that holds the library, not through the deck
+	// Resolve the deck's template library — every layer it draws from: the
+	// external `templates:` library and the deck-root templates/ — through the
+	// loader's layered resolution point (layered-template-library) before
+	// anything else. A resolved root may sit outside the deck (e.g.
+	// `../shared-lib`), so the library and its themes are loaded from the
+	// operating-system path that holds each layer, not through the deck
 	// fs.FS, which cannot express paths above the deck root. A missing or
 	// invalid library, or a theme that does not resolve in it, is reported the
 	// same way a broken deck is — before anything is served — and never falls
@@ -154,7 +154,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	themeReg, err := theme.LoadDir(os.DirFS(library.RootPath), template.ThemesDir)
+	themeReg, err := loadLibraryThemeRegistry(library)
 	if err != nil {
 		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
@@ -250,6 +250,54 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	_ = srv.Shutdown(shutdownCtx)
 	_ = stopWatch()
 	return 0
+}
+
+// loadLibraryThemeRegistry builds the deck's theme registry from EVERY layer
+// of the merged library (layered-template-library, theme-selection): each
+// layer's themes/ directory is loaded from that layer's OWN root, so a theme a
+// layer contributes keeps that layer's own theme files (theme.Theme.Assets is
+// rooted inside the contributing layer), and the merged registry lets the
+// deck's `theme:` key — default `default` — resolve a theme contributed by
+// either layer. Theme names are unique across layers, enforced by
+// template.LoadDeckLibrary before it returns, so merging the layers never
+// collides and no theme silently overrides another.
+//
+// A layer that carries no themes/ directory contributes no themes: themes/ is
+// optional per layer (as it is for a single-root library), so a two-layer deck
+// whose theme lives only in one layer still resolves it. A single-layer
+// library keeps theme.LoadDir's exact behaviour, including its error when the
+// layer's themes/ directory is missing.
+func loadLibraryThemeRegistry(library *template.Library) (*theme.Registry, error) {
+	// The whole library is one layer: load its themes exactly as before.
+	if len(library.Layers) == 1 {
+		return theme.LoadDir(os.DirFS(library.RootPath), template.ThemesDir)
+	}
+
+	merged := theme.NewRegistry()
+	for _, layer := range library.Layers {
+		fsys := os.DirFS(layer.RootPath)
+		if _, err := fs.Stat(fsys, template.ThemesDir); errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		layerReg, err := theme.LoadDir(fsys, template.ThemesDir)
+		if err != nil {
+			return nil, err
+		}
+		// theme.Registry exposes registration but no multi-root loader, so the
+		// layers merge by transferring each layer's registered themes into the
+		// one merged registry (via Names/Lookup/Register). Uniqueness was
+		// already enforced over the merged library, so Register cannot collide.
+		for _, name := range layerReg.Names() {
+			th, err := layerReg.Lookup(name)
+			if err != nil {
+				return nil, err
+			}
+			if err := merged.Register(th); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return merged, nil
 }
 
 // parseStartArgs parses the arguments after the `start` command word:
