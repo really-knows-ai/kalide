@@ -337,6 +337,333 @@ func TestStartLiveReload(t *testing.T) {
 	}
 }
 
+// TestStartTwoRootLiveReload is the plan.phase-04 task-19 end-to-end test for
+// the layered two-root live reload and the raw `templates:` restart gate
+// (layered-template-library, live-reload, template-retarget-requires-restart,
+// templates-gallery). It drives the real kalide binary the harness builds
+// (harness.go) so it exercises the whole path an author takes with a deck that
+// draws from BOTH resolved library layers:
+//
+//   - kalide.yaml names an external `templates:` library (`../shared-lib`)
+//     while the deck also carries its own deck-root templates/ directory, so
+//     the deck's merged library is the external layer plus the local layer;
+//   - an edit under the EXTERNAL library root live-reloads: the debounced
+//     watcher notices the external root (internal/watch resolves every layer
+//     root), the pipeline rebuilds the merged library, and the served page
+//     carries the edited external-layer layout;
+//   - an edit under the deck-root templates/ local layer likewise
+//     live-reloads, and the external layer's edit is retained;
+//   - a mid-session `templates:` change is refused: the next reload publishes
+//     the standard full-page restart-required error while the process keeps
+//     running and every static route pinned at startup — the two per-layer
+//     media routes and the two per-layer theme routes — keeps serving the
+//     startup library's files;
+//   - reverting the raw value to the startup baseline resumes the deck with
+//     both layers' edits still applied, and the run stops cleanly.
+//
+// It builds a binary and drives a real server with the real watcher and SSE
+// stream, so it is skipped under -short. It reuses the SSE helpers (openSSE,
+// waitLine, drainFor, waitFor) declared alongside TestStartLiveReload below,
+// and the server package's MediaPath/ThemesPath and
+// ExternalMediaPath/ExternalThemesPath route constants.
+func TestStartTwoRootLiveReload(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	writeLayeredReloadFixture(h)
+
+	h.Start()
+
+	if got := h.URL(); !strings.HasPrefix(got, "http://127.0.0.1:") || !strings.HasSuffix(got, "/") {
+		t.Fatalf("start printed URL %q, want http://127.0.0.1:<port>/", got)
+	}
+
+	// The merged library drives the deck page: one slide rendered from the
+	// external layer's guest layout and one from the local layer's hello
+	// layout both carry their startup marker.
+	body, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	if strings.Contains(body, "Deck error") {
+		t.Fatalf("served page is the error page, want the two-layer deck:\n%s", body)
+	}
+	for _, want := range []string{"Local Slide", "External Slide", layeredLocalStartMarker, layeredExternalStartMarker} {
+		if !strings.Contains(body, want) {
+			t.Errorf("served two-layer deck page is missing %q:\n%s", want, body)
+		}
+	}
+
+	// Every static per-layer route Listen pins at startup serves its own
+	// layer's file: the external `templates:` layer under the external
+	// prefixes, the local deck-root templates/ under the unprefixed primary
+	// routes.
+	assertLayeredStartupRoutes(t, h)
+
+	// An edit under the EXTERNAL library root live-reloads. Edits are repeated
+	// until the broadcast is observed, covering the small window between the
+	// stream's initial `: connected` flush and its subscribe; every edit is a
+	// valid library.
+	es := openSSE(t, h)
+	defer es.Close()
+	waitLine(t, es, ": connected", 5*time.Second)
+
+	var externalMarker string
+	externalDeadline := time.Now().Add(10 * time.Second)
+	for i := 1; ; i++ {
+		externalMarker = fmt.Sprintf("external-edit-%d", i)
+		h.WriteFile("../shared-lib/slides/guests/layout.html.tmpl",
+			[]byte(layeredExternalLayout(externalMarker)))
+		if drainFor(es, "data: reload", 500*time.Millisecond) {
+			break
+		}
+		if time.Now().After(externalDeadline) {
+			t.Fatalf("no SSE reload after editing a file under the external library root\nstdout:\n%s\nstderr:\n%s",
+				h.Stdout(), h.Stderr())
+		}
+	}
+	// The merged library is re-read and re-rendered before the reload is
+	// broadcast, so the edited external layout is what "/" now serves, and the
+	// local layer's slide is still there.
+	waitFor(t, 5*time.Second, "the edited external layer layout to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, externalMarker) && strings.Contains(b, layeredLocalStartMarker)
+	})
+	es.Close()
+
+	// An edit under the deck-root templates/ local layer live-reloads too, and
+	// the external layer's edit is retained: the rebuild re-reads every
+	// resolved layer.
+	ls := openSSE(t, h)
+	defer ls.Close()
+	waitLine(t, ls, ": connected", 5*time.Second)
+
+	var localMarker string
+	localDeadline := time.Now().Add(10 * time.Second)
+	for i := 1; ; i++ {
+		localMarker = fmt.Sprintf("local-edit-%d", i)
+		h.WriteFile("templates/slides/hello/layout.html.tmpl",
+			[]byte(layeredLocalLayout(localMarker)))
+		if drainFor(ls, "data: reload", 500*time.Millisecond) {
+			break
+		}
+		if time.Now().After(localDeadline) {
+			t.Fatalf("no SSE reload after editing a file under the deck-root templates/ layer\nstdout:\n%s\nstderr:\n%s",
+				h.Stdout(), h.Stderr())
+		}
+	}
+	waitFor(t, 5*time.Second, "the edited local layer layout to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, localMarker) && strings.Contains(b, externalMarker)
+	})
+	ls.Close()
+
+	// A mid-session `templates:` change is refused live: the built-in pipeline
+	// pins the raw startup value, so the next reload publishes the standard
+	// full-page restart-required error instead of the retarget library's deck.
+	// The process keeps running and the port stays bound (GetString fails on
+	// any non-200), so this is an error page, not a crash.
+	startPort := h.Port()
+	retargetConfig := []byte(strings.Replace(layeredDeckConfig,
+		"templates: ../shared-lib", "templates: ../other-lib", 1))
+	if string(retargetConfig) == layeredDeckConfig {
+		t.Fatalf("kalide.yaml fixture does not carry the startup templates value:\n%s", layeredDeckConfig)
+	}
+	h.WriteFile("kalide.yaml", retargetConfig)
+
+	waitFor(t, 10*time.Second, "the restart-required error page on the retarget", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, "Deck error") && strings.Contains(b, "error-page__message")
+	})
+	body, err = h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET / (retarget error page): %v", err)
+	}
+	if !strings.Contains(body, "changed after startup") ||
+		!strings.Contains(body, "restart kalide start to use the new template library") {
+		t.Errorf("retarget error page does not carry the restart-required error:\n%s", body)
+	}
+	// The retarget was not applied live: the other library's layout is never
+	// served, and the startup layers' edits are not leaked into the error page.
+	if strings.Contains(body, `class="other"`) {
+		t.Errorf("retarget library's deck was served live instead of requiring a restart:\n%s", body)
+	}
+	if got := h.Port(); got != startPort {
+		t.Errorf("port changed across the retarget: %d -> %d, want the process still bound to %d",
+			startPort, got, startPort)
+	}
+	// The static routes pinned at startup keep serving the startup library
+	// throughout the retarget: the per-layer media and theme routes still
+	// answer from their layer's own startup root, never the retarget library.
+	assertLayeredStartupRoutes(t, h)
+
+	// Reverting the raw value to the startup baseline resumes the deck with
+	// both layers' edits still applied.
+	h.WriteFile("kalide.yaml", []byte(layeredDeckConfig))
+	waitFor(t, 10*time.Second, "the deck to resume after reverting the templates value", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, externalMarker) && strings.Contains(b, localMarker) &&
+			!strings.Contains(b, "Deck error")
+	})
+
+	// A graceful stop exits 0, releases the port and leaves no child behind;
+	// the harness asserts the exit status, the released port and the absence of
+	// leftover children in Stop.
+	port := h.Port()
+	if port == 0 {
+		t.Fatal("start did not bind a port")
+	}
+	h.Stop()
+	if _, err := h.Get("/"); err == nil {
+		t.Errorf("GET / succeeded after Stop; port %d was not released", port)
+	}
+}
+
+// layeredDeckConfig is the two-root fixture deck: it names an external
+// `templates:` library while the deck also carries its own deck-root
+// templates/ directory, so the merged library is the external layer plus the
+// local layer. `theme: default` resolves in the local layer.
+const layeredDeckConfig = `title: Layered Live Deck
+author: Ada Lovelace
+theme: default
+templates: ../shared-lib
+`
+
+// The startup marker classes each layer's layout carries, and the marker
+// comments each layer's theme stylesheet carries, so the served page and the
+// pinned static routes can pin which layer is being read.
+const (
+	layeredLocalStartMarker    = "local-start"
+	layeredExternalStartMarker = "external-start"
+
+	layeredLocalThemeMarker    = "local-startup-theme"
+	layeredExternalThemeMarker = "external-startup-theme"
+)
+
+// layeredLocalHelloManifest and layeredExternalGuestManifest are the two
+// layers' slide-template manifests: each takes only a required title, so every
+// slide the fixture writes validates.
+const (
+	layeredLocalHelloManifest = `description: local hello slide
+fields:
+  - name: title
+    type: text
+    required: true
+body:
+  mode: optional
+`
+
+	layeredExternalGuestManifest = `description: external guest slide
+fields:
+  - name: title
+    type: text
+    required: true
+body:
+  mode: optional
+`
+
+	layeredOtherManifest = `description: retarget target slide
+fields:
+  - name: title
+    type: text
+    required: true
+body:
+  mode: optional
+`
+)
+
+// layeredLocalLayout renders the local layer's hello layout with the given
+// marker class, so an edit under the deck-root templates/ layer produces a
+// distinctive, greppable change in the served page.
+func layeredLocalLayout(marker string) string {
+	return fmt.Sprintf(
+		`<section class="hello-slide"><h1 class="hello-title %s">{{ .title }}</h1></section>`+"\n", marker)
+}
+
+// layeredExternalLayout renders the external layer's guest layout with the
+// given marker class, so an edit under the external library root produces a
+// distinctive, greppable change in the served page.
+func layeredExternalLayout(marker string) string {
+	return fmt.Sprintf(
+		`<section class="guests-slide"><h1 class="guests-title %s">{{ .title }}</h1></section>`+"\n", marker)
+}
+
+// writeLayeredReloadFixture writes the two-root fixture deck the test serves:
+// kalide.yaml, one slide for each layer's template, the deck-root templates/
+// local layer, the external `../shared-lib` layer, and the `../other-lib`
+// retarget target (a valid library whose content must never be served live).
+// No name — slide, theme or media — is carried by both layers, so the merged
+// library passes library-layer-uniqueness.
+func writeLayeredReloadFixture(h *Harness) {
+	h.WriteFile("kalide.yaml", []byte(layeredDeckConfig))
+	h.WriteFile("slides/1-local.md",
+		[]byte("---\ntemplate: hello\ntitle: Local Slide\n---\nA local-layer slide.\n"))
+	h.WriteFile("slides/2-external.md",
+		[]byte("---\ntemplate: guests\ntitle: External Slide\n---\nAn external-layer slide.\n"))
+
+	// The deck-root templates/ local layer.
+	h.WriteFile("templates/library.yaml",
+		[]byte("name: local-lib\ndescription: local deck layer\nformat: 1\n"))
+	h.WriteFile("templates/slides/hello/template.yaml", []byte(layeredLocalHelloManifest))
+	h.WriteFile("templates/slides/hello/layout.html.tmpl", []byte(layeredLocalLayout(layeredLocalStartMarker)))
+	h.WriteFile("templates/slides/hello/example.md", []byte("---\ntemplate: hello\ntitle: Example\n---\n"))
+	h.WriteFile("templates/themes/default/theme.css",
+		[]byte("/* "+layeredLocalThemeMarker+" */\nbody { margin: 0; }\n"))
+	h.WriteFile("templates/media/local.svg", []byte("<svg>local</svg>\n"))
+
+	// The external `templates: ../shared-lib` layer.
+	h.WriteFile("../shared-lib/library.yaml",
+		[]byte("name: shared-lib\ndescription: external deck layer\nformat: 1\n"))
+	h.WriteFile("../shared-lib/slides/guests/template.yaml", []byte(layeredExternalGuestManifest))
+	h.WriteFile("../shared-lib/slides/guests/layout.html.tmpl",
+		[]byte(layeredExternalLayout(layeredExternalStartMarker)))
+	h.WriteFile("../shared-lib/slides/guests/example.md", []byte("---\ntemplate: guests\ntitle: Example\n---\n"))
+	h.WriteFile("../shared-lib/themes/exttheme/theme.css",
+		[]byte("/* "+layeredExternalThemeMarker+" */\nbody { margin: 0; }\n"))
+	h.WriteFile("../shared-lib/media/ext.svg", []byte("<svg>external</svg>\n"))
+
+	// The retarget target: a valid library that must never be served live.
+	h.WriteFile("../other-lib/library.yaml",
+		[]byte("name: other-lib\ndescription: retarget target\nformat: 1\n"))
+	h.WriteFile("../other-lib/slides/other/template.yaml", []byte(layeredOtherManifest))
+	h.WriteFile("../other-lib/slides/other/layout.html.tmpl",
+		[]byte(`<section><h1 class="other">{{ .title }}</h1></section>`+"\n"))
+	h.WriteFile("../other-lib/slides/other/example.md", []byte("---\ntemplate: other\ntitle: Example\n---\n"))
+}
+
+// assertLayeredStartupRoutes asserts the four static per-layer routes Listen
+// pinned at startup still serve the startup library: the external `templates:`
+// layer under the external prefixes (its own theme and media file) and the
+// deck-root templates/ local layer under the unprefixed primary routes. Each
+// request must answer 200 with that layer's marker, so a route that followed a
+// retarget or lost its layer fails the test.
+func assertLayeredStartupRoutes(t *testing.T, h *Harness) {
+	t.Helper()
+
+	if got, err := h.GetString(server.MediaPath + "local.svg"); err != nil {
+		t.Errorf("GET %slocal.svg: %v", server.MediaPath, err)
+	} else if !strings.Contains(got, "<svg>local</svg>") {
+		t.Errorf("primary media route does not serve the startup local layer: %q", got)
+	}
+	if got, err := h.GetString(server.ExternalMediaPath + "ext.svg"); err != nil {
+		t.Errorf("GET %sext.svg: %v", server.ExternalMediaPath, err)
+	} else if !strings.Contains(got, "<svg>external</svg>") {
+		t.Errorf("external media route does not serve the startup external layer: %q", got)
+	}
+	if got, err := h.GetString(server.ThemesPath + "default/theme.css"); err != nil {
+		t.Errorf("GET %sdefault/theme.css: %v", server.ThemesPath, err)
+	} else if !strings.Contains(got, layeredLocalThemeMarker) {
+		t.Errorf("primary theme route does not serve the startup local layer: %q", got)
+	}
+	if got, err := h.GetString(server.ExternalThemesPath + "exttheme/theme.css"); err != nil {
+		t.Errorf("GET %sexttheme/theme.css: %v", server.ExternalThemesPath, err)
+	} else if !strings.Contains(got, layeredExternalThemeMarker) {
+		t.Errorf("external theme route does not serve the startup external layer: %q", got)
+	}
+}
+
 // sseStream is a live event stream from the running server: the response body
 // plus a goroutine that feeds its lines to a channel.
 type sseStream struct {
