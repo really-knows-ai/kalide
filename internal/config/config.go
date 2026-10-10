@@ -150,6 +150,32 @@ func Unset(key string) error {
 	return writeValues(values)
 }
 
+// List returns the recognised keys that are set in kalide's per-user config
+// file, one "key=value" entry each. The entries are sorted by key so the result
+// is deterministic; when no recognised key is set — including when the config
+// file or its directory does not exist — the result is empty. Keys outside the
+// RecognisedKeys set are never listed.
+func List() ([]string, error) {
+	values, err := Load()
+	if err != nil {
+		return nil, err
+	}
+
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		if RecognisedKeys[key] {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+
+	entries := make([]string, 0, len(keys))
+	for _, key := range keys {
+		entries = append(entries, key+"="+values[key])
+	}
+	return entries, nil
+}
+
 // normalisePath returns value as an absolute, cleaned path. A leading "~"
 // expands to the user's home directory; a relative path resolves against the
 // process's current working directory.
