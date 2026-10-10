@@ -16,10 +16,16 @@ import (
 const usage = `kalide — author and present Markdown slide decks
 
 Usage:
-  kalide init [path]         Create a deck in the current directory. With no
-                             [path], write a starter slide and a local
-                             templates/ library; with [path], reference the
-                             external template library there
+  kalide init [path] [--local]
+                             Create a deck in the current directory. The
+                             optional [path] names an external template
+                             library to reference. The library is resolved
+                             first match wins: an explicit [path], else the
+                             configured default-template-dir, else the
+                             built-in starter deck (a starter slide and a
+                             local templates/ library). --local forces the
+                             built-in starter deck even when a default is
+                             configured. There is no --force
   kalide init-library <path> Create a new, empty template library at <path>
   kalide config get <key>    Print the value of a set recognised key
   kalide config set <key> <value>
