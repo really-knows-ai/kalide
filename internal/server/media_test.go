@@ -451,3 +451,307 @@ func assertRewrittenURLsResolve(t *testing.T, baseURL, body string) {
 		}
 	}
 }
+
+// TestMediaHandlerLayeredLibrary covers mediaHandler over a real two-layer
+// library loaded through template.LoadDeckLibrary (layered-template-library;
+// plan.phase-04.task-14). It mounts the handler over an actual HTTP server and
+// proves the per-layer serving contract the phase-02 task-13 URL contract
+// renders onto:
+//
+//   - each layer's media is served from its OWN root: the primary
+//     (deck-root local) layer's files under MediaPath and the external
+//     `templates:` layer's files under ExternalMediaPath, with no merged
+//     namespace — a local file 404s under the external prefix and an external
+//     file 404s under the primary prefix.
+//   - a .css file in a layer's media/ folder is rewritten against THAT
+//     serving layer's bases: the external layer's stylesheet onto
+//     ExternalMediaPath/ExternalThemesPath and the local layer's onto the
+//     primary MediaPath/ThemesPath.
+//   - each layer's theme assets are served from the owning layer under the
+//     layer's own route, and a theme under the wrong layer's prefix 404s.
+//   - a deck theme carried ONLY by the external layer is served at the
+//     UNPREFIXED ThemesPath route (the per-name owner fallback) with its
+//     reserved-prefix references rewritten against the external layer's own
+//     bases, while a theme the local layer owns is served locally.
+//
+// It writes a real two-layer deck to temporary directories, so it is guarded
+// with -short.
+func TestMediaHandlerLayeredLibrary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test reads a real two-layer library from disk")
+	}
+
+	deckRoot := t.TempDir()
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+	externalRoot := t.TempDir()
+
+	writeLayeredMediaLayer(t, externalRoot, "extlib", "ext-slide", "ext-theme", "ext")
+	writeLayeredMediaLayer(t, localRoot, "locallib", "local-slide", "local-theme", "local")
+
+	lib, err := template.LoadDeckLibrary(deckRoot, externalRoot)
+	if err != nil {
+		t.Fatalf("template.LoadDeckLibrary: %v", err)
+	}
+	if len(lib.Layers) != 2 {
+		t.Fatalf("len(lib.Layers) = %d, want 2 (external + local)", len(lib.Layers))
+	}
+
+	// A two-layer deck's mediaHandler derives each layer's theme registry from
+	// lib.Layers, so the passed registry is only the single-root fallback; the
+	// local layer's own registry is a realistic value for it.
+	themes, err := theme.LoadDir(os.DirFS(localRoot), template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
+
+	ts := httptest.NewServer(mediaHandler(lib, themes))
+	t.Cleanup(ts.Close)
+
+	get := func(t *testing.T, target string) (string, http.Header, int) {
+		t.Helper()
+		resp, err := http.Get(ts.URL + target)
+		if err != nil {
+			t.Fatalf("GET %s: %v", target, err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body %s: %v", target, err)
+		}
+		return string(body), resp.Header, resp.StatusCode
+	}
+	mediaURL := func(base, clean string) string { return `url("` + base + clean + `")` }
+	themeURL := func(base, name, clean string) string { return `url("` + base + name + "/" + clean + `")` }
+	assertNoReservedPrefixes := func(t *testing.T, body string) {
+		t.Helper()
+		if p := template.MediaURLPrefix(); strings.Contains(body, p) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", p, body)
+		}
+		if p := template.ThemeURLPrefix(); strings.Contains(body, p) {
+			t.Errorf("body still contains reserved prefix %q:\n%s", p, body)
+		}
+	}
+
+	t.Run("each layer's media is served from its own root", func(t *testing.T) {
+		body, _, status := get(t, MediaPath+"local-logo.svg")
+		if status != http.StatusOK {
+			t.Fatalf("GET local media status = %d, want 200", status)
+		}
+		if body != "<svg>local</svg>" {
+			t.Errorf("local media body = %q, want the local layer's file", body)
+		}
+		body, _, status = get(t, ExternalMediaPath+"ext-logo.svg")
+		if status != http.StatusOK {
+			t.Fatalf("GET external media status = %d, want 200", status)
+		}
+		if body != "<svg>ext</svg>" {
+			t.Errorf("external media body = %q, want the external layer's file", body)
+		}
+	})
+
+	t.Run("media is never a merged namespace", func(t *testing.T) {
+		if _, _, status := get(t, ExternalMediaPath+"local-logo.svg"); status != http.StatusNotFound {
+			t.Errorf("local media under the external prefix status = %d, want 404", status)
+		}
+		if _, _, status := get(t, MediaPath+"ext-logo.svg"); status != http.StatusNotFound {
+			t.Errorf("external media under the primary prefix status = %d, want 404", status)
+		}
+	})
+
+	t.Run("external layer media stylesheet rewritten against the external bases", func(t *testing.T) {
+		body, header, status := get(t, ExternalMediaPath+"ext.css")
+		if status != http.StatusOK {
+			t.Fatalf("status = %d, want 200", status)
+		}
+		if ct := header.Get("Content-Type"); !strings.HasPrefix(ct, "text/css") {
+			t.Errorf("Content-Type = %q, want it to start with text/css", ct)
+		}
+		if want := mediaURL(ExternalMediaPath, "ext-font.woff2"); !strings.Contains(body, want) {
+			t.Errorf("body missing external-base rewrite %s:\n%s", want, body)
+		}
+		if want := themeURL(ExternalThemesPath, "ext-theme", "ext.svg"); !strings.Contains(body, want) {
+			t.Errorf("body missing external-base rewrite %s:\n%s", want, body)
+		}
+		assertNoReservedPrefixes(t, body)
+	})
+
+	t.Run("primary layer media stylesheet rewritten against the primary bases", func(t *testing.T) {
+		body, header, status := get(t, MediaPath+"local.css")
+		if status != http.StatusOK {
+			t.Fatalf("status = %d, want 200", status)
+		}
+		if ct := header.Get("Content-Type"); !strings.HasPrefix(ct, "text/css") {
+			t.Errorf("Content-Type = %q, want it to start with text/css", ct)
+		}
+		if want := mediaURL(MediaPath, "local-font.woff2"); !strings.Contains(body, want) {
+			t.Errorf("body missing primary-base rewrite %s:\n%s", want, body)
+		}
+		if want := themeURL(ThemesPath, "local-theme", "local.svg"); !strings.Contains(body, want) {
+			t.Errorf("body missing primary-base rewrite %s:\n%s", want, body)
+		}
+		assertNoReservedPrefixes(t, body)
+	})
+
+	t.Run("theme assets are served from the owning layer under its prefix", func(t *testing.T) {
+		// The external layer's theme under the external prefix, rewritten
+		// against the external bases.
+		body, _, status := get(t, ExternalThemesPath+"ext-theme/theme.css")
+		if status != http.StatusOK {
+			t.Fatalf("GET external theme status = %d, want 200", status)
+		}
+		if want := mediaURL(ExternalMediaPath, "ext-font.woff2"); !strings.Contains(body, want) {
+			t.Errorf("external theme body missing %s:\n%s", want, body)
+		}
+		if want := themeURL(ExternalThemesPath, "ext-theme", "ext.svg"); !strings.Contains(body, want) {
+			t.Errorf("external theme body missing %s:\n%s", want, body)
+		}
+		assertNoReservedPrefixes(t, body)
+
+		// The local layer's theme under the unprefixed prefix, rewritten
+		// against the primary bases.
+		body, _, status = get(t, ThemesPath+"local-theme/theme.css")
+		if status != http.StatusOK {
+			t.Fatalf("GET local theme status = %d, want 200", status)
+		}
+		if want := mediaURL(MediaPath, "local-font.woff2"); !strings.Contains(body, want) {
+			t.Errorf("local theme body missing %s:\n%s", want, body)
+		}
+		if want := themeURL(ThemesPath, "local-theme", "local.svg"); !strings.Contains(body, want) {
+			t.Errorf("local theme body missing %s:\n%s", want, body)
+		}
+		assertNoReservedPrefixes(t, body)
+
+		// A local theme is not served under the external prefix: the external
+		// route addresses only the external layer's registry.
+		if _, _, status := get(t, ExternalThemesPath+"local-theme/theme.css"); status != http.StatusNotFound {
+			t.Errorf("local theme under the external prefix status = %d, want 404", status)
+		}
+	})
+
+	t.Run("external-only deck theme served at the unprefixed route with external bases", func(t *testing.T) {
+		body, _, status := get(t, ThemesPath+"ext-theme/theme.css")
+		if status != http.StatusOK {
+			t.Fatalf("GET external-only theme at the unprefixed route status = %d, want 200", status)
+		}
+		// Its reserved-prefix references resolve in its own (external) layer,
+		// not the primary one.
+		if want := mediaURL(ExternalMediaPath, "ext-font.woff2"); !strings.Contains(body, want) {
+			t.Errorf("body missing external-base rewrite %s:\n%s", want, body)
+		}
+		if want := themeURL(ExternalThemesPath, "ext-theme", "ext.svg"); !strings.Contains(body, want) {
+			t.Errorf("body missing external-base rewrite %s:\n%s", want, body)
+		}
+		if strings.Contains(body, `"`+ThemesPath+"ext-theme/") {
+			t.Errorf("external-only theme's theme: ref was rewritten to the primary base:\n%s", body)
+		}
+		assertNoReservedPrefixes(t, body)
+
+		// The rewritten reference resolves at the external theme route.
+		asset, _, assetStatus := get(t, ExternalThemesPath+"ext-theme/ext.svg")
+		if assetStatus != http.StatusOK {
+			t.Fatalf("GET rewritten external theme asset status = %d, want 200", assetStatus)
+		}
+		if asset != "<svg>ext-theme</svg>" {
+			t.Errorf("external theme asset = %q, want %q", asset, "<svg>ext-theme</svg>")
+		}
+	})
+}
+
+// TestMediaHandlerSoleLayerUnchanged proves a single-root library — a deck
+// with only its local templates/ layer, no `templates:` key — behaves exactly
+// as before through mediaHandler (layered-template-library;
+// plan.phase-04.task-14): the sole layer is served at the primary
+// MediaPath/ThemesPath URLs with the primary bases, the caller's registry is
+// the one used, and the external-prefix routes are not mounted at all.
+func TestMediaHandlerSoleLayerUnchanged(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test reads a real library from disk")
+	}
+
+	deckRoot := t.TempDir()
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+	writeLayeredMediaLayer(t, localRoot, "locallib", "local-slide", "local-theme", "local")
+
+	lib, err := template.LoadDeckLibrary(deckRoot, "")
+	if err != nil {
+		t.Fatalf("template.LoadDeckLibrary: %v", err)
+	}
+	if len(lib.Layers) != 1 || lib.Layers[0].Role != template.LayerRoleSole {
+		t.Fatalf("layers = %d roles, want one sole layer", len(lib.Layers))
+	}
+
+	themes, err := theme.LoadDir(os.DirFS(localRoot), template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir: %v", err)
+	}
+
+	ts := httptest.NewServer(mediaHandler(lib, themes))
+	t.Cleanup(ts.Close)
+
+	get := func(t *testing.T, target string) (string, int) {
+		t.Helper()
+		resp, err := http.Get(ts.URL + target)
+		if err != nil {
+			t.Fatalf("GET %s: %v", target, err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body %s: %v", target, err)
+		}
+		return string(body), resp.StatusCode
+	}
+
+	if body, status := get(t, MediaPath+"local-logo.svg"); status != http.StatusOK || body != "<svg>local</svg>" {
+		t.Errorf("primary media = (%q, %d), want the sole layer's raw file", body, status)
+	}
+	if body, status := get(t, ThemesPath+"local-theme/theme.css"); status != http.StatusOK ||
+		!strings.Contains(body, `url("`+MediaPath+`local-font.woff2")`) {
+		t.Errorf("primary theme = (%q, %d), want the primary-base rewrite", body, status)
+	}
+	if body, status := get(t, MediaPath+"local.css"); status != http.StatusOK ||
+		!strings.Contains(body, `url("`+ThemesPath+`local-theme/local.svg")`) {
+		t.Errorf("primary media stylesheet = (%q, %d), want the primary-base rewrite", body, status)
+	}
+
+	// A single-root library mounts no external-prefix route.
+	if _, status := get(t, ExternalMediaPath+"local-logo.svg"); status != http.StatusNotFound {
+		t.Errorf("external media prefix on a sole-layer library = %d, want 404", status)
+	}
+	if _, status := get(t, ExternalThemesPath+"local-theme/theme.css"); status != http.StatusNotFound {
+		t.Errorf("external theme prefix on a sole-layer library = %d, want 404", status)
+	}
+}
+
+// writeLayeredMediaLayer writes one valid library layer to root for the
+// mediaHandler layered tests: library.yaml, one slide, one theme (its
+// theme.css reaching both reserved prefixes plus an owned svg) and a media
+// tree with a raw svg, a font, and a stylesheet reaching both reserved
+// prefixes. label ("ext"/"local") gives the layer's theme-owned file and media
+// paths distinct names, so the two layers merge without a
+// library-layer-uniqueness collision (checkLayerUniqueness).
+func writeLayeredMediaLayer(t *testing.T, root, libName, slide, theme, label string) {
+	t.Helper()
+	writeFile(t, filepath.Join(root, template.LibraryFile),
+		"name: "+libName+"\nformat: 1\n")
+	writeFile(t, filepath.Join(root, template.SlidesDir, slide, template.ManifestFile),
+		"name: "+slide+"\n")
+	writeFile(t, filepath.Join(root, template.SlidesDir, slide, template.LayoutFile),
+		"<section><h1>{{.Title}}</h1></section>")
+	writeFile(t, filepath.Join(root, template.SlidesDir, slide, template.ExampleFile),
+		"# "+slide+"\n")
+
+	writeFile(t, filepath.Join(root, template.ThemesDir, theme, template.ThemeStylesheet),
+		"body { background: url('"+template.MediaURLPrefix()+label+"-font.woff2'); }\n"+
+			".logo { background: url('"+template.ThemeURLPrefix()+theme+"/"+label+".svg'); }\n")
+	writeFile(t, filepath.Join(root, template.ThemesDir, theme, label+".svg"),
+		"<svg>"+theme+"</svg>")
+
+	writeFile(t, filepath.Join(root, template.MediaDir, label+"-logo.svg"),
+		"<svg>"+label+"</svg>")
+	writeFile(t, filepath.Join(root, template.MediaDir, label+"-font.woff2"), label+"font")
+	writeFile(t, filepath.Join(root, template.MediaDir, label+".css"),
+		"/* "+label+" media css */\n"+
+			".a { background: url('"+template.MediaURLPrefix()+label+"-font.woff2'); }\n"+
+			".b { background: url('"+template.ThemeURLPrefix()+theme+"/"+label+".svg'); }\n")
+}
