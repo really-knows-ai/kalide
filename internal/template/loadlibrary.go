@@ -334,6 +334,94 @@ func libraryFromLayer(layer *LibraryLayer) *Library {
 	}
 }
 
+// mergeLibraryLayers merges an ordered slice of contributing library layers
+// into one *Library with equal standing and no precedence: every layer's
+// slides, sections and themes contribute to the merged maps, and no layer
+// overrides another (layered-template-library, project-templates). It is the
+// merge counterpart of libraryFromLayer, which exposes a single layer as a
+// one-layer Library.
+//
+// layers is ordered from the external `templates:` layer to the deck-root
+// local templates/ layer, exactly as ResolveLibraryLayers returns the roots
+// (external first, local second). Merge keeps that order and uses the FIRST
+// layer as the primary layer: the merged Meta, Root and RootPath are the
+// primary layer's. Because the external layer precedes the local one when a
+// deck configures a `templates:` root, the primary is the external layer
+// then, else the local layer. The layers have equal standing, so the primary
+// choice only decides which layer's metadata and default root the merged
+// value exposes — each layer's own metadata and root stay verbatim in Layers.
+//
+// Root and RootPath are the primary layer's directory and display path. They
+// are convenience defaults only: a per-layer file must be resolved through
+// that layer's own root, so a consumer needing a specific layer's root reads
+// Library.Layers[i].Root / .RootPath rather than the merged Root/RootPath.
+//
+// The merged Slides/Sections/Themes maps are the union of every layer's
+// entries. HasMedia is true when any layer carries media. There is no merged
+// media namespace, so the merged Media is the primary layer's media
+// sub-filesystem; a consumer that needs a particular layer's media reads
+// Layers[i].Media (and Layers[i].HasMedia) instead.
+//
+// mergeLibraryLayers does NOT detect duplicate names: when two layers carry
+// the same name in a kind it keeps the first layer's entry and otherwise
+// ignores the later one. A name carried by two layers is a validation error
+// (library-layer-uniqueness), and mergeLibraryLayers assumes uniqueness has
+// already been checked: LoadDeckLibrary runs checkLayerUniqueness over the
+// loaded layers before merging, so a duplicate reaches its path-qualified
+// error there rather than being silently resolved here.
+//
+// A single layer merges to exactly the Library libraryFromLayer builds from
+// it (the one-layer case); zero layers yields an empty, media-less Library.
+func mergeLibraryLayers(layers []*LibraryLayer) *Library {
+	switch len(layers) {
+	case 0:
+		return &Library{
+			Slides:   make(map[string]*LibraryTemplate),
+			Sections: make(map[string]*LibraryTemplate),
+			Themes:   make(map[string]*LibraryTheme),
+		}
+	case 1:
+		return libraryFromLayer(layers[0])
+	}
+
+	primary := layers[0]
+	merged := &Library{
+		Root:     primary.Root,
+		RootPath: primary.RootPath,
+		Meta:     primary.Meta,
+		Slides:   make(map[string]*LibraryTemplate),
+		Sections: make(map[string]*LibraryTemplate),
+		Themes:   make(map[string]*LibraryTheme),
+		HasMedia: primary.HasMedia,
+		Media:    primary.Media,
+		Layers:   layers,
+	}
+	for _, layer := range layers {
+		if layer == nil {
+			continue
+		}
+		for name, t := range layer.Slides {
+			if _, exists := merged.Slides[name]; !exists {
+				merged.Slides[name] = t
+			}
+		}
+		for name, t := range layer.Sections {
+			if _, exists := merged.Sections[name]; !exists {
+				merged.Sections[name] = t
+			}
+		}
+		for name, th := range layer.Themes {
+			if _, exists := merged.Themes[name]; !exists {
+				merged.Themes[name] = th
+			}
+		}
+		if layer.HasMedia {
+			merged.HasMedia = true
+		}
+	}
+	return merged
+}
+
 // checkLibraryBuild is templates-dir-validation step 4: parsing manifests
 // (parseManifest) into definitions and running the template-build-checks
 // (Registry.Validate) over them. It builds a *Registry over lib
