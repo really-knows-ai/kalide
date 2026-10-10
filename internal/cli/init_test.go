@@ -510,8 +510,11 @@ func TestInit(t *testing.T) {
 // references it (stdout lists the created paths, exit 0); extra arguments are a
 // usage error (exit 2, nothing written); an invalid or missing external
 // library, or a library that does not resolve the deck's default theme, exits
-// non-zero with nothing written; a pre-existing local templates/ is exempt;
-// and the no-arg seed path is unchanged.
+// non-zero with nothing written; a pre-existing local templates/ is exempt and
+// left in place as the deck's local layer, so a slide name it shares with the
+// external library is not detected at init but rejected when `kalide start`
+// loads the merged library; an existing local templates/ still blocks only the
+// seed form; and the no-arg seed path is unchanged.
 //
 // Its configured-default integration cases drive a REAL per-user config store
 // (isolateConfig) and a REAL external library on disk: `kalide init` (no path)
@@ -934,6 +937,131 @@ func TestInitExternalLibrary(t *testing.T) {
 		_, templates := initConfigTemplates(t, dir)
 		if templates != "../shared-lib" {
 			t.Errorf("kalide.yaml templates = %q, want %q", templates, "../shared-lib")
+		}
+	})
+
+	// The external branch validates the external library ALONE, so a
+	// pre-existing local templates/ whose slide name collides with the external
+	// library's is left in place by init and the collision surfaces only when
+	// `kalide start` loads the merged library (library-layer-uniqueness).
+	t.Run("colliding local layer is left in place and rejected at start's load", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("integration test: writes a real deck and two on-disk libraries")
+		}
+		isolateConfig(t)
+		parent, libDir := newInitExternalLibrary(t)
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		// A pre-existing local templates/ that is itself a valid library and
+		// carries the SAME slide name ("hello") the external library carries.
+		localTemplates := filepath.Join(dir, "templates")
+		writeExternalCLILibrary(t, localTemplates, "local-lib", "local hello description",
+			"<section><h1>{{.title}}</h1></section>\n")
+		localManifest := filepath.Join(localTemplates, "slides", "hello", "template.yaml")
+		before, err := os.ReadFile(localManifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		// `init ../shared-lib` reads the external library alone: the colliding
+		// local templates/ is not read, so init succeeds with nothing refused.
+		code, stdout, stderr := runCLI("init", "../shared-lib")
+		if code != 0 {
+			t.Fatalf("Run(init ../shared-lib) exit = %d, want 0 with a colliding local templates/ (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(init ../shared-lib) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "../shared-lib") {
+			t.Errorf("Run(init ../shared-lib) stdout = %q, want the external library path", stdout)
+		}
+
+		// The local layer participates as the deck's local library layer and is
+		// left byte-for-byte in place; init writes none of its own.
+		if after, err := os.ReadFile(localManifest); err != nil || string(after) != string(before) {
+			t.Errorf("local templates/slides/hello/template.yaml changed across init (err = %v), want it untouched", err)
+		}
+		_, configured := initConfigTemplates(t, dir)
+		if configured != "../shared-lib" {
+			t.Errorf("kalide.yaml templates = %q, want %q", configured, "../shared-lib")
+		}
+
+		// The collision is NOT detected at init: it surfaces when `kalide start`
+		// loads the merged library through the same loader runStart calls with
+		// the same raw `templates:` value. The duplicate slide name is reported
+		// naming the name and both carrying paths, one per layer.
+		if _, err := template.LoadDeckLibrary(dir, configured); err == nil {
+			t.Fatalf("template.LoadDeckLibrary(%s, %q) error = nil, want the duplicate slide-name error", dir, configured)
+		} else {
+			for _, want := range []string{
+				"declared in both",
+				`"hello"`,
+				filepath.Join(libDir, "slides", "hello", "template.yaml"),
+				localManifest,
+			} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("merged load error = %q, want it to name %q", err, want)
+				}
+			}
+		}
+	})
+
+	// An existing local templates/ still blocks the built-in starter-deck
+	// branch, which writes a local templates/ of its own, while the external
+	// branch leaves it exempt: the block applies to the seed form only
+	// (cli-init-refuse-existing).
+	t.Run("existing local templates still blocks only the seed form", func(t *testing.T) {
+		parent, _ := newInitExternalLibrary(t)
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(filepath.Join(dir, "templates"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		const sentinel = "seed-blocking local templates content\n"
+		if err := os.WriteFile(filepath.Join(dir, "templates", "keep.txt"), []byte(sentinel), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		// The seed form (no path, no configured default) refuses to clobber it.
+		code, stdout, stderr := runCLI("init")
+		if code == 0 {
+			t.Fatalf("Run(init) exit = 0 with a pre-existing local templates/, want the seed refusal")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(init) stdout = %q, want empty on refusal", stdout)
+		}
+		for _, want := range []string{"init:", "templates/", "already present", "never overwrites"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("Run(init) stderr = %q, want the seed refusal mentioning %q", stderr, want)
+			}
+		}
+		if got, err := os.ReadFile(filepath.Join(dir, "templates", "keep.txt")); err != nil || string(got) != sentinel {
+			t.Errorf("templates/keep.txt = %q, err = %v; want the pre-existing content unchanged", got, err)
+		}
+		for _, other := range []string{"kalide.yaml", "slides", "assets"} {
+			if _, err := os.Lstat(filepath.Join(dir, other)); err == nil {
+				t.Errorf("%s was created despite the seed refusal, want nothing written", other)
+			}
+		}
+
+		// The same pre-existing local templates/ does not block the external
+		// form: `init ../shared-lib` proceeds and leaves it in place.
+		code, stdout, stderr = runCLI("init", "../shared-lib")
+		if code != 0 {
+			t.Fatalf("Run(init ../shared-lib) exit = %d with the same pre-existing templates/, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(init ../shared-lib) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "../shared-lib") {
+			t.Errorf("Run(init ../shared-lib) stdout = %q, want the external library path", stdout)
+		}
+		if got, err := os.ReadFile(filepath.Join(dir, "templates", "keep.txt")); err != nil || string(got) != sentinel {
+			t.Errorf("templates/keep.txt = %q, err = %v; want it left in place by the external init", got, err)
 		}
 	})
 
