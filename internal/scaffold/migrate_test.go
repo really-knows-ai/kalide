@@ -57,7 +57,7 @@ import (
 // library name, and t.TempDir's base name is not, so the library lives in a
 // "shared-lib" subdirectory. The library ships library.yaml (format 1), the
 // standard layout directories, the seeded default theme and the library-root
-// AGENTS.md, so it loads cleanly through template.LoadDeckLibrary.
+// AGENTS.md, so it loads cleanly through template.LoadLibraryAt.
 func migrateLibraryFixture(t *testing.T) string {
 	t.Helper()
 
@@ -662,11 +662,13 @@ func migrateLibraryAt(t *testing.T, format int) string {
 
 // migrateLoadLibrary loads a real library root through the real loader and fails
 // the test on any error. A library is a template root itself, so it is loaded as
-// a deck would load a configured library: "." resolves against the library root.
+// its own single root through template.LoadLibraryAt: the library directory
+// becomes its own fs.FS root, and a nested <dir>/templates/ inside it is an
+// ordinary top-level entry, never merged as a second local layer.
 func migrateLoadLibrary(t *testing.T, libraryRoot string) {
 	t.Helper()
 
-	if _, err := template.LoadDeckLibrary(libraryRoot, "."); err != nil {
-		t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = %v, want the library to load after the migration half", libraryRoot, err)
+	if _, err := template.LoadLibraryAt(libraryRoot); err != nil {
+		t.Fatalf("template.LoadLibraryAt(%s) error = %v, want the library to load after the migration half", libraryRoot, err)
 	}
 }
