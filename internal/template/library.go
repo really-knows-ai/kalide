@@ -194,6 +194,13 @@ const (
 // root (error-reporting), alongside what was loaded from it: its metadata, its
 // slide and section templates, its themes and its media sub-filesystem. It is
 // the per-layer counterpart of the merged Library.
+//
+// The deck-root local templates/ layer (LayerRoleLocal) is the merged
+// Library's primary layer: its metadata, root and media become the merged
+// convenience fields and it is served at the unprefixed /assets/templates/...
+// URLs, while the external `templates:` layer of a two-layer deck is served
+// under a distinct prefix and keeps its media only on its own layer
+// (mergeLibraryLayers).
 type LibraryLayer struct {
 	// Role identifies this layer's standing in the deck whose library it
 	// contributes to: the external `templates:` layer, the deck-root local
@@ -246,25 +253,35 @@ type LibraryLayer struct {
 // returning it.
 //
 // A Library is the merged result of one or more contributing LibraryLayers
-// (layered-template-library): the Slides/Sections/Themes/HasMedia/Media fields
-// are the union of the layers' entries, while Layers retains each contributing
-// layer's own root and media alongside them. A Library loaded from a single
-// root has exactly one layer; mergeLibraryLayers merges an ordered layer set
-// into one Library.
+// (layered-template-library): the Slides/Sections/Themes fields are the union
+// of the layers' entries, while the convenience Root/RootPath/Meta/Media/
+// HasMedia describe the PRIMARY layer and Layers retains every contributing
+// layer's own root and media. A Library loaded from a single root has exactly
+// one layer; mergeLibraryLayers merges an ordered layer set into one Library.
+//
+// The primary layer is the one served at the UNPREFIXED
+// /assets/templates/media/ and /assets/templates/themes/ URLs: the sole layer
+// of a single-root library, or the deck-root local templates/ layer of a
+// two-layer deck. The external `templates:` layer of a two-layer deck is served
+// under its distinct /assets/templates/external/... prefix and is never the
+// merged Library's primary (mergeLibraryLayers).
 type Library struct {
-	// Root is the templates/ directory, rooted so that "library.yaml",
-	// "slides", "sections", "themes" and "media" are its direct entries.
+	// Root is the primary layer's templates/ directory, rooted so that
+	// "library.yaml", "slides", "sections", "themes" and "media" are its
+	// direct entries. When this Library merges several layers, each layer's
+	// own root is retained in Layers.
 	Root fs.FS
 
 	// RootPath is Root's path within the project filesystem LoadLibrary was
 	// given, typically TemplatesDir ("templates"). It is used to
-	// path-qualify errors and to locate the media root for serving.
+	// path-qualify errors and to locate the primary layer's media root for
+	// serving. When this Library merges several layers, each layer's own
+	// path is retained in Layers.
 	RootPath string
 
-	// Meta is the parsed library.yaml metadata. When this Library is the
-	// merge of several contributing layers, Meta is the PRIMARY layer's
-	// metadata: the external `templates:` layer when the deck configures
-	// one, otherwise the deck-root local templates/ layer. The layers have
+	// Meta is the parsed library.yaml metadata of the PRIMARY layer: the
+	// deck-root local templates/ layer when the deck's two layers merge,
+	// otherwise the sole layer of a single-root library. The layers have
 	// equal standing and neither overrides the other; each layer's own
 	// metadata is retained verbatim in Layers.
 	Meta LibraryMeta
@@ -282,20 +299,25 @@ type Library struct {
 	// Themes holds the themes loaded from templates/themes, keyed by name.
 	Themes map[string]*LibraryTheme
 
-	// HasMedia reports whether the templates/media directory exists. It may
-	// be empty or absent; there is no media/ requirement (media is optional
-	// content, not a required top-level entry).
+	// HasMedia reports whether the templates/media directory of the PRIMARY
+	// layer exists. It may be empty or absent; there is no media/ requirement
+	// (media is optional content, not a required top-level entry). When this
+	// Library merges several layers, a non-primary layer's media is reachable
+	// only through its own Layers[i].Media/HasMedia.
 	HasMedia bool
 
-	// Media is the templates/media sub-filesystem, rooted so that a media
-	// path an author writes ("logo.svg", "video/intro.mp4") is a direct
-	// fs.FS path within it. It is nil when HasMedia is false.
+	// Media is the PRIMARY layer's templates/media sub-filesystem, rooted so
+	// that a media path an author writes ("logo.svg", "video/intro.mp4") is a
+	// direct fs.FS path within it. It is nil when HasMedia is false, so the
+	// merged HasMedia/Media pair can never disagree. When this Library merges
+	// several layers, a non-primary layer's media is reachable only through
+	// its own Layers[i].Media.
 	Media fs.FS
 
 	// Layers holds the contributing layers this Library was merged from, in
 	// resolution order: the external `templates:` layer first when the deck
 	// configures one, then the deck-root local templates/ layer. Each
-	// *LibraryLayer retains its own Root, RootPath, metadata, loaded
+	// *LibraryLayer retains its own Root, RootPath, Role, metadata, loaded
 	// templates, themes and media sub-filesystem, alongside the merged maps
 	// above — so a caller can address each layer's own files by that layer's
 	// own root rather than through the merged maps alone. A Library loaded

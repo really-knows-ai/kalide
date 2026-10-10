@@ -567,9 +567,11 @@ type SectionCall struct {
 	// It is nil when the registry/library records no provenance for the
 	// resolved target — a single-root library, or a resolver built without
 	// layer information. Consumers must treat nil as "use the
-	// primary/merged root": the primary root is the external `templates:`
-	// layer when it is the deck's only layer, otherwise the deck-root local
-	// templates/ layer.
+	// primary/merged root": the primary layer is the one served at the
+	// unprefixed /assets/templates/... URLs — the sole layer of a
+	// single-root library, or the deck-root local templates/ layer
+	// (LayerRoleLocal) of a two-layer deck; the external `templates:` layer
+	// of a two-layer deck is never the primary (mergeLibraryLayers).
 	Layer *LibraryLayer
 
 	// Values is the effective field data the target executes with: the call's

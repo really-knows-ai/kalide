@@ -7,33 +7,39 @@ import (
 
 // This file is the template loader's library-root resolution point
 // (external-template-library): ResolveLibraryRoot turns a deck's raw
-// `templates:` value plus its deck root into the deck's PRIMARY library root
-// (the external `templates:` root when configured, else the deck-root
-// templates/), ResolveLibraryLayers returns every layer root the deck draws
-// from, and LoadDeckLibrary loads, validates and merges every one of those
+// `templates:` value plus its deck root into the deck's authoritative single
+// library root (the external `templates:` root when configured, else the
+// deck-root templates/), ResolveLibraryLayers returns every layer root the deck
+// draws from, and LoadDeckLibrary loads, validates and merges every one of those
 // layers through the shared loader body in loadlibrary.go. ResolveLibraryRoot
 // is not authoritative over
-// the local layer: a configured `templates:` root is the primary root, but the
-// deck-root templates/ still participates as the local layer through
-// ResolveLibraryLayers, so a configured path never suppresses a present local
-// templates/. The error when neither resolves names the offending or expected
-// path.
+// the local layer: a configured `templates:` root is the single root it
+// resolves, but the deck-root templates/ still participates as the local layer
+// through ResolveLibraryLayers, so a configured path never suppresses a present
+// local templates/. This single resolved root is not the merged Library's
+// primary layer: the merged primary is the layer served at the unprefixed
+// /assets/templates/... URLs (the local layer of a two-layer deck), which is
+// the deck-root templates/ here only when no external `templates:` is
+// configured (mergeLibraryLayers). The error when neither resolves names the
+// offending or expected path.
 //
 // The roots are resolved on the real filesystem, against the directory holding
 // kalide.yaml, rather than through the deck's fs.FS: an external library may
 // sit above the deck root (e.g. `../shared-lib`), which os.DirFS and
 // fs.ValidPath reject.
 
-// ResolveLibraryRoot resolves the primary template-library root a deck uses.
+// ResolveLibraryRoot resolves the authoritative single template-library root a
+// deck uses. It is the single-root counterpart of ResolveLibraryLayers, not the
+// merged Library's primary layer (mergeLibraryLayers).
 //
 // deckRoot is the directory holding the deck's kalide.yaml, as an
 // operating-system path. configured is the deck's raw top-level `templates:`
 // value as written (deck.TemplatesPath): "" when the key is absent or empty.
 //
-// When configured is non-empty it is the primary root: a relative path is
+// When configured is non-empty it is the resolved root: a relative path is
 // resolved against deckRoot and an absolute path is used as given. When
 // configured is empty the deck-root templates/ directory under deckRoot is the
-// primary root. ResolveLibraryRoot is not authoritative over the local layer:
+// resolved root. ResolveLibraryRoot is not authoritative over the local layer:
 // the local templates/ still participates as the local layer through
 // ResolveLibraryLayers, so a configured path does not ignore it. Callers that
 // need every layer the deck draws from must use ResolveLibraryLayers.
@@ -145,9 +151,10 @@ func ResolveLibraryLayers(deckRoot, configured string) ([]string, error) {
 // layer's own root), rejects a name carried by two layers
 // (checkLayerUniqueness), and merges the layers into one *Library with equal
 // standing (mergeLibraryLayers). The merged Library carries the layers it was
-// merged from (Library.Layers) and takes its metadata and default root from
-// the primary layer, the first in resolution order (the external `templates:`
-// root when configured, else the local one).
+// merged from (Library.Layers); its convenience metadata, root and media come
+// from the primary layer — the deck-root local templates/ layer when two layers
+// merge, otherwise the sole layer — the layer served at the unprefixed
+// /assets/templates/... URLs (mergeLibraryLayers).
 //
 // The first layer — the external `templates:` layer when configured, and any
 // sole layer — is loaded fully (libraryLayerFull), so it validates as a

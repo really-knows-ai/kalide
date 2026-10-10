@@ -59,7 +59,7 @@ import (
 // resolves the ordered roots — the configured `templates:` root, plus the
 // local templates/ whenever it exists (external-template-library) — and
 // LoadDeckLibrary loads each through the loader body below. ResolveLibraryRoot
-// is the primary-root counterpart: the `templates:` path when configured, else
+// is the single-root counterpart: the `templates:` path when configured, else
 // the local templates/.
 
 // LoadLibrary loads and validates the templates/ library at root within
@@ -347,24 +347,32 @@ func libraryFromLayer(layer *LibraryLayer) *Library {
 //
 // layers is ordered from the external `templates:` layer to the deck-root
 // local templates/ layer, exactly as ResolveLibraryLayers returns the roots
-// (external first, local second). Merge keeps that order and uses the FIRST
-// layer as the primary layer: the merged Meta, Root and RootPath are the
-// primary layer's. Because the external layer precedes the local one when a
-// deck configures a `templates:` root, the primary is the external layer
-// then, else the local layer. The layers have equal standing, so the primary
-// choice only decides which layer's metadata and default root the merged
-// value exposes — each layer's own metadata and root stay verbatim in Layers.
+// (external first, local second). Merge keeps that order in Library.Layers.
+// The merged Library's PRIMARY layer — the layer whose metadata, root and
+// media the merged convenience fields expose — is the layer served at the
+// UNPREFIXED /assets/templates/... URLs: the deck-root local templates/ layer
+// of a two-layer deck (LayerRoleLocal), or the sole layer of a single-layer
+// library (LayerRoleSole). The external `templates:` layer of a two-layer deck
+// is served under its distinct /assets/templates/external/... prefix, so it is
+// NOT the primary. The primary is selected by ROLE: the layer whose Role is
+// LayerRoleLocal when one is present, otherwise the LAST layer of the ordered
+// slice — which is the local layer of a hand-built external-first
+// [external, local] slice whose layers carry no role. The layers have equal
+// standing, so the primary choice only decides which layer's metadata, root
+// and media the merged convenience fields expose; each layer's own metadata,
+// root and media stay verbatim in Layers.
 //
-// Root and RootPath are the primary layer's directory and display path. They
-// are convenience defaults only: a per-layer file must be resolved through
+// Root and RootPath are the primary layer's directory and display path: the
+// same root the layer served at the unprefixed media/themes URLs is read from.
+// They are convenience defaults only: a per-layer file must be resolved through
 // that layer's own root, so a consumer needing a specific layer's root reads
 // Library.Layers[i].Root / .RootPath rather than the merged Root/RootPath.
 //
 // The merged Slides/Sections/Themes maps are the union of every layer's
-// entries. HasMedia is true when any layer carries media. There is no merged
-// media namespace, so the merged Media is the primary layer's media
-// sub-filesystem; a consumer that needs a particular layer's media reads
-// Layers[i].Media (and Layers[i].HasMedia) instead.
+// entries. HasMedia and Media are the PRIMARY layer's HasMedia and media
+// sub-filesystem, so the merged pair can never disagree; the external layer's
+// media of a two-layer deck is reachable only through its own Layers[i].Media.
+// There is no merged media namespace.
 //
 // mergeLibraryLayers does NOT detect duplicate names: when two layers carry
 // the same name in a kind it keeps the first layer's entry and otherwise
@@ -388,17 +396,31 @@ func mergeLibraryLayers(layers []*LibraryLayer) *Library {
 		return libraryFromLayer(layers[0])
 	}
 
-	primary := layers[0]
+	// The primary layer is the one served at the unprefixed
+	// /assets/templates/... URLs: prefer the layer resolved as the deck's
+	// local (deck-root templates/) layer, and fall back to the last layer —
+	// the local one of a hand-built external-first slice whose layers carry
+	// no role.
+	primary := layers[len(layers)-1]
+	for _, layer := range layers {
+		if layer != nil && layer.Role == LayerRoleLocal {
+			primary = layer
+			break
+		}
+	}
+
 	merged := &Library{
-		Root:     primary.Root,
-		RootPath: primary.RootPath,
-		Meta:     primary.Meta,
 		Slides:   make(map[string]*LibraryTemplate),
 		Sections: make(map[string]*LibraryTemplate),
 		Themes:   make(map[string]*LibraryTheme),
-		HasMedia: primary.HasMedia,
-		Media:    primary.Media,
 		Layers:   layers,
+	}
+	if primary != nil {
+		merged.Root = primary.Root
+		merged.RootPath = primary.RootPath
+		merged.Meta = primary.Meta
+		merged.HasMedia = primary.HasMedia
+		merged.Media = primary.Media
 	}
 	for _, layer := range layers {
 		if layer == nil {
@@ -418,9 +440,6 @@ func mergeLibraryLayers(layers []*LibraryLayer) *Library {
 			if _, exists := merged.Themes[name]; !exists {
 				merged.Themes[name] = th
 			}
-		}
-		if layer.HasMedia {
-			merged.HasMedia = true
 		}
 	}
 	return merged
