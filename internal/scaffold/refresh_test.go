@@ -1048,14 +1048,15 @@ func refreshLoadDeck(t *testing.T, deckRoot, libraryRoot, configured string) {
 
 // refreshLoadLibrary loads a refreshed template library through the real loader
 // and fails the test on any error. A library is a template root itself, so it is
-// loaded as a deck would load it with a configured library: the "." path
-// resolves against the library root and runs the full templates-dir-validation
-// checks over it.
+// loaded as its own single root through template.LoadLibraryAt: the library
+// directory becomes its own fs.FS root, and a nested <dir>/templates/ inside it
+// is an ordinary top-level entry, never merged as a second local layer. The
+// full templates-dir-validation checks still run over that one root.
 func refreshLoadLibrary(t *testing.T, libraryRoot string) {
 	t.Helper()
 
-	if _, err := template.LoadDeckLibrary(libraryRoot, "."); err != nil {
-		t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = %v, want the refreshed library to load", libraryRoot, err)
+	if _, err := template.LoadLibraryAt(libraryRoot); err != nil {
+		t.Fatalf("template.LoadLibraryAt(%s) error = %v, want the refreshed library to load", libraryRoot, err)
 	}
 }
 
