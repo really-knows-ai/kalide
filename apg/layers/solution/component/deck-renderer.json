@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "deck-renderer",
-  "body": "Deck renderer: assembles the whole-deck reveal.js document — applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors and notes — over the per-slide documents. Owns internal/render/deck.go (RenderDeck plus renderDeckSlide, themeStylesheet, insertBeforeSectionClose); it is the top-level entry internal/server.Reloader.renderDefault calls. The render tier splits by role: solution.component.renderer executes templates and section instances bottom-up (internal/render/render.go); deck-renderer assembles the resulting deck document (internal/render/deck.go).",
+  "body": "Deck renderer: assembles the whole-deck reveal.js document — applies theme CSS, reveal.js config (navigationMode passed through from `navigation`), vertical stacks, anchors and notes — over the per-slide documents. A numbered slide with letter slides renders as a plain outer `<section>` wrapper (no id or class) whose first child is the horizontal slide's own `<section>` (keeping its anchor id) and whose subsequent children are its letter slides' `<section>`s in letter order; a numbered slide with no letter slides renders as a single `<section>`. Owns internal/render/deck.go (RenderDeck plus renderDeckSlide and themeStylesheet); it is the top-level entry internal/server.Reloader.renderDefault calls. The render tier splits by role: solution.component.renderer executes templates and section instances bottom-up (internal/render/render.go); deck-renderer assembles the resulting deck document (internal/render/deck.go).",
   "properties": {},
   "out": [
     {
@@ -23,8 +23,8 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.service.render-deck",
+      "kind": "details",
+      "source": "solution.note.cli-templates-and-deck-renderer",
       "properties": {}
     },
     {
@@ -38,8 +38,8 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.cli-templates-and-deck-renderer",
+      "kind": "realised-by",
+      "source": "domain.service.render-deck",
       "properties": {}
     }
   ]

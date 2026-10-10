@@ -2,19 +2,19 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "vertical-slides",
-  "body": "A letter suffix (e.g. `3a-…`) makes a reveal.js vertical slide under numbered slide 3, ordered by letter; one level only. A letter slide without its number slide = error; duplicate number+letter = error.",
+  "body": "A letter suffix (e.g. `3a-…`) makes a reveal.js vertical slide under numbered slide 3, ordered by letter; one level only. A numbered slide that has letter slides renders as a vertical stack whose first slide is that numbered slide's own content and whose following slides are its letter slides in letter order. A letter slide without its number slide = error; duplicate number+letter = error.\n\nAcceptance criteria: with slides `1-intro.md`, `1a-detail.md` and `1b-more.md`, the rendered stack's first child is the content of slide 1, and slides 1a and 1b follow beneath it in letter order; the numbered slide's own content is visible as the first slide of its stack, with no dummy empty slide.",
   "properties": {
     "feature": "deck-structure"
   },
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.slide-position",
+      "target": "domain.service.load-deck",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.load-deck",
+      "target": "domain.value.slide-position",
       "properties": {}
     }
   ],
