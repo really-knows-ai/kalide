@@ -75,6 +75,46 @@ func (e *RenderError) Error() string {
 // Unwrap returns the underlying cause.
 func (e *RenderError) Unwrap() error { return e.Err }
 
+// mediaURLPrefix is the served media URL base of a library's
+// single/primary layer: a `{{ media "<path>" }}` reference in a layout owned by
+// that layer resolves to mediaURLPrefix + "<path>" (joining with a single "/",
+// since it is a URL, not an OS path). It must match internal/server.MediaPath
+// exactly — the route that serves templates/media/** — but the two packages
+// cannot share the constant directly, since internal/server imports
+// internal/render; the value is mirrored here and documented on both sides
+// (internal/server/media.go carries the agreement note). The trailing slash is
+// kept so the literal mirrors server.MediaPath; MediaFunc trims it before
+// joining, so either form yields the same URL.
+const mediaURLPrefix = "/assets/templates/media/"
+
+// externalMediaURLPrefix is the served media URL base of a TWO-layer deck's
+// external `templates:` layer (LibraryLayerRole LayerRoleExternal): a
+// `{{ media "<path>" }}` reference in a layout owned by that layer resolves to
+// externalMediaURLPrefix + "<path>". The layer is identified by the
+// `external` path segment; there is no index and no query tag. The deck-root
+// local templates/ layer of the same two-layer deck keeps mediaURLPrefix, and a
+// single-layer library keeps it too, so each layer's media is addressed by its
+// own prefix rather than a merged namespace (layered-template-library,
+// library-layer-references). internal/server mounts the matching external route
+// in phase 4; until then these URLs are a transient branch-only mid-plan state
+// (see RenderSlide's doc).
+const externalMediaURLPrefix = "/assets/templates/external/media/"
+
+// mediaBaseForLayer is the renderer's layer→served-media-base hook
+// (renderer.layerMediaBase) for a layered deck: the external `templates:` layer
+// resolves under externalMediaURLPrefix, every other layer — the deck-root
+// local templates/ layer of a two-layer deck, and any layer reached without a
+// role — under the single/primary mediaURLPrefix. A nil layer, which
+// funcMapForLayer never passes, falls back to the primary base; a sole-layer
+// deck never installs the hook at all, so the existing `media` helper stays
+// bound and output remains byte-identical.
+func mediaBaseForLayer(layer *template.LibraryLayer) string {
+	if layer != nil && layer.Role == template.LayerRoleExternal {
+		return externalMediaURLPrefix
+	}
+	return mediaURLPrefix
+}
+
 // RenderSlide renders one parsed, validated slide as a single reveal.js
 // <section> fragment, ready to be placed directly inside the deck page's
 // `.reveal > .slides` container.
@@ -128,6 +168,36 @@ func (e *RenderError) Unwrap() error { return e.Err }
 // has the slide as its parent, not a section: callerFields stays nil while
 // callerCtx carries the slide's deck/slide context (section-template-context).
 //
+// For a layered deck, RenderSlide binds the slide layout to the slide
+// template's OWNING layer. reg.LayerOf(parsed.Template) returns the
+// LibraryLayer that contributed the slide template; when its Role is not
+// LayerRoleSole the deck is two-layered, and RenderSlide installs the
+// renderer's layer→served-media-base hook so each layer's layouts resolve
+// `media` against their own Media filesystem and their own served prefix. The
+// slide layout itself, like a called section, then executes through
+// executeLayeredLayout with its owning layer (replacing the plain shared
+// namespace execution); a role of LayerRoleSole — a single-layer library,
+// whether the deck-root templates/ or an external library — or no
+// owning-layer provenance leaves the hook nil and the slide layout executes
+// through the shared namespace exactly as before, so a single-layer library
+// renders byte-for-byte as earlier code did.
+//
+// The per-layer media URL contract is: the single/primary layer — the deck's
+// only layer when it has one, otherwise the deck-root local templates/ layer
+// of a two-layer deck — keeps today's exact URL
+// "/assets/templates/media/<path>"; the external `templates:` layer of a
+// two-layer deck emits the distinct per-layer prefix
+// "/assets/templates/external/media/<path>" (the layer is identified by the
+// `external` path segment; there is no index and no query tag). Because phase 4
+// (the server routes) depends on phase 2, the external prefixed URLs RenderSlide
+// emits before phase 4 are a transient branch-only mid-plan state: between
+// phase 2 and phase 4 the server serves only the unprefixed single/primary
+// (local) routes, so an external-layer URL renders but does not yet resolve,
+// and the phase-2 render tests exercise the dispatching hook against an
+// in-memory media filesystem and an explicit base string, never against live
+// server routes; phase-04 tasks 6–8 land the external routes before any
+// release.
+//
 // When parsed has a `# notes` section, RenderSlide appends an
 // `<aside class="notes">` inside the slide with its rendered body; the embedded
 // reveal.js notes plugin reads it. When it has none, no aside is emitted.
@@ -161,6 +231,15 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 	if funcMap == nil {
 		funcMap = template.LayoutFuncMap(nil, "")
 	}
+	// The slide template's owning layer identifies the deck's layering: its
+	// Role is set by LoadDeckLibrary (external/local for a two-layer deck, sole
+	// for a single-layer library). A two-layer deck needs the per-layer media
+	// URL scheme installed; a sole layer, or a registry carrying no
+	// provenance, leaves the hook nil so every layout keeps the primary `media`
+	// helper and output stays byte-identical (see the RenderSlide doc for the
+	// URL contract).
+	slideLayer := reg.LayerOf(slideTmpl.Name)
+
 	// The renderer is constructed before parseLayouts because parseLayouts
 	// installs its renderer-backed `section` helper on the shared namespace;
 	// root is assigned from the parse result below, before any layout executes.
@@ -172,6 +251,9 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 		// parent: callerFields stays nil (zero value) while callerCtx carries
 		// the slide's deck/slide context (section-template-context).
 		callerCtx: &sectionCtx{cfg: cfg, meta: meta, total: total},
+	}
+	if slideLayer != nil && slideLayer.Role != template.LayerRoleSole {
+		r.layerMediaBase = mediaBaseForLayer
 	}
 
 	// The shared layout namespace is parsed before any section data is built:
@@ -192,7 +274,7 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 	}
 
 	var buf bytes.Buffer
-	if err := root.ExecuteTemplate(&buf, layoutName(slideTmpl), data); err != nil {
+	if err := r.executeLayeredLayout(&buf, slideTmpl, slideLayer, data); err != nil {
 		return "", &RenderError{File: parsed.File, Err: fmt.Errorf("execute layout: %w", err)}
 	}
 
@@ -254,12 +336,14 @@ type renderer struct {
 
 	// layerMediaBase maps a *template.LibraryLayer to the served media URL base
 	// its `media` helper resolves under. It is the renderer's per-layer URL hook:
-	// while it is nil the renderer holds no per-layer URL scheme, so a called
-	// section keeps the existing (primary) `media` helper and a single-layer
-	// library renders byte-for-byte as before. Task-13 installs the scheme — the
-	// single/primary layer's base and the external layer's distinct prefix — and
-	// leaves nil as the "no per-layer base" default (section-helper,
-	// library-layer-references).
+	// RenderSlide installs it (mediaBaseForLayer) exactly when the slide
+	// template's owning layer has a two-layer role (LayerRoleExternal or
+	// LayerRoleLocal), so the single/primary layer keeps mediaURLPrefix and the
+	// external layer gets externalMediaURLPrefix. While it is nil — a sole-layer
+	// deck or a registry with no owning-layer provenance — the renderer holds no
+	// per-layer URL scheme, so a called section keeps the existing (primary)
+	// `media` helper and a single-layer library renders byte-for-byte as before
+	// (section-helper, library-layer-references).
 	layerMediaBase func(*template.LibraryLayer) string
 }
 
@@ -604,9 +688,10 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 // merged library's primary media (library-layer-references). Otherwise — a nil
 // layer, or a renderer whose layer→base hook is unset — the layout executes
 // through the shared namespace exactly as before, which keeps single-layer
-// output byte-identical and leaves the per-layer URL scheme to task-13. It is
-// the shared building block the render-time section helper uses and that the
-// declared child-section and slide paths (tasks 12/13) apply in the same way.
+// output byte-identical and leaves the per-layer URL scheme to a deck whose
+// layers carry no role. It is the shared building block the render-time
+// section helper, the declared child-section path (renderSection) and the
+// slide's own layout (RenderSlide), all apply in the same way.
 func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Template, layer *template.LibraryLayer, data map[string]any) error {
 	if layer == nil || r.layerMediaBase == nil {
 		return r.root.ExecuteTemplate(buf, layoutName(tmpl), data)
@@ -628,8 +713,9 @@ func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Templa
 // resolves in the layer that owns it (library-layer-references). A nil layer,
 // or an unset hook, leaves `media` as the existing primary helper, so a
 // single-layer library renders byte-for-byte as before. It is the func-map half
-// of executeLayeredLayout, exposed so the declared child-section and slide paths
-// (tasks 12/13) can bind their own layer the same way.
+// of executeLayeredLayout, shared by the declared child-section path
+// (renderSection), the render-time section helper and the slide's own layout
+// (RenderSlide), each binding its template's own owning layer the same way.
 func (r *renderer) funcMapForLayer(layer *template.LibraryLayer) htmltmpl.FuncMap {
 	base := r.funcMap
 	if base == nil {
