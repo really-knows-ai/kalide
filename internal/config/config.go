@@ -129,6 +129,27 @@ func Set(key, value string) error {
 	return writeValues(values)
 }
 
+// Unset removes key from kalide's per-user config file, preserving the other
+// stored recognised keys. key must be one of the RecognisedKeys; an
+// unrecognised key is refused and nothing is written. Unsetting a recognised
+// key that is not set is a no-op success: the config file is left untouched (in
+// particular it is not created on the first unset of an absent key).
+func Unset(key string) error {
+	if !RecognisedKeys[key] {
+		return fmt.Errorf("unrecognised config key %q", key)
+	}
+
+	values, err := Load()
+	if err != nil {
+		return err
+	}
+	if _, ok := values[key]; !ok {
+		return nil
+	}
+	delete(values, key)
+	return writeValues(values)
+}
+
 // normalisePath returns value as an absolute, cleaned path. A leading "~"
 // expands to the user's home directory; a relative path resolves against the
 // process's current working directory.
