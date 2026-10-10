@@ -1,0 +1,38 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "library-layer-references",
+  "body": "Reference direction across library layers: section calls resolve across the merged library, so a local template invokes an external section template with the `section` helper exactly as it invokes a local one (section-helper). The external layer is a self-contained library: every template, theme and media reference inside an external-layer template resolves within the external library alone, so the external library validates on its own as a standalone library before the merge (templates-dir-validation). A reference from an external template to a section, theme or media name that only the local layer carries is a templates error, while a reference from a local template to an external name resolves.\n\nAC:\n- a local slide template whose layout calls an external section template renders that external section;\n- a local theme or layout that references an external `media/` file resolves;\n- an external template that references a section or media file carried only by the local layer is a templates error naming the external template;\n- the external library validates as a standalone library with the local `templates/` directory absent.",
+  "properties": {
+    "feature": "layered-template-libraries"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-layer",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.layered-template-library",
+      "properties": {}
+    }
+  ]
+}

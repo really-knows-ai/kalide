@@ -2,14 +2,9 @@
   "layer": "solution",
   "type": "component",
   "name": "http-server",
-  "body": "HTTP server: binds 127.0.0.1 only; default port 8080 with automatic fallback through 8081..8099 (20 ports total) when busy, then a startup error advising `--port` if all are busy; an explicit `--port` that is busy is a startup error rather than a fallback; reports the actual bound port for the printed link. Serves deck page or error page, embedded assets, deck assets/, the resolved library's `media/` (the URLs returned by the layout `media` helper) and each resolved-library `themes/<name>/` directory, content type by file extension, serving only paths confined to those roots. Every stylesheet served from those routes — `theme.css`, every `.css` served from a theme directory, and every `.css` served from `media/` — is passed through the serve-time rewrite: a `media:` reference becomes the served media URL and a `theme:<name>/` reference becomes that theme's served file URL, so a reference in an imported stylesheet is rewritten exactly as one in `theme.css` (theme-media-references). Also serves the /templates gallery and the live-reload endpoint, which pushes each deck-rebuilt notification to connected browsers. The reload pipeline pins the resolved library root to the configured `templates:` value captured at startup; a mid-session change to that value serves the full-page restart-required error on the served deck page, and the process keeps running. The `/templates` gallery and the library media/theme routes are static surfaces pinned at `server.Listen` time and keep serving the startup library, remaining outside the restart-required scope (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
+  "body": "HTTP server: binds 127.0.0.1 only; default port 8080 with automatic fallback through 8081..8099 (20 ports total) when busy, then a startup error advising `--port` if all are busy; an explicit `--port` that is busy is a startup error rather than a fallback; reports the actual bound port for the printed link. Serves deck page or error page, embedded assets, deck assets/, each resolved layer's `media/` (the URLs returned by the layout `media` helper) and each resolved layer's `themes/<name>/` directory, content type by file extension, serving only paths confined to those roots. Every stylesheet served from those routes — `theme.css`, every `.css` served from a theme directory, and every `.css` served from `media/` — is passed through the serve-time rewrite: a `media:` reference becomes the served media URL and a `theme:<name>/` reference becomes that theme's served file URL, so a reference in an imported stylesheet is rewritten exactly as one in `theme.css` (theme-media-references). Also serves the /templates gallery and the live-reload endpoint, which pushes each deck-rebuilt notification to connected browsers. The reload pipeline pins the external layer's root to the configured `templates:` value captured at startup; a mid-session change to that value serves the full-page restart-required error on the served deck page, and the process keeps running. The `/templates` gallery and the library media/theme routes are static surfaces pinned at `server.Listen` time and keep serving the startup library, remaining outside the restart-required scope (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
   "properties": {},
   "out": [
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/server.mediaHandler",
-      "properties": {}
-    },
     {
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/server.Reloader",
@@ -27,17 +22,22 @@
     },
     {
       "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/server.mediaFileHandler",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/server.mediaHandler",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/server.rewriteThemeCSS",
       "properties": {}
     },
     {
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/server.themeFileHandler",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/server.mediaFileHandler",
       "properties": {}
     },
     {
@@ -64,6 +64,11 @@
       "kind": "implemented-by",
       "target": "internal/server/themecss.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/server.templatesRetargeted",
+      "properties": {}
     }
   ],
   "in": [
@@ -73,8 +78,13 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.service.serve-deck",
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.theme-library-reach",
       "properties": {}
     },
     {
@@ -89,17 +99,12 @@
     },
     {
       "kind": "realised-by",
+      "source": "domain.service.serve-deck",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
       "source": "domain.service.watch-deck",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.theme-library-reach",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
     }
   ]

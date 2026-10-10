@@ -2,9 +2,14 @@
   "layer": "solution",
   "type": "component",
   "name": "theme-registry",
-  "body": "Theme registry: project themes (one directory per theme under the resolved library's `themes/<name>/`) mapping to their `theme.css` and files, registered by the template-library-loader; lookup by deck config, omitted theme resolves to `default`; an unknown name is an error listing project themes. Themes come solely from the resolved library (global.constraint.no-embedded-template-assets). A theme's `theme.css` — and every stylesheet it imports — may carry reserved `media:` references into the resolved library's shared `media/` tree and reserved `theme:<name>/` references into another theme's files, plus references relative to its own location (validated by the loader, theme-media-references); the theme registry serves the raw theme files and the HTTP server rewrites those references to served URLs at serve time.",
+  "body": "Theme registry: project themes (one directory per theme under a library layer's `themes/<name>/`) mapping to their `theme.css` and files, registered by the template-library-loader; lookup by deck config, omitted theme resolves to `default`; an unknown name is an error listing project themes. Themes come solely from the resolved library layers (global.constraint.no-embedded-template-assets). A theme's `theme.css` — and every stylesheet it imports — may carry reserved `media:` references into its layer's shared `media/` tree and reserved `theme:<name>/` references into another theme's files, plus references relative to its own location (validated by the loader, theme-media-references); the theme registry serves the raw theme files and the HTTP server rewrites those references to served URLs at serve time.",
   "properties": {},
   "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/suggest.Closest",
+      "properties": {}
+    },
     {
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/theme.LoadDir",
@@ -19,11 +24,6 @@
       "kind": "implemented-by",
       "target": "internal/theme/theme.go",
       "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/suggest.Closest",
-      "properties": {}
     }
   ],
   "in": [
@@ -33,8 +33,8 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.entity.theme",
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
     },
     {
@@ -43,8 +43,8 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
+      "kind": "realised-by",
+      "source": "domain.entity.theme",
       "properties": {}
     }
   ]

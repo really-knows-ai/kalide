@@ -2,14 +2,59 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "project-templates",
-  "body": "Project templates: every kalide project defines its own templates and assets (slide/section templates, themes, fonts, logos and any other media such as video) as a template library. By default the library is a `templates/` directory at the project root, alongside `slides/`, `assets/` and `kalide.yaml`; a deck may instead point at an external library directory via `kalide.yaml` (see external-template-library). Exactly one library per deck. Every project supplies its own library; the binary ships none and provides no fallback (global.constraint.no-embedded-template-assets). Parent of the project-templates feature.",
+  "body": "Project templates: every kalide project defines its own templates and assets (slide/section templates, themes, fonts, logos and any other media such as video) as a template library. By default the library is a `templates/` directory at the project root, alongside `slides/`, `assets/` and `kalide.yaml`; a deck may also draw on an external library directory via `kalide.yaml`, so its library is one set drawn from up to two layers — the external library and the deck-root `templates/` directory (see external-template-library, layered-template-library). Every project supplies its own library; the binary ships none and provides no fallback (global.constraint.no-embedded-template-assets). Parent of the project-templates feature.",
   "properties": {
     "feature": "project-templates"
   },
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.templates-dir-layout",
+      "target": "requirements.requirement.agent-authoring",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.deck-library-upgrade",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.demo-project",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.external-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.init-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.library-agent-guide",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.library-guide-layout",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-context",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-language",
       "properties": {}
     },
     {
@@ -20,6 +65,16 @@
     {
       "kind": "contains",
       "target": "requirements.requirement.template-media",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.template-retarget-requires-restart",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.templates-dir-layout",
       "properties": {}
     },
     {
@@ -38,80 +93,30 @@
       "properties": {}
     },
     {
+      "kind": "contains",
+      "target": "requirements.requirement.theme-media-references",
+      "properties": {}
+    },
+    {
       "kind": "drives",
       "target": "domain.entity.template-library",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.template-language",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.demo-project",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.template-context",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.external-template-library",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.init-library",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.template-retarget-requires-restart",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.agent-authoring",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.library-agent-guide",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.library-guide-layout",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.agent-guide-drift-check",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.theme-media-references",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.deck-library-upgrade",
+      "target": "requirements.requirement.layered-template-library",
       "properties": {}
     }
   ],
   "in": [
     {
       "kind": "contains",
-      "source": "requirements.user.template-author",
+      "source": "requirements.stakeholder.brand-owner",
       "properties": {}
     },
     {
       "kind": "contains",
-      "source": "requirements.stakeholder.brand-owner",
+      "source": "requirements.user.template-author",
       "properties": {}
     }
   ]

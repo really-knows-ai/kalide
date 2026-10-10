@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "cli-templates-list",
-  "body": "`kalide templates` lists every template in the resolved library (the configured `templates:` path, else the local `templates/`; see external-template-library) with its name, kind (slide|section — derived from whether it lives under the library's `slides/` or `sections/`) and one-line description. Run outside a project (no resolvable library) it errors per templates-dir-required.",
+  "body": "`kalide templates` lists every template in the deck's merged library (the external library at the configured `templates:` path when set, and the deck-root `templates/` directory; see layered-template-library) with its name, kind (slide|section — derived from whether it lives under the library's `slides/` or `sections/`) and one-line description. Run outside a project (no resolvable library) it errors per templates-dir-required.",
   "properties": {
     "feature": "cli"
   },
@@ -26,6 +26,11 @@
   "in": [
     {
       "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "source": "requirements.user.deck-author",
       "properties": {}
     },
@@ -37,11 +42,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "source": "requirements.stakeholder.deck-creators",
       "properties": {}
     }
   ]

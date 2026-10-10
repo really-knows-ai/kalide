@@ -1,0 +1,9 @@
+{
+  "layer": "requirements",
+  "type": "constraint",
+  "name": "external-library-self-contained",
+  "body": "An external library is self-contained: every template, theme and media reference inside it resolves within that external library alone, so it loads and validates with no reference to the deck's local `templates/` directory. A reference from an external-layer template to a section, theme or media name carried only by the local layer is a templates error.",
+  "properties": {},
+  "out": [],
+  "in": []
+}

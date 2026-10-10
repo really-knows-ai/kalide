@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "templating",
-  "body": "Templating: the deck's template library (the resolved library root — the configured `templates:` path, else the local `templates/` dir) — its templates, their schemas (fields, types, formats, body rules, sections), themes and media.",
+  "body": "Templating: the deck's template library — one merged set drawn from the resolved library layers (the external library at the configured `templates:` path when set, and the deck-root `templates/` directory when it exists; layered-template-library) — its templates, their schemas (fields, types, formats, body rules, sections), themes and media.",
   "properties": {
     "attribute": "core",
     "root": "template"
@@ -11,6 +11,36 @@
     {
       "kind": "contains",
       "target": "domain.entity.template",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.entity.template-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.entity.theme",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.scaffold-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.body-rule",
       "properties": {}
     },
     {
@@ -30,27 +60,12 @@
     },
     {
       "kind": "contains",
-      "target": "domain.value.body-rule",
+      "target": "domain.value.item-context",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "domain.entity.theme",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.service.template-registry",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
-      "target": "solution.component.template-registry",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.entity.template-library",
+      "target": "domain.value.library-agent-guide",
       "properties": {}
     },
     {
@@ -65,27 +80,7 @@
     },
     {
       "kind": "contains",
-      "target": "domain.service.load-template-library",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "domain.value.slide-metadata",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
-      "target": "solution.component.renderer",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.service.scaffold-template-library",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.value.library-agent-guide",
       "properties": {}
     },
     {
@@ -94,20 +89,25 @@
       "properties": {}
     },
     {
+      "kind": "realised-by",
+      "target": "solution.component.renderer",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-registry",
+      "properties": {}
+    },
+    {
       "kind": "contains",
-      "target": "domain.value.item-context",
+      "target": "domain.value.library-layer",
       "properties": {}
     }
   ],
   "in": [
     {
       "kind": "drives",
-      "source": "requirements.requirement.single-binary",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.template-context",
+      "source": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
     },
     {
@@ -117,7 +117,12 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.agent-guide-drift-check",
+      "source": "requirements.requirement.single-binary",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-context",
       "properties": {}
     }
   ]

@@ -2,14 +2,14 @@
   "layer": "domain",
   "type": "entity",
   "name": "template-library",
-  "body": "Template library: the deck's template library directory — the path configured by `templates:` in `kalide.yaml`, else a local `templates/` (see external-template-library) — as one self-contained, relocatable unit, identified by its library manifest; contains templates, themes and media. Exactly one per deck; if neither root resolves it is an error. The layout is unchanged wherever the root is. The resolved root is pinned for the life of a `kalide start` session (captured at startup): a mid-session change to the configured `templates:` value keeps the pinned root and surfaces the full-page restart-required error (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
+  "body": "Template library: the deck's template library — one set drawn from up to two layers (library-layer): the external library at the `templates:` path in `kalide.yaml` when the key is present, and the deck-root `templates/` directory when it exists (see layered-template-library). Each layer is a self-contained, relocatable unit identified by its library manifest; the merged set holds the layers' templates, themes and media with no name carried by both (library-layer-uniqueness). The deck-root layer is an ordinary library; the external layer is self-contained and validates on its own (library-layer-references). A deck with no layer is an error (templates-dir-required), and the layers' roots are pinned for the life of a `kalide start` session: a mid-session change to the configured `templates:` value keeps the pinned external root and surfaces the full-page restart-required error (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
   "properties": {
     "kind": "entity"
   },
   "out": [
     {
       "kind": "realised-by",
-      "target": "solution.component.template-library-loader",
+      "target": "solution.component.demo-fixture",
       "properties": {}
     },
     {
@@ -19,29 +19,19 @@
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.demo-fixture",
+      "target": "solution.component.template-library-loader",
       "properties": {}
     }
   ],
   "in": [
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.project-templates",
-      "properties": {}
-    },
     {
       "kind": "contains",
       "source": "domain.group.templating",
       "properties": {}
     },
     {
-      "kind": "drives",
-      "source": "requirements.requirement.template-media",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.templates-dir-layout",
+      "kind": "details",
+      "source": "requirements.note.theme-media-references-feedback-3",
       "properties": {}
     },
     {
@@ -61,11 +51,6 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.template-retarget-requires-restart",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
     },
@@ -76,12 +61,32 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.project-templates",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-media",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.template-retarget-requires-restart",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.templates-dir-layout",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.theme-media-references",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.theme-media-references-feedback-3",
+      "kind": "drives",
+      "source": "requirements.requirement.layered-template-library",
       "properties": {}
     }
   ]

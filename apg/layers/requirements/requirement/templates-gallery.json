@@ -2,19 +2,19 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "templates-gallery",
-  "body": "The server serves a `/templates` gallery page showing every template in the resolved library (the configured `templates:` path, else the local `templates/`; see external-template-library) rendered from its example slide (with the project theme), with its description and field/section/body documentation.",
+  "body": "The server serves a `/templates` gallery page showing every template in the deck's merged library (the external library at the configured `templates:` path when set, and the deck-root `templates/` directory; see layered-template-library) rendered from its example slide (with the project theme), with its description and field/section/body documentation.",
   "properties": {
     "feature": "presenting"
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.service.serve-deck",
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-definition",
       "properties": {}
     },
     {
-      "kind": "depends-on",
-      "target": "requirements.requirement.template-definition",
+      "kind": "drives",
+      "target": "domain.service.serve-deck",
       "properties": {}
     }
   ],

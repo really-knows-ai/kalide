@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "library-layer-uniqueness",
+  "body": "No-override uniqueness across the merged library: the external and local layers merge with no precedence, so a name carried by both layers is a validation error rather than an override. The rule holds for each name kind — slide template names, section template names, theme names, and `media/` paths. A duplicate is a templates error naming the duplicated name and both paths (the file or directory that carries it in each layer), reported before any deck is served. Within one layer the same uniqueness holds across `slides/` and `sections/` (templates-dir-layout).\n\nAC:\n- an external slide named `content` and a local slide named `content` is a templates error naming `content` and both paths;\n- an external and a local section named `columns` is a templates error naming `columns` and both paths;\n- an external and a local theme named `default` is a templates error naming `default` and both paths;\n- an external and a local `media/` path naming the same file is a templates error naming the path and both roots;\n- two layers with disjoint slide, section, theme and media names merge and load cleanly.",
+  "properties": {
+    "feature": "layered-template-libraries"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-layer",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.layered-template-library",
+      "properties": {}
+    }
+  ]
+}

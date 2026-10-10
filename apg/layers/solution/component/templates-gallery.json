@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "templates-gallery",
-  "body": "Templates gallery page (/templates): renders each template's example and documentation, and documents a template's declared child sections — and, for a section template, the child sections it can hold — each with what it accepts (cli-templates-show). A tree view of a template's nesting (its composed child sections, recursively) is a nice-to-have, not a required behaviour.",
+  "body": "Templates gallery page (/templates): renders each template of the deck's merged library (the external library at the configured `templates:` path when set, and the deck-root `templates/` directory; see layered-template-library) from its example and documentation, and documents a template's declared child sections — and, for a section template, the child sections it can hold — each with what it accepts (cli-templates-show). A tree view of a template's nesting (its composed child sections, recursively) is a nice-to-have, not a required behaviour.",
   "properties": {},
   "out": [
     {
@@ -28,11 +28,6 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.service.serve-deck",
-      "properties": {}
-    },
-    {
       "kind": "details",
       "source": "solution.note.nested-sections-solution",
       "properties": {}
@@ -40,6 +35,11 @@
     {
       "kind": "details",
       "source": "solution.note.spine-backfill-reconcile",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.serve-deck",
       "properties": {}
     }
   ]

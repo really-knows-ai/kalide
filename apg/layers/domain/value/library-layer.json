@@ -1,0 +1,35 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "library-layer",
+  "body": "Library layer: one root that contributes templates, themes and media to a deck's merged template library. A deck has up to two layers — the external library (the directory named by the `templates:` key in `kalide.yaml`, when the key is present) and the deck-root local `templates/` directory (present whenever that directory exists) — and at least one. The layers have equal standing: their templates, sections, themes and media merge into one library, no layer overrides another, and a name carried by both is a validation error (library-layer-uniqueness). A layer's files are read from that layer's own root, an error names the root it comes from, and the external layer is self-contained (library-layer-references).",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.layered-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.library-layer-uniqueness",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.external-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.library-layer-references",
+      "properties": {}
+    }
+  ]
+}
