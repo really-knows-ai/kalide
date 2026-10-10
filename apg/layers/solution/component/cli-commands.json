@@ -7,6 +7,11 @@
   "out": [
     {
       "kind": "implemented-by",
+      "target": "cmd/kalide/main.go",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/cli.Run",
       "properties": {}
     },
@@ -22,7 +27,7 @@
     },
     {
       "kind": "implemented-by",
-      "target": "cmd/kalide/main.go",
+      "target": "go.github.com/really-knows-ai/kalide/internal/cli.runStart",
       "properties": {}
     },
     {
@@ -47,7 +52,7 @@
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/cli.runStart",
+      "target": "go.github.com/really-knows-ai/kalide/internal/cli.parseInitArgs",
       "properties": {}
     }
   ],
@@ -58,13 +63,13 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.service.scaffold-deck",
+      "kind": "details",
+      "source": "solution.note.nested-sections-coverage-reconcile",
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "source": "domain.service.serve-deck",
+      "kind": "details",
+      "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
     },
     {
@@ -74,17 +79,17 @@
     },
     {
       "kind": "realised-by",
+      "source": "domain.service.scaffold-deck",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
       "source": "domain.service.scaffold-template-library",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
+      "kind": "realised-by",
+      "source": "domain.service.serve-deck",
       "properties": {}
     }
   ]
