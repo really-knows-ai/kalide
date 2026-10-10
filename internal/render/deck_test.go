@@ -178,6 +178,76 @@ func TestRenderDeck(t *testing.T) {
 	})
 }
 
+// TestWrapVerticalStack exercises wrapVerticalStack directly: a numbered
+// slide's rendered <section> plus its letter slides' sections must come back as
+// one plain wrapper <section> (no id or class of its own) whose first child is
+// the numbered slide's own section — keeping its anchor id — followed by the
+// letter sections in letter order and closed by </section>. Empty verticals
+// pass the horizontal fragment through unchanged, and no dummy empty slide is
+// emitted.
+func TestWrapVerticalStack(t *testing.T) {
+	const (
+		horizontal = `<section id="first" class="title"><h1>First</h1></section>`
+		alpha      = `<section id="alpha"><h1>Alpha</h1></section>`
+		beta       = `<section id="beta"><h1>Beta</h1></section>`
+		verticals  = alpha + beta
+	)
+
+	t.Run("one plain wrapper around the group", func(t *testing.T) {
+		got := wrapVerticalStack(horizontal, verticals)
+		want := "<section>" + horizontal + verticals + "</section>"
+		if got != want {
+			t.Fatalf("wrapVerticalStack(horizontal, verticals) =\n%s\nwant:\n%s", got, want)
+		}
+		if !strings.HasPrefix(got, "<section>") {
+			t.Errorf("wrapper opening tag is not a bare <section> (id/class leaked):\n%s", got)
+		}
+		if !strings.HasSuffix(got, "</section>") {
+			t.Errorf("wrapper is not closed by </section> as the last element:\n%s", got)
+		}
+	})
+
+	t.Run("first child is the numbered slide keeping its id", func(t *testing.T) {
+		got := wrapVerticalStack(horizontal, verticals)
+		inner := strings.TrimPrefix(got, "<section>")
+		if !strings.HasPrefix(inner, horizontal) {
+			t.Errorf("wrapper's first child is not the numbered slide's section:\n%s", got)
+		}
+		if !strings.Contains(inner, `id="first"`) {
+			t.Errorf("numbered slide lost its anchor id:\n%s", got)
+		}
+	})
+
+	t.Run("letter sections follow in letter order", func(t *testing.T) {
+		got := wrapVerticalStack(horizontal, verticals)
+		first := deckHTMLIndex(t, got, `id="first"`)
+		a := deckHTMLIndex(t, got, `id="alpha"`)
+		b := deckHTMLIndex(t, got, `id="beta"`)
+		if !(first < a && a < b) {
+			t.Errorf("sections are out of order: first=%d alpha=%d beta=%d", first, a, b)
+		}
+	})
+
+	t.Run("empty verticals passthrough", func(t *testing.T) {
+		if got := wrapVerticalStack(horizontal, ""); got != horizontal {
+			t.Errorf("wrapVerticalStack with empty verticals = %q, want horizontal unchanged %q", got, horizontal)
+		}
+	})
+
+	t.Run("no dummy empty slide", func(t *testing.T) {
+		got := wrapVerticalStack(horizontal, verticals)
+		if strings.Contains(got, "<section></section>") {
+			t.Errorf("output contains a dummy empty slide:\n%s", got)
+		}
+		if n := strings.Count(got, "<section"); n != 4 {
+			t.Errorf("output has %d <section> elements, want 4 (wrapper + first + alpha + beta):\n%s", n, got)
+		}
+		if n := strings.Count(got, "</section>"); n != 4 {
+			t.Errorf("output has %d </section> closers, want 4:\n%s", n, got)
+		}
+	})
+}
+
 // fixtureThemes loads the phase-3 fixture library's templates/themes
 // directory (theme.LoadDir), which registers the "plain" theme.
 func fixtureThemes(t *testing.T) *theme.Registry {
