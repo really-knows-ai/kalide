@@ -26,8 +26,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
+
+// defaultTemplateDirKey is the recognised key whose value is a directory path.
+// Set normalises it to an absolute path so the stored value does not depend on
+// the working directory of any later command.
+const defaultTemplateDirKey = "default-template-dir"
 
 // RecognisedKeys is the set of user-config keys kalide understands. It is the
 // single source of truth for key validation: a key outside this set is refused
@@ -35,7 +41,7 @@ import (
 // "default-template-dir" — the directory of the template library `kalide init`
 // uses when no path argument is given.
 var RecognisedKeys = map[string]bool{
-	"default-template-dir": true,
+	defaultTemplateDirKey: true,
 }
 
 // configFile returns the path of kalide's per-user config file:
@@ -71,6 +77,92 @@ func Load() (map[string]string, error) {
 	defer f.Close()
 
 	return parse(f, path)
+}
+
+// Set writes value under key in kalide's per-user config file, creating the
+// file and its parent directory on the first write. key must be one of the
+// RecognisedKeys; an unrecognised key is refused and nothing is written. Other
+// stored recognised keys are preserved.
+//
+// The value of the path key "default-template-dir" is normalised to an absolute
+// path: a leading "~" expands to the user's home directory and a relative path
+// resolves against the process's current working directory. The stored value is
+// therefore independent of the working directory of any later command.
+func Set(key, value string) error {
+	if !RecognisedKeys[key] {
+		return fmt.Errorf("unrecognised config key %q", key)
+	}
+	if key == defaultTemplateDirKey {
+		abs, err := normalisePath(value)
+		if err != nil {
+			return err
+		}
+		value = abs
+	}
+
+	values, err := Load()
+	if err != nil {
+		return err
+	}
+	values[key] = value
+	return writeValues(values)
+}
+
+// normalisePath returns value as an absolute, cleaned path. A leading "~"
+// expands to the user's home directory; a relative path resolves against the
+// process's current working directory.
+func normalisePath(value string) (string, error) {
+	if value == "~" || strings.HasPrefix(value, "~/") || strings.HasPrefix(value, `~\`) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("normalise path %q: expand home directory: %w", value, err)
+		}
+		if value == "~" {
+			value = home
+		} else {
+			value = filepath.Join(home, value[2:])
+		}
+	}
+	abs, err := filepath.Abs(value)
+	if err != nil {
+		return "", fmt.Errorf("normalise path %q: %w", value, err)
+	}
+	return abs, nil
+}
+
+// writeValues writes the recognised keys of values to the config file as
+// deterministic (sorted) key=value lines, creating the file's parent directory
+// as needed.
+func writeValues(values map[string]string) error {
+	path, err := configFile()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create config directory %s: %w", dir, err)
+	}
+
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		if RecognisedKeys[key] {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	for _, key := range keys {
+		b.WriteString(key)
+		b.WriteByte('=')
+		b.WriteString(values[key])
+		b.WriteByte('\n')
+	}
+
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write config file %s: %w", path, err)
+	}
+	return nil
 }
 
 // parse reads key=value text into a map over the recognised keys, skipping
