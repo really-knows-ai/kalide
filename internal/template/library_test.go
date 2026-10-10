@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	htmltemplate "html/template"
+	"io/fs"
+	"path"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -424,5 +426,486 @@ func TestLayoutFuncMapHTMLVsAutoEscaped(t *testing.T) {
 	}
 	if !strings.Contains(got, "&lt;script&gt;") {
 		t.Errorf("rendered = %q, want the plain string Title HTML-escaped", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// plan.phase-01.task-10: unit tests for the multi-layer merge
+// (mergeLibraryLayers, loadlibrary.go) and cross-layer name uniqueness
+// (checkLayerUniqueness, libraryunique.go).
+//
+// Both functions operate on already-loaded *LibraryLayer values — loadLibrary's
+// output, not a filesystem — so these tests hand-build layers whose RootPath,
+// loaded maps and media sub-filesystem have exactly the shape loadLibrary
+// fills, reproducing the loaded manifest/theme-relative paths so each error
+// reads the way a real load produces it.
+
+// testLayer returns a hand-built LibraryLayer whose loaded maps are
+// initialized and whose Root is an empty in-memory fs.FS, mirroring the shape
+// loadLibrary returns. root becomes the layer's RootPath: the path the
+// uniqueness errors are qualified with (LibraryLayer.RootPath).
+func testLayer(root string) *LibraryLayer {
+	return &LibraryLayer{
+		Root:     fstest.MapFS{},
+		RootPath: root,
+		Slides:   map[string]*LibraryTemplate{},
+		Sections: map[string]*LibraryTemplate{},
+		Themes:   map[string]*LibraryTheme{},
+	}
+}
+
+// addTestSlide adds a hand-built slide template named name to layer, with the
+// Dir and ManifestPath loadLibrary's loadLibraryTemplate fills in
+// (<root>/slides/<name>/template.yaml).
+func addTestSlide(layer *LibraryLayer, name string) *LibraryTemplate {
+	lt := &LibraryTemplate{
+		Name:         name,
+		Kind:         KindSlide,
+		Dir:          path.Join(SlidesDir, name),
+		ManifestPath: path.Join(layer.RootPath, SlidesDir, name, ManifestFile),
+	}
+	layer.Slides[name] = lt
+	return lt
+}
+
+// addTestSection adds a hand-built section template named name to layer, with
+// the Dir and ManifestPath loadLibrary fills in
+// (<root>/sections/<name>/template.yaml).
+func addTestSection(layer *LibraryLayer, name string) *LibraryTemplate {
+	lt := &LibraryTemplate{
+		Name:         name,
+		Kind:         KindSection,
+		Dir:          path.Join(SectionsDir, name),
+		ManifestPath: path.Join(layer.RootPath, SectionsDir, name, ManifestFile),
+	}
+	layer.Sections[name] = lt
+	return lt
+}
+
+// addTestTheme adds a hand-built theme named name to layer, with the Dir
+// loadLibrary's loadLibraryTheme fills in (<name> under themes/).
+func addTestTheme(layer *LibraryLayer, name string) *LibraryTheme {
+	th := &LibraryTheme{
+		Name: name,
+		Dir:  path.Join(ThemesDir, name),
+	}
+	layer.Themes[name] = th
+	return th
+}
+
+// setTestMedia gives layer a media/ sub-filesystem holding one file per
+// relative path, keyed exactly as loadLibrary's fs.Sub(sub, MediaDir) would: a
+// media path is a direct fs.FS path within it.
+func setTestMedia(layer *LibraryLayer, rels ...string) {
+	fsys := fstest.MapFS{}
+	for _, rel := range rels {
+		fsys[rel] = &fstest.MapFile{Data: []byte(rel)}
+	}
+	layer.HasMedia = true
+	layer.Media = fsys
+}
+
+// assertLayerDuplicateError asserts err is a *LibraryError that names the
+// duplicated name and both carrying paths — Path is the first layer's path and
+// the message names both — under the given namespace word ("template",
+// "theme" or "media path").
+func assertLayerDuplicateError(t *testing.T, err error, namespace, name, firstPath, secondPath string) {
+	t.Helper()
+	libErr := asLibraryError(t, err)
+	if libErr.Path != firstPath {
+		t.Errorf("Path = %q, want the first layer's path %q", libErr.Path, firstPath)
+	}
+	if libErr.Line != 0 {
+		t.Errorf("Line = %d, want 0 (a whole-path uniqueness error)", libErr.Line)
+	}
+	if !strings.Contains(libErr.Message, namespace) {
+		t.Errorf("Message = %q, want it to name the %s namespace", libErr.Message, namespace)
+	}
+	if !strings.Contains(libErr.Message, name) {
+		t.Errorf("Message = %q, want it to name %q", libErr.Message, name)
+	}
+	if !strings.Contains(libErr.Message, firstPath) {
+		t.Errorf("Message = %q, want it to name the first path %q", libErr.Message, firstPath)
+	}
+	if !strings.Contains(libErr.Message, secondPath) {
+		t.Errorf("Message = %q, want it to name the second path %q", libErr.Message, secondPath)
+	}
+}
+
+// TestMergeLibraryLayersZeroLayers proves mergeLibraryLayers of no layers
+// yields an empty, media-less Library with initialized (non-nil) maps, so a
+// caller can read the merged value without a nil check.
+func TestMergeLibraryLayersZeroLayers(t *testing.T) {
+	for _, layers := range [][]*LibraryLayer{nil, {}} {
+		merged := mergeLibraryLayers(layers)
+		if merged == nil {
+			t.Fatal("mergeLibraryLayers() = nil, want a non-nil empty Library")
+		}
+		if merged.Slides == nil || merged.Sections == nil || merged.Themes == nil {
+			t.Errorf("merged maps = (slides %v, sections %v, themes %v), want all non-nil",
+				merged.Slides, merged.Sections, merged.Themes)
+		}
+		if len(merged.Slides) != 0 || len(merged.Sections) != 0 || len(merged.Themes) != 0 {
+			t.Errorf("merged maps = %d/%d/%d entries, want all empty",
+				len(merged.Slides), len(merged.Sections), len(merged.Themes))
+		}
+		if merged.Layers != nil {
+			t.Errorf("Layers = %v, want nil", merged.Layers)
+		}
+		if merged.HasMedia {
+			t.Error("HasMedia = true, want false")
+		}
+		if merged.RootPath != "" {
+			t.Errorf("RootPath = %q, want empty", merged.RootPath)
+		}
+	}
+}
+
+// TestMergeLibraryLayersSingleLayer proves a one-layer merge is exactly the
+// Library libraryFromLayer builds: the layer's own content, metadata, root and
+// media, with Layers carrying that one layer.
+func TestMergeLibraryLayersSingleLayer(t *testing.T) {
+	layer := testLayer("/only")
+	layer.Meta = LibraryMeta{Name: "only", Format: 1}
+	slide := addTestSlide(layer, "hello")
+	section := addTestSection(layer, "item")
+	theme := addTestTheme(layer, "plain")
+	setTestMedia(layer, "logo.svg")
+
+	merged := mergeLibraryLayers([]*LibraryLayer{layer})
+	if merged == nil {
+		t.Fatal("mergeLibraryLayers() = nil, want a Library")
+	}
+	if len(merged.Layers) != 1 || merged.Layers[0] != layer {
+		t.Fatalf("Layers = %v, want exactly the input layer", merged.Layers)
+	}
+	if merged.RootPath != "/only" {
+		t.Errorf("RootPath = %q, want %q", merged.RootPath, "/only")
+	}
+	if merged.Meta != layer.Meta {
+		t.Errorf("Meta = %+v, want the layer's %+v", merged.Meta, layer.Meta)
+	}
+	if merged.Slides["hello"] != slide {
+		t.Error("Slides[hello] is not the layer's own template")
+	}
+	if merged.Sections["item"] != section {
+		t.Error("Sections[item] is not the layer's own template")
+	}
+	if merged.Themes["plain"] != theme {
+		t.Error("Themes[plain] is not the layer's own theme")
+	}
+	if !merged.HasMedia {
+		t.Error("HasMedia = false, want true")
+	}
+	if _, err := fs.Stat(merged.Media, "logo.svg"); err != nil {
+		t.Errorf("merged.Media does not resolve the layer's logo.svg: %v", err)
+	}
+}
+
+// TestMergeLibraryLayersDisjointUnion proves two disjoint layers merge into
+// one Library carrying every entry of both, with Layers preserving the ordered
+// inputs.
+func TestMergeLibraryLayersDisjointUnion(t *testing.T) {
+	external := testLayer("/ext")
+	addTestSlide(external, "ext-slide")
+	addTestSection(external, "ext-section")
+	addTestTheme(external, "ext-theme")
+
+	local := testLayer("/local")
+	addTestSlide(local, "local-slide")
+	addTestSection(local, "local-section")
+	addTestTheme(local, "local-theme")
+
+	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+
+	if len(merged.Layers) != 2 || merged.Layers[0] != external || merged.Layers[1] != local {
+		t.Fatalf("Layers = %v, want [external local] in resolution order", merged.Layers)
+	}
+	for _, name := range []string{"ext-slide", "local-slide"} {
+		if merged.Slides[name] == nil {
+			t.Errorf("Slides[%q] missing from the merged union", name)
+		}
+	}
+	for _, name := range []string{"ext-section", "local-section"} {
+		if merged.Sections[name] == nil {
+			t.Errorf("Sections[%q] missing from the merged union", name)
+		}
+	}
+	for _, name := range []string{"ext-theme", "local-theme"} {
+		if merged.Themes[name] == nil {
+			t.Errorf("Themes[%q] missing from the merged union", name)
+		}
+	}
+}
+
+// TestMergeLibraryLayersEqualStanding proves the layers merge with equal
+// standing: a layer's entries survive in the merged maps as that layer's own
+// objects regardless of which layer contributes them, so neither layer
+// overrides or displaces the other.
+func TestMergeLibraryLayersEqualStanding(t *testing.T) {
+	external := testLayer("/ext")
+	extSlide := addTestSlide(external, "ext-slide")
+
+	local := testLayer("/local")
+	localSlide := addTestSlide(local, "local-slide")
+
+	// Neither name is carried by the other layer (duplicates are rejected by
+	// checkLayerUniqueness before merge), so both must survive.
+	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+	if merged.Slides["ext-slide"] != extSlide {
+		t.Error("Slides[ext-slide] is not the external layer's own template")
+	}
+	if merged.Slides["local-slide"] != localSlide {
+		t.Error("Slides[local-slide] is not the local layer's own template")
+	}
+}
+
+// TestMergeLibraryLayersPrimaryFromFirstLayer proves the merged Meta, Root and
+// RootPath come from the primary layer — the first in resolution order — while
+// every layer's own metadata and root stay verbatim in Layers.
+func TestMergeLibraryLayersPrimaryFromFirstLayer(t *testing.T) {
+	external := testLayer("/ext")
+	external.Root = fstest.MapFS{"primary.root": &fstest.MapFile{Data: []byte("primary")}}
+	external.Meta = LibraryMeta{Name: "external", Description: "the external layer", Format: 1}
+
+	local := testLayer("/local")
+	local.Root = fstest.MapFS{"secondary.root": &fstest.MapFile{Data: []byte("secondary")}}
+	local.Meta = LibraryMeta{Name: "local", Description: "the local layer", Format: 1}
+
+	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+
+	if merged.Meta != external.Meta {
+		t.Errorf("Meta = %+v, want the first layer's %+v", merged.Meta, external.Meta)
+	}
+	if merged.RootPath != "/ext" {
+		t.Errorf("RootPath = %q, want the first layer's %q", merged.RootPath, "/ext")
+	}
+	if _, err := fs.Stat(merged.Root, "primary.root"); err != nil {
+		t.Errorf("merged.Root does not resolve the first layer's file: %v", err)
+	}
+	if _, err := fs.Stat(merged.Root, "secondary.root"); err == nil {
+		t.Error("merged.Root resolves the second layer's file, want the first layer's root only")
+	}
+	if merged.Layers[0].Meta != external.Meta || merged.Layers[1].Meta != local.Meta {
+		t.Errorf("Layers metas = (%+v, %+v), want (%+v, %+v) verbatim",
+			merged.Layers[0].Meta, merged.Layers[1].Meta, external.Meta, local.Meta)
+	}
+	if merged.Layers[1].RootPath != "/local" {
+		t.Errorf("Layers[1].RootPath = %q, want the local layer's %q", merged.Layers[1].RootPath, "/local")
+	}
+}
+
+// TestMergeLibraryLayersRetainsPerLayerMedia proves each layer's own media
+// sub-filesystem stays addressable through Layers, and the merged Media is the
+// primary layer's (there is no merged media namespace).
+func TestMergeLibraryLayersRetainsPerLayerMedia(t *testing.T) {
+	external := testLayer("/ext")
+	setTestMedia(external, "ext.png", "shared/logo.svg")
+	local := testLayer("/local")
+	setTestMedia(local, "local.png")
+
+	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+
+	if !merged.HasMedia {
+		t.Error("HasMedia = false, want true (both layers carry media)")
+	}
+	if _, err := fs.Stat(merged.Layers[0].Media, "ext.png"); err != nil {
+		t.Errorf("Layers[0].Media (external) does not resolve ext.png: %v", err)
+	}
+	if _, err := fs.Stat(merged.Layers[1].Media, "local.png"); err != nil {
+		t.Errorf("Layers[1].Media (local) does not resolve local.png: %v", err)
+	}
+	if _, err := fs.Stat(merged.Media, "ext.png"); err != nil {
+		t.Errorf("merged.Media (the primary layer's) does not resolve ext.png: %v", err)
+	}
+	if _, err := fs.Stat(merged.Media, "local.png"); err == nil {
+		t.Error("merged.Media resolves the second layer's file, want the primary layer's media only")
+	}
+}
+
+// TestMergeLibraryLayersHasMediaFromAnyLayer proves HasMedia is the union: it
+// is true when any layer carries media — here only the second — while each
+// layer retains its own media state in Layers.
+func TestMergeLibraryLayersHasMediaFromAnyLayer(t *testing.T) {
+	external := testLayer("/ext")
+	local := testLayer("/local")
+	setTestMedia(local, "local.png")
+
+	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+	if !merged.HasMedia {
+		t.Error("HasMedia = false, want true: the second layer carries media")
+	}
+	if merged.Layers[0].HasMedia {
+		t.Error("Layers[0].HasMedia = true, want false: the external layer has no media")
+	}
+	if !merged.Layers[1].HasMedia {
+		t.Error("Layers[1].HasMedia = false, want true")
+	}
+	if _, err := fs.Stat(merged.Layers[1].Media, "local.png"); err != nil {
+		t.Errorf("Layers[1].Media does not resolve local.png: %v", err)
+	}
+}
+
+// TestCheckLayerUniquenessNoDuplicates proves disjoint layers pass: every
+// slide, section, theme and media path is carried by at most one layer, and a
+// nil entry is ignored.
+func TestCheckLayerUniquenessNoDuplicates(t *testing.T) {
+	external := testLayer("/ext")
+	addTestSlide(external, "ext-slide")
+	addTestSection(external, "ext-section")
+	addTestTheme(external, "ext-theme")
+	setTestMedia(external, "ext.png")
+
+	local := testLayer("/local")
+	addTestSlide(local, "local-slide")
+	addTestSection(local, "local-section")
+	addTestTheme(local, "local-theme")
+	setTestMedia(local, "local.png")
+
+	if err := checkLayerUniqueness([]*LibraryLayer{external, local}); err != nil {
+		t.Fatalf("checkLayerUniqueness() = %v, want nil for disjoint layers", err)
+	}
+	if err := checkLayerUniqueness([]*LibraryLayer{external, nil, local}); err != nil {
+		t.Fatalf("checkLayerUniqueness() with a nil layer = %v, want nil (nil ignored)", err)
+	}
+}
+
+// TestCheckLayerUniquenessSlideDuplicate proves a slide name carried by two
+// layers is rejected, naming the name and both manifest paths.
+func TestCheckLayerUniquenessSlideDuplicate(t *testing.T) {
+	external := testLayer("/ext")
+	addTestSlide(external, "dup")
+	local := testLayer("/local")
+	addTestSlide(local, "dup")
+
+	err := checkLayerUniqueness([]*LibraryLayer{external, local})
+	assertLayerDuplicateError(t, err, "template", "dup",
+		"/ext/slides/dup/template.yaml", "/local/slides/dup/template.yaml")
+}
+
+// TestCheckLayerUniquenessSectionDuplicate proves a section name carried by two
+// layers is rejected, naming the name and both manifest paths.
+func TestCheckLayerUniquenessSectionDuplicate(t *testing.T) {
+	external := testLayer("/ext")
+	addTestSection(external, "dup")
+	local := testLayer("/local")
+	addTestSection(local, "dup")
+
+	err := checkLayerUniqueness([]*LibraryLayer{external, local})
+	assertLayerDuplicateError(t, err, "template", "dup",
+		"/ext/sections/dup/template.yaml", "/local/sections/dup/template.yaml")
+}
+
+// TestCheckLayerUniquenessCrossKindDuplicate proves slides and sections share
+// one template namespace across layers: a slide in one layer and a section in
+// another collide just as two same-kind templates do, in both directions.
+func TestCheckLayerUniquenessCrossKindDuplicate(t *testing.T) {
+	t.Run("external slide vs local section", func(t *testing.T) {
+		external := testLayer("/ext")
+		addTestSlide(external, "dup")
+		local := testLayer("/local")
+		addTestSection(local, "dup")
+
+		err := checkLayerUniqueness([]*LibraryLayer{external, local})
+		assertLayerDuplicateError(t, err, "template", "dup",
+			"/ext/slides/dup/template.yaml", "/local/sections/dup/template.yaml")
+	})
+
+	t.Run("external section vs local slide", func(t *testing.T) {
+		external := testLayer("/ext")
+		addTestSection(external, "dup")
+		local := testLayer("/local")
+		addTestSlide(local, "dup")
+
+		err := checkLayerUniqueness([]*LibraryLayer{external, local})
+		assertLayerDuplicateError(t, err, "template", "dup",
+			"/ext/sections/dup/template.yaml", "/local/slides/dup/template.yaml")
+	})
+}
+
+// TestCheckLayerUniquenessThemeDuplicate proves a theme name carried by two
+// layers is rejected, naming the name and both theme directory paths
+// (<root>/themes/<name>).
+func TestCheckLayerUniquenessThemeDuplicate(t *testing.T) {
+	external := testLayer("/ext")
+	addTestTheme(external, "dup")
+	local := testLayer("/local")
+	addTestTheme(local, "dup")
+
+	err := checkLayerUniqueness([]*LibraryLayer{external, local})
+	assertLayerDuplicateError(t, err, "theme", "dup", "/ext/themes/dup", "/local/themes/dup")
+}
+
+// TestCheckLayerUniquenessMediaDuplicate proves a media path carried by two
+// layers is rejected, naming the relative path and its full location under
+// both layer roots (<root>/media/<rel>).
+func TestCheckLayerUniquenessMediaDuplicate(t *testing.T) {
+	t.Run("top-level file", func(t *testing.T) {
+		external := testLayer("/ext")
+		setTestMedia(external, "logo.svg", "ext-only.png")
+		local := testLayer("/local")
+		setTestMedia(local, "logo.svg")
+
+		err := checkLayerUniqueness([]*LibraryLayer{external, local})
+		assertLayerDuplicateError(t, err, "media path", "logo.svg",
+			"/ext/media/logo.svg", "/local/media/logo.svg")
+	})
+
+	t.Run("nested file", func(t *testing.T) {
+		external := testLayer("/ext")
+		setTestMedia(external, "video/intro.mp4")
+		local := testLayer("/local")
+		setTestMedia(local, "video/intro.mp4")
+
+		err := checkLayerUniqueness([]*LibraryLayer{external, local})
+		assertLayerDuplicateError(t, err, "media path", "video/intro.mp4",
+			"/ext/media/video/intro.mp4", "/local/media/video/intro.mp4")
+	})
+}
+
+// TestCheckLayerUniquenessDeterministicFirstViolation proves the check reports
+// the same first violation across runs even when several namespaces collide at
+// once. The layers carry template collisions ("aaa", "bbb"), a theme collision
+// ("aaa") and a media collision ("aaa.png"); the fixed namespace order
+// (templates, themes, media) and the sorted-name order inside a namespace make
+// the template "aaa" collision the one reported every time.
+func TestCheckLayerUniquenessDeterministicFirstViolation(t *testing.T) {
+	external := testLayer("/ext")
+	addTestSlide(external, "aaa")
+	addTestSlide(external, "bbb")
+	addTestTheme(external, "aaa")
+	setTestMedia(external, "aaa.png")
+
+	local := testLayer("/local")
+	addTestSlide(local, "aaa")
+	addTestSlide(local, "bbb")
+	addTestTheme(local, "aaa")
+	setTestMedia(local, "aaa.png")
+
+	const runs = 100
+	var first string
+	for i := 0; i < runs; i++ {
+		libErr := asLibraryError(t, checkLayerUniqueness([]*LibraryLayer{external, local}))
+		if first == "" {
+			first = libErr.Error()
+			continue
+		}
+		if libErr.Error() != first {
+			t.Fatalf("run %d: error = %q, want the same first violation %q", i, libErr.Error(), first)
+		}
+	}
+
+	if !strings.Contains(first, `template "aaa"`) {
+		t.Errorf("first violation = %q, want the template %q collision", first, "aaa")
+	}
+	if strings.Contains(first, `theme "aaa"`) {
+		t.Errorf("first violation = %q, want the templates namespace checked before themes", first)
+	}
+	if strings.Contains(first, "media path") {
+		t.Errorf("first violation = %q, want the templates namespace checked before media", first)
+	}
+	if !strings.Contains(first, "/ext/slides/aaa/template.yaml") ||
+		!strings.Contains(first, "/local/slides/aaa/template.yaml") {
+		t.Errorf("first violation = %q, want both colliding manifest paths", first)
 	}
 }
