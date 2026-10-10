@@ -46,7 +46,7 @@ const (
 // and no allow-list beyond "the file exists under its declared root".
 func mediaHandler(lib *template.Library, themes *theme.Registry) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(MediaPath, http.StripPrefix(MediaPath, mediaFileHandler(primaryLibraryMediaFS(lib))))
+	mux.Handle(MediaPath, mediaFileHandler(primaryLibraryMediaFS(lib), MediaPath, primaryThemeCSSBases))
 	mux.Handle(ThemesPath, themeFileHandler(themes))
 	return mux
 }
@@ -119,19 +119,31 @@ func libraryLayerMedia(lib *template.Library, role template.LibraryLayerRole) fs
 	return nil
 }
 
-// mediaFileHandler serves a single file directly under mediaFS: the request
-// path (already stripped of MediaPath by the caller) is cleaned and checked
-// exactly as assetHandler checks an embedded-asset request (assetName,
-// isRegularFile), so an absolute path or a ".." segment 404s instead of
-// escaping mediaFS's root.
+// mediaFileHandler serves a single file directly under mediaFS, for the media
+// route a caller mounts at prefix: it strips prefix itself (http.StripPrefix),
+// so a caller registers it with a plain mux.Handle(prefix, …) and passes the
+// same prefix here. The stripped request path is cleaned and checked exactly as
+// assetHandler checks an embedded-asset request (assetName, isRegularFile), so
+// an absolute path or a ".." segment 404s instead of escaping mediaFS's root.
 //
-// A .css file is served through rewriteThemeCSS and explicitly as text/css, so
-// a stylesheet reached from the /media/ route — including one another
-// stylesheet @imports through the reserved media: prefix — has its own
+// The prefix names the serving layer's route and bases carries that same
+// layer's media/themes base URLs — the URLs a rewritten .css reference is
+// joined onto. Mounting the single/primary layer passes MediaPath and
+// primaryThemeCSSBases, today's exact behaviour; the external `templates:`
+// layer's media route passes its own prefix
+// (/assets/templates/external/media/) and bases (mediaBase
+// /assets/templates/external/media/, themesBase
+// /assets/templates/external/themes/), so a stylesheet served from that layer's
+// media/ folder has its reserved-prefix references rewritten to that layer's
+// own URLs rather than a fixed or merged base.
+//
+// A .css file is served through rewriteThemeCSS (with bases) and explicitly as
+// text/css, so a stylesheet reached from the /media/ route — including one
+// another stylesheet @imports through the reserved media: prefix — has its own
 // media:/theme:<name>/ references rewritten before the bytes reach the client.
 // Every other media file is served raw, exactly as before.
-func mediaFileHandler(mediaFS fs.FS) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func mediaFileHandler(mediaFS fs.FS, prefix string, bases themeCSSBases) http.Handler {
+	return http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -165,8 +177,8 @@ func mediaFileHandler(mediaFS fs.FS) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		http.ServeContent(w, r, path.Base(name), info.ModTime(), bytes.NewReader(rewriteThemeCSS(css)))
-	})
+		http.ServeContent(w, r, path.Base(name), info.ModTime(), bytes.NewReader(rewriteThemeCSS(css, bases)))
+	}))
 }
 
 // themeFileHandler serves templates/themes/<name>/<file> requests under
