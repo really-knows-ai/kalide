@@ -174,16 +174,22 @@ type Options struct {
 
 	// Library is the project's loaded templates/ library
 	// (template.LoadLibrary). When non-nil, Listen mounts mediaHandler's
-	// MediaPath route over its Media filesystem and builds the /templates
-	// gallery (galleryHandler) from it (template-media, templates-gallery).
-	// A nil Library disables template-media serving and the /templates
-	// gallery answers 500, since the gallery has no registry to document.
+	// per-layer media and theme routes over its layers — MediaPath/ThemesPath
+	// for the single/primary layer and, for a two-layer deck,
+	// ExternalMediaPath/ExternalThemesPath for the external `templates:` layer
+	// (template-media, layered-template-library) — and builds the /templates
+	// gallery (galleryHandler) from it (templates-gallery). It is the startup
+	// library the caller already loaded and validated: Listen pins it for the
+	// session and never reloads it. A nil Library disables template-media
+	// serving and the /templates gallery answers 500, since the gallery has no
+	// registry to document.
 	Library *template.Library
 
 	// Themes is the project's loaded theme registry (theme.LoadDir). When
-	// non-nil, Listen mounts mediaHandler's ThemesPath route over it, so a
-	// theme's on-disk files (its theme.css and any files beside it) are
-	// served (theme-selection, template-media).
+	// non-nil, Listen mounts mediaHandler's ThemesPath (and, for a two-layer
+	// deck's external layer, ExternalThemesPath) routes over it, so a theme's
+	// on-disk files (its theme.css and any files beside it) are served
+	// (theme-selection, template-media).
 	Themes *theme.Registry
 }
 
@@ -227,8 +233,30 @@ func Listen(opts Options) (*Server, error) {
 	// (template-media); it is mounted here, alongside the embedded reveal.js
 	// assets, so it is reachable as soon as the server is, and — like every
 	// route on this mux — only ever over the loopback bind (Host).
-	mux.Handle(MediaPath, mediaHandler(opts.Library, opts.Themes))
-	mux.Handle(ThemesPath, mediaHandler(opts.Library, opts.Themes))
+	//
+	// The library is the STARTUP library the caller already loaded and
+	// validated before calling Listen; Listen pins that pointer for the whole
+	// session and never reloads it, so these asset routes keep serving the
+	// deck's startup library (phase-04 task-11). Live reload rebuilds the
+	// served deck page, not these routes.
+	//
+	// The handler is mounted at all four per-layer prefixes so every media and
+	// theme URL render.RenderSlide emits resolves (the phase-02 task-13 URL
+	// contract): MediaPath/ThemesPath for the single/primary layer — the sole
+	// layer of a single-root library, or the deck-root local templates/ layer
+	// of a two-layer deck — and ExternalMediaPath/ExternalThemesPath for a
+	// two-layer deck's external `templates:` layer. mediaHandler itself mounts
+	// the external routes only when the library actually has an
+	// external-role layer, so a single-root library still serves exactly its
+	// MediaPath/ThemesPath routes and answers 404 under the two external
+	// prefixes — byte-identical to before. Registering all four unconditionally
+	// keeps Listen ignorant of the layer set (the handler owns it) and mirrors
+	// mediaHandler's own documented contract.
+	media := mediaHandler(opts.Library, opts.Themes)
+	mux.Handle(MediaPath, media)
+	mux.Handle(ThemesPath, media)
+	mux.Handle(ExternalMediaPath, media)
+	mux.Handle(ExternalThemesPath, media)
 
 	s.mux = mux
 	// The /templates gallery is a fixed route every server serves, so it is
@@ -245,6 +273,17 @@ func Listen(opts Options) (*Server, error) {
 	}
 	var galleryFuncMap htmltmpl.FuncMap
 	if opts.Library != nil {
+		// Each gallery preview renders through render.RenderSlide, which
+		// dispatches that preview's `media` helper to its template's OWNING
+		// layer — Registry.LayerOf over galleryReg's provenance — using that
+		// layer's own media filesystem and served prefix. A gallery card for
+		// either merged layer therefore follows the same per-layer URL scheme
+		// the deck page does, and only the library needs to stay reachable
+		// through galleryReg for task-13's galleryEntries (gallery.go) to read
+		// it. This map binds that dispatch's fallback alone: the
+		// single/primary layer's media (Library.Media is exactly the primary
+		// layer's media) at the primary MediaPath base, matching render's
+		// default for a sole or local-layer template.
 		galleryFuncMap = template.LayoutFuncMap(opts.Library.Media, MediaPath)
 	}
 	s.Handle(galleryPath, galleryHandler(galleryReg, galleryFuncMap))
