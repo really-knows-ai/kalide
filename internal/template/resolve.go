@@ -83,5 +83,9 @@ func LoadDeckLibrary(deckRoot, configured string) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	return loadLibrary(os.DirFS(root), ".", root)
+	layer, err := loadLibrary(os.DirFS(root), ".", root, libraryLayerFull)
+	if err != nil {
+		return nil, err
+	}
+	return libraryFromLayer(layer), nil
 }

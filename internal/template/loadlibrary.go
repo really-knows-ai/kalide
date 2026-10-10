@@ -12,11 +12,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// This file implements LoadLibrary, the only way to build a *Library: it
-// walks a project's templates/ directory and runs the templates-dir-
-// validation checks in a fixed, fail-fast order, returning the first
-// failure. Each step is documented at its call site below with its step
-// number, matching the plan's ordering:
+// This file implements the single-layer library loader. loadLibrary loads and
+// validates one library layer at its own root — walking that layer's
+// templates/ directory and running the templates-dir-validation checks in a
+// fixed, fail-fast order, returning the first failure — and LoadLibrary wraps
+// the loaded layer as a one-layer *Library. Each step is documented at its
+// call site below with its step number, matching the plan's ordering:
 //
 //  1. library.yaml present and valid;
 //  2. slide/section names unique across kinds; any top-level entry other
@@ -40,6 +41,15 @@ import (
 //     definition and its layout executes; phase 1 leaves this a no-op,
 //     phase-2 task-12 fills it in.
 //
+// A layer is loaded either fully (libraryLayerFull) or deferred
+// (libraryLayerDeferred): deferred skips the cross-template section-call
+// build checks (step 4) and the example runs (step 7) for a layer whose
+// templates may reference templates contributed by another merged layer (the
+// deck-root local layer of a layered deck). Those checks depend on every
+// layer being present, so the merged load runs them once over the whole set.
+// A standalone/external root and the single-root wrappers (LoadLibrary,
+// LoadLibraryAt) always validate fully.
+//
 // There is no built-in fallback when the library root is missing or is not a
 // directory (no-built-in-fallback): the loader reports a *LibraryError naming
 // the expected path and suggesting `kalide init`, and the caller must not
@@ -54,21 +64,65 @@ import (
 // documented on this file.
 //
 // root is both the library directory's path within fsys and the path errors
-// are qualified with. LoadDeckLibrary (resolve.go) is the deck-level entry
-// point: it resolves the root (the configured `templates:` path, else the
-// local templates/) and calls loadLibrary with a display root that may differ
-// from the path within fsys when the resolved library sits outside the deck.
+// are qualified with. LoadLibrary validates the single root it is given as a
+// complete, self-contained library (libraryLayerFull), so it runs every step,
+// including the cross-template section-call build checks and the example runs.
+// The returned Library carries exactly one contributing layer (Library.Layers).
+// LoadDeckLibrary (resolve.go) is the deck-level entry point: it resolves the
+// root (the configured `templates:` path, else the local templates/) and loads
+// it as a layer with a display root that may differ from the path within fsys
+// when the resolved library sits outside the deck.
 func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
-	return loadLibrary(fsys, root, root)
+	layer, err := loadLibrary(fsys, root, root, libraryLayerFull)
+	if err != nil {
+		return nil, err
+	}
+	return libraryFromLayer(layer), nil
 }
 
-// loadLibrary is LoadLibrary's shared body. fsRoot is the library directory's
-// path within fsys; displayRoot is the path errors are qualified with and that
-// is stored as Library.RootPath. The two differ when the loader validates a
-// resolved external root (external-template-library): fsys is then
-// os.DirFS(resolved), fsRoot is ".", and displayRoot is the resolved
-// operating-system path. displayRoot is never empty.
-func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
+// libraryLayerMode selects how much of the cross-template validation
+// loadLibrary runs while loading one library layer.
+//
+// A standalone or external library root — one that is checked as a complete
+// library on its own — is loaded fully (libraryLayerFull). A layer that is
+// not self-contained-checked, because its templates may call templates
+// contributed by another merged layer (the deck-root local layer of a layered
+// deck), is loaded deferred (libraryLayerDeferred): it still runs the
+// per-layer steps 1-3 and 5-6, but skips the cross-template section-call
+// build checks (step 4, checkLibraryBuild) and the example runs (step 7,
+// checkLibraryExamples), which can only be decided once every merged layer is
+// present. The merged load runs those checks once over the merged set.
+type libraryLayerMode int
+
+const (
+	// libraryLayerFull runs every templates-dir-validation step for the layer,
+	// including the cross-template section-call build checks (step 4) and the
+	// example runs (step 7). The single-root wrappers (LoadLibrary,
+	// LoadLibraryAt) and a standalone/external root always use this mode.
+	libraryLayerFull libraryLayerMode = iota
+
+	// libraryLayerDeferred runs the per-layer steps (1-3 and 5-6) but skips
+	// the cross-template section-call build checks (step 4, checkLibraryBuild)
+	// and the example runs (step 7, checkLibraryExamples). The merged library
+	// runs those two checks once over the whole merged set.
+	libraryLayerDeferred
+)
+
+// loadLibrary is LoadLibrary's shared body. It loads and validates ONE library
+// layer at fsRoot within fsys and returns that layer's loaded form. fsRoot is
+// the library directory's path within fsys; displayRoot is the path errors are
+// qualified with and that is stored as LibraryLayer.RootPath. The two differ
+// when the loader validates a resolved external root
+// (external-template-library): fsys is then os.DirFS(resolved), fsRoot is ".",
+// and displayRoot is the resolved operating-system path. displayRoot is never
+// empty.
+//
+// mode selects whether the cross-template section-call build checks (step 4)
+// and the example runs (step 7) run for this layer: libraryLayerFull runs
+// them, libraryLayerDeferred skips them for a layer whose templates may
+// reference templates contributed by another merged layer. The per-layer
+// steps 1-3 and 5-6 always run.
+func loadLibrary(fsys fs.FS, fsRoot, displayRoot string, mode libraryLayerMode) (*LibraryLayer, error) {
 	info, err := fs.Stat(fsys, fsRoot)
 	if err != nil {
 		return nil, missingTemplatesDirError(displayRoot, displayRoot+" directory not found")
@@ -140,10 +194,14 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 		lib.Sections[name] = t
 	}
 
-	// Step 4 (hook): the build checks. Phase 1 leaves this a no-op;
-	// phase-2 task-11 (checkLibraryBuild) fills it in.
-	if err := checkLibraryBuild(lib); err != nil {
-		return nil, err
+	// Step 4: the cross-template section-call build checks. They are skipped
+	// in deferred mode, where the layer's templates may call templates
+	// contributed by another merged layer: the merged load (task 9) runs them
+	// once over the whole merged set.
+	if mode == libraryLayerFull {
+		if err := checkLibraryBuild(lib); err != nil {
+			return nil, err
+		}
 	}
 
 	// Step 5: every theme has theme.css.
@@ -193,14 +251,53 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string) (*Library, error) {
 		}
 	}
 
-	// Step 7 (hook): example validation and layout execution. Phase 1
-	// leaves this a no-op; phase-2 task-12 (checkLibraryExamples) fills it
-	// in.
-	if err := checkLibraryExamples(lib); err != nil {
-		return nil, err
+	// Step 7: example validation and layout execution. As with step 4,
+	// deferred mode defers this to the merged library, whose templates may
+	// call templates contributed by another merged layer.
+	if mode == libraryLayerFull {
+		if err := checkLibraryExamples(lib); err != nil {
+			return nil, err
+		}
 	}
 
-	return lib, nil
+	return layerFromLibrary(lib), nil
+}
+
+// layerFromLibrary returns lib's loaded content as a single *LibraryLayer,
+// sharing its loaded maps and metadata. It is how loadLibrary turns the
+// internal single-layer *Library it builds (whose helpers such as
+// checkLibraryBuild and loadLibraryMeta operate on a *Library) into the
+// LibraryLayer it returns.
+func layerFromLibrary(lib *Library) *LibraryLayer {
+	return &LibraryLayer{
+		Root:     lib.Root,
+		RootPath: lib.RootPath,
+		Meta:     lib.Meta,
+		Slides:   lib.Slides,
+		Sections: lib.Sections,
+		Themes:   lib.Themes,
+		HasMedia: lib.HasMedia,
+		Media:    lib.Media,
+	}
+}
+
+// libraryFromLayer returns layer as a one-layer *Library, sharing its loaded
+// maps and metadata. It is how the single-root wrappers (LoadLibrary,
+// LoadLibraryAt) expose a layer loaded through loadLibrary as a merged
+// Library: the Library's slides/sections/themes/media are that layer's, and
+// Layers carries exactly that one layer.
+func libraryFromLayer(layer *LibraryLayer) *Library {
+	return &Library{
+		Root:     layer.Root,
+		RootPath: layer.RootPath,
+		Meta:     layer.Meta,
+		Slides:   layer.Slides,
+		Sections: layer.Sections,
+		Themes:   layer.Themes,
+		HasMedia: layer.HasMedia,
+		Media:    layer.Media,
+		Layers:   []*LibraryLayer{layer},
+	}
 }
 
 // checkLibraryBuild is templates-dir-validation step 4: parsing manifests
