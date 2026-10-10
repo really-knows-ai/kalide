@@ -80,6 +80,23 @@ func migrateDeckFixture(t *testing.T) string {
 	return dir
 }
 
+// migrateWriteSlide writes one complete, minimal slide template named name at
+// libraryRoot/slides/name — a schema-free manifest, a plain media-free layout
+// and a placeholder example — so a library a test builds carries an
+// inspectable top-level template. It is the scaffold counterpart of the
+// template package's writeLibraryTemplate, used to give a library root a
+// nested <root>/templates/ layer a slide name that collides with a top-level
+// one.
+func migrateWriteSlide(t *testing.T, libraryRoot, name string) {
+	t.Helper()
+
+	base := filepath.Join(libraryRoot, template.SlidesDir, name)
+	mkdir(t, base)
+	writeFile(t, filepath.Join(base, template.ManifestFile), "name: "+name+"\n")
+	writeFile(t, filepath.Join(base, template.LayoutFile), "<section><h1>{{.Title}}</h1></section>")
+	writeFile(t, filepath.Join(base, template.ExampleFile), "# "+name+"\n")
+}
+
 // migrateSetTarget raises migrationTargetFormat for the calling (sub)test and
 // restores the production value on cleanup. It is the var-shaped companion of
 // the migrateLibraryWith seam: only test files replace it, and only for the
@@ -479,24 +496,30 @@ func TestMigrateLibraryRollback(t *testing.T) {
 // (upgrade/plan.phase-03.task-9). It runs on real on-disk projects — a real
 // format-1 library and a real no-arg seed deck built with scaffold.InitLibrary
 // and scaffold.Init — and re-validates the result through the real loaders:
-// template.LoadDeckLibrary for a library (and a deck's template root) and
+// template.LoadLibraryAt for a migrated library validated as its own single
+// root, template.LoadDeckLibrary where a deck's template root is resolved, and
 // deck.LoadConfig for a deck. It is int tier: guarded with testing.Short, it
 // reaches no network, no server and no git and exposes no command surface
 // (global.constraint.upgrade-offline,
 // global.constraint.upgrade-never-breaks-project).
 //
-// Three claims:
+// Four claims:
 //
 //   - a format-1 library and a deck are byte-for-byte no-ops of the migration
 //     half and still load/validate cleanly;
 //   - a refused format (0, 2) leaves a real library byte-for-byte untouched;
+//   - a migrated library carrying a nested <dir>/templates/ — with a slide
+//     whose name collides with a top-level one — validates as its own single
+//     root through template.LoadLibraryAt: the nested directory is an ordinary
+//     ignored top-level entry, never merged as a second local layer, so no
+//     layer-uniqueness collision occurs (upgrade-migrate-format);
 //   - the loader↔migrator tie
 //     (requirements.requirement.upgrade-migrate-format, AC "loadLibraryMeta
 //     accepts every format the migrator reads — today that is exactly {1}"): a
 //     library at implementedFormat() — and, for every source format in
 //     registeredMigrations() (none today, so that loop covers zero cases) — a
 //     library at that migration's source format loads through
-//     template.LoadDeckLibrary, while implementedFormat()+1 is refused. The
+//     template.LoadLibraryAt, while implementedFormat()+1 is refused. The
 //     test-only tie fails if the implemented format or the loader's accepted
 //     set drifts (e.g. a migration registered without loader support) rather
 //     than passing vacuously. No production loader change is made here.
@@ -568,23 +591,58 @@ func TestMigrateLibrary(t *testing.T) {
 			})
 		}
 
-		// (b) implementedFormat()+1 is refused by the real loader.
+		// (b) implementedFormat()+1 is refused by the real loader, read as
+		// the library's own single root through template.LoadLibraryAt (the
+		// same path validateMigratedLibrary validates a migrated library by).
 		next := current + 1
 		t.Run(fmt.Sprintf("a library at implementedFormat()+1 = %d is refused", next), func(t *testing.T) {
 			dir := migrateLibraryAt(t, next)
 
-			_, err := template.LoadDeckLibrary(dir, ".")
+			_, err := template.LoadLibraryAt(dir)
 			if err == nil {
-				t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = nil, want format %d refused", dir, next)
+				t.Fatalf("template.LoadLibraryAt(%s) error = nil, want format %d refused", dir, next)
 			}
 			var libErr *template.LibraryError
 			if !errors.As(err, &libErr) {
-				t.Fatalf("template.LoadDeckLibrary(%s, \".\") error = %v, want *template.LibraryError", dir, err)
+				t.Fatalf("template.LoadLibraryAt(%s) error = %v, want *template.LibraryError", dir, err)
 			}
 			if !strings.Contains(libErr.Message, "unsupported library format") {
-				t.Errorf("LoadDeckLibrary error message = %q, want it to report an unsupported library format", libErr.Message)
+				t.Errorf("LoadLibraryAt error message = %q, want it to report an unsupported library format", libErr.Message)
 			}
 		})
+	})
+
+	t.Run("a migrated library carrying a nested templates/ validates as its own single root", func(t *testing.T) {
+		dir := migrateLibraryFixture(t)
+		migrateSetTarget(t, implementedFormat()+1)
+
+		// A top-level slide and a nested <dir>/templates/ holding a complete
+		// library whose slide carries the SAME name: were the nested directory
+		// merged as a second local layer, checkLayerUniqueness would reject
+		// the duplicate "shared" and validateMigratedLibrary would fail. The
+		// migrated library is validated as its own single root through
+		// template.LoadLibraryAt, so the nested directory is an ordinary
+		// ignored top-level entry and the run succeeds
+		// (upgrade-migrate-format).
+		migrateWriteSlide(t, dir, "shared")
+		nested := filepath.Join(dir, template.TemplatesDir)
+		mkdir(t, nested)
+		writeFile(t, filepath.Join(nested, template.LibraryFile), "name: nested\nformat: 1\n")
+		migrateWriteSlide(t, nested, "shared")
+
+		// A no-op step leaves the format anchor untouched (the loader accepts
+		// only format 1), so the migration's result still loads; raising the
+		// target forces a step to run, and therefore validateMigratedLibrary to
+		// run, where a plain format-1 no-op returns before validation.
+		step := formatMigration{
+			sourceFormat: implementedFormat(),
+			apply:        func(string) error { return nil },
+		}
+
+		if err := migrateLibraryWith(dir, []formatMigration{step}); err != nil {
+			t.Fatalf("migrateLibraryWith(%s) error = %v, want the nested templates/ library validated as its own single root, "+
+				"never merged as a second local layer", dir, err)
+		}
 	})
 }
 
