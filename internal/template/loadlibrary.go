@@ -54,9 +54,13 @@ import (
 // There is no built-in fallback when the library root is missing or is not a
 // directory (no-built-in-fallback): the loader reports a *LibraryError naming
 // the expected path and suggesting `kalide init`, and the caller must not
-// substitute compiled-in content. ResolveLibraryRoot and LoadDeckLibrary
-// (resolve.go) are the single point that picks the root — the configured
-// `templates:` path, else the local templates/ (external-template-library).
+// substitute compiled-in content. LoadDeckLibrary (resolve.go) is the single
+// point that picks a deck's roots and loads its layers: ResolveLibraryLayers
+// resolves the ordered roots — the configured `templates:` root, plus the
+// local templates/ whenever it exists (external-template-library) — and
+// LoadDeckLibrary loads each through the loader body below. ResolveLibraryRoot
+// is the primary-root counterpart: the `templates:` path when configured, else
+// the local templates/.
 
 // LoadLibrary loads and validates the templates/ library at root within
 // fsys — typically root == TemplatesDir at a project's root directory — and
