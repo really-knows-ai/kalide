@@ -730,13 +730,14 @@ func assertUpgradeDeckLoads(t *testing.T, dir string) {
 	}
 }
 
-// assertUpgradeLibraryLoads loads dir as the template library `kalide start`
-// would, failing the test when the upgraded library does not load. A library IS
-// a template root, so it is loaded at "." exactly as scaffold.Upgrade validates
-// it.
+// assertUpgradeLibraryLoads loads dir as its own single library root, failing
+// the test when the upgraded library does not load. A library IS a template
+// root, so it is loaded at its own root via template.LoadLibraryAt (no nested
+// <dir>/templates/ is merged as a second local layer), exactly as
+// scaffold.Upgrade validates it.
 func assertUpgradeLibraryLoads(t *testing.T, dir string) {
 	t.Helper()
-	if _, err := template.LoadDeckLibrary(dir, "."); err != nil {
+	if _, err := template.LoadLibraryAt(dir); err != nil {
 		t.Fatalf("upgraded library %s does not load: %v", dir, err)
 	}
 }
