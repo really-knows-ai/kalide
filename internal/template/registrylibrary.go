@@ -35,6 +35,16 @@ import (
 // section name checks (checkDeclaredName): "deck" and "slide" are reserved
 // alongside "body", "notes", and "_format".
 //
+// It also records each registered template's owning-layer provenance
+// (library-layer-references): after a section is registered its owning layer is
+// looked up through resolveMergedSectionTarget, and after a slide is registered
+// through resolveMergedSlideLayer; the layer is stored via Registry.setLayer so
+// Registry.LayerOf can return it. A Library that carries no Layers — the empty
+// zero-layer merge, or a Library built without them — records nothing, exactly
+// as a name whose owning layer cannot be identified does: both report nil
+// through LayerOf. Registration and validation behaviour are otherwise
+// unchanged.
+//
 // single-binary (requirements.requirement.single-binary): the library is
 // resolved locally and offline — it works purely on the in-memory Library
 // LoadLibrary already built (which reads only the project's templates/
@@ -52,11 +62,14 @@ func NewRegistryFromLibrary(lib *Library) (*Registry, error) {
 		if err := registerLibraryTemplate(r, lib.Sections[name]); err != nil {
 			return nil, err
 		}
+		_, layer, _ := resolveMergedSectionTarget(lib, name)
+		r.setLayer(name, layer)
 	}
 	for _, name := range sortedLibraryTemplateNames(lib.Slides) {
 		if err := registerLibraryTemplate(r, lib.Slides[name]); err != nil {
 			return nil, err
 		}
+		r.setLayer(name, resolveMergedSlideLayer(lib, name))
 	}
 	return r, nil
 }
@@ -88,6 +101,35 @@ func wrapLibraryTemplateError(lt *LibraryTemplate, err error) error {
 		return nil
 	}
 	return libraryErrorf(lt.ManifestPath, 0, "%s", err.Error())
+}
+
+// resolveMergedSlideLayer returns the *LibraryLayer whose Slides map holds, by
+// identity, the slide template registered under name in lib's merged Slides
+// map: the slide counterpart of resolveMergedSectionTarget (library.go). The
+// merged Slides map is the union of the layers' slides, so it alone cannot say
+// which layer contributed a slide; this lookup recovers that provenance for
+// NewRegistryFromLibrary.
+//
+// A nil lib, an unknown slide name, or a Library whose Layers do not carry that
+// slide — no Layers at all, or none holding the same *LibraryTemplate pointer —
+// reports nil, so no provenance is recorded and LayerOf reports nil.
+func resolveMergedSlideLayer(lib *Library, name string) *LibraryLayer {
+	if lib == nil {
+		return nil
+	}
+	target := lib.Slides[name]
+	if target == nil {
+		return nil
+	}
+	for _, layer := range lib.Layers {
+		if layer == nil {
+			continue
+		}
+		if layer.Slides[name] == target {
+			return layer
+		}
+	}
+	return nil
 }
 
 // sortedLibraryTemplateNames returns m's keys sorted, so registration order
