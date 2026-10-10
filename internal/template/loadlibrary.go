@@ -4,6 +4,7 @@ import (
 	"errors"
 	htmltemplate "html/template"
 	"io/fs"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -74,6 +75,39 @@ import (
 // when the resolved library sits outside the deck.
 func LoadLibrary(fsys fs.FS, root string) (*Library, error) {
 	layer, err := loadLibrary(fsys, root, root, libraryLayerFull)
+	if err != nil {
+		return nil, err
+	}
+	return libraryFromLayer(layer), nil
+}
+
+// LoadLibraryAt loads and validates the on-disk library directory at root as
+// a complete, self-contained library and returns it once every
+// templates-dir-validation check has passed.
+//
+// root is an absolute operating-system path. It becomes its own fs.FS root
+// (os.DirFS(root)), so the library is validated as its own root: no nested
+// templates/ directory inside it is merged as a second layer, and nothing
+// outside it is consulted or merged. This is the entry point for a library
+// that IS a template root — a migrated or upgraded library directory, an
+// external library loaded on init — as opposed to LoadDeckLibrary, which
+// resolves a deck's layered roots (the configured `templates:` root plus any
+// deck-root templates/) and merges them.
+//
+// Every error and the returned Library.RootPath are qualified with the
+// absolute OS path root (not the fs-relative "."), so a reader sees the real
+// location. A missing or non-directory root reuses loadLibrary's
+// *LibraryError carrying the `kalide init` hint, exactly as
+// ResolveLibraryRoot reports an absent local templates/ (templates-dir-
+// required; no-built-in-fallback).
+//
+// Like loadLibrary, LoadLibraryAt always validates fully (libraryLayerFull):
+// a library loaded through it is treated as a standalone root and runs every
+// step, including the cross-template section-call build checks and the example
+// runs. Its doc mirrors LoadLibrary; the returned Library carries exactly one
+// contributing layer (Library.Layers).
+func LoadLibraryAt(root string) (*Library, error) {
+	layer, err := loadLibrary(os.DirFS(root), ".", root, libraryLayerFull)
 	if err != nil {
 		return nil, err
 	}
