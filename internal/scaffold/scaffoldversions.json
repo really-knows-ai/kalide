@@ -21,7 +21,11 @@
         },
         {
           "digest": "2ef9099e3b1e03e150b3fe56111d8d6e4a880cd014a9331fd2e3243414eba25a",
-          "versions": ["v0.10.0", "unreleased"]
+          "versions": ["v0.10.0"]
+        },
+        {
+          "digest": "c6b5babe17ab46db122e9e11219232c56807f018077b0b3f6f1206f78cfd937a",
+          "versions": ["unreleased"]
         }
       ]
     },
@@ -100,7 +104,11 @@
         },
         {
           "digest": "df286a0bfc47f86f647341f657bb1f0c91321ec9bd251b6c3a56132eb9943298",
-          "versions": ["v0.10.0", "unreleased"]
+          "versions": ["v0.10.0"]
+        },
+        {
+          "digest": "a1d0c96f9621000f7516d91f1f011f31828e4e3bfad5d1997d93bce0fb2772d0",
+          "versions": ["unreleased"]
         }
       ]
     },
