@@ -158,6 +158,55 @@ type LibraryTheme struct {
 	Files map[string][]byte
 }
 
+// LibraryLayer is one contributing library layer: a single templates/
+// directory that contributes its templates, themes and media to a deck's
+// merged template library (library-layer). A deck has up to two layers — the
+// external library named by the deck's top-level `templates:` key and the
+// deck-root local templates/ directory — with equal standing and no
+// precedence; their layers merge into one Library (mergeLibraryLayers) and a
+// name carried by both is a validation error (library-layer-uniqueness).
+//
+// A LibraryLayer carries the layer's own Root and RootPath, so its files are
+// read from that layer and an error raised while loading it names that layer's
+// root (error-reporting), alongside what was loaded from it: its metadata, its
+// slide and section templates, its themes and its media sub-filesystem. It is
+// the per-layer counterpart of the merged Library.
+type LibraryLayer struct {
+	// Root is the layer's templates/ directory, rooted so that "library.yaml",
+	// "slides", "sections", "themes" and "media" are its direct entries.
+	Root fs.FS
+
+	// RootPath is Root's path as it is shown: the layer's own
+	// operating-system path when the layer was resolved on the real
+	// filesystem. It is used to path-qualify that layer's errors and to
+	// locate its media root for serving.
+	RootPath string
+
+	// Meta is the parsed library.yaml metadata of this layer.
+	Meta LibraryMeta
+
+	// Slides holds the templates loaded from this layer's slides/ directory,
+	// keyed by name.
+	Slides map[string]*LibraryTemplate
+
+	// Sections holds the templates loaded from this layer's sections/
+	// directory, keyed by name.
+	Sections map[string]*LibraryTemplate
+
+	// Themes holds the themes loaded from this layer's themes/ directory,
+	// keyed by name.
+	Themes map[string]*LibraryTheme
+
+	// HasMedia reports whether this layer's media/ directory exists. It may
+	// be empty or absent; media is optional content.
+	HasMedia bool
+
+	// Media is this layer's media/ sub-filesystem, rooted so that a media
+	// path an author writes ("logo.svg", "video/intro.mp4") is a direct fs.FS
+	// path within it. It is nil when HasMedia is false.
+	Media fs.FS
+}
+
 // Library is a project's loaded templates/ directory: its metadata, its
 // slide and section templates (kind by directory), its themes and its media
 // root. LoadLibrary is the only way to build one; a Library that exists has
