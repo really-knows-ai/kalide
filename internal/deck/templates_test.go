@@ -1,19 +1,32 @@
 package deck
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
-// This file is the unit-test deliverable for plan.phase-01.task-9: the optional
-// top-level `templates:` key on a deck's kalide.yaml — Config.Templates,
-// LoadConfig's parsing of it, and the deck-side accessor TemplatesPath.
+// This file covers the optional top-level `templates:` key on a deck's
+// kalide.yaml — Config.Templates, LoadConfig's parsing of it, and the deck-side
+// accessor TemplatesPath. It began as the unit-test deliverable for
+// plan.phase-01.task-9 and is extended by plan.phase-03.task-5 to pin the key's
+// layered-library semantics: the value names the deck's EXTERNAL library layer
+// and is captured exactly as written for the loader to resolve, while an absent
+// or empty value is "" — the deck then loads only its deck-root templates/
+// (local) layer.
 //
 // It exercises LoadConfig in-process over a fake fs.FS, so it runs under
 // -short. It reuses configFS, testThemes and wantErr from deck_test.go.
 
-// TestTemplatesKey covers the `templates:` deck key (external-template-library):
-// it is accepted and stored exactly as written (relative and absolute), is ""
-// when the key is absent or empty, is a positioned type error when present with
-// a non-string value, and is now one of the keys an unknown-key closest-match
-// suggestion can name.
+// TestTemplatesKey covers the `templates:` deck key (external-template-library,
+// layered-template-library, deck-config): it is a recognised top-level key — one
+// of the two additional allowed keys, alongside `properties`, and part of
+// ConfigKeys, the vocabulary an unknown-key closest-match suggestion draws from.
+// Its raw value is captured exactly as written (relative, absolute or
+// uncleaned) through both Config.Templates and TemplatesPath, so the loader can
+// resolve it as the deck's external library layer. An absent or empty value is
+// "" meaning no external layer — the deck loads only its local deck-root
+// templates/. A non-string value is a positioned type error, and a misspelled or
+// singular key is still suggested back to "templates".
 func TestTemplatesKey(t *testing.T) {
 	themes := testThemes(t)
 
@@ -58,6 +71,8 @@ func TestTemplatesKey(t *testing.T) {
 	})
 
 	t.Run("absent key is empty", func(t *testing.T) {
+		// Absent means no external layer configured: "" is what the layered
+		// resolver reads as "local deck-root templates/ only".
 		cfg, err := LoadConfig(configFS("title: D\n"), ConfigFile, themes)
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
@@ -71,6 +86,8 @@ func TestTemplatesKey(t *testing.T) {
 	})
 
 	t.Run("null or empty value is empty", func(t *testing.T) {
+		// A null or "" value likewise configures no external layer, so the
+		// deck falls back to its local templates/ layer alone.
 		for _, yaml := range []string{
 			"title: D\ntemplates:\n",
 			"title: D\ntemplates: \"\"\n",
@@ -81,6 +98,9 @@ func TestTemplatesKey(t *testing.T) {
 			}
 			if cfg.Templates != "" {
 				t.Errorf("Config(%q).Templates = %q, want empty", yaml, cfg.Templates)
+			}
+			if got := TemplatesPath(cfg); got != "" {
+				t.Errorf("TemplatesPath(%q) = %q, want empty", yaml, got)
 			}
 		}
 	})
@@ -101,6 +121,36 @@ func TestTemplatesKey(t *testing.T) {
 				_, err := LoadConfig(configFS(tt.yaml), ConfigFile, themes)
 				wantErr(t, err, "kalide.yaml:2:", `key "templates"`, "expected a string, got "+tt.want)
 			})
+		}
+	})
+
+	t.Run("recognised key is in the suggestion vocabulary", func(t *testing.T) {
+		// `templates` is a recognised top-level key: it is part of ConfigKeys,
+		// the single source of truth for both the unknown-key whitelist and the
+		// closest-match suggestion candidates, and it sits alongside
+		// `properties` as one of the two additional allowed keys.
+		keys := ConfigKeys()
+		for _, want := range []string{"templates", "properties"} {
+			if !slices.Contains(keys, want) {
+				t.Errorf("ConfigKeys() = %v, want it to contain %q", keys, want)
+			}
+		}
+	})
+
+	t.Run("coexists with properties, the other additional key", func(t *testing.T) {
+		cfg, err := LoadConfig(configFS(
+			"title: D\n"+
+				"properties:\n"+
+				"  audience: exec\n"+
+				"templates: ../shared-lib\n"), ConfigFile, themes)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if cfg.Templates != "../shared-lib" {
+			t.Errorf("Config.Templates = %q, want %q", cfg.Templates, "../shared-lib")
+		}
+		if v, ok := cfg.Properties["audience"].(string); !ok || v != "exec" {
+			t.Errorf("Properties[audience] = %#v, want string %q", cfg.Properties["audience"], "exec")
 		}
 	})
 
