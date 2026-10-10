@@ -384,6 +384,15 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 // from this instance and inherits its deck/slide context (item-context,
 // template-context). A call made from a slide layout sees a nil parent, since
 // RenderSlide publishes the slide context with no calling instance.
+//
+// The instance's layout executes with the `media` helper bound to its own
+// template's owning layer when the renderer holds a per-layer base hook
+// (executeLayeredLayout, keyed by r.reg.LayerOf(tmpl.Name)), so a declared
+// child section contributed by the external layer resolves a media reference in
+// that layer rather than the merged library's primary media
+// (library-layer-references). A template whose owning layer is unknown, or a
+// renderer whose per-layer base hook is unset, executes through the shared
+// namespace exactly as before, keeping single-layer output byte-identical.
 func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, secCtx *sectionCtx) (htmltmpl.HTML, error) {
 	// Every section instance, at every composition depth, carries its own
 	// reserved `.raw` (its authored source field values and body) and `.data`
@@ -453,7 +462,7 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	}()
 
 	var buf bytes.Buffer
-	if err := r.root.ExecuteTemplate(&buf, layoutName(tmpl), data); err != nil {
+	if err := r.executeLayeredLayout(&buf, tmpl, r.reg.LayerOf(tmpl.Name), data); err != nil {
 		return "", fmt.Errorf("execute layout: %w", err)
 	}
 	return htmltmpl.HTML(buf.String()), nil
