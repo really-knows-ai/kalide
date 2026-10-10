@@ -667,3 +667,235 @@ func TestRenderSlideSoleLayerMediaUnchanged(t *testing.T) {
 		t.Errorf("sole-layer render emitted an external media prefix:\n%s", gotLayered)
 	}
 }
+
+// The layered template-composition probes below drive executeLayeredLayout's
+// per-layer namespace (feedback-28): a two-layer deck's layout may invoke
+// another layout with `{{ template "<layout name>" . }}` — the composition
+// parseLayouts' shared namespace supports — and that call must resolve while
+// each `{{ media … }}` reference still resolves in the EXECUTING layout's own
+// layer.
+//
+// A loader subtlety shapes how these fixtures are built. LoadLibrary's step 7
+// (checkLibraryExamples) executes each template's layout in isolation, parsed
+// alone, so a DISK layout carrying `{{ template "<other>" . }}` fails to load
+// with `no such template` before any render happens. These probes therefore
+// load ordinary, self-contained libraries through the public LoadDeckLibrary
+// first and then install the composition layout text on the loaded
+// *template.LibraryTemplate (exactly the text an authored composition layout
+// would carry) before building the registry; the render path under test reads
+// only that in-memory LayoutText. This mirrors internal/template's own tests,
+// which set a LibraryTemplate's LayoutText directly, and keeps the probe on the
+// public two-layer loader (real layer roles and per-layer media filesystems)
+// rather than a hand-built library.
+//
+// The layout name a `{{ template … }}` call must name is layoutName(t) —
+// t.Layout.Name, which for a library-loaded template is its layout file path
+// (loadlibrary.go: path.Join(layerRoot, dir, layout.html.tmpl)). The probes
+// read that name back off the loaded template, so the literal and the
+// namespace key cannot drift.
+
+// layeredCompositionFixture writes a two-layer deck whose DISK layouts are all
+// self-contained (no `{{ template }}` call), so LoadDeckLibrary accepts them at
+// its step-7 example runs; a probe installs the composition text afterwards.
+// The external layer carries three sections — extcaller/extcallee (the
+// template-composition pair) and extinvoked (invoked from the local layer) —
+// and the local layer two slides, localslide (which calls the external section
+// through the `section` helper) and localinvokee (invoked as a layout). Every
+// media file lives in one layer only — ext-*.svg externally, local-*.svg
+// locally — so a media URL reveals which layer's filesystem resolved it and a
+// mis-bound layer fails rather than silently matching a same-named file.
+func layeredCompositionFixture(t *testing.T) (deckRoot, extRoot string) {
+	t.Helper()
+
+	extRoot = t.TempDir()
+	writeLayerManifest(t, extRoot, "ext-comp-lib")
+	writeLayerTemplate(t, extRoot, template.SectionsDir, "extcaller",
+		`<div class="ext-caller"><img class="caller" src="{{ media "ext-one.svg" }}"></div>`)
+	writeLayerTemplate(t, extRoot, template.SectionsDir, "extcallee",
+		`<div class="ext-callee"><img class="callee" src="{{ media "ext-two.svg" }}"></div>`)
+	writeLayerTemplate(t, extRoot, template.SectionsDir, "extinvoked",
+		`<div class="ext-invoked"><img class="invoked" src="{{ media "ext-logo.svg" }}"></div>`)
+	writeLayerMedia(t, extRoot, "ext-one.svg", "<svg/>")
+	writeLayerMedia(t, extRoot, "ext-two.svg", "<svg/>")
+	writeLayerMedia(t, extRoot, "ext-logo.svg", "<svg/>")
+
+	deckRoot = t.TempDir()
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+	writeLayerManifest(t, localRoot, "local-comp-lib")
+	writeLayerTemplate(t, localRoot, template.SlidesDir, "localslide",
+		`<section class="local-slide"><img class="own" src="{{ media "local-logo.svg" }}">{{ section "extcaller" }}</section>`)
+	writeLayerTemplate(t, localRoot, template.SlidesDir, "localinvokee",
+		`<section class="local-invokee"><img class="invokee" src="{{ media "local-logo2.svg" }}"></section>`)
+	writeLayerMedia(t, localRoot, "local-logo.svg", "<svg/>")
+	writeLayerMedia(t, localRoot, "local-logo2.svg", "<svg/>")
+	writeLayerMedia(t, localRoot, "local-invoked.svg", "<svg/>")
+	return deckRoot, extRoot
+}
+
+// loadedLayoutName returns the layout name a `{{ template … }}` call must use
+// to invoke the named loaded slide or section template: layoutName(t), the name
+// executeLayeredLayout/namespaceForLayer keys the per-layer namespace by. For a
+// library-loaded template it is the layout file path (loadlibrary.go), so the
+// probe builds the call literal from the loaded template rather than guessing.
+func loadedLayoutName(t *testing.T, lib *template.Library, name string) string {
+	t.Helper()
+	lt := lib.Slides[name]
+	if lt == nil {
+		lt = lib.Sections[name]
+	}
+	if lt == nil || lt.Layout == nil {
+		t.Fatalf("loaded template %q has no parsed layout", name)
+	}
+	return lt.Layout.Name()
+}
+
+// installLayoutText replaces the named loaded template's layout text with
+// layout before NewRegistryFromLibrary reads it into the registry definition.
+// The loader's step-7 example run cannot accept a disk layout with a
+// cross-template `{{ template … }}` call (see the probe comment above), so a
+// composition layout is installed here instead.
+func installLayoutText(t *testing.T, lib *template.Library, name, layout string) {
+	t.Helper()
+	lt := lib.Slides[name]
+	if lt == nil {
+		lt = lib.Sections[name]
+	}
+	if lt == nil {
+		t.Fatalf("loaded template %q not found", name)
+	}
+	lt.LayoutText = layout
+}
+
+// mustLayeredRegistryInstalled loads the two-layer fixture through the public
+// layered loader, lets install replace any layout text a probe needs, then
+// builds the registry and layout func map exactly as mustLayeredRegistry does.
+func mustLayeredRegistryInstalled(t *testing.T, deckRoot, extRoot string, install func(*template.Library)) (*template.Library, *template.Registry, htmltmpl.FuncMap) {
+	t.Helper()
+	lib, err := template.LoadDeckLibrary(deckRoot, extRoot)
+	if err != nil {
+		t.Fatalf("template.LoadDeckLibrary: %v", err)
+	}
+	if install != nil {
+		install(lib)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	return lib, reg, template.LayoutFuncMap(lib.Media, mediaURLPrefix)
+}
+
+// TestRenderSlideLayeredTemplateCompositionLocal pins feedback-28 for the
+// local-to-local case: a local slide layout invokes ANOTHER local layout with
+// `{{ template "<name>" . }}` and both layouts resolve their own `{{ media … }}`
+// under the single/primary /assets/templates/media/ base. Before
+// executeLayeredLayout parsed every registered layout into a per-layer
+// namespace, the call failed with "no such template".
+func TestRenderSlideLayeredTemplateCompositionLocal(t *testing.T) {
+	deckRoot, extRoot := layeredCompositionFixture(t)
+
+	_, reg, funcMap := mustLayeredRegistryInstalled(t, deckRoot, extRoot, func(lib *template.Library) {
+		invokee := loadedLayoutName(t, lib, "localinvokee")
+		installLayoutText(t, lib, "localslide",
+			`<section class="local-slide"><img class="own" src="{{ media "local-logo.svg" }}">{{ template "`+invokee+`" . }}</section>`)
+	})
+
+	parsed := &slide.Slide{File: "slides/1-local.md", Template: "localslide"}
+	got := renderSlideString(t, parsed, "local",
+		&deck.Config{Title: "Layered"}, deck.Slide{Number: 1, Label: "local"}, 1, reg, funcMap)
+
+	for _, want := range []string{
+		`<img class="own" src="/assets/templates/media/local-logo.svg">`,
+		`<img class="invokee" src="/assets/templates/media/local-logo2.svg">`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered slide does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "/assets/templates/external/") {
+		t.Errorf("local composition emitted an external prefix:\n%s", got)
+	}
+}
+
+// TestRenderSlideLayeredTemplateCompositionExternal pins feedback-28 for the
+// external-to-external case: a local slide calls an external section through
+// the `section` helper, and that external section invokes ANOTHER external
+// layout with `{{ template "<name>" . }}`; both resolve their media under the
+// external /assets/templates/external/media/ base. The external layout's
+// composition runs in the external layer's namespace, so the invoked layout's
+// media must not fall back to the primary (local) prefix.
+func TestRenderSlideLayeredTemplateCompositionExternal(t *testing.T) {
+	deckRoot, extRoot := layeredCompositionFixture(t)
+
+	_, reg, funcMap := mustLayeredRegistryInstalled(t, deckRoot, extRoot, func(lib *template.Library) {
+		callee := loadedLayoutName(t, lib, "extcallee")
+		installLayoutText(t, lib, "extcaller",
+			`<div class="ext-caller"><img class="caller" src="{{ media "ext-one.svg" }}">{{ template "`+callee+`" . }}</div>`)
+	})
+
+	parsed := &slide.Slide{File: "slides/2-caller.md", Template: "localslide"}
+	got := renderSlideString(t, parsed, "caller",
+		&deck.Config{Title: "Layered"}, deck.Slide{Number: 2, Label: "caller"}, 1, reg, funcMap)
+
+	for _, want := range []string{
+		`<img class="caller" src="/assets/templates/external/media/ext-one.svg">`,
+		`<img class="callee" src="/assets/templates/external/media/ext-two.svg">`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered slide does not contain %q:\n%s", want, got)
+		}
+	}
+	for _, forbidden := range []string{
+		`/assets/templates/media/ext-one.svg`,
+		`/assets/templates/media/ext-two.svg`,
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("external composition media resolved with the primary prefix: found %q:\n%s", forbidden, got)
+		}
+	}
+}
+
+// TestRenderSlideLayeredTemplateCompositionCrossLayer pins feedback-28 for the
+// cross-layer case: a LOCAL layout invokes an EXTERNAL layout with
+// `{{ template "<name>" . }}`, and the invoked external layout's `{{ media … }}`
+// resolves in the EXECUTING (local) layer — the local /assets/templates/media/
+// base and the local media filesystem — not the invoked layout's own external
+// layer. The invoked layout names a LOCAL-only media file, so a render bound to
+// the external layer would fail to resolve it rather than silently pick a
+// same-path file.
+func TestRenderSlideLayeredTemplateCompositionCrossLayer(t *testing.T) {
+	deckRoot, extRoot := layeredCompositionFixture(t)
+
+	lib, reg, funcMap := mustLayeredRegistryInstalled(t, deckRoot, extRoot, func(lib *template.Library) {
+		invoked := loadedLayoutName(t, lib, "extinvoked")
+		installLayoutText(t, lib, "extinvoked",
+			`<div class="ext-invoked"><img class="invoked" src="{{ media "local-invoked.svg" }}"></div>`)
+		installLayoutText(t, lib, "localslide",
+			`<section class="local-slide"><img class="own" src="{{ media "local-logo.svg" }}">{{ template "`+invoked+`" . }}</section>`)
+	})
+
+	// The invoked layout's media file lives only in the local layer, so the
+	// filesystem half of the executing-layer binding is observable.
+	if _, err := fs.Stat(lib.Layers[0].Media, "local-invoked.svg"); err == nil {
+		t.Error("external layer media holds local-invoked.svg, want it local-only so the fixture proves the executing-layer binding")
+	}
+	if _, err := fs.Stat(lib.Layers[1].Media, "local-invoked.svg"); err != nil {
+		t.Errorf("local layer media does not hold local-invoked.svg: %v", err)
+	}
+
+	parsed := &slide.Slide{File: "slides/3-cross.md", Template: "localslide"}
+	got := renderSlideString(t, parsed, "cross",
+		&deck.Config{Title: "Layered"}, deck.Slide{Number: 3, Label: "cross"}, 1, reg, funcMap)
+
+	for _, want := range []string{
+		`<img class="own" src="/assets/templates/media/local-logo.svg">`,
+		`<img class="invoked" src="/assets/templates/media/local-invoked.svg">`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered slide does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "/assets/templates/external/media/local-invoked.svg") {
+		t.Errorf("cross-layer invoked layout media used the external prefix, want the executing local layer's base:\n%s", got)
+	}
+}
