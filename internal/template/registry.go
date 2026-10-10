@@ -570,6 +570,23 @@ func checkDeclaredName(kind, tmpl, name string) error {
 // template that is not defined, or a slide-usage template (sections accept only
 // section-usage templates), and rejects impossible repeat bounds.
 //
+// Every name is resolved against the registry's WHOLE template namespace, not
+// just the checked template's own layer: r.Lookup — and r.TemplateNames, which
+// feeds the closest-match suggestion — sees every template registered in r. For
+// a registry built from a merged Library (NewRegistryFromLibrary), that
+// namespace is the union of every contributing layer's slides and sections
+// (layered-template-library), so a call in a local-layer template resolves an
+// external-layer section and vice versa (library-layer-references). This check
+// therefore only decides whether each call resolves somewhere in the union.
+//
+// It deliberately does NOT re-check an external-layer template's call that
+// names a local-only section: that reference is already rejected when the
+// external layer is loaded standalone (loadLibrary in libraryLayerFull mode,
+// the external/standalone root), which validates the layer as a self-contained
+// library against its own namespace (external-template-library). Per-layer
+// isolation is a per-layer load concern; this merged pass runs over the union
+// and lets a cross-layer call resolve.
+//
 // It then applies the load-time checks for every `section` helper call in the
 // template's layout (requirements.requirement.section-helper-load-checks). A
 // helper call is a static reference, so the same check pass that validates the
@@ -589,9 +606,12 @@ func checkDeclaredName(kind, tmpl, name string) error {
 // A non-literal `fields` or `body` expression is a permitted pass-through and
 // is not checked here: its keys and body are validated against the target's
 // field and body rules when the target renders (field-rules). Every error
-// carries the `template "<name>":` prefix, so the templates loader's
-// path-qualification (checkLibraryBuild, templates-dir-validation step 4) maps
-// it back to the declaring template.yaml.
+// carries the `template "<name>":` prefix naming the CALLING template (t.Name)
+// — not the resolved target — even when the failure is about that target (an
+// undefined name, a missing required field, a child section). The templates
+// loader's path-qualification (checkLibraryBuild, templates-dir-validation
+// step 4) therefore maps every failure back to the calling template's own
+// template.yaml, across layers as well as within one.
 func (r *Registry) checkSections(t *Template) error {
 	for i := range t.Sections {
 		d := &t.Sections[i]
