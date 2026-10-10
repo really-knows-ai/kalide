@@ -319,3 +319,55 @@ func (l *Library) ThemeNames() []string {
 	sort.Strings(names)
 	return names
 }
+
+// resolveMergedSectionTarget resolves a section name against the merged
+// library's section namespace and pairs the resolved *LibraryTemplate with the
+// *LibraryLayer that owns it (library-layer-references). It is the one lookup
+// that carries a section target's layer provenance back out of a merged
+// Library: Library.Sections is the union of the layers' sections and so holds
+// the target, but the merged map alone cannot say which layer contributed it,
+// because mergeLibraryLayers drops per-name layer provenance when it unions the
+// maps (mergeLibraryLayers).
+//
+// lib may be a merged multi-layer Library or a single-layer Library (whose
+// Layers holds exactly its one layer); a nil lib, or a name that is not a
+// section in lib.Sections, reports ok false and both values nil.
+//
+// The owning layer is found by identity, not by name: the entry in
+// lib.Layers[i].Sections[name] must be the same *LibraryTemplate pointer the
+// merged lib.Sections[name] holds (mergeLibraryLayers shares the pointer, it
+// does not copy the template), so a layer that happens to carry a different
+// template under the same name is never mistaken for the owner. When
+// lib.Sections has no matching layer — a Library that carries no Layers at all,
+// such as the empty zero-layer mergeLibraryLayers result — the template is
+// still returned with ok true and a nil *LibraryLayer, so a caller can always
+// tell "resolved, but its layer is unknown" apart from "not a section".
+//
+// A section's owning layer matters because every reference inside that section
+// other than the `section` helper call itself resolves in the section's own
+// layer: its layout `media` helper, its `media:` and `theme:<name>/` references
+// and its theme's files all resolve from the owning layer's root and media, not
+// the merged Library's primary root or media (library-layer-references). The
+// callers that must carry this provenance are the registry provenance
+// (Registry, NewRegistryFromLibrary), the merged-namespace section-helper
+// resolution (Registry.checkSections, ResolveSectionCall/SectionCall) and the
+// render/example paths that bind the `media` helper to the called section's
+// layer.
+func resolveMergedSectionTarget(lib *Library, name string) (*LibraryTemplate, *LibraryLayer, bool) {
+	if lib == nil {
+		return nil, nil, false
+	}
+	target, ok := lib.Sections[name]
+	if !ok || target == nil {
+		return nil, nil, false
+	}
+	for _, layer := range lib.Layers {
+		if layer == nil {
+			continue
+		}
+		if layer.Sections[name] == target {
+			return target, layer, true
+		}
+	}
+	return target, nil, true
+}
