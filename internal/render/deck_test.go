@@ -16,10 +16,10 @@ import (
 
 // TestRenderDeck covers RenderDeck end to end on the phase-3 fixture library
 // (internal/template/testdata/library): the .reveal > .slides structure with
-// letter slides nested as vertical stacks, the navigationMode passthrough,
-// the registry-resolved theme stylesheet served from templates/themes/<name>,
-// the embedded offline asset URLs, print-to-PDF wiring, speaker notes and
-// determinism.
+// letter slides grouped under a plain wrapper <section> as vertical stacks,
+// the navigationMode passthrough, the registry-resolved theme stylesheet served
+// from templates/themes/<name>, the embedded offline asset URLs, print-to-PDF
+// wiring, speaker notes and determinism.
 func TestRenderDeck(t *testing.T) {
 	reg, funcMap := mustFixtureRegistry(t)
 
@@ -63,15 +63,15 @@ func TestRenderDeck(t *testing.T) {
 			"beta":   sectionDepth(page, beta),
 			"second": sectionDepth(page, second),
 		}
-		want := map[string]int{"first": 1, "alpha": 2, "beta": 2, "second": 1}
+		want := map[string]int{"first": 2, "alpha": 2, "beta": 2, "second": 1}
 		for name, got := range depths {
 			if got != want[name] {
 				t.Errorf("slide %q has section depth %d, want %d", name, got, want[name])
 			}
 		}
 
-		if got := strings.Count(page, "<section"); got != 4 {
-			t.Errorf("page has %d <section> elements, want 4 (2 horizontal + 2 vertical)", got)
+		if got := strings.Count(page, "<section"); got != 5 {
+			t.Errorf("page has %d <section> elements, want 5 (wrapper + first + alpha + beta + second)", got)
 		}
 	})
 
