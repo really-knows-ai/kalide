@@ -1,0 +1,30 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "user-config-store",
+  "body": "User-config store: the per-user settings file store — locates the config file under the operating system's user config directory, reads it into a key-to-value map, writes a key (creating the file and its parent directory), unsets a key, lists the keys, and normalises the `default-template-library` value to an absolute path on set (`~` to the user's home directory, a relative path against the current working directory). Local filesystem only, no network. It is the storage half of domain.service.load-user-config and backs both the `kalide config` command and `kalide init`'s default-library resolution. Its intended home is a new internal package (a config store); the code is built by the plan.",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.load-user-config",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.user-config",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.configuration",
+      "properties": {}
+    }
+  ]
+}

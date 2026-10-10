@@ -1,0 +1,37 @@
+{
+  "layer": "domain",
+  "type": "group",
+  "name": "configuration",
+  "body": "Configuration: kalide's user-level settings — the per-user config file and the default template library directory it holds — read by the CLI at command time and shared by every deck and every working directory.",
+  "properties": {
+    "attribute": "supporting"
+  },
+  "out": [
+    {
+      "kind": "contains",
+      "target": "domain.entity.user-config",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.default-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.service.load-user-config",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.user-config-store",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.config-command",
+      "properties": {}
+    }
+  ],
+  "in": []
+}

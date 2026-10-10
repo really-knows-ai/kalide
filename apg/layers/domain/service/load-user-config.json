@@ -1,0 +1,31 @@
+{
+  "layer": "domain",
+  "type": "service",
+  "name": "load-user-config",
+  "body": "Load user config: read kalide's per-user settings file into a key-to-value map; resolve one key; write a key (creating the file and its parent directory); unset a key; list the keys. On `set` of `default-template-library` it normalises the value to an absolute path (`~` to the user's home directory, a relative path against the current working directory). Local filesystem only, no network. Realised by solution.component.user-config-store and solution.component.config-command.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.user-config-store",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.config-command",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.configuration",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.cli-config",
+      "properties": {}
+    }
+  ]
+}

@@ -9,77 +9,12 @@
   "out": [
     {
       "kind": "contains",
-      "target": "solution.component.cli-commands",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.deck-loader",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.slide-parser",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.markdown-validator",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.template-registry",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.deck-validator",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.renderer",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.http-server",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.file-watcher",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.embedded-assets",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.theme-registry",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.template-library-loader",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.init-seed",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "solution.component.agent-guide",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "solution.component.upgrade",
+      "target": "solution.component.cli-commands",
       "properties": {}
     },
     {
@@ -89,16 +24,86 @@
     },
     {
       "kind": "contains",
+      "target": "solution.component.deck-loader",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "solution.component.deck-renderer",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.deck-validator",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.embedded-assets",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.file-watcher",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.http-server",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.init-seed",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.markdown-validator",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.renderer",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.slide-parser",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.theme-registry",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.upgrade",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.config-command",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.user-config-store",
       "properties": {}
     }
   ],
   "in": [
-    {
-      "kind": "realised-by",
-      "source": "domain.group.authoring",
-      "properties": {}
-    },
     {
       "kind": "contains",
       "source": "solution.system.kalide",
@@ -107,6 +112,11 @@
     {
       "kind": "details",
       "source": "solution.note.spine-tier3-anchors",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.authoring",
       "properties": {}
     }
   ]

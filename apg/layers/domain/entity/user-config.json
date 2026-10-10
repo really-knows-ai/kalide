@@ -1,0 +1,33 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "user-config",
+  "body": "The user config: kalide's per-user settings file under the operating system's user config directory — a flat key-to-string-value map. It is shared by every deck and every working directory; kalide creates or updates it on `kalide config set`, reads it on `kalide config get|list` and when resolving the default template library for `kalide init`. Its first defined key is `default-template-library` (domain.value.default-template-library); other keys are free-form. Local filesystem only.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.user-config-store",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.config-command",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.configuration",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.cli-config",
+      "properties": {}
+    }
+  ]
+}

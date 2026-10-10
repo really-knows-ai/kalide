@@ -1,0 +1,28 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "init-library-resolution",
+  "body": "`kalide init [path] [--local]` resolves the template library it uses, first match wins:\n1. an explicit `path` argument — an external-library deck (as `kalide init <path>`);\n2. else, the configured user-level default (`default-template-library`, read from the per-user config file) — an external-library deck;\n3. else, the built-in starter deck — the seed with a local `templates/` and a starter slide (cli-init-minimal-seed).\nThe `--local` flag forces the built-in starter deck (branch 3) even when a default is configured, so a single init can opt out without unsetting the default. `--local` is valid only with no path argument; combining `--local` with a `path` is a usage error and writes nothing. init therefore accepts an optional `path` argument and the optional `--local` flag (the rule that init accepts no options does not hold; there is still no `--force`). In branches 1 and 2 the chosen path is validated fail-fast before any write (external-template-library, cli-init): a missing or invalid library, or a library that does not resolve the deck's theme, aborts with a clear error naming the path, a non-zero exit and nothing written. In branch 1 an explicit relative path is stored as given (resolved against the deck root); in branch 2 the configured default is stored as an absolute path (default-template-library). Branch 3 is the built-in seed unchanged (cli-init-minimal-seed), whose local-`templates/` block applies (cli-init-refuse-existing).\n\nAC:\n- `kalide init` with a configured default and no path produces branch 2; `kalide init --local` produces branch 3 (a seed deck with a local `templates/` and a starter slide); `kalide init ../lib` produces branch 1;\n- `kalide init --local ../lib` is a usage error and writes nothing;\n- with no default set and no path, `kalide init` produces branch 3.",
+  "properties": {
+    "feature": "configuration"
+  },
+  "out": [
+    {
+      "kind": "depends-on",
+      "target": "requirements.requirement.default-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.cli-init",
+      "properties": {}
+    }
+  ]
+}

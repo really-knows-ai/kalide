@@ -27,17 +27,17 @@
     },
     {
       "kind": "contains",
+      "target": "requirements.requirement.markdown-allowed-subset",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.slide-file-ordering",
       "properties": {}
     },
     {
       "kind": "contains",
       "target": "requirements.requirement.slide-template-required",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
     },
     {
@@ -49,17 +49,27 @@
       "kind": "represents",
       "target": "domain.entity.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-config",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.default-template-library",
+      "properties": {}
     }
   ],
   "in": [
     {
       "kind": "details",
-      "source": "requirements.note.spine-stakeholder-reachability",
+      "source": "global.note.represents-actor-tier",
       "properties": {}
     },
     {
       "kind": "details",
-      "source": "global.note.represents-actor-tier",
+      "source": "requirements.note.spine-stakeholder-reachability",
       "properties": {}
     }
   ]

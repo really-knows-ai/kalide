@@ -7,11 +7,6 @@
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.single-binary",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.cli-init",
       "properties": {}
     },
@@ -37,6 +32,11 @@
     },
     {
       "kind": "contains",
+      "target": "requirements.requirement.single-binary",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.slide-file-ordering",
       "properties": {}
     },
@@ -48,6 +48,16 @@
     {
       "kind": "contains",
       "target": "requirements.requirement.whole-deck-validation",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-config",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.default-template-library",
       "properties": {}
     }
   ],
