@@ -1,5 +1,5 @@
 ---
-description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest}, README.md. Implements plan tasks in the project worktree.
+description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest,config}, README.md. Implements plan tasks in the project worktree.
 mode: subagent
 hidden: true
 generated: true
@@ -59,6 +59,7 @@ permission:
     "apg/.worktrees/*/internal/cli/**": allow
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/internal/config/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -92,6 +93,7 @@ permission:
     "apg/.worktrees/*/internal/cli/**": allow
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/internal/config/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -110,6 +112,7 @@ permission:
     "apg/.worktrees/*/internal/cli/**": allow
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/internal/config/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -128,6 +131,7 @@ permission:
     "apg/.worktrees/*/internal/cli/**": allow
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
+    "apg/.worktrees/*/internal/config/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -185,7 +189,8 @@ project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 `cross`/`release` targets for darwin/{arm64,amd64}, windows/{amd64,arm64},
 linux/{amd64,arm64}), `.gitignore`,
 `README.md`, `cmd/**`, `internal/cli/**`, `internal/scaffold/**`,
-`internal/suggest/**`, the root legal/release docs `LICENSE`, `NOTICE`,
+`internal/suggest/**`, `internal/config/**` (per-user settings store, stdlib
+only; its `config_test.go` is test-implementer's), the root legal/release docs `LICENSE`, `NOTICE`,
 `TRADEMARKS.md`, `CHANGELOG.md`, and `brand/**` (brand source such as `.svg`
 files and `brand/LICENSE`). **Nothing under `brand/**` is ever `go:embed`'ed or
 copied into `internal/assets`** — brand files are repo artifacts, not shipped
