@@ -481,3 +481,218 @@ func assertServedTemplatesRefsResolve(t *testing.T, dir, page string) {
 		}
 	}
 }
+
+// TestRenderDeckLayeredSectionMedia is the whole-deck integration test for the
+// layered media-URL contract (library-layer-references): a real two-layer deck
+// on disk — an external `templates:` library and the deck-root templates/
+// layer — is loaded by template.LoadDeckLibrary, validated and rendered by
+// RenderDeck, the same library→deck→parse→render pipeline the other
+// whole-deck tests drive. It is the RenderDeck (page-level) counterpart of the
+// RenderSlide unit test in sectionhelper_test.go and reuses that file's
+// layering fixtures (layeredMediaFixture, writeSoleLayerLibrary, the
+// writeLayer* writers) rather than rebuilding them.
+//
+// It pins the full-page outcome of the per-layer binding:
+//
+//   - a LOCAL slide template's `section` helper invokes an EXTERNAL section,
+//     whose `media` reference resolves in the external layer — both the URL
+//     (/assets/templates/external/media/…) and the external media filesystem —
+//     while the local slide's own `media` reference keeps the primary
+//     /assets/templates/media/… URL and the local media filesystem;
+//   - the two prefixes never cross (a local file is never addressed as
+//     external, and vice versa);
+//   - the deck theme resolves from the external layer's own themes/ registry
+//     and links the deck-level theme URL;
+//   - a deck that only uses local templates, and a deck whose whole library is
+//     a single external root, both render with the unchanged, unprefixed
+//     /assets/templates/media/… URLs and never emit an external prefix.
+//
+// It reads real deck and library directories from disk, so it is skipped under
+// -short.
+func TestRenderDeckLayeredSectionMedia(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test reads a real deck directory from disk")
+	}
+
+	t.Run("a two-layer deck binds an external section's media to the external layer", func(t *testing.T) {
+		deckRoot, extRoot := writeLayeredRenderDeck(t)
+		lib, page := renderLayeredDeckPipeline(t, deckRoot, extRoot, extRoot)
+
+		// LoadDeckLibrary marks the configured external root first, the
+		// deck-root templates/ second.
+		if len(lib.Layers) != 2 {
+			t.Fatalf("len(Layers) = %d, want 2 (external + local)", len(lib.Layers))
+		}
+		if lib.Layers[0].Role != template.LayerRoleExternal {
+			t.Errorf("Layers[0].Role = %v, want LayerRoleExternal", lib.Layers[0].Role)
+		}
+		if lib.Layers[1].Role != template.LayerRoleLocal {
+			t.Errorf("Layers[1].Role = %v, want LayerRoleLocal", lib.Layers[1].Role)
+		}
+
+		// The external section the local slide invokes through the helper
+		// renders with its media resolved in the EXTERNAL layer.
+		if want := `<div class="ext-section"><img src="/assets/templates/external/media/ext-logo.svg"></div>`; !strings.Contains(page, want) {
+			t.Errorf("page does not contain the external section's external-prefixed media:\nwant: %s\npage:\n%s", want, page)
+		}
+		// The local slide template's own media keeps the primary base.
+		if want := `<img class="own" src="/assets/templates/media/local-logo.svg">`; !strings.Contains(page, want) {
+			t.Errorf("page does not contain the local slide's primary media URL:\nwant: %s\npage:\n%s", want, page)
+		}
+		// The prefixes never cross.
+		if strings.Contains(page, "/assets/templates/external/media/local-logo.svg") {
+			t.Errorf("local media was addressed with the external prefix:\n%s", page)
+		}
+		if strings.Contains(page, "/assets/templates/media/ext-logo.svg") {
+			t.Errorf("external media was addressed with the primary prefix:\n%s", page)
+		}
+		// The deck theme resolves from the external layer's themes/ registry and
+		// links the single/primary theme URL (the per-layer external theme route
+		// lands in phase 4).
+		if want := `<link rel="stylesheet" href="/assets/templates/themes/plain/theme.css">`; !strings.Contains(page, want) {
+			t.Errorf("page does not link the deck theme resolved from the external layer:\nwant: %s\npage:\n%s", want, page)
+		}
+	})
+
+	t.Run("a local-only deck renders unchanged unprefixed media URLs", func(t *testing.T) {
+		deckRoot := writeLocalOnlyRenderDeck(t)
+		_, page := renderLayeredDeckPipeline(t, deckRoot, "", filepath.Join(deckRoot, template.TemplatesDir))
+
+		if want := `<img src="/assets/templates/media/solo.svg">`; !strings.Contains(page, want) {
+			t.Errorf("local-only deck page does not contain the primary media URL:\nwant: %s\npage:\n%s", want, page)
+		}
+		if strings.Contains(page, "/assets/templates/external/") {
+			t.Errorf("local-only deck page emitted an external prefix:\n%s", page)
+		}
+	})
+
+	t.Run("an external-only library renders unchanged unprefixed media URLs", func(t *testing.T) {
+		deckRoot, extRoot := writeExternalOnlyRenderDeck(t)
+		lib, page := renderLayeredDeckPipeline(t, deckRoot, extRoot, extRoot)
+
+		if len(lib.Layers) != 1 {
+			t.Fatalf("len(Layers) = %d, want 1 (the external root is the deck's whole library)", len(lib.Layers))
+		}
+		if lib.Layers[0].Role != template.LayerRoleSole {
+			t.Errorf("Layers[0].Role = %v, want LayerRoleSole", lib.Layers[0].Role)
+		}
+		if want := `<img src="/assets/templates/media/ext-logo.svg">`; !strings.Contains(page, want) {
+			t.Errorf("external-only deck page does not contain the primary media URL:\nwant: %s\npage:\n%s", want, page)
+		}
+		if strings.Contains(page, "/assets/templates/external/") {
+			t.Errorf("external-only deck page emitted an external prefix:\n%s", page)
+		}
+	})
+}
+
+// writeLayeredRenderDeck writes a full two-layer deck on real temp dirs: the
+// shared layeredMediaFixture layers (an external library carrying the extmedia
+// section and ext-logo.svg, a deck-root templates/ layer carrying localslide —
+// which resolves its own local-logo.svg and calls extmedia through the
+// `section` helper — plus localchild) extended with the deck files and the
+// external layer's theme. It returns the deck root and the external root,
+// exactly the (deckRoot, configured) arguments LoadDeckLibrary takes.
+func writeLayeredRenderDeck(t *testing.T) (deckRoot, extRoot string) {
+	t.Helper()
+	deckRoot, extRoot = layeredMediaFixture(t)
+	// The deck-level theme lives in the external layer, so the theme registry
+	// is built from the external root — showing a theme reference resolving in
+	// the external layer's own themes/.
+	writeLayerTheme(t, extRoot, "plain", "body { margin: 0; }\n")
+	writeLayerFile(t, filepath.Join(deckRoot, deck.ConfigFile),
+		"title: Layered Deck\ntheme: plain\ntemplates: \""+extRoot+"\"\n")
+	writeLayerFile(t, filepath.Join(deckRoot, deck.SlidesDir, "1-local.md"),
+		"---\ntemplate: localslide\n---\n")
+	return deckRoot, extRoot
+}
+
+// writeLocalOnlyRenderDeck writes a full deck whose whole library is the
+// deck-root templates/ layer (no `templates:` key): writeSoleLayerLibrary's
+// soloslide, which resolves its own solo.svg, plus the deck files and theme.
+func writeLocalOnlyRenderDeck(t *testing.T) string {
+	t.Helper()
+	deckRoot := writeSoleLayerLibrary(t)
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+	writeLayerTheme(t, localRoot, "plain", "body { margin: 0; }\n")
+	writeLayerFile(t, filepath.Join(deckRoot, deck.ConfigFile),
+		"title: Solo Deck\ntheme: plain\n")
+	writeLayerFile(t, filepath.Join(deckRoot, deck.SlidesDir, "1-solo.md"),
+		"---\ntemplate: soloslide\n---\n")
+	return deckRoot
+}
+
+// writeExternalOnlyRenderDeck writes a full deck whose whole library is a
+// single external root configured through `templates:`: the deck root carries
+// no templates/ directory, so the external root is the deck's only (sole)
+// layer. It returns the deck root and the external root.
+func writeExternalOnlyRenderDeck(t *testing.T) (deckRoot, extRoot string) {
+	t.Helper()
+	extRoot = t.TempDir()
+	writeLayerManifest(t, extRoot, "ext-lib")
+	writeLayerTemplate(t, extRoot, template.SlidesDir, "extslide",
+		`<section class="ext-slide"><img src="{{ media "ext-logo.svg" }}"></section>`)
+	writeLayerMedia(t, extRoot, "ext-logo.svg", "<svg/>")
+	writeLayerTheme(t, extRoot, "plain", "body { margin: 0; }\n")
+
+	// Deliberately no deck-root templates/: the external root is the library.
+	deckRoot = t.TempDir()
+	writeLayerFile(t, filepath.Join(deckRoot, deck.ConfigFile),
+		"title: External Deck\ntheme: plain\ntemplates: \""+extRoot+"\"\n")
+	writeLayerFile(t, filepath.Join(deckRoot, deck.SlidesDir, "1-ext.md"),
+		"---\ntemplate: extslide\n---\n")
+	return deckRoot, extRoot
+}
+
+// writeLayerTheme writes one layer theme's required theme.css under
+// root/themes/<name>/.
+func writeLayerTheme(t *testing.T, root, name, css string) {
+	t.Helper()
+	writeLayerFile(t, filepath.Join(root, template.ThemesDir, name, template.ThemeStylesheet), css)
+}
+
+// renderLayeredDeckPipeline runs the whole library→deck→parse→render pipeline
+// over a layered deck: theme.LoadDir over themeRoot's own themes/, the merged
+// library through template.LoadDeckLibrary(deckRoot, configured), the registry
+// built from it, validate.Validate, deck.LoadConfig/LoadSlides, slide.Parse and
+// RenderDeck (with `media` bound to the primary served base, which RenderSlide
+// overrides per layer). It returns the merged library and the rendered page
+// HTML, failing the test on any load/validate/render error.
+func renderLayeredDeckPipeline(t *testing.T, deckRoot, configured, themeRoot string) (*template.Library, string) {
+	t.Helper()
+	fsys := os.DirFS(deckRoot)
+
+	themeReg, err := theme.LoadDir(os.DirFS(themeRoot), template.ThemesDir)
+	if err != nil {
+		t.Fatalf("theme.LoadDir(%s): %v", themeRoot, err)
+	}
+
+	lib, err := template.LoadDeckLibrary(deckRoot, configured)
+	if err != nil {
+		t.Fatalf("template.LoadDeckLibrary(%s, %s): %v", deckRoot, configured, err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+
+	if verr, invalid := validate.Validate(fsys, reg, themeReg); invalid {
+		t.Fatalf("validate.Validate rejected the layered deck: %s", validate.Format(verr))
+	}
+
+	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
+	if err != nil {
+		t.Fatalf("deck.LoadConfig: %v", err)
+	}
+	d, err := deck.LoadSlides(fsys, deck.SlidesDir)
+	if err != nil {
+		t.Fatalf("deck.LoadSlides: %v", err)
+	}
+	parsed := parsePipelineSlides(t, fsys, d, reg)
+
+	funcMap := template.LayoutFuncMap(lib.Media, mediaURLPrefix)
+	pageHTML, err := RenderDeck(cfg, d, parsed, reg, themeReg, funcMap)
+	if err != nil {
+		t.Fatalf("RenderDeck: %v", err)
+	}
+	return lib, string(pageHTML)
+}
