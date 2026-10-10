@@ -19,22 +19,35 @@ and a **template library** that supplies every slide layout, section layout,
 theme and shared media file. There is no built-in fallback: a deck without a
 resolvable library does not load.
 
-The library is either:
+The library is one merged set drawn from up to two **layers**:
 
-- the deck's **local `templates/` directory** — what a no-argument
-  `kalide init` creates; or
+- the deck's **local `templates/` directory** — loaded whenever that directory
+  exists (what a no-argument `kalide init` creates); and
 - an **external library** named by the deck's `templates:` key in
   `kalide.yaml` (an absolute path, or a path relative to the deck root such as
-  `../shared-lib`) — what `kalide init <path>` creates.
+  `../shared-lib`) — loaded whenever the key is present (what
+  `kalide init <path>` creates).
 
-The format is identical in both cases; only where the library lives differs.
-Two consequences of the external form:
+Both layers are loaded when both are present, with equal standing: there is no
+precedence between them and no overriding. A relative `templates:` path is
+resolved against the deck root; an absolute path is used as given. The format
+is identical in both layers; only where the library lives differs. Two
+consequences of the layered library:
 
-- `kalide init <path>` writes an **empty `slides/`** — no starter slide — and
-  no local `templates/`.
-- A configured `templates:` path is authoritative: when the key is present and
-  non-empty the local `templates/` directory is ignored entirely. A relative
-  path is resolved against the deck root; an absolute path is used as given.
+- `kalide init <path>` validates the external library **alone** before writing
+  anything — a missing or invalid library, or one that does not resolve the
+  deck's theme, aborts with an error naming the path and nothing written — then
+  writes an **empty `slides/`** (no starter slide) and no local `templates/`.
+  A pre-existing local `templates/` is left untouched and participates as the
+  deck's local layer.
+- A name carried by both layers — a slide or section name (the two share one
+  template namespace), a theme name, or a shared `media/` path — is a
+  validation error naming the name and both paths, never an override. A local
+  template's `section` helper call resolves against the merged section
+  namespace, so it invokes an external section like a local one; every other
+  reference (`media`, `media:`, `theme:<name>/`) resolves inside the
+  referencing template's or theme's own layer, and the external library is
+  self-contained, so it validates standalone.
 
 ## kalide.yaml
 
@@ -60,14 +73,16 @@ Every key:
 - `date` — the presentation date written `YYYY-MM-DD`; any other form is an
   error.
 - `theme` — the theme name; omitted means `default`. The theme must be a
-  directory under the resolved library's `themes/`.
+  directory under the merged library's `themes/` (a theme may live in either
+  layer, but the name must be unique across both).
 - `navigation` — `default`, `linear` or `grid`; omitted means `default`.
 - `properties` — an arbitrary mapping of author keys to typed scalars (string,
   number, boolean, or a `YYYY-MM-DD` date). A mapping or list value is an
   error. The map is always available to templates.
-- `templates` — path to the deck's external template library. Omitted means the
-  local `templates/` directory. Relative paths resolve against the deck root;
-  absolute paths are used as given.
+- `templates` — path to the deck's external template library layer. Omitted
+  means there is no external layer; the deck-root `templates/` is still loaded
+  as the local layer whenever it exists. Relative paths resolve against the
+  deck root; absolute paths are used as given.
 
 Every other top-level key is an error, with a closest-match suggestion.
 
@@ -156,7 +171,8 @@ audience.
 
 ## The template library
 
-The resolved library is a directory with this fixed layout:
+Each resolved layer is a directory with this fixed layout (shown below as the
+deck's local `templates/`):
 
 ```
 templates/
@@ -180,7 +196,10 @@ templates/
 - A template's **kind** (`slide` or `section`) comes from its directory:
   `slides/` or `sections/`. `template.yaml` must not carry a `usage:` key.
 - A template's **name** is its directory name, and must be unique across
-  `slides/` and `sections/` together.
+  `slides/` and `sections/` together, and across the merged layers: a name
+  carried by two layers is an error naming the name and both paths. Theme names
+  and `media/` paths each form their own namespace, unique across the merged
+  layers the same way.
 - Every template directory holds exactly `template.yaml`, `layout.html.tmpl`
   and `example.md`.
 - `themes/<name>/` holds `theme.css` plus any fonts, logos or other files the
@@ -357,11 +376,11 @@ Five reserved context names are provided, as **data**, not helpers:
 
 The v1 layout **helper** set is exactly `media`, `section`, `dict` and `list`.
 
-`media`'s argument is a path relative to the resolved library's `media/`
-directory. It returns the URL the server serves that file under. The argument
-must not be absolute and must not contain `..`; a missing file, an absolute
-path or a `..` segment is an error naming the layout's file and line. `media`
-never resolves into a theme directory.
+`media`'s argument is a path relative to the `media/` directory of the layer
+that owns the layout. It returns the URL the server serves that file under. The
+argument must not be absolute and must not contain `..`; a missing file, an
+absolute path or a `..` segment is an error naming the layout's file and line.
+`media` never resolves into a theme directory.
 
 ```
 {{ media "logo.svg" }}
@@ -405,33 +424,34 @@ template may not declare a field or section named `deck`, `slide`, `item`,
 ## Themes
 
 - `theme` is deck-wide only, never per slide. Omitted means `default`.
-- Available themes are exactly the directories under the resolved library's
-  `themes/`. There are **no built-in themes**.
+- Available themes are exactly the directories under the merged library's
+  `themes/` — the `themes/` of every resolved layer. There are **no built-in
+  themes**.
 - A named (or defaulted) theme the library does not define is an error listing
   the available themes with a closest-match suggestion.
 - A theme is a `theme.css` token stylesheet plus optional files it owns.
   Theme-owned files (fonts, logos) are referenced from that theme's CSS and are
   served from the theme directory.
-- A theme's `theme.css` — and every CSS it `@import`s, wherever in the resolved
-  library that CSS lives (its own theme directory, another theme, or `media/`) —
-  may reference a servable library file with both `url()` and `@import`, in
-  three forms:
+- A theme's `theme.css` — and every CSS it `@import`s, wherever in that layer
+  that CSS lives (its own theme directory, another theme, or `media/`) — may
+  reference a servable file in that same layer with both `url()` and `@import`,
+  in three forms:
   - an unprefixed relative path, resolved from the referencing file's own
     location and confined to that file's own tree: the theme directory for a
     stylesheet in a theme, or `media/` for a stylesheet reached through
     `media:`;
-  - the reserved `media:` prefix → the resolved library's shared `media/` tree,
+  - the reserved `media:` prefix → that layer's shared `media/` tree,
     for example `url('media:fonts/Inter-Regular.woff2')` or
     `@import url('media:theme.css')`;
-  - the reserved `theme:<name>/` prefix → another theme's directory, for
-    example `url('theme:default/theme.css')` or
+  - the reserved `theme:<name>/` prefix → another theme's directory in that
+    layer, for example `url('theme:default/theme.css')` or
     `@import url('theme:default/theme.css')`, so a theme may build on another.
 - Cross-tree reach happens only through the `media:` and `theme:<name>/`
   prefixes. An unprefixed relative reference stays inside the stylesheet's own
   tree: no absolute paths, no `..` leaving that tree, no other scheme, nothing
-  outside the library, and no references into non-servable entries (`slides/`,
+  outside that layer, and no references into non-servable entries (`slides/`,
   `sections/`, `library.yaml`, `AGENTS.md`). The path after `media:` is relative
-  to the library's `media/` — the same base the layout `{{ media "path" }}`
+  to that layer's `media/` — the same base the layout `{{ media "path" }}`
   helper uses — and the path after `theme:<name>/` is relative to
   `themes/<name>/`; an unknown `theme:<name>` is an error. Both prefixes work in
   both `url()` and `@import`, and an imported stylesheet's own references are
@@ -441,14 +461,16 @@ template may not declare a field or section named `deck`, `slide`, `item`,
 
 ## Media
 
-- Shared media of any type lives under the resolved library's `media/` and is
+- Shared media of any type lives under each resolved layer's `media/` and is
   referenced from layouts with `{{ media "path" }}`.
-- The path is relative to `media/` only: no absolute paths and no `..`.
-- A theme's CSS — `theme.css` and every CSS it `@import`s — reaches the same
-  `media/` tree through the reserved `media:` prefix and another theme's
-  directory through the reserved `theme:<name>/` prefix; both work in `url()`
-  and `@import`, so a theme may build on another. An unprefixed relative
-  reference stays inside the stylesheet's own tree. See **Themes**.
+- The path is relative to that layer's `media/` only: no absolute paths and no
+  `..`.
+- A theme's CSS — `theme.css` and every CSS it `@import`s — reaches that
+  layer's `media/` tree through the reserved `media:` prefix and another
+  theme's directory in that layer through the reserved `theme:<name>/` prefix;
+  both work in `url()` and `@import`, so a theme may build on another. An
+  unprefixed relative reference stays inside the stylesheet's own tree. See
+  **Themes**.
 - Theme-owned files are not reachable through `media`; reference them from
   `theme.css`.
 - File types are not restricted; the content type is derived from the file
@@ -457,9 +479,10 @@ template may not declare a field or section named `deck`, `slide`, `item`,
 ## Validation and errors
 
 `kalide start` validates the whole deck before serving anything, and
-`kalide templates` loads the same library. Validation is **fail-fast**: exactly
-one error is reported — the first one found. An error states the file, the line
-when known, the full path, what is wrong and how to fix it, for example:
+`kalide templates` loads the same merged library. Validation is **fail-fast**:
+exactly one error is reported — the first one found. An error states the file,
+the line when known, the full path, what is wrong and how to fix it, for
+example:
 
 ```
 slides/3-team.md:12 › column[1] › people[0] › name: required — add a name: value
@@ -469,6 +492,14 @@ The same text appears in the terminal and on the browser error page. Unknown
 names (templates, sections, themes, keys) get a closest-match "did you
 mean …?" suggestion.
 
+The resolved layers are merged and checked before anything is served: a slide
+or section name (the two share one template namespace), a theme name, or a
+shared `media/` path carried by both layers is an error naming the name and
+both paths — never an override. The external library is self-contained: every
+reference inside an external-layer template or theme must resolve within that
+external library alone, so an external library validates standalone. An error
+is path-qualified with the layer root it comes from.
+
 ## Commands
 
 ```
@@ -476,26 +507,32 @@ kalide init [path]         Create a deck in the current directory.
 kalide init-library <path> Create a new, empty template library at <path>.
 kalide start [--port N] [--no-open]
                            Validate and serve the deck with live reload.
-kalide templates [name]    List the resolved library's templates, or show one.
+kalide templates [name]    List the merged library's templates, or show one.
 kalide upgrade             Refresh kalide-owned files and apply migrations.
 kalide version             Print the version (also --version, -v).
 kalide help                Show usage.
 ```
 
 - `kalide init` with no path writes the deck, a starter slide and a minimal
-  local `templates/` library. `kalide init <path>` writes a deck referencing
-  the external library at `<path>` (an empty `slides/`, and no local
-  `templates/`) after validating it fail-fast. Both forms write a project-root
-  `AGENTS.md` agent guide **only when none exists**; a pre-existing `AGENTS.md`
-  never blocks and is left untouched. `init` refuses when `slides/`, `assets/`
-  or `kalide.yaml` already exists (a local `templates/` blocks only the no-path
-  form), and there is no `--force`.
+  local `templates/` library. `kalide init <path>` validates the external
+  library at `<path>` **alone** (fail-fast) before writing anything, then
+  writes a deck referencing it — an empty `slides/`, and no local `templates/`;
+  a pre-existing local `templates/` is left untouched and becomes the deck's
+  local layer. Both forms write a project-root `AGENTS.md` agent guide **only
+  when none exists**; a pre-existing `AGENTS.md` never blocks and is left
+  untouched. `init` refuses when `slides/`, `assets/` or `kalide.yaml` already
+  exists (a local `templates/` blocks only the no-path form), and there is no
+  `--force`.
 - `kalide init-library <path>` creates a new, deck-ready library
   (`library.yaml`, empty `slides/`, `sections/` and `media/`, and a minimal
   default theme), refusing if the target already holds one. It also writes a
   root-level `AGENTS.md` library guide only when none exists.
-- `kalide start` is the validation gate: run it after every edit.
-- `kalide templates` lists the templates in the resolved library;
+- `kalide start` is the validation gate: run it after every edit. While it
+  runs, edits under either resolved layer live-reload; changing the configured
+  `templates:` value in `kalide.yaml` does not — the deck page shows a
+  restart-required error and keeps serving the startup library until you
+  restart `kalide start`.
+- `kalide templates` lists the templates in the merged library (both layers);
   `kalide templates <name>` documents one template's fields, sections, body
   rules and example.
 - `kalide upgrade` brings an existing deck or library in the current directory
