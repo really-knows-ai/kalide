@@ -2,6 +2,9 @@ package render
 
 import (
 	htmltmpl "html/template"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -397,5 +400,270 @@ func TestRenderSlideSectionHelperValidation(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The layered-media probes below drive the REAL layered loader over two small
+// on-disk library directories — an external `templates:` library and the
+// deck-root templates/ layer — because internal/render cannot construct a
+// two-layer template.Library through template's unexported test helpers. The
+// trees are tiny and entirely local, so these unit tests still run under
+// -short (t.TempDir, no network or port); they pin
+// render.RenderSlide/sectionHelper/renderSection's per-layer media binding
+// (library-layer-references):
+//
+//   - a local template's own `media` reference keeps the primary served base
+//     and media filesystem, while a section it invokes from the external layer
+//     resolves in the EXTERNAL layer — both the served URL and the media
+//     filesystem;
+//   - a declared child section (renderSection) contributed by the external
+//     layer binds that layer the same way;
+//   - a sole-layer library renders byte-for-byte as the non-layered
+//     (template.LoadLibrary) path does, so a single-layer deck is unchanged.
+//
+// theme:/media: CSS rewriting is server-side (phase 4) and is deliberately not
+// exercised here.
+
+// writeLayerFile writes data at path, creating its parent directories.
+func writeLayerFile(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s): %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s): %v", path, err)
+	}
+}
+
+// writeLayerManifest writes a minimal valid library.yaml at root.
+func writeLayerManifest(t *testing.T, root, name string) {
+	t.Helper()
+	writeLayerFile(t, filepath.Join(root, template.LibraryFile),
+		"name: "+name+"\nformat: 1\n")
+}
+
+// writeLayerTemplate writes one schema-free template directory
+// root/<kindDir>/<name> with the given layout and a placeholder example. A
+// schema-free template's example is not shape-checked, so its layout may call
+// `{{ section … }}` or `{{ media … }}` without an authored example body.
+func writeLayerTemplate(t *testing.T, root, kindDir, name, layout string) {
+	t.Helper()
+	base := filepath.Join(root, kindDir, name)
+	writeLayerFile(t, filepath.Join(base, template.ManifestFile), "name: "+name+"\n")
+	writeLayerFile(t, filepath.Join(base, template.LayoutFile), layout)
+	writeLayerFile(t, filepath.Join(base, template.ExampleFile), "# "+name+"\n")
+}
+
+// writeLayerMedia writes one file under root/media.
+func writeLayerMedia(t *testing.T, root, rel, data string) {
+	t.Helper()
+	writeLayerFile(t, filepath.Join(root, template.MediaDir, filepath.FromSlash(rel)), data)
+}
+
+// layeredMediaFixture writes a two-layer deck under two fresh temp dirs and
+// returns them. extRoot is the external `templates:` library: one section,
+// extmedia, whose layout resolves its own media ext-logo.svg. deckRoot holds
+// the local layer at deckRoot/templates: a localslide that resolves its own
+// local-logo.svg and calls the external extmedia through the `section` helper,
+// plus a localchild that splices a declared child section. ext-logo.svg exists
+// ONLY in the external layer, so a render that bound the external section to
+// the local layer's media would fail to resolve it rather than silently pick a
+// same-named file — which is what makes the URL AND the filesystem assertions
+// meaningful.
+func layeredMediaFixture(t *testing.T) (deckRoot, extRoot string) {
+	t.Helper()
+
+	extRoot = t.TempDir()
+	writeLayerManifest(t, extRoot, "ext-lib")
+	writeLayerTemplate(t, extRoot, template.SectionsDir, "extmedia",
+		`<div class="ext-section"><img src="{{ media "ext-logo.svg" }}"></div>`)
+	writeLayerMedia(t, extRoot, "ext-logo.svg", "<svg/>")
+
+	deckRoot = t.TempDir()
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+	writeLayerManifest(t, localRoot, "local-lib")
+	writeLayerTemplate(t, localRoot, template.SlidesDir, "localslide",
+		`<section class="local-slide">`+
+			`<img class="own" src="{{ media "local-logo.svg" }}">`+
+			`{{ section "extmedia" }}</section>`)
+	writeLayerTemplate(t, localRoot, template.SlidesDir, "localchild",
+		`<section class="local-child">`+
+			`<img class="own" src="{{ media "local-logo.svg" }}">`+
+			`{{ range .blocks }}{{ . }}{{ end }}</section>`)
+	writeLayerMedia(t, localRoot, "local-logo.svg", "<svg/>")
+	return deckRoot, extRoot
+}
+
+// mustLayeredRegistry loads the two-layer fixture through the public layered
+// loader and returns the merged library, its registry and the layout func map a
+// deck executes with (`media` bound to the primary served base). LoadDeckLibrary
+// sets each layer's Role, so the test never assigns a LibraryLayer.Role by hand.
+func mustLayeredRegistry(t *testing.T, deckRoot, extRoot string) (*template.Library, *template.Registry, htmltmpl.FuncMap) {
+	t.Helper()
+	lib, err := template.LoadDeckLibrary(deckRoot, extRoot)
+	if err != nil {
+		t.Fatalf("template.LoadDeckLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	// The primary layer's base; the renderer overrides `media` per layer when
+	// the deck is two-layered, so only a sole-layer deck actually uses it.
+	return lib, reg, template.LayoutFuncMap(lib.Media, mediaURLPrefix)
+}
+
+// TestRenderSlideLayeredSectionMedia proves the render-time `section` helper
+// binds the called section's OWN owning layer for its execution
+// (library-layer-references): from a LOCAL slide layout, the local template's
+// own `media` reference keeps the primary `/assets/templates/media/` base and
+// the local media filesystem, while the external section's `media` reference
+// resolves in the EXTERNAL layer — `/assets/templates/external/media/<file>`
+// served from the external layer's media filesystem — not the local one. The
+// renderer's layer hook is installed because LoadDeckLibrary set the slide
+// template's owning layer to a two-layer role.
+func TestRenderSlideLayeredSectionMedia(t *testing.T) {
+	deckRoot, extRoot := layeredMediaFixture(t)
+	lib, reg, funcMap := mustLayeredRegistry(t, deckRoot, extRoot)
+
+	// LoadDeckLibrary assigns the roles: the configured external root first,
+	// the deck-root templates/ second.
+	if len(lib.Layers) != 2 {
+		t.Fatalf("len(Layers) = %d, want 2 (external + local)", len(lib.Layers))
+	}
+	if lib.Layers[0].Role != template.LayerRoleExternal {
+		t.Errorf("Layers[0].Role = %v, want LayerRoleExternal", lib.Layers[0].Role)
+	}
+	if lib.Layers[1].Role != template.LayerRoleLocal {
+		t.Errorf("Layers[1].Role = %v, want LayerRoleLocal", lib.Layers[1].Role)
+	}
+
+	// ext-logo.svg lives only in the external layer's media filesystem, so the
+	// fs half of the per-layer binding is observable.
+	if _, err := fs.Stat(lib.Layers[0].Media, "ext-logo.svg"); err != nil {
+		t.Errorf("external layer media does not hold ext-logo.svg: %v", err)
+	}
+	if _, err := fs.Stat(lib.Layers[1].Media, "ext-logo.svg"); err == nil {
+		t.Error("local layer media holds ext-logo.svg, want it external-only so the fixture proves the layer binding")
+	}
+
+	parsed := &slide.Slide{File: "slides/1-local.md", Template: "localslide"}
+	got := renderSlideString(t, parsed, "local",
+		&deck.Config{Title: "Layered"}, deck.Slide{Number: 1, Label: "local"}, 1, reg, funcMap)
+
+	// The local template's own media keeps the primary /assets/templates/media base.
+	if !strings.Contains(got, `<img class="own" src="/assets/templates/media/local-logo.svg">`) {
+		t.Errorf("local template's own media did not keep the primary base:\n%s", got)
+	}
+	// The external section's media resolves in the EXTERNAL layer: URL and fs.
+	if !strings.Contains(got, `<div class="ext-section"><img src="/assets/templates/external/media/ext-logo.svg"></div>`) {
+		t.Errorf("external section media did not resolve under the external prefix:\n%s", got)
+	}
+	// The prefixes never cross: the local file is not addressed as external,
+	// and the external file is not addressed with the primary layer's base.
+	if strings.Contains(got, "/assets/templates/external/media/local-logo.svg") {
+		t.Errorf("local media was addressed with the external prefix:\n%s", got)
+	}
+	if strings.Contains(got, "/assets/templates/media/ext-logo.svg") {
+		t.Errorf("external media was addressed with the primary prefix:\n%s", got)
+	}
+}
+
+// TestRenderSlideLayeredDeclaredSectionMedia proves the DECLARED child-section
+// path (renderSection) binds the child template's own owning layer, exactly as
+// the helper path does: a declared child instance whose template the external
+// layer contributed resolves its `media` reference under the external prefix
+// and external media filesystem, while the local slide's own media stays the
+// primary base (library-layer-references).
+func TestRenderSlideLayeredDeclaredSectionMedia(t *testing.T) {
+	deckRoot, extRoot := layeredMediaFixture(t)
+	_, reg, funcMap := mustLayeredRegistry(t, deckRoot, extRoot)
+
+	parsed := &slide.Slide{
+		File:     "slides/2-child.md",
+		Template: "localchild",
+		Sections: []slide.Section{
+			{Name: "blocks", Level: 1, Index: 0, Template: "extmedia"},
+		},
+	}
+	got := renderSlideString(t, parsed, "child",
+		&deck.Config{Title: "Layered"}, deck.Slide{Number: 2, Label: "child"}, 1, reg, funcMap)
+
+	if !strings.Contains(got, `<img class="own" src="/assets/templates/media/local-logo.svg">`) {
+		t.Errorf("local slide's own media did not keep the primary base:\n%s", got)
+	}
+	if !strings.Contains(got, `<div class="ext-section"><img src="/assets/templates/external/media/ext-logo.svg"></div>`) {
+		t.Errorf("declared external child section did not resolve its media in the external layer:\n%s", got)
+	}
+}
+
+// writeSoleLayerLibrary writes a single-layer deck under a fresh temp dir: a
+// deck-root templates/ library with one schema-free slide resolving its own
+// media. With no configured `templates:` key this directory is the deck's only
+// layer.
+func writeSoleLayerLibrary(t *testing.T) string {
+	t.Helper()
+	deckRoot := t.TempDir()
+	root := filepath.Join(deckRoot, template.TemplatesDir)
+	writeLayerManifest(t, root, "solo-lib")
+	writeLayerTemplate(t, root, template.SlidesDir, "soloslide",
+		`<section class="solo-slide"><img src="{{ media "solo.svg" }}"></section>`)
+	writeLayerMedia(t, root, "solo.svg", "<svg/>")
+	return deckRoot
+}
+
+// TestRenderSlideSoleLayerMediaUnchanged proves a sole-layer library renders
+// byte-for-byte as the non-layered path: the same slide rendered through the
+// layered loader (LoadDeckLibrary, one layer, LayerRoleSole) and through the
+// non-layered single-root loader (LoadLibrary) is identical, keeps the primary
+// `/assets/templates/media/` base, and never emits an external prefix. A sole
+// layer installs no layer hook, so RenderSlide leaves the shared namespace —
+// and the existing `media` helper — exactly as before.
+func TestRenderSlideSoleLayerMediaUnchanged(t *testing.T) {
+	deckRoot := writeSoleLayerLibrary(t)
+
+	// The layered resolver path: one layer, role sole.
+	layered, err := template.LoadDeckLibrary(deckRoot, "")
+	if err != nil {
+		t.Fatalf("template.LoadDeckLibrary: %v", err)
+	}
+	if len(layered.Layers) != 1 {
+		t.Fatalf("len(Layers) = %d, want 1 (the deck-root templates/ alone)", len(layered.Layers))
+	}
+	if layered.Layers[0].Role != template.LayerRoleSole {
+		t.Errorf("Layers[0].Role = %v, want LayerRoleSole", layered.Layers[0].Role)
+	}
+	layeredReg, err := template.NewRegistryFromLibrary(layered)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary(layered): %v", err)
+	}
+
+	// The non-layered single-root path.
+	plain, err := template.LoadLibrary(os.DirFS(deckRoot), template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	plainReg, err := template.NewRegistryFromLibrary(plain)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary(plain): %v", err)
+	}
+
+	parsed := &slide.Slide{File: "slides/1-solo.md", Template: "soloslide"}
+	cfg := &deck.Config{Title: "Solo"}
+	meta := deck.Slide{Number: 1, Label: "solo"}
+
+	gotLayered := renderSlideString(t, parsed, "solo", cfg, meta, 1,
+		layeredReg, template.LayoutFuncMap(layered.Media, mediaURLPrefix))
+	gotPlain := renderSlideString(t, parsed, "solo", cfg, meta, 1,
+		plainReg, template.LayoutFuncMap(plain.Media, mediaURLPrefix))
+
+	if gotLayered != gotPlain {
+		t.Errorf("sole-layer render differs from the non-layered path:\nlayered: %q\nplain:   %q", gotLayered, gotPlain)
+	}
+	if !strings.Contains(gotLayered, `<img src="/assets/templates/media/solo.svg">`) {
+		t.Errorf("sole-layer media did not keep the primary base:\n%s", gotLayered)
+	}
+	if strings.Contains(gotLayered, "/assets/templates/external/media/") {
+		t.Errorf("sole-layer render emitted an external media prefix:\n%s", gotLayered)
 	}
 }
