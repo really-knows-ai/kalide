@@ -43,9 +43,12 @@ const themesURLPrefix = "/assets/templates/themes/"
 // in themeReg and Navigation is the reveal.js navigationMode — "default",
 // "linear" or "grid", with an omitted/empty value resolving to reveal.js's own
 // default (navigation-mode). d is the deck's ordered slide model
-// (internal/deck.LoadSlides): each numbered slide becomes an outer `<section>`
-// and its letter slides are nested inside it as the vertical stack, in the
-// model's order (vertical-slides). parsed holds the slides' parsed structures
+// (internal/deck.LoadSlides): each numbered slide is its own `<section>`, and a
+// numbered slide with letter slides is wrapped — together with them — in a
+// plain outer `<section>` whose first child is the numbered slide's own
+// `<section>` and whose remaining children are its letter slides in letter
+// order (the vertical stack), in the model's order (vertical-slides). parsed
+// holds the slides' parsed structures
 // (internal/slide.Parse), indexed here by slide.Slide.File, which must be the
 // slide's deck path (deck.Slide.Path) — the convention internal/validate uses.
 // reg is the populated template registry the deck was validated against —
@@ -116,7 +119,9 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 	}
 
 	// Horizontal slides in the model's order; a horizontal slide with letter
-	// slides wraps them as a vertical stack inside its own <section>. The
+	// slides is wrapped, together with them, in a plain outer <section> whose
+	// first child is the numbered slide's own <section> and whose remaining
+	// children are the letter slides in order (the vertical stack). The
 	// deck's slide-file count is derived once, at render time, and threaded
 	// into every slide's reserved `slide` context (slide-metadata).
 	total := d.Total()
@@ -137,7 +142,7 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 				}
 				inner.WriteString(string(vertical))
 			}
-			horizontal = htmltmpl.HTML(insertBeforeSectionClose(string(horizontal), inner.String()))
+			horizontal = htmltmpl.HTML(wrapVerticalStack(string(horizontal), inner.String()))
 		}
 		slides.WriteString(string(horizontal))
 	}
