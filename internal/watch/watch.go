@@ -346,27 +346,30 @@ func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 	}
 }
 
-// libraryRelevant reports whether name is part of the resolved template
-// library's structure: the library root itself, its library.yaml, or anything
-// at or beneath slides/, sections/, themes/ or media/. Every other top-level
-// entry in the library root (e.g. .git/, README.md, AGENTS.md) is not part of
-// the library and is ignored, so it never triggers a reload. It is false when
-// no library root was resolved.
+// libraryRelevant reports whether name is part of either resolved template
+// library layer's structure (layered-template-library): the layer root itself,
+// its library.yaml, or anything at or beneath slides/, sections/, themes/ or
+// media/. Every other top-level entry in a layer root (e.g. .git/, README.md,
+// AGENTS.md) is not part of the library and is ignored, so it never triggers a
+// reload. Each root is tested with the same per-root semantics, so a change
+// under either layer — the external `templates:` root or the deck-root
+// templates/ — is relevant. It is false when no library root was resolved.
 func (w *watcher) libraryRelevant(name string) bool {
-	library := w.primaryLibrary()
-	if library == "" {
-		return false
-	}
 	name = filepath.Clean(name)
-	if name == library {
-		return true
-	}
-	if name == filepath.Join(library, template.LibraryFile) {
-		return true
-	}
-	for _, dir := range libraryWatchDirs {
-		if atOrUnder(filepath.Join(library, dir), name) {
+	for _, library := range w.libraries {
+		if library == "" {
+			continue
+		}
+		if name == library {
 			return true
+		}
+		if name == filepath.Join(library, template.LibraryFile) {
+			return true
+		}
+		for _, dir := range libraryWatchDirs {
+			if atOrUnder(filepath.Join(library, dir), name) {
+				return true
+			}
 		}
 	}
 	return false
