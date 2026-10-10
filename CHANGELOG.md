@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-10
+
+### Added
+
+- `kalide config get|set|unset|list`: reads and writes a per-user config file.
+  The recognised key is `default-template-dir`; values set for it are
+  normalised to an absolute path.
+
+### Changed
+
+- `kalide init [path] [--local]` now resolves the template library in order:
+  an explicit `path`, then the configured `default-template-dir`, then the
+  built-in starter deck. `--local` forces the built-in starter deck. If the
+  chosen library is missing or invalid, `init` fails fast and writes nothing.
+
+### Fixed
+
+- Vertical slides now render as a stack whose first slide is the numbered
+  slide itself (`1`, then `1a`, `1b`, …). You no longer need an empty dummy
+  slide `1` as a workaround. If a deck used one, delete it and rename `1a`
+  to `1`.
+
 ## [0.10.1] - 2026-10-01
 
 ### Fixed
