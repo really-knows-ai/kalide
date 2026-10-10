@@ -40,7 +40,9 @@ package e2e
 
 import (
 	"fmt"
+	"html"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -291,4 +293,321 @@ func TestExternalLibrary(t *testing.T) {
 	// off2.Stop reports any outbound connection the restarted run made.
 	h.Stop()
 	off2.Stop()
+}
+
+// layeredExternalLibraryDeckConfig is the two-layer fixture deck: the deck-root
+// templates/ directory is the local layer and `templates: ../shared-lib` names
+// the external layer next to it, so the merged library is the external layer
+// plus the local layer. `theme: default` resolves in the local layer.
+const layeredExternalLibraryDeckConfig = `title: Layered External Library Deck
+author: Ada Lovelace
+theme: default
+templates: ../shared-lib
+`
+
+// The two layers' metadata names, kept distinct so a failure reads clearly.
+const (
+	layeredExternalLocalLibName = "local-lib"
+	layeredExternalLibName      = "shared-lib"
+)
+
+// layeredLocalSlideManifest is the local layer's slide manifest: it requires
+// the `heading` field the fixture slide supplies and takes no body.
+const layeredLocalSlideManifest = `description: a local slide that invokes an external section
+fields:
+  - name: heading
+    type: text
+    required: true
+body:
+  mode: disallowed
+`
+
+// layeredLocalSlideLayout is the local slide's layout. It renders its own
+// `local-logo.svg` at the primary media base and then composes the EXTERNAL
+// section `external-notice` through the `section` helper: the call resolves
+// against the MERGED section namespace (section-helper,
+// library-layer-references), so the external section executes with its own
+// layer's media binding.
+const layeredLocalSlideLayout = `<section class="local-slide">
+  <h1 class="local-heading">{{ .heading }}</h1>
+  <img class="own" src="{{ media "local-logo.svg" }}">
+  {{ section "external-notice" }}
+</section>
+`
+
+// layeredExternalNoticeManifest is the external layer's section manifest: no
+// fields and no body, so the helper call passes nothing and the section renders
+// on its own. It validates standalone as part of the external layer's full load.
+const layeredExternalNoticeManifest = `description: an external section invoked across layers
+fields: []
+body:
+  mode: disallowed
+`
+
+// layeredExternalNoticeLayout renders the external section with the given
+// extra class, so an edit under the external root produces a distinctive,
+// greppable change in the served page. Its `media` reference resolves in the
+// external layer's own root and is served under the external media prefix.
+func layeredExternalNoticeLayout(marker string) string {
+	class := "external-notice"
+	if marker != "" {
+		class += " " + marker
+	}
+	return `<aside class="` + class + `"><img src="{{ media "ext-icon.svg" }}"></aside>` + "\n"
+}
+
+// layeredLocalDuplicateManifest and layeredLocalDuplicateLayout are a complete,
+// valid local slide template whose directory name `external-notice` duplicates
+// the EXTERNAL layer's section name. The merged template namespace is shared by
+// slides and sections (library-layer-uniqueness), so this local slide collides
+// with the external section the moment both layers are merged — never as a
+// within-layer clash.
+const (
+	layeredLocalDuplicateManifest = `description: a local slide duplicating the external section name
+fields: []
+body:
+  mode: disallowed
+`
+
+	layeredLocalDuplicateLayout = `<section class="duplicate-local-slide"></section>` + "\n"
+)
+
+// localLogoMarkup is the local layer's media file, written (and rewritten) so
+// its own layer's primary media route can be pinned and a watched local file
+// can force a reload without changing the deck.
+const localLogoMarkup = "<svg class=\"local-logo\"/>\n"
+
+// TestExternalLibraryLayeredOverLocal is the plan.phase-05 task-5 end-to-end
+// test for a deck that draws from BOTH resolved library layers
+// (layered-template-library, library-layer-uniqueness, library-layer-references,
+// live-reload): an external `templates: ../shared-lib` library AND a deck-root
+// templates/ directory. It drives the real kalide binary the harness builds
+// (harness.go), so it exercises the whole path an author takes:
+//
+//   - the merged library serves the deck: the local layer's `local-slide`
+//     renders with its own media at the primary /assets/templates/media/ route,
+//     and the `{{ section "external-notice" }}` call its layout makes resolves
+//     against the merged section namespace and executes the EXTERNAL layer's
+//     section, whose own `media` reference is served from the external layer at
+//     /assets/templates/external/media/ (cross-layer section call,
+//     library-layer-references);
+//   - each layer's media file is served from its own root at its own route;
+//   - an edit under the external layer root live-reloads: the watcher watches
+//     the external root, the merged library is rebuilt and the cross-layer call
+//     re-renders with the edit (live-reload);
+//   - a local template whose name the external layer also carries is rejected:
+//     the running server publishes the full-page error naming the duplicated
+//     name `external-notice` and BOTH carrying paths — the external section's
+//     manifest and the local slide's (library-layer-uniqueness) — and the deck
+//     recovers once the duplicate is removed.
+//
+// It builds a binary and drives a real server with the real watcher and SSE
+// stream, so it is skipped under -short. It reuses the harness and the SSE
+// helpers (openSSE, waitLine, drainFor, waitFor) declared alongside the phase-7
+// live-reload test in livereload_test.go, and the server package's primary and
+// external media route constants.
+func TestExternalLibraryLayeredOverLocal(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	writeLayeredExternalLibraryFixture(h)
+
+	h.Start()
+
+	if got := h.URL(); !strings.HasPrefix(got, "http://127.0.0.1:") || !strings.HasSuffix(got, "/") {
+		t.Fatalf("start printed URL %q, want http://127.0.0.1:<port>/", got)
+	}
+
+	// The merged library drives the deck page: the local slide renders and its
+	// `{{ section "external-notice" }}` call splices in the EXTERNAL layer's
+	// section, whose media resolves under the external prefix.
+	body, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	if strings.Contains(body, "Deck error") {
+		t.Fatalf("served page is the error page, want the two-layer deck:\n%s", body)
+	}
+	assertLayeredExternalPage(t, body)
+
+	// Each layer's media is served from its own root at its own route: the
+	// local layer's file at the primary MediaPath and the external layer's at
+	// ExternalMediaPath. The external section's rendered URL is therefore
+	// fetchable exactly where render emitted it.
+	if got, err := h.GetString(server.MediaPath + "local-logo.svg"); err != nil {
+		t.Errorf("GET %slocal-logo.svg: %v", server.MediaPath, err)
+	} else if !strings.Contains(got, `class="local-logo"`) {
+		t.Errorf("primary media route does not serve the local layer's file: %q", got)
+	}
+	if got, err := h.GetString(server.ExternalMediaPath + "ext-icon.svg"); err != nil {
+		t.Errorf("GET %sext-icon.svg: %v", server.ExternalMediaPath, err)
+	} else if !strings.Contains(got, `class="ext-icon"`) {
+		t.Errorf("external media route does not serve the external layer's file: %q", got)
+	}
+
+	// An edit under the EXTERNAL layer root live-reloads. Edits are repeated
+	// until the broadcast is observed, covering the small window between the
+	// stream's initial `: connected` flush and its subscribe; every edit is a
+	// valid external section.
+	s := openSSE(t, h)
+	waitLine(t, s, ": connected", 5*time.Second)
+
+	var marker string
+	deadline := time.Now().Add(10 * time.Second)
+	for i := 1; ; i++ {
+		marker = fmt.Sprintf("external-section-edit-%d", i)
+		h.WriteFile("../shared-lib/sections/external-notice/layout.html.tmpl",
+			[]byte(layeredExternalNoticeLayout(marker)))
+		if drainFor(s, "data: reload", 500*time.Millisecond) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no SSE reload after editing the external layer's section\nstdout:\n%s\nstderr:\n%s",
+				h.Stdout(), h.Stderr())
+		}
+	}
+	// The merged library is re-read and re-rendered before the reload is
+	// broadcast, so the cross-layer call now splices in the edited external
+	// section while the local slide's own media stays served.
+	waitFor(t, 5*time.Second, "the edited external section to be served", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, marker) &&
+			strings.Contains(b, server.MediaPath+"local-logo.svg")
+	})
+	s.Close()
+
+	// Duplicate-name rejection: a local template whose name the external layer
+	// also carries is refused by the merged loader, and the running server
+	// publishes the full-page error rather than serving a broken or stale deck
+	// (never-serve-broken-deck, library-layer-uniqueness). A complete, valid
+	// template is written so the collision — not a missing file — is what the
+	// loader reports, then a watched local file is rewritten so a reload is
+	// forced after the whole duplicate exists.
+	h.WriteFile("templates/slides/external-notice/template.yaml", []byte(layeredLocalDuplicateManifest))
+	h.WriteFile("templates/slides/external-notice/layout.html.tmpl", []byte(layeredLocalDuplicateLayout))
+	h.WriteFile("templates/slides/external-notice/example.md", []byte("# external-notice\n"))
+	h.WriteFile("templates/media/local-logo.svg", []byte(localLogoMarkup))
+
+	// The loader builds each carrying path with path.Join from the layer root
+	// the running process resolves (getcwd canonicalises macOS /var ->
+	// /private/var), so resolve the roots the same way before comparing.
+	externalManifest := layeredLayerManifestPath(t, h, "../shared-lib", "sections", "external-notice")
+	localManifest := layeredLayerManifestPath(t, h, "templates", "slides", "external-notice")
+
+	waitFor(t, 10*time.Second, "the duplicate-name error page", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(html.UnescapeString(b),
+			`template "external-notice" is declared in both`)
+	})
+	errBody, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET / (duplicate-name error page): %v", err)
+	}
+	if !strings.Contains(errBody, "Deck error") || !strings.Contains(errBody, "error-page__message") {
+		t.Errorf("served page is not the full-page error shell after the duplicate:\n%s", errBody)
+	}
+	unescaped := html.UnescapeString(errBody)
+	for _, want := range []string{
+		`template "external-notice" is declared in both`,
+		externalManifest,
+		localManifest,
+	} {
+		if !strings.Contains(unescaped, want) {
+			t.Errorf("duplicate-name error does not name %q:\n%s", want, unescaped)
+		}
+	}
+
+	// Removing the duplicate recovers the deck: the reload re-merges both
+	// layers and the external section's edit is still served.
+	if err := os.RemoveAll(h.Path("templates/slides/external-notice")); err != nil {
+		t.Fatalf("remove duplicate local template: %v", err)
+	}
+	h.WriteFile("templates/media/local-logo.svg", []byte(localLogoMarkup))
+	waitFor(t, 10*time.Second, "the deck to recover after removing the duplicate", func() bool {
+		b, err := h.GetString("/")
+		return err == nil && strings.Contains(b, marker) &&
+			strings.Contains(b, `class="external-notice `) && !strings.Contains(b, "Deck error")
+	})
+
+	// A graceful stop exits 0, releases the port and leaves no child behind;
+	// the harness asserts the exit status, the released port and the absence of
+	// leftover children in Stop.
+	port := h.Port()
+	if port == 0 {
+		t.Fatal("start did not bind a port")
+	}
+	h.Stop()
+	if _, err := h.Get("/"); err == nil {
+		t.Errorf("GET / succeeded after Stop; port %d was not released", port)
+	}
+}
+
+// writeLayeredExternalLibraryFixture lays down the two-layer deck the test
+// serves: kalide.yaml, one slide for the local layer's template, the deck-root
+// templates/ local layer (a `local-slide` whose layout calls the external
+// section through the `section` helper, its own media and theme), and the
+// external `../shared-lib` layer (the `external-notice` section, its own media
+// and metadata). No name — slide, section, theme or media path — is carried by
+// both layers, so the merged library passes library-layer-uniqueness.
+func writeLayeredExternalLibraryFixture(h *Harness) {
+	h.WriteFile("kalide.yaml", []byte(layeredExternalLibraryDeckConfig))
+	h.WriteFile("slides/1-notice.md",
+		[]byte("---\ntemplate: local-slide\nheading: Layered Notice\n---\n"))
+
+	// The deck-root templates/ local layer.
+	h.WriteFile("templates/library.yaml",
+		[]byte("name: "+layeredExternalLocalLibName+"\ndescription: deck-root local layer\nformat: 1\n"))
+	h.WriteFile("templates/themes/default/theme.css",
+		[]byte("/* local-layer-theme */\nbody { margin: 0; }\n"))
+	h.WriteFile("templates/media/local-logo.svg", []byte(localLogoMarkup))
+	h.WriteFile("templates/slides/local-slide/template.yaml", []byte(layeredLocalSlideManifest))
+	h.WriteFile("templates/slides/local-slide/layout.html.tmpl", []byte(layeredLocalSlideLayout))
+	h.WriteFile("templates/slides/local-slide/example.md",
+		[]byte("---\ntemplate: local-slide\nheading: Example\n---\n"))
+
+	// The external `templates: ../shared-lib` layer.
+	h.WriteFile("../shared-lib/library.yaml",
+		[]byte("name: "+layeredExternalLibName+"\ndescription: external deck layer\nformat: 1\n"))
+	h.WriteFile("../shared-lib/sections/external-notice/template.yaml", []byte(layeredExternalNoticeManifest))
+	h.WriteFile("../shared-lib/sections/external-notice/layout.html.tmpl",
+		[]byte(layeredExternalNoticeLayout("")))
+	h.WriteFile("../shared-lib/sections/external-notice/example.md", []byte("# external-notice\n"))
+	h.WriteFile("../shared-lib/media/ext-icon.svg", []byte("<svg class=\"ext-icon\"/>\n"))
+}
+
+// assertLayeredExternalPage asserts the served two-layer page carries the
+// local slide, its own primary-base media, and the external section the local
+// layout invoked cross-layer, with that section's media under the external
+// prefix.
+func assertLayeredExternalPage(t *testing.T, body string) {
+	t.Helper()
+
+	for _, want := range []string{
+		"Layered External Library Deck",
+		`<h1 class="local-heading">Layered Notice</h1>`,
+		`<img class="own" src="` + server.MediaPath + `local-logo.svg">`,
+		`<aside class="external-notice"><img src="` + server.ExternalMediaPath + `ext-icon.svg"></aside>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("served layered deck page is missing %q:\n%s", want, body)
+		}
+	}
+}
+
+// layeredLayerManifestPath returns the manifest path the merged loader reports
+// for a template carried by the layer at layerRel (relative to the harness
+// working directory): the layer root resolved to the canonical path the running
+// binary's os.Getwd reports, joined with the template's kind directory and
+// name. The loader builds that path with path.Join, so it always uses forward
+// slashes even where the root itself is a Windows path.
+func layeredLayerManifestPath(t *testing.T, h *Harness, layerRel, kindDir, name string) string {
+	t.Helper()
+
+	root, err := filepath.EvalSymlinks(h.Path(layerRel))
+	if err != nil {
+		t.Fatalf("resolve library layer root %s: %v", layerRel, err)
+	}
+	return path.Join(root, kindDir, name, "template.yaml")
 }
