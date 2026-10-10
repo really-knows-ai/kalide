@@ -21,6 +21,17 @@ package cli
 // their usage and description, `templates <name>` prints the
 // Fields/Sections/Body/Example sections, and an unknown name is rejected with
 // the closest-match suggestion from internal/suggest.
+//
+// The layered cases build a two-layer deck — the fixture library as the
+// deck-root templates/ local layer plus a sibling external `templates:`
+// library with disjoint names — and assert that `kalide templates` lists the
+// merged set from both layers, rejects a name carried by both layers naming
+// both manifest paths, and errors naming an invalid external path
+// (cli-templates-list, layered-template-library, library-layer-uniqueness).
+// Because runStart blocks until a signal, the start path's merged per-layer
+// theme loading is covered by exercising loadLibraryThemeRegistry directly:
+// a theme living only in the external layer resolves in a two-layer deck
+// (theme-selection).
 
 import (
 	"os"
@@ -250,6 +261,139 @@ func TestStartAndTemplates(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("templates lists every template merged from both layers", func(t *testing.T) {
+		// A two-layer deck: the fixture library is the deck-root local
+		// templates/ layer, and a sibling external library is named by the
+		// top-level `templates:` key. The layers carry disjoint names, so
+		// `kalide templates` lists the local hello slide and item section
+		// alongside the external ext-slide and ext-section — the merged,
+		// layered library every layer contributes to
+		// (cli-templates-list, layered-template-library).
+		dir := chdirFixtureLibrary(t)
+		writeTestLibrary(t, filepath.Join(dir, "extlib"), "external-library",
+			[]string{"ext-slide"}, []string{"ext-section"}, "")
+		writeCLIFile(t, filepath.Join(dir, "kalide.yaml"), []byte("templates: extlib\n"))
+
+		code, stdout, stderr := runCLI("templates")
+		if code != 0 {
+			t.Fatalf("Run(templates) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "Templates:") {
+			t.Fatalf("Run(templates) stdout = %q, want the list header", stdout)
+		}
+
+		// Every name from each layer is listed exactly once, with the usage
+		// derived from the template's own directory (slide vs section).
+		for _, want := range []struct{ name, usage string }{
+			{"hello", "slide"},
+			{"item", "section"},
+			{"ext-slide", "slide"},
+			{"ext-section", "section"},
+		} {
+			row := templateListRow(stdout, want.name)
+			if row == "" {
+				t.Errorf("Run(templates) stdout = %q, want a row for %q", stdout, want.name)
+				continue
+			}
+			if !strings.Contains(row, want.usage) {
+				t.Errorf("Run(templates) row = %q, want usage %q for %q", row, want.usage, want.name)
+			}
+		}
+	})
+
+	t.Run("templates rejects a name carried by both layers naming both paths", func(t *testing.T) {
+		// The external layer carries a slide named hello, which the local
+		// fixture also carries. The layers have equal standing, so the merge
+		// is refused rather than silently resolved: the command fails and the
+		// error names the duplicated name and the manifest path that carries
+		// it in BOTH layers (library-layer-uniqueness, cli-templates-list).
+		dir := chdirFixtureLibrary(t)
+		extDir := filepath.Join(dir, "extlib")
+		writeTestLibrary(t, extDir, "external-library", []string{"hello"}, nil, "")
+		writeCLIFile(t, filepath.Join(dir, "kalide.yaml"), []byte("templates: extlib\n"))
+
+		code, stdout, stderr := runCLI("templates")
+		if code == 0 {
+			t.Fatalf("Run(templates) exit = 0, want non-zero for a duplicate name across layers")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates) stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, `template "hello" is declared in both`) {
+			t.Fatalf("Run(templates) stderr = %q, want the path-qualified duplicate error", stderr)
+		}
+		extManifest := filepath.Join(extDir, "slides", "hello", "template.yaml")
+		localManifest := filepath.Join(dir, "templates", "slides", "hello", "template.yaml")
+		if !strings.Contains(stderr, extManifest) {
+			t.Errorf("Run(templates) stderr = %q, want the external path %q", stderr, extManifest)
+		}
+		if !strings.Contains(stderr, localManifest) {
+			t.Errorf("Run(templates) stderr = %q, want the local path %q", stderr, localManifest)
+		}
+	})
+
+	t.Run("templates errors on an invalid external path naming it", func(t *testing.T) {
+		// The deck configures an external `templates:` path that does not
+		// exist. The layered resolution reports it naming the offending path
+		// (with the `templates:` hint), never falling back to the local
+		// templates/ (templates-dir-required, cli-templates-list).
+		dir := chdirFixtureLibrary(t)
+		writeCLIFile(t, filepath.Join(dir, "kalide.yaml"), []byte("templates: missing-lib\n"))
+
+		code, stdout, stderr := runCLI("templates")
+		if code == 0 {
+			t.Fatalf("Run(templates) exit = 0, want non-zero for an invalid external path")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates) stdout = %q, want empty", stdout)
+		}
+		missing := filepath.Join(dir, "missing-lib")
+		if !strings.Contains(stderr, missing) {
+			t.Fatalf("Run(templates) stderr = %q, want it to name the invalid external path %q", stderr, missing)
+		}
+		if !strings.Contains(stderr, "directory not found") {
+			t.Errorf("Run(templates) stderr = %q, want the missing-directory reason", stderr)
+		}
+		if !strings.Contains(stderr, "path in kalide.yaml") {
+			t.Errorf("Run(templates) stderr = %q, want the `templates:` hint", stderr)
+		}
+	})
+
+	t.Run("an external-layer theme resolves in a two-layer deck", func(t *testing.T) {
+		// A theme living only in the external `templates:` layer is
+		// resolvable in a two-layer deck: loadLibraryThemeRegistry loads each
+		// layer's own themes/ from that layer's root and merges them, so the
+		// external theme is in the registry while the local layer — carrying
+		// no themes/ directory at all — is skipped rather than erroring
+		// (layered-template-library, theme-selection). runStart blocks until a
+		// signal, so the theme registry builder is exercised directly.
+		dir := t.TempDir()
+		writeTestLibrary(t, filepath.Join(dir, "templates"), "local-library",
+			[]string{"local-slide"}, nil, "")
+		writeTestLibrary(t, filepath.Join(dir, "extlib"), "external-library",
+			[]string{"ext-slide"}, nil, "ext-theme")
+		writeCLIFile(t, filepath.Join(dir, "kalide.yaml"), []byte("templates: extlib\n"))
+
+		lib, err := template.LoadDeckLibrary(dir, "extlib")
+		if err != nil {
+			t.Fatalf("template.LoadDeckLibrary: %v", err)
+		}
+		if len(lib.Layers) != 2 {
+			t.Fatalf("len(Layers) = %d, want 2 (external + local)", len(lib.Layers))
+		}
+
+		themeReg, err := loadLibraryThemeRegistry(lib)
+		if err != nil {
+			t.Fatalf("loadLibraryThemeRegistry: %v (a layer without themes/ must not error)", err)
+		}
+		if _, err := themeReg.Lookup("ext-theme"); err != nil {
+			t.Errorf("Lookup(ext-theme) = error %v, want the theme contributed only by the external layer", err)
+		}
+	})
 }
 
 // mustFixtureRegistry loads the phase-3 fixture library from the current
@@ -329,5 +473,60 @@ body:
 		if err := os.WriteFile(p, []byte(f.data), 0o644); err != nil {
 			t.Fatalf("write %s: %v", p, err)
 		}
+	}
+}
+
+// templateListRow returns the line of `kalide templates` list output that
+// names the template, or "" when no line does. It lets a test assert the
+// usage shown for a specific template without a substring match against the
+// same word elsewhere in the output.
+func templateListRow(stdout, name string) string {
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.Contains(line, name) {
+			return line
+		}
+	}
+	return ""
+}
+
+// writeTestLibrary writes a minimal valid template library directly at dir,
+// for use as an external `templates:` layer in these CLI tests: library.yaml
+// with the given name, one media-free slide per slideNames and one section per
+// sectionNames (writeTestTemplate), and, when theme is non-empty, one theme
+// directory with a minimal theme.css. The templates carry no fields or
+// sections, so their placeholder example needs no matching authoring — the
+// same shape the template package's integration tests build.
+func writeTestLibrary(t *testing.T, dir, name string, slideNames, sectionNames []string, theme string) {
+	t.Helper()
+	writeCLIFile(t, filepath.Join(dir, "library.yaml"), []byte("name: "+name+"\nformat: 1\n"))
+	for _, n := range slideNames {
+		writeTestTemplate(t, dir, "slides", n)
+	}
+	for _, n := range sectionNames {
+		writeTestTemplate(t, dir, "sections", n)
+	}
+	if theme != "" {
+		writeCLIFile(t, filepath.Join(dir, "themes", theme, "theme.css"), []byte("body { color: black; }\n"))
+	}
+}
+
+// writeTestTemplate writes one template directory dir/kindDir/name with a
+// schema-free manifest, a plain layout and a placeholder example.
+func writeTestTemplate(t *testing.T, dir, kindDir, name string) {
+	t.Helper()
+	base := filepath.Join(dir, kindDir, name)
+	writeCLIFile(t, filepath.Join(base, "template.yaml"), []byte("name: "+name+"\n"))
+	writeCLIFile(t, filepath.Join(base, "layout.html.tmpl"), []byte("<section><h1>{{.Title}}</h1></section>"))
+	writeCLIFile(t, filepath.Join(base, "example.md"), []byte("# "+name+"\n"))
+}
+
+// writeCLIFile writes data to path, creating the parent directory tree first.
+func writeCLIFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
