@@ -302,6 +302,62 @@ func TestRunUpgrade(t *testing.T) {
 		assertUpgradeDeckLoads(t, deckDir)
 	})
 
+	t.Run("a layered deck's local templates/ layer is never refreshed and still loads merged", func(t *testing.T) {
+		deckDir, libDir := newUpgradeExternalDeck(t, "shared-lib")
+		// The deck also carries a deck-root templates/ layer: author content
+		// loaded alongside the external library as the local layer
+		// (layered-template-library). It contributes a slide disjoint from the
+		// external library's names, so the merged load does not collide.
+		localRoot := filepath.Join(deckDir, template.TemplatesDir)
+		writeTestLibrary(t, localRoot, "local-library", []string{"local-slide"}, nil, "")
+		// Remove the deck guide so the refresh half DOES write its one
+		// kalide-owned member for this deck form: the refresh must touch only
+		// the deck-root guide and nothing under the local templates/ layer.
+		if err := os.Remove(filepath.Join(deckDir, "AGENTS.md")); err != nil {
+			t.Fatalf("remove deck AGENTS.md: %v", err)
+		}
+		beforeLocal := snapshotUpgradeTree(t, localRoot)
+		beforeExternal := snapshotUpgradeTree(t, libDir)
+
+		stdout, stderr := runUpgradeExpect(t, deckDir, 0)
+		if stderr != "" {
+			t.Errorf("runUpgrade(layered deck) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: deck") {
+			t.Errorf("runUpgrade(layered deck) stdout = %q, want the deck report header", stdout)
+		}
+		// Only the deck-root guide is refreshed; nothing in the local templates/
+		// layer is named (refreshed or skipped), so the report itself proves the
+		// layered deck's local layer is out of the refresh scope.
+		assertUpgradeReportCounts(t, stdout, 1, 0)
+		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
+			t.Errorf("runUpgrade(layered deck) stdout = %q, want the refreshed deck guide named", stdout)
+		}
+		if upgradeReportNamesPath(stdout, template.TemplatesDir+"/"+template.LibraryFile) {
+			t.Errorf("runUpgrade(layered deck) stdout = %q, want the local templates/ layer never named", stdout)
+		}
+
+		// The local templates/ layer and the configured external library are
+		// byte-for-byte and mtime-untouched.
+		assertUpgradeTreeUnchanged(t, localRoot, beforeLocal)
+		assertUpgradeTreeUnchanged(t, libDir, beforeExternal)
+
+		// The upgraded deck still loads its MERGED library, contributing both
+		// the external library (its default theme) and the local layer (its
+		// slide). assertUpgradeDeckLoads validates a single-root library's
+		// theme registry, so the merged load is asserted directly here.
+		library, err := template.LoadDeckLibrary(deckDir, "../shared-lib")
+		if err != nil {
+			t.Fatalf("upgraded layered deck %s: merged library does not load: %v", deckDir, err)
+		}
+		if len(library.Layers) != 2 {
+			t.Errorf("len(Layers) = %d, want 2 (external + local)", len(library.Layers))
+		}
+		if _, _, ok := library.TemplateByName("local-slide"); !ok {
+			t.Errorf("merged library is missing the local layer's slide %q", "local-slide")
+		}
+	})
+
 	t.Run("a library run exits 0 and reports the library-owned refreshed and skipped paths", func(t *testing.T) {
 		libDir := newUpgradeLibrary(t, "shared-lib")
 		guide := readUpgradeFile(t, libDir, "AGENTS.md")
@@ -328,6 +384,70 @@ func TestRunUpgrade(t *testing.T) {
 		}
 
 		assertUpgradeLibraryLoads(t, libDir)
+	})
+
+	t.Run("an upgraded library with a nested templates/ loads as its own single root", func(t *testing.T) {
+		libDir := newUpgradeLibrary(t, "shared-lib")
+		// A nested templates/ library inside the library root. It carries a
+		// theme named default — the same theme name as the root library — and a
+		// slide of its own. Were the library directory treated as a deck and its
+		// nested templates/ as a second local layer, the shared theme name would
+		// collide and the merged load would fail; validated as its own single
+		// root, the nested directory is an ordinary ignored top-level entry
+		// (projectKindLibrary -> template.LoadLibraryAt).
+		nestedRoot := filepath.Join(libDir, template.TemplatesDir)
+		writeTestLibrary(t, nestedRoot, "nested", []string{"nested-slide"}, nil, theme.DefaultName)
+
+		stdout, stderr := runUpgradeExpect(t, libDir, 0)
+		if stderr != "" {
+			t.Errorf("runUpgrade(library with nested templates/) stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "kalide upgrade: library") {
+			t.Errorf("runUpgrade(library with nested templates/) stdout = %q, want the library report header", stdout)
+		}
+		assertUpgradeReportCounts(t, stdout, 0, len(upgradeLibraryMemberPaths))
+
+		// The upgraded library loads as its own single root: the nested
+		// templates/ is not merged as a second local layer.
+		lib, err := template.LoadLibraryAt(libDir)
+		if err != nil {
+			t.Fatalf("upgraded library %s does not load: %v", libDir, err)
+		}
+		if len(lib.Layers) != 1 {
+			t.Errorf("len(Layers) = %d, want 1 (the nested templates/ is not a second layer)", len(lib.Layers))
+		}
+		if _, _, ok := lib.TemplateByName("nested-slide"); ok {
+			t.Errorf("the loaded library carries the nested templates/ slide %q, want the nested directory ignored", "nested-slide")
+		}
+	})
+
+	t.Run("a library whose upgraded load fails reports the upgraded library wrap", func(t *testing.T) {
+		libDir := newUpgradeLibrary(t, "shared-lib")
+		// A library.yaml that passes the tolerant format check (format 1 is
+		// supported) but is not loadable: its name is not a valid library name.
+		// The refresh half runs, then the end-to-end own-root load fails and
+		// Upgrade reports it with the documented wrap.
+		writeUpgradeFile(t, libDir, template.LibraryFile, "name: Bad Name\nformat: 1\n")
+
+		stdout, stderr := runUpgradeExpect(t, libDir, 1)
+		if stdout != "" {
+			t.Errorf("runUpgrade(invalid library) stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{
+			"upgrade: validation failed",
+			fmt.Sprintf("upgraded library %s does not load", libDir),
+		} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("runUpgrade(invalid library) stderr = %q, want it to contain %q", stderr, want)
+			}
+		}
+
+		// The failed load restores the project's bytes: the broken library.yaml
+		// is still exactly what was on disk before the run. (A library's undo
+		// replays the whole tree snapshot, so it restores bytes, not mtimes.)
+		if got := string(readUpgradeFile(t, libDir, template.LibraryFile)); got != "name: Bad Name\nformat: 1\n" {
+			t.Errorf("library.yaml = %q, want the pre-run bytes restored", got)
+		}
 	})
 
 	for _, format := range []int{0, 2} {
