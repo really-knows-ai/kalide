@@ -472,8 +472,8 @@ func TestLoadDeckLibrary(t *testing.T) {
 // templates-dir-validation):
 //
 //   - two layers with disjoint names merge into one Library that retains each
-//     layer's own root, ordered external then local, with the external layer
-//     primary (its Meta and RootPath);
+//     layer's own root, ordered external then local, with the local deck-root
+//     templates/ layer primary (its Meta and RootPath);
 //   - a name carried by both layers is rejected naming the name and both
 //     paths, including a slide in one layer colliding with a section in the
 //     other (one shared template namespace);
@@ -508,8 +508,8 @@ func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 				t.Errorf("TemplateByName(%q) = (%v, %q, %v), want a section from the merged library", name, lt, kind, ok)
 			}
 		}
-		if lib.Meta.Name != "external" {
-			t.Errorf("Meta.Name = %q, want the external (primary) layer's %q", lib.Meta.Name, "external")
+		if lib.Meta.Name != "local" {
+			t.Errorf("Meta.Name = %q, want the local (primary) layer's %q", lib.Meta.Name, "local")
 		}
 		if len(lib.Layers) != 2 {
 			t.Fatalf("len(Layers) = %d, want 2", len(lib.Layers))
@@ -520,8 +520,8 @@ func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 		if lib.Layers[1].RootPath != localRoot {
 			t.Errorf("Layers[1].RootPath = %q, want the local layer %q", lib.Layers[1].RootPath, localRoot)
 		}
-		if lib.RootPath != external {
-			t.Errorf("RootPath = %q, want the primary (external) layer %q", lib.RootPath, external)
+		if lib.RootPath != localRoot {
+			t.Errorf("RootPath = %q, want the local (primary) layer %q", lib.RootPath, localRoot)
 		}
 	})
 

@@ -239,7 +239,7 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 
 		// Each layer's own themes and media stay addressable through its own
 		// layer, even though the merged Library exposes only the primary
-		// (external) layer's media.
+		// (local, deck-root templates/) layer's media.
 		if _, ok := lib.Layers[0].Themes["ext-theme"]; !ok {
 			t.Error("Layers[0].Themes[ext-theme] not found")
 		}
@@ -257,6 +257,12 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 		}
 		if _, err := fs.Stat(lib.Layers[1].Media, "local.png"); err != nil {
 			t.Errorf("Layers[1].Media does not resolve the local layer's local.png: %v", err)
+		}
+		if _, err := fs.Stat(lib.Media, "local.png"); err != nil {
+			t.Errorf("merged.Media does not resolve the local (primary) layer's local.png: %v", err)
+		}
+		if _, err := fs.Stat(lib.Media, "ext.png"); err == nil {
+			t.Error("merged.Media resolves the external layer's ext.png, want the local (primary) layer's media only")
 		}
 		if !lib.HasMedia {
 			t.Error("HasMedia = false, want true")

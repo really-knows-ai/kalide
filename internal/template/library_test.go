@@ -660,44 +660,46 @@ func TestMergeLibraryLayersEqualStanding(t *testing.T) {
 	}
 }
 
-// TestMergeLibraryLayersPrimaryFromFirstLayer proves the merged Meta, Root and
-// RootPath come from the primary layer — the first in resolution order — while
-// every layer's own metadata and root stay verbatim in Layers.
-func TestMergeLibraryLayersPrimaryFromFirstLayer(t *testing.T) {
+// TestMergeLibraryLayersPrimaryFromLocalLayer proves the merged Meta, Root and
+// RootPath come from the primary layer — the deck-root local templates/ layer,
+// which (the hand-built layers carrying no role) is the last in resolution
+// order — while every layer's own metadata and root stay verbatim in Layers.
+func TestMergeLibraryLayersPrimaryFromLocalLayer(t *testing.T) {
 	external := testLayer("/ext")
-	external.Root = fstest.MapFS{"primary.root": &fstest.MapFile{Data: []byte("primary")}}
+	external.Root = fstest.MapFS{"external.root": &fstest.MapFile{Data: []byte("external")}}
 	external.Meta = LibraryMeta{Name: "external", Description: "the external layer", Format: 1}
 
 	local := testLayer("/local")
-	local.Root = fstest.MapFS{"secondary.root": &fstest.MapFile{Data: []byte("secondary")}}
+	local.Root = fstest.MapFS{"local.root": &fstest.MapFile{Data: []byte("local")}}
 	local.Meta = LibraryMeta{Name: "local", Description: "the local layer", Format: 1}
 
 	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
 
-	if merged.Meta != external.Meta {
-		t.Errorf("Meta = %+v, want the first layer's %+v", merged.Meta, external.Meta)
+	if merged.Meta != local.Meta {
+		t.Errorf("Meta = %+v, want the local (primary) layer's %+v", merged.Meta, local.Meta)
 	}
-	if merged.RootPath != "/ext" {
-		t.Errorf("RootPath = %q, want the first layer's %q", merged.RootPath, "/ext")
+	if merged.RootPath != "/local" {
+		t.Errorf("RootPath = %q, want the local (primary) layer's %q", merged.RootPath, "/local")
 	}
-	if _, err := fs.Stat(merged.Root, "primary.root"); err != nil {
-		t.Errorf("merged.Root does not resolve the first layer's file: %v", err)
+	if _, err := fs.Stat(merged.Root, "local.root"); err != nil {
+		t.Errorf("merged.Root does not resolve the local (primary) layer's file: %v", err)
 	}
-	if _, err := fs.Stat(merged.Root, "secondary.root"); err == nil {
-		t.Error("merged.Root resolves the second layer's file, want the first layer's root only")
+	if _, err := fs.Stat(merged.Root, "external.root"); err == nil {
+		t.Error("merged.Root resolves the external layer's file, want the local (primary) layer's root only")
 	}
 	if merged.Layers[0].Meta != external.Meta || merged.Layers[1].Meta != local.Meta {
 		t.Errorf("Layers metas = (%+v, %+v), want (%+v, %+v) verbatim",
 			merged.Layers[0].Meta, merged.Layers[1].Meta, external.Meta, local.Meta)
 	}
-	if merged.Layers[1].RootPath != "/local" {
-		t.Errorf("Layers[1].RootPath = %q, want the local layer's %q", merged.Layers[1].RootPath, "/local")
+	if merged.Layers[0].RootPath != "/ext" {
+		t.Errorf("Layers[0].RootPath = %q, want the external layer's %q", merged.Layers[0].RootPath, "/ext")
 	}
 }
 
 // TestMergeLibraryLayersRetainsPerLayerMedia proves each layer's own media
 // sub-filesystem stays addressable through Layers, and the merged Media is the
-// primary layer's (there is no merged media namespace).
+// primary (local) layer's — the external layer's media is reachable only
+// through its own layer, so there is no merged media namespace.
 func TestMergeLibraryLayersRetainsPerLayerMedia(t *testing.T) {
 	external := testLayer("/ext")
 	setTestMedia(external, "ext.png", "shared/logo.svg")
@@ -715,35 +717,95 @@ func TestMergeLibraryLayersRetainsPerLayerMedia(t *testing.T) {
 	if _, err := fs.Stat(merged.Layers[1].Media, "local.png"); err != nil {
 		t.Errorf("Layers[1].Media (local) does not resolve local.png: %v", err)
 	}
-	if _, err := fs.Stat(merged.Media, "ext.png"); err != nil {
-		t.Errorf("merged.Media (the primary layer's) does not resolve ext.png: %v", err)
+	if _, err := fs.Stat(merged.Media, "local.png"); err != nil {
+		t.Errorf("merged.Media (the primary local layer's) does not resolve local.png: %v", err)
 	}
-	if _, err := fs.Stat(merged.Media, "local.png"); err == nil {
-		t.Error("merged.Media resolves the second layer's file, want the primary layer's media only")
+	if _, err := fs.Stat(merged.Media, "ext.png"); err == nil {
+		t.Error("merged.Media resolves the external layer's file, want the primary (local) layer's media only")
 	}
 }
 
-// TestMergeLibraryLayersHasMediaFromAnyLayer proves HasMedia is the union: it
-// is true when any layer carries media — here only the second — while each
-// layer retains its own media state in Layers.
-func TestMergeLibraryLayersHasMediaFromAnyLayer(t *testing.T) {
-	external := testLayer("/ext")
-	local := testLayer("/local")
-	setTestMedia(local, "local.png")
+// TestMergeLibraryLayersHasMediaFromPrimaryLayer proves HasMedia and Media come
+// from the PRIMARY layer only (HasMedia = primary.HasMedia), not the union of
+// the layers: the local (primary) layer's media is exposed on the merged
+// Library, while media carried only by the non-primary external layer leaves
+// merged.HasMedia false and merged.Media nil. A local layer selected by its
+// LayerRoleLocal wins even when it is not the last layer, and a single layer is
+// its own primary.
+func TestMergeLibraryLayersHasMediaFromPrimaryLayer(t *testing.T) {
+	t.Run("media only on the primary local layer", func(t *testing.T) {
+		external := testLayer("/ext")
+		local := testLayer("/local")
+		setTestMedia(local, "local.png")
 
-	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
-	if !merged.HasMedia {
-		t.Error("HasMedia = false, want true: the second layer carries media")
-	}
-	if merged.Layers[0].HasMedia {
-		t.Error("Layers[0].HasMedia = true, want false: the external layer has no media")
-	}
-	if !merged.Layers[1].HasMedia {
-		t.Error("Layers[1].HasMedia = false, want true")
-	}
-	if _, err := fs.Stat(merged.Layers[1].Media, "local.png"); err != nil {
-		t.Errorf("Layers[1].Media does not resolve local.png: %v", err)
-	}
+		merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+		if !merged.HasMedia {
+			t.Error("HasMedia = false, want true: the primary (local) layer carries media")
+		}
+		if merged.Layers[0].HasMedia {
+			t.Error("Layers[0].HasMedia = true, want false: the external layer has no media")
+		}
+		if !merged.Layers[1].HasMedia {
+			t.Error("Layers[1].HasMedia = false, want true")
+		}
+		if _, err := fs.Stat(merged.Media, "local.png"); err != nil {
+			t.Errorf("merged.Media does not resolve the primary layer's local.png: %v", err)
+		}
+	})
+
+	t.Run("media only on the non-primary external layer", func(t *testing.T) {
+		external := testLayer("/ext")
+		setTestMedia(external, "ext.png")
+		local := testLayer("/local")
+
+		merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+		if merged.HasMedia {
+			t.Error("HasMedia = true, want false: only the non-primary external layer carries media")
+		}
+		if merged.Media != nil {
+			t.Errorf("merged.Media = %v, want nil: the primary (local) layer has no media", merged.Media)
+		}
+		if !merged.Layers[0].HasMedia {
+			t.Error("Layers[0].HasMedia = false, want true: the external layer still carries its own media")
+		}
+		if _, err := fs.Stat(merged.Layers[0].Media, "ext.png"); err != nil {
+			t.Errorf("Layers[0].Media does not resolve ext.png: %v", err)
+		}
+	})
+
+	t.Run("primary chosen by role: LayerRoleLocal wins even when not last", func(t *testing.T) {
+		// local is FIRST here and external LAST, so a last-layer fallback would
+		// pick the external layer; the layer's Role must pick the local layer.
+		local := testLayer("/local")
+		local.Role = LayerRoleLocal
+		external := testLayer("/ext")
+		external.Role = LayerRoleExternal
+		setTestMedia(external, "ext.png")
+
+		merged := mergeLibraryLayers([]*LibraryLayer{local, external})
+		if merged.HasMedia {
+			t.Error("HasMedia = true, want false: the primary (local) layer carries no media, though the trailing external layer does")
+		}
+		if merged.Media != nil {
+			t.Errorf("merged.Media = %v, want nil: the primary (local) layer has no media", merged.Media)
+		}
+		if merged.RootPath != "/local" {
+			t.Errorf("RootPath = %q, want the role-selected local layer %q", merged.RootPath, "/local")
+		}
+	})
+
+	t.Run("single media-carrying layer", func(t *testing.T) {
+		only := testLayer("/only")
+		setTestMedia(only, "only.png")
+
+		merged := mergeLibraryLayers([]*LibraryLayer{only})
+		if !merged.HasMedia {
+			t.Error("HasMedia = false, want true for a single media-carrying layer")
+		}
+		if _, err := fs.Stat(merged.Media, "only.png"); err != nil {
+			t.Errorf("merged.Media does not resolve only.png: %v", err)
+		}
+	})
 }
 
 // TestCheckLayerUniquenessNoDuplicates proves disjoint layers pass: every
