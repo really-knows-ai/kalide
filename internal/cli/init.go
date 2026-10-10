@@ -64,6 +64,44 @@ const initExternalCreatedMessage = `Created a deck referencing the external temp
   assets/
 `
 
+// parseInitArgs parses the arguments after `kalide init`: an optional
+// external-library path plus the optional --local flag, in any order, and
+// nothing else (there is still no --force). It returns the path (empty when
+// absent) and whether --local was given. Any malformed argument list is a usage
+// error reported by the returned error's message:
+//
+//   - an unknown option-looking token (any argument beginning with "-" other
+//     than --local, such as the retired --force) is rejected;
+//   - more than one path argument is rejected;
+//   - --local combined with a path is rejected, since --local forces the
+//     built-in starter deck and therefore contradicts an external library.
+//
+// It performs no filesystem work and writes nothing; the caller turns a
+// non-nil error into usage text on stderr and exit 2.
+func parseInitArgs(args []string) (path string, local bool, err error) {
+	havePath := false
+	for _, arg := range args {
+		switch {
+		case arg == "--local":
+			local = true
+		case strings.HasPrefix(arg, "-"):
+			// There are no other init options. A token that looks like a flag
+			// (the retired `--force`, say) is a usage error, not a path.
+			return "", false, fmt.Errorf("kalide init: unexpected option %q (expected at most one library path and the optional --local)", arg)
+		default:
+			if havePath {
+				return "", false, fmt.Errorf("kalide init: unexpected argument %q (expected at most one library path)", arg)
+			}
+			path = arg
+			havePath = true
+		}
+	}
+	if local && havePath {
+		return "", false, fmt.Errorf("kalide init: --local cannot be combined with a library path")
+	}
+	return path, local, nil
+}
+
 // runInit implements `kalide init [path]`. It returns the process status code:
 // 0 when the deck is written; 1 when the current directory cannot be resolved
 // or scaffold refuses (a blocking path already exists, the external library is
