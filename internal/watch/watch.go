@@ -2,11 +2,12 @@
 // them as a debounced stream of events.
 //
 // It is the file-watching half of live reload (domain.service.watch-deck): the
-// watched paths are the deck's slides/ subtree, its assets/ subtree, its
-// resolved template-library root's structure — the root itself, its
+// watched paths are the deck's slides/ subtree, its assets/ subtree, each
+// resolved template-library layer root's structure — the external `templates:`
+// root when configured and the deck-root templates/ when it exists
+// (external-template-library, layered-template-library): each root itself, its
 // library.yaml and the slides/, sections/, themes/ and media/ subtrees, but no
-// other top-level entry in the root (the configured `templates:` path, else the
-// local templates/; see external-template-library) — and its kalide.yaml. The
+// other top-level entry in a root — and its kalide.yaml. The
 // watcher never reads, validates or renders a deck; it only reports that
 // something under those paths changed. internal/server consumes the events to
 // re-validate and re-render the deck and to push a reload to the open browser
@@ -39,12 +40,12 @@ const AssetsDir = "assets"
 
 // TemplatesDir is the fixed name of the local template library directory at
 // the root of a deck, alongside deck.SlidesDir and AssetsDir. It aliases
-// template.TemplatesDir and is the fallback library root when kalide.yaml has
-// no `templates:` key; otherwise the configured path is the resolved root
-// (external-template-library). The resolved root is watched recursively so an
-// edit anywhere in the library triggers a reload. Like assets/, a missing
-// local templates/ directory is not an error at startup: the root watch picks
-// it up if it is created later.
+// template.TemplatesDir and is the deck's local library layer root whenever
+// that directory exists, alongside the external `templates:` root when the key
+// is configured (external-template-library, layered-template-library). Each
+// layer root's structure is watched so an edit anywhere in a library triggers a
+// reload. Like assets/, a missing local templates/ directory is not an error at
+// startup: the root watch picks it up if it is created later.
 const TemplatesDir = template.TemplatesDir
 
 // libraryWatchDirs are the template-library top-level directories whose
@@ -92,22 +93,23 @@ type Event struct {
 //
 //   - the slides/ subtree (deck.SlidesDir) recursively;
 //   - the assets/ subtree (AssetsDir) recursively;
-//   - the resolved template-library root's structure — the configured
-//     `templates:` path in kalide.yaml (relative to root, or absolute; it may
-//     lie outside root), else the local templates/ (TemplatesDir) — namely the
-//     root itself (non-recursively), the top-level library.yaml and the
-//     slides/, sections/, themes/ and media/ subtrees; every other top-level
-//     entry in the root (e.g. .git/, README.md, AGENTS.md) is ignored; and
+//   - each resolved template-library layer root's structure
+//     (layered-template-library): the external `templates:` path in kalide.yaml
+//     (relative to root, or absolute; it may lie outside root) when configured,
+//     and the deck-root templates/ (TemplatesDir) when it exists — namely each
+//     root itself (non-recursively), its top-level library.yaml and its slides/,
+//     sections/, themes/ and media/ subtrees; every other top-level entry in a
+//     root (e.g. .git/, README.md, AGENTS.md) is ignored; and
 //   - the kalide.yaml file (deck.ConfigFile) at the root.
 //
-// fsnotify is not recursive, so Watch walks slides/, assets/ and each of the
-// library structure directories at startup and registers every directory it
-// finds; the library root itself is watched non-recursively so no unrelated
-// entry is followed. A directory created later is picked up from the create
-// event that the parent's watch reports and has its subtree added; a directory
-// removed or renamed has its watch (and its descendants') dropped. A missing
-// slides/, assets/ or library directory is not an error: the root watch sees a
-// local one if it is created later.
+// fsnotify is not recursive, so Watch walks slides/, assets/ and each layer
+// root's library structure directories at startup and registers every
+// directory it finds; each layer root itself is watched non-recursively so no
+// unrelated entry is followed. A directory created later is picked up from the
+// create event that the parent's watch reports and has its subtree added; a
+// directory removed or renamed has its watch (and its descendants') dropped. A
+// missing slides/, assets/ or library directory is not an error: the root watch
+// sees a local one if it is created later.
 //
 // Debounce: each relevant event resets a timer, and a single Event is sent only
 // after no relevant event has arrived for debounce (one event per burst). No
@@ -142,19 +144,13 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 		return nil, nil, fmt.Errorf("watch %s: %w", root, err)
 	}
 
-	// Resolve the deck's template-library roots from kalide.yaml (the
-	// configured `templates:` path, else the local templates/) so every
-	// resolved root — possibly an external directory outside the deck root —
-	// is retained for watching (external-template-library). A missing or
-	// unresolvable library is not an error: the deck's slides/, assets/ and
-	// kalide.yaml are still watched, and a resolved root is picked up later if
-	// it appears.
-	//
-	// The watcher retains every resolved layer root (w.libraries); until the
-	// per-layer watch lands (phase-4 tasks 3-5) only the primary root —
-	// libraries[0], the external `templates:` root when configured, else the
-	// local templates/ — is registered, exactly the single root the watcher
-	// watched before, so single-root behaviour is unchanged.
+	// Resolve the deck's template-library layer roots from kalide.yaml (the
+	// configured `templates:` path and the local templates/) so every resolved
+	// root — possibly an external directory outside the deck root — is
+	// retained and watched (external-template-library,
+	// layered-template-library). A missing or unresolvable library is not an
+	// error: the deck's slides/, assets/ and kalide.yaml are still watched, and
+	// a resolved root is picked up later if it appears.
 	roots := libraryRoot(root)
 
 	w := &watcher{
@@ -179,12 +175,16 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 	}
 	w.addTree(filepath.Join(root, deck.SlidesDir))
 	w.addTree(filepath.Join(root, AssetsDir))
-	if library := w.primaryLibrary(); library != "" {
-		// Only the library's own structure is followed: the root itself
-		// (non-recursively) and its slides/, sections/, themes/ and media/
-		// subtrees. Every other top-level entry in the library root — a .git/
-		// directory, a README, the root AGENTS.md, an editor lockfile — is
-		// not part of the library and is ignored.
+	// Register each resolved layer root's own structure: the root itself
+	// (non-recursively) and its slides/, sections/, themes/ and media/
+	// subtrees. Every other top-level entry in a layer root — a .git/
+	// directory, a README, the root AGENTS.md, an editor lockfile — is not part
+	// of the library and is ignored. A missing layer root is not an error: the
+	// root watch picks it up if it is created later (addRelevantTree).
+	for _, library := range w.libraries {
+		if library == "" {
+			continue
+		}
 		_ = w.add(library)
 		for _, dir := range libraryWatchDirs {
 			w.addTree(filepath.Join(library, dir))
@@ -221,12 +221,9 @@ type watcher struct {
 	// root, its library.yaml, or anything at or beneath slides/, sections/,
 	// themes/ or media/) is a deck change even when it lies outside root.
 	//
-	// The watcher retains every resolved root. libraryRelevant and
-	// addRelevantTree consult every root; until the per-layer startup watch
-	// lands (phase-4 task 5) only the primary root, libraries[0] — the
-	// external `templates:` root when configured, else the local templates/ —
-	// is registered at startup, so single-root startup behaviour is unchanged.
-	// Use primaryLibrary for that root.
+	// The watcher registers and consults every resolved root: Watch registers
+	// each root's structure at startup, and libraryRelevant and addRelevantTree
+	// cover every root at event time.
 	libraries []string
 
 	fsw      *fsnotify.Watcher
@@ -239,18 +236,6 @@ type watcher struct {
 	out  chan Event
 	stop chan struct{}
 	done chan struct{}
-}
-
-// primaryLibrary returns the watcher's primary template-library root — the
-// external `templates:` root when configured, else the deck-root templates/ —
-// or "" when no layer root was resolved. Until the per-layer startup watch
-// lands (phase-4 task 5) Watch registers only this root at startup; the
-// event-time paths (libraryRelevant, addRelevantTree) already cover every root.
-func (w *watcher) primaryLibrary() string {
-	if len(w.libraries) == 0 {
-		return ""
-	}
-	return w.libraries[0]
 }
 
 // add registers one directory (an absolute path) with the underlying watcher,
