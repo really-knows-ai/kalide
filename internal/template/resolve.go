@@ -191,6 +191,23 @@ func LoadDeckLibrary(deckRoot, configured string) (*Library, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Record the layer's role from the resolution, before the uniqueness
+		// check and the merge, so everything downstream — the merged Library
+		// and every render path reading a layer through Library.Layers — sees
+		// it. A single surviving layer, whether the external `templates:` root
+		// alone or the deck-root local templates/ alone, is the deck's whole
+		// library and is sole. When two layers survive, the first (the
+		// configured external `templates:` layer) is external and the second
+		// (the deck-root templates/) is local; render derives each layer's
+		// served URL prefixes from its role (layered-template-library).
+		switch {
+		case len(roots) > 1 && i == 0:
+			layer.Role = LayerRoleExternal
+		case len(roots) > 1:
+			layer.Role = LayerRoleLocal
+		default:
+			layer.Role = LayerRoleSole
+		}
 		layers = append(layers, layer)
 	}
 
