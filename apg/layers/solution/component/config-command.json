@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "config-command",
-  "body": "Config command: the `kalide config` CLI surface — the handler that parses `get|set|unset|list`, reads and writes the user config through the user-config store, prints the value or list to stdout and errors to stderr, and returns the process status code (0 success, non-zero on an unset key, 2 on a usage error). It is dispatched by `cli.Run` beside init, init-library, start, templates, upgrade and version, and is the CLI presentation half of domain.service.load-user-config. Its intended home is a new internal/cli file (config.go, handler runConfig and its helpers); the code is built by the plan.",
+  "body": "Config command: the `kalide config` CLI surface — the handler that parses `get|set|unset|list`, accepts recognised keys only (the recognised key set is `default-template-dir`; a key outside it is a usage error listing the recognised keys, exit 2), reads and writes the user config through the user-config store, prints the value or the set-recognised-key list to stdout and errors to stderr, and returns the process status code (0 success, non-zero on an unset key, 2 on a usage error). It is dispatched by `cli.Run` beside init, init-library, start, templates, upgrade and version, and is the CLI presentation half of domain.service.load-user-config. Its intended home is a new internal/cli file (config.go, handler runConfig and its helpers); the code is built by the plan.",
   "properties": {},
   "out": [],
   "in": [
@@ -13,17 +13,17 @@
     },
     {
       "kind": "realised-by",
-      "source": "domain.service.load-user-config",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
       "source": "domain.entity.user-config",
       "properties": {}
     },
     {
       "kind": "realised-by",
       "source": "domain.group.configuration",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.load-user-config",
       "properties": {}
     }
   ]

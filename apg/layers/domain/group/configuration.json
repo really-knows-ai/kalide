@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "configuration",
-  "body": "Configuration: kalide's user-level settings — the per-user config file and the default template library directory it holds — read by the CLI at command time and shared by every deck and every working directory.",
+  "body": "Configuration: kalide's user-level settings — the per-user config file and the default template directory it holds — read by the CLI at command time and shared by every deck and every working directory.",
   "properties": {
     "attribute": "supporting"
   },
@@ -14,12 +14,12 @@
     },
     {
       "kind": "contains",
-      "target": "domain.value.default-template-library",
+      "target": "domain.service.load-user-config",
       "properties": {}
     },
     {
-      "kind": "contains",
-      "target": "domain.service.load-user-config",
+      "kind": "realised-by",
+      "target": "solution.component.config-command",
       "properties": {}
     },
     {
@@ -28,8 +28,8 @@
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "target": "solution.component.config-command",
+      "kind": "contains",
+      "target": "domain.value.default-template-dir",
       "properties": {}
     }
   ],

@@ -7,6 +7,11 @@
   "out": [
     {
       "kind": "contains",
+      "target": "requirements.requirement.cli-config",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.cli-init",
       "properties": {}
     },
@@ -52,12 +57,7 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.cli-config",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.default-template-library",
+      "target": "requirements.requirement.default-template-dir",
       "properties": {}
     }
   ],
