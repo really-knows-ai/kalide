@@ -5,38 +5,45 @@ import (
 	"path/filepath"
 )
 
-// This file is the template loader's single library-root resolution point
+// This file is the template loader's library-root resolution point
 // (external-template-library): ResolveLibraryRoot turns a deck's raw
-// `templates:` value plus its deck root into the one library root to use, and
-// LoadDeckLibrary loads and validates that root through the shared loader body
-// in loadlibrary.go. No other place resolves a library root, so there is
-// exactly one authority deciding it: a configured `templates:` path is
-// authoritative and never silently falls back to a local `templates/`, and the
-// error when neither resolves names the offending or expected path.
+// `templates:` value plus its deck root into the deck's PRIMARY library root
+// (the external `templates:` root when configured, else the deck-root
+// templates/), ResolveLibraryLayers returns every layer root the deck draws
+// from, and LoadDeckLibrary loads and validates a root through the shared
+// loader body in loadlibrary.go. ResolveLibraryRoot is not authoritative over
+// the local layer: a configured `templates:` root is the primary root, but the
+// deck-root templates/ still participates as the local layer through
+// ResolveLibraryLayers, so a configured path never suppresses a present local
+// templates/. The error when neither resolves names the offending or expected
+// path.
 //
-// The root is resolved on the real filesystem, against the directory holding
+// The roots are resolved on the real filesystem, against the directory holding
 // kalide.yaml, rather than through the deck's fs.FS: an external library may
 // sit above the deck root (e.g. `../shared-lib`), which os.DirFS and
 // fs.ValidPath reject.
 
-// ResolveLibraryRoot resolves the template-library root a deck must use.
+// ResolveLibraryRoot resolves the primary template-library root a deck uses.
 //
 // deckRoot is the directory holding the deck's kalide.yaml, as an
 // operating-system path. configured is the deck's raw top-level `templates:`
 // value as written (deck.TemplatesPath): "" when the key is absent or empty.
 //
-// When configured is non-empty it wins and is authoritative: a relative path is
-// resolved against deckRoot, an absolute path is used as given, and the local
-// templates/ directory is ignored entirely. When configured is empty the local
-// templates/ directory under deckRoot is used.
+// When configured is non-empty it is the primary root: a relative path is
+// resolved against deckRoot and an absolute path is used as given. When
+// configured is empty the deck-root templates/ directory under deckRoot is the
+// primary root. ResolveLibraryRoot is not authoritative over the local layer:
+// the local templates/ still participates as the local layer through
+// ResolveLibraryLayers, so a configured path does not ignore it. Callers that
+// need every layer the deck draws from must use ResolveLibraryLayers.
 //
 // The resolved root must exist and be a directory. When it does not — the
 // configured path is missing or not a directory, or (with no key) the local
 // templates/ is absent or not a directory — ResolveLibraryRoot returns a
 // *LibraryError naming that offending or expected path, with the `kalide init`
 // hint only for the absent-local case. There is no built-in fallback, and a
-// configured path never silently falls back to the local templates/
-// (templates-dir-required).
+// missing configured path errors rather than silently falling back to the
+// local templates/ (templates-dir-required).
 func ResolveLibraryRoot(deckRoot, configured string) (string, error) {
 	if configured != "" {
 		root := configured
@@ -129,10 +136,12 @@ func ResolveLibraryLayers(deckRoot, configured string) ([]string, error) {
 	return layers, nil
 }
 
-// LoadDeckLibrary loads and validates the template library a deck must use,
-// resolving its root through ResolveLibraryRoot and then running the full
-// templates-dir-validation checks at that resolved root (both the templates and
-// the themes under it), returning the first path-qualified templates error.
+// LoadDeckLibrary loads and validates the template library a deck uses. It
+// resolves the deck's primary library root through ResolveLibraryRoot — the
+// external `templates:` root when configured, else the deck-root templates/ —
+// and then runs the full templates-dir-validation checks at that resolved root
+// (both the templates and the themes under it), returning the first
+// path-qualified templates error.
 //
 // deckRoot is the directory holding the deck's kalide.yaml; configured is the
 // deck's raw `templates:` value as written (deck.TemplatesPath). The resolved
