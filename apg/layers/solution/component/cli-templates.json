@@ -12,11 +12,6 @@
     },
     {
       "kind": "implemented-by",
-      "target": "internal/cli/templates.go",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/cli.runTemplates",
       "properties": {}
     },
@@ -24,17 +19,17 @@
       "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/suggest.Closest",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/cli/templates.go",
+      "properties": {}
     }
   ],
   "in": [
     {
       "kind": "contains",
       "source": "solution.container.cli-binary",
-      "properties": {}
-    },
-    {
-      "kind": "realised-by",
-      "source": "domain.service.template-registry",
       "properties": {}
     },
     {
@@ -48,8 +43,8 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.cli-templates-and-deck-renderer",
+      "kind": "realised-by",
+      "source": "domain.service.template-registry",
       "properties": {}
     }
   ]
