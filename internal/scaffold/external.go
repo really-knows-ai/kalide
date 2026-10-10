@@ -10,10 +10,14 @@
 // and an empty assets/. It writes no local templates/: the library is the one
 // at path (requirements.requirement.cli-init-minimal-seed).
 //
-// Validation reuses the loader's single root-resolution point and its
-// templates-dir-validation checks (template.LoadDeckLibrary), which resolve a
-// relative path against the deck root and use an absolute path as given. The
-// deck's theme is resolved against that same library through the theme
+// Validation resolves the external library root exactly as the loader does — a
+// relative path against the deck root, an absolute path as given — and
+// validates it ALONE through template.LoadLibraryAt, the path-qualified
+// single-layer loader: the resolved root is its own fs.FS root, so a
+// pre-existing deck-root templates/ is never merged as a second layer (it is
+// left untouched and participates only later, at `kalide start`, so a name
+// collision between the layers surfaces there, not at init). The deck's theme
+// is resolved against that same library's themes/ only through the theme
 // registry (theme.LoadDir + Registry.Lookup), mirroring `kalide start`
 // (requirements.requirement.theme-selection): a library that is load-valid
 // but does not define the deck's theme cannot host the deck, so it is refused
@@ -87,13 +91,26 @@ func InitExternal(dir, externalPath string) error {
 		return blockRefusal(conflicts)
 	}
 
+	// Resolve the external library root exactly as the loader does: a
+	// relative path is resolved against dir (the deck root) and an absolute
+	// path is used as given, so the path validated here is the path
+	// `kalide start` later resolves from kalide.yaml.
+	resolvedExternalPath := externalPath
+	if !filepath.IsAbs(resolvedExternalPath) {
+		resolvedExternalPath = filepath.Join(dir, resolvedExternalPath)
+	}
+	resolvedExternalPath = filepath.Clean(resolvedExternalPath)
+
 	// Validate the external library AND the deck's default theme fail-fast,
-	// before any write. LoadDeckLibrary resolves externalPath against dir and
-	// runs the full templates-dir-validation checks at the resolved root; a
-	// configured path never falls back to a local templates/.
-	library, err := template.LoadDeckLibrary(dir, externalPath)
+	// before any write. LoadLibraryAt validates resolvedExternalPath as its
+	// own single root and runs the full templates-dir-validation checks
+	// there: it never merges a pre-existing deck-root templates/ as a second
+	// layer, so a local templates/ that is not itself a valid library does
+	// not abort init and is left untouched (cli-init-refuse-existing). Every
+	// error is wrapped with externalPath as written.
+	library, err := template.LoadLibraryAt(resolvedExternalPath)
 	if err != nil {
-		return fmt.Errorf("init: %w", err)
+		return fmt.Errorf("init: external template library %s: %w", externalPath, err)
 	}
 	themes, err := theme.LoadDir(os.DirFS(library.RootPath), template.ThemesDir)
 	if err != nil {
