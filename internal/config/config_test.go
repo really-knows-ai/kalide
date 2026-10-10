@@ -2,7 +2,13 @@ package config
 
 // This file unit-tests kalide's per-user settings store (internal/config): the
 // flat <os.UserConfigDir()>/kalide/config key=value file backing `kalide config`
-// and `kalide init`'s default-template-directory resolution (phase-01 task-8).
+// and the single setting `kalide init` consults — "default-template-dir", the
+// directory of the template library init uses when no path argument is given.
+//
+// Only `kalide init` reads this setting: `kalide start`, `kalide templates` and
+// rendering resolve a deck's library from its library layers — the `templates:`
+// path when present and the deck-root `templates/` when it exists — and never
+// consult the user config.
 //
 // Every case isolates the store from the developer's real per-user config by
 // pointing HOME — and, for portability, XDG_CONFIG_HOME (Linux), AppData and
@@ -78,10 +84,13 @@ func assertStoreAbsent(t *testing.T) {
 	}
 }
 
-// TestSetNormalisesPaths covers AC (a): Set normalises the path value to an
-// absolute path — a leading `~` expands to the home directory, a relative path
-// resolves against the process cwd — and the stored value is absolute and
-// independent of the working directory of any later command.
+// TestSetNormalisesPaths covers AC (a): Set normalises the "default-template-dir"
+// value to an absolute path — a leading `~` expands to the home directory, a
+// relative path resolves against the process cwd — so the stored value is
+// absolute and independent of the working directory of any later command. It is
+// the user-config setting only `kalide init` consults (start, templates and
+// rendering resolve the library from the deck's layers), so this test pins the
+// normalisation contract init relies on.
 func TestSetNormalisesPaths(t *testing.T) {
 	t.Run("leading tilde expands to the home directory", func(t *testing.T) {
 		isolateConfig(t)
