@@ -45,6 +45,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/really-knows-ai/kalide/internal/server"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -315,4 +317,548 @@ func snapshotTree(t *testing.T, root string) map[string]string {
 		t.Fatalf("snapshot %s: %v", root, err)
 	}
 	return snap
+}
+
+// The tests below are the phase-04 task-3 end-to-end coverage of `kalide init`'s
+// template-library resolution and the branch guards
+// (requirements.requirement.init-library-resolution,
+// requirements.requirement.cli-init,
+// requirements.requirement.cli-init-refuse-existing and
+// requirements.requirement.default-template-dir). They drive the real kalide
+// binary the harness builds, with a hermetic per-user config store: every
+// child process is run through runKalideWithHome (config_test.go), so HOME,
+// XDG_CONFIG_HOME, AppData and USERPROFILE point at a fresh temp home and the
+// developer's real config is never read or written. The
+// `default-template-dir` the cases configure is a real external library on
+// disk, built by newInitLibrary below.
+//
+// The three resolution branches are exercised first match wins: an explicit
+// path, else the configured default (an absolute path), else the built-in
+// starter seed — which --local forces even when a default is set. The guards
+// are asserted per branch: slides/, assets/ and kalide.yaml block everywhere;
+// a pre-existing local templates/ blocks only the seed branch and is exempt and
+// left byte-for-byte untouched in the external branches; a pre-existing
+// AGENTS.md never blocks in any branch. They build a binary and drive a server,
+// so they are skipped under -short.
+
+// TestInitConfiguredDefaultServes covers the configured-default branch end to
+// end: with a valid `default-template-dir` configured, `kalide init` writes a
+// deck whose kalide.yaml references the configured library by its absolute
+// path, with empty slides/ and assets/ and no local templates/ or starter
+// slide, and `kalide start` validates and serves that deck from the configured
+// library.
+func TestInitConfiguredDefaultServes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	home := t.TempDir()
+	libDir := newInitLibrary(t, "configured-lib", "configured-default-library", "configured-default-theme")
+	setInitDefaultTemplateDir(t, h, home, libDir)
+
+	assertDirEmpty(t, h.WorkDir())
+
+	stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+	if code != 0 {
+		t.Fatalf("kalide init exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide init stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(stdout, libDir) {
+		t.Errorf("kalide init output does not name the configured library %q:\n%s", libDir, stdout)
+	}
+	if strings.Contains(stdout, "templates/library.yaml") || strings.Contains(stdout, "slides/1-hello.md") {
+		t.Errorf("kalide init output names a local templates/ or starter slide, want neither:\n%s", stdout)
+	}
+
+	got := initDeckTemplates(t, h.WorkDir())
+	if got != libDir {
+		t.Errorf("kalide.yaml templates = %q, want the configured absolute default %q", got, libDir)
+	}
+	if !filepath.IsAbs(got) {
+		t.Errorf("kalide.yaml templates = %q, want an absolute path", got)
+	}
+	if _, err := os.Stat(h.Path("templates")); !os.IsNotExist(err) {
+		t.Errorf("kalide init wrote a local templates/ (err = %v), want only the external reference", err)
+	}
+	if _, err := os.Stat(h.Path("slides/1-hello.md")); !os.IsNotExist(err) {
+		t.Errorf("kalide init wrote the starter slide, want none")
+	}
+	assertDirEmpty(t, h.Path("slides"))
+	assertDirEmpty(t, h.Path("assets"))
+
+	// `kalide start` validates the written deck and serves it; the default
+	// theme the server serves comes from the configured library, pinned by its
+	// marker, so this proves the deck resolved that external root.
+	h.Start()
+	body, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	if strings.Contains(body, "Deck error") {
+		t.Fatalf("served page is the error page, want the external-library deck:\n%s", body)
+	}
+	served, err := h.GetString(server.ThemesPath + "default/theme.css")
+	if err != nil {
+		t.Fatalf("GET %sdefault/theme.css: %v", server.ThemesPath, err)
+	}
+	if !strings.Contains(served, "configured-default-theme") {
+		t.Errorf("served %sdefault/theme.css does not come from the configured library:\n%s", server.ThemesPath, served)
+	}
+	h.Stop()
+}
+
+// TestInitDeckOwnTemplatesOverridesConfiguredDefault proves the deck's own
+// `templates:` is authoritative over the user config for `kalide start` and
+// `kalide templates`: with a configured default pointing at one valid library,
+// a deck that declares a different valid library in kalide.yaml serves from and
+// documents the deck's library, never the configured default.
+func TestInitDeckOwnTemplatesOverridesConfiguredDefault(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	home := t.TempDir()
+	configuredDir := newInitLibrary(t, "configured-lib", "configured-default-library", "configured-default-theme")
+	deckLibDir := newInitLibrary(t, "deck-lib", "deck-library-marker", "deck-library-theme")
+	setInitDefaultTemplateDir(t, h, home, configuredDir)
+
+	// A deck that declares its own `templates:`, pointing at a different valid
+	// library than the configured default.
+	h.WriteFile("kalide.yaml", []byte(
+		"title: Deck With Its Own Templates\ntheme: default\ntemplates: "+deckLibDir+"\n"))
+	if err := os.MkdirAll(h.Path("slides"), 0o755); err != nil {
+		t.Fatalf("create slides/: %v", err)
+	}
+	if err := os.MkdirAll(h.Path("assets"), 0o755); err != nil {
+		t.Fatalf("create assets/: %v", err)
+	}
+
+	// `kalide templates` documents the deck's own library, never the
+	// configured default.
+	stdout, stderr, code := h.Run("templates")
+	if code != 0 {
+		t.Fatalf("kalide templates exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if !strings.Contains(stdout, "deck-library-marker") {
+		t.Errorf("kalide templates output does not list the deck library's template:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "configured-default-library") {
+		t.Errorf("kalide templates consulted the configured default:\n%s", stdout)
+	}
+
+	// `kalide start` serves from the deck's own library too.
+	h.Start()
+	body, err := h.GetString("/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	if strings.Contains(body, "Deck error") {
+		t.Fatalf("served page is the error page, want the deck-library deck:\n%s", body)
+	}
+	served, err := h.GetString(server.ThemesPath + "default/theme.css")
+	if err != nil {
+		t.Fatalf("GET %sdefault/theme.css: %v", server.ThemesPath, err)
+	}
+	if !strings.Contains(served, "deck-library-theme") {
+		t.Errorf("served %sdefault/theme.css does not come from the deck library:\n%s", server.ThemesPath, served)
+	}
+	if strings.Contains(served, "configured-default-theme") {
+		t.Errorf("served %sdefault/theme.css came from the configured default:\n%s", server.ThemesPath, served)
+	}
+	h.Stop()
+}
+
+// TestInitExplicitAndLocalOverrides covers the two branches that beat a
+// configured default: `kalide init <path>` (the explicit library is stored as
+// given) and `kalide init --local` (the built-in seed is written and the
+// config is never consulted), plus the `--local <path>` usage error that writes
+// nothing.
+func TestInitExplicitAndLocalOverrides(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	configuredDir := newInitLibrary(t, "configured-lib", "configured-default-library", "configured-default-theme")
+	explicitDir := newInitLibrary(t, "deck-lib", "deck-library-marker", "deck-library-theme")
+
+	t.Run("--local writes the seed even with a configured default", func(t *testing.T) {
+		home := t.TempDir()
+		setInitDefaultTemplateDir(t, h, home, configuredDir)
+		resetDir(t, h.WorkDir())
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init", "--local")
+		if code != 0 {
+			t.Fatalf("kalide init --local exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide init --local stderr = %q, want empty", stderr)
+		}
+		for _, want := range []string{"templates/library.yaml", "slides/1-hello.md", "templates/themes/default/theme.css"} {
+			if !strings.Contains(stdout, want) {
+				t.Errorf("kalide init --local output does not name %q:\n%s", want, stdout)
+			}
+		}
+		if _, err := os.Stat(h.Path("templates/library.yaml")); err != nil {
+			t.Errorf("kalide init --local did not write the seed library: %v", err)
+		}
+		if got := initDeckTemplates(t, h.WorkDir()); got != "" {
+			t.Errorf("kalide.yaml templates = %q, want the empty seed value", got)
+		}
+	})
+
+	t.Run("explicit path overrides the configured default", func(t *testing.T) {
+		home := t.TempDir()
+		setInitDefaultTemplateDir(t, h, home, configuredDir)
+		resetDir(t, h.WorkDir())
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init", explicitDir)
+		if code != 0 {
+			t.Fatalf("kalide init <path> exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide init <path> stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, explicitDir) {
+			t.Errorf("kalide init <path> output does not name the explicit library %q:\n%s", explicitDir, stdout)
+		}
+		if got := initDeckTemplates(t, h.WorkDir()); got != explicitDir {
+			t.Errorf("kalide.yaml templates = %q, want the explicit library %q (not the configured default %q)",
+				got, explicitDir, configuredDir)
+		}
+	})
+
+	t.Run("--local with a path is a usage error writing nothing", func(t *testing.T) {
+		home := t.TempDir()
+		resetDir(t, h.WorkDir())
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init", "--local", explicitDir)
+		if code != 2 {
+			t.Fatalf("kalide init --local <path> exit = %d, want 2 (stderr = %q)", code, stderr)
+		}
+		if stdout != "" {
+			t.Errorf("kalide init --local <path> stdout = %q, want empty", stdout)
+		}
+		for _, want := range []string{"Usage:", "--local cannot be combined"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("kalide init --local <path> stderr = %q, want it to mention %q", stderr, want)
+			}
+		}
+		assertDirEmpty(t, h.WorkDir())
+	})
+}
+
+// TestInitConfiguredDefaultFailures covers the configured default that cannot
+// host the deck: a path that is missing from disk, a directory that is not a
+// valid library, and a valid library that does not define the deck's default
+// theme. Each fails non-zero, names the offending path, and writes nothing.
+func TestInitConfiguredDefaultFailures(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+
+	t.Run("missing configured default", func(t *testing.T) {
+		home := t.TempDir()
+		missing := filepath.Join(t.TempDir(), "nope")
+		setInitDefaultTemplateDir(t, h, home, missing)
+		resetDir(t, h.WorkDir())
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code == 0 {
+			t.Fatalf("kalide init exit = 0, want non-zero for a missing configured default")
+		}
+		if stdout != "" {
+			t.Errorf("kalide init stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, missing) {
+			t.Errorf("kalide init stderr = %q, want it to name the missing configured path %q", stderr, missing)
+		}
+		assertDirEmpty(t, h.WorkDir())
+	})
+
+	t.Run("invalid configured default", func(t *testing.T) {
+		home := t.TempDir()
+		libDir := newInitLibrary(t, "configured-lib", "configured-default-library", "configured-default-theme")
+		writeInitFile(t, filepath.Join(libDir, "library.yaml"), "name: Bad_Name\nformat: 1\n")
+		setInitDefaultTemplateDir(t, h, home, libDir)
+		resetDir(t, h.WorkDir())
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code == 0 {
+			t.Fatalf("kalide init exit = 0, want non-zero for an invalid configured default")
+		}
+		if stdout != "" {
+			t.Errorf("kalide init stdout = %q, want empty", stdout)
+		}
+		if want := filepath.Join(libDir, "library.yaml"); !strings.Contains(stderr, want) {
+			t.Errorf("kalide init stderr = %q, want it to name %q", stderr, want)
+		}
+		if !strings.Contains(stderr, "not a valid name") {
+			t.Errorf("kalide init stderr = %q, want the library.yaml name error", stderr)
+		}
+		assertDirEmpty(t, h.WorkDir())
+	})
+
+	t.Run("configured default without the deck's theme", func(t *testing.T) {
+		home := t.TempDir()
+		libDir := newInitLibrary(t, "configured-lib", "configured-default-library", "configured-default-theme")
+		if err := os.RemoveAll(filepath.Join(libDir, "themes", "default")); err != nil {
+			t.Fatalf("remove themes/default: %v", err)
+		}
+		writeInitFile(t, filepath.Join(libDir, "themes", "plain", "theme.css"), "body {}\n")
+		setInitDefaultTemplateDir(t, h, home, libDir)
+		resetDir(t, h.WorkDir())
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code == 0 {
+			t.Fatalf("kalide init exit = 0, want non-zero when the configured default does not resolve the deck's theme")
+		}
+		if stdout != "" {
+			t.Errorf("kalide init stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, "default") {
+			t.Errorf("kalide init stderr = %q, want it to name the unresolvable default theme", stderr)
+		}
+		if !strings.Contains(stderr, libDir) {
+			t.Errorf("kalide init stderr = %q, want it to name the offending library %q", stderr, libDir)
+		}
+		assertDirEmpty(t, h.WorkDir())
+	})
+}
+
+// TestInitRefusalExemptions covers the branch guard rules over the real
+// binary: a pre-existing local templates/ is exempt (and left byte-for-byte
+// untouched) in the explicit-path and configured-default branches but blocks
+// the seed branch, where slides/, assets/ and kalide.yaml also block; and a
+// pre-existing AGENTS.md never blocks in any branch and is left untouched.
+func TestInitRefusalExemptions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	configuredDir := newInitLibrary(t, "configured-lib", "configured-default-library", "configured-default-theme")
+	explicitDir := newInitLibrary(t, "deck-lib", "deck-library-marker", "deck-library-theme")
+
+	const templatesSentinel = "pre-existing local templates init must not touch\n"
+
+	t.Run("pre-existing templates blocks the seed branch", func(t *testing.T) {
+		home := t.TempDir()
+		resetDir(t, h.WorkDir())
+		h.WriteFile("templates/keep.txt", []byte(templatesSentinel))
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code == 0 {
+			t.Fatalf("kalide init exit = 0 with a pre-existing templates/, want non-zero refusal")
+		}
+		if stdout != "" {
+			t.Errorf("kalide init stdout = %q, want empty on refusal", stdout)
+		}
+		for _, want := range []string{"templates/", "never overwrites"} {
+			if !strings.Contains(stderr, want) {
+				t.Errorf("kalide init refusal does not mention %q:\n%s", want, stderr)
+			}
+		}
+		assertInitFile(t, h.Path("templates/keep.txt"), templatesSentinel)
+		for _, absent := range []string{"kalide.yaml", "slides", "assets"} {
+			if _, err := os.Lstat(h.Path(absent)); err == nil {
+				t.Errorf("%s was created despite the refusal, want nothing written", absent)
+			}
+		}
+	})
+
+	t.Run("pre-existing templates is exempt in the explicit-path branch", func(t *testing.T) {
+		home := t.TempDir()
+		resetDir(t, h.WorkDir())
+		h.WriteFile("templates/keep.txt", []byte(templatesSentinel))
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init", explicitDir)
+		if code != 0 {
+			t.Fatalf("kalide init <path> exit = %d, want 0 with a pre-existing templates/ (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide init <path> stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, explicitDir) {
+			t.Errorf("kalide init <path> output does not name the external library %q:\n%s", explicitDir, stdout)
+		}
+		assertInitFile(t, h.Path("templates/keep.txt"), templatesSentinel)
+		if got := initDeckTemplates(t, h.WorkDir()); got != explicitDir {
+			t.Errorf("kalide.yaml templates = %q, want %q", got, explicitDir)
+		}
+	})
+
+	t.Run("pre-existing templates is exempt in the configured-default branch", func(t *testing.T) {
+		home := t.TempDir()
+		setInitDefaultTemplateDir(t, h, home, configuredDir)
+		resetDir(t, h.WorkDir())
+		h.WriteFile("templates/keep.txt", []byte(templatesSentinel))
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code != 0 {
+			t.Fatalf("kalide init exit = %d, want 0 with a pre-existing templates/ (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide init stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, configuredDir) {
+			t.Errorf("kalide init output does not name the configured library %q:\n%s", configuredDir, stdout)
+		}
+		assertInitFile(t, h.Path("templates/keep.txt"), templatesSentinel)
+		if got := initDeckTemplates(t, h.WorkDir()); got != configuredDir {
+			t.Errorf("kalide.yaml templates = %q, want the configured default %q", got, configuredDir)
+		}
+	})
+
+	const agentsSentinel = "hand-written agent guide init must not touch\n"
+
+	t.Run("pre-existing AGENTS.md never blocks the external branch", func(t *testing.T) {
+		home := t.TempDir()
+		setInitDefaultTemplateDir(t, h, home, configuredDir)
+		resetDir(t, h.WorkDir())
+		h.WriteFile("AGENTS.md", []byte(agentsSentinel))
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code != 0 {
+			t.Fatalf("kalide init exit = %d, want 0 with a pre-existing AGENTS.md (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide init stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, configuredDir) {
+			t.Errorf("kalide init output does not name the configured library %q:\n%s", configuredDir, stdout)
+		}
+		assertInitFile(t, h.Path("AGENTS.md"), agentsSentinel)
+	})
+
+	t.Run("pre-existing AGENTS.md never blocks the seed branch", func(t *testing.T) {
+		home := t.TempDir()
+		resetDir(t, h.WorkDir())
+		h.WriteFile("AGENTS.md", []byte(agentsSentinel))
+
+		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
+		if code != 0 {
+			t.Fatalf("kalide init exit = %d, want 0 with a pre-existing AGENTS.md (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("kalide init stderr = %q, want empty", stderr)
+		}
+		if !strings.Contains(stdout, "slides/1-hello.md") {
+			t.Errorf("kalide init output does not name the seed slide:\n%s", stdout)
+		}
+		assertInitFile(t, h.Path("AGENTS.md"), agentsSentinel)
+	})
+}
+
+// newInitLibrary writes a minimal, valid external template library into a new
+// temp directory and returns its absolute path. name must be a valid library
+// name (its directory name and library.yaml `name:`); description and marker
+// distinguish one library from another — the description appears in `kalide
+// templates` output, the marker in the served default theme's stylesheet — so a
+// test can pin which library the binary resolved.
+func newInitLibrary(t *testing.T, name, description, marker string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), name)
+	writeInitExternalLibrary(t, dir, name, description, marker)
+	return dir
+}
+
+// writeInitExternalLibrary writes the minimal, valid external template library
+// the loader accepts at dir: library.yaml, one "hello" slide template with the
+// given description and default theme marker, its layout and example, and
+// themes/default/theme.css. It mirrors internal/cli's writeExternalCLILibrary
+// so the e2e fixtures are exactly the shape a real library has.
+func writeInitExternalLibrary(t *testing.T, dir, name, description, marker string) {
+	t.Helper()
+	writeInitFile(t, filepath.Join(dir, "library.yaml"),
+		"name: "+name+"\ndescription: "+description+"\nformat: 1\n")
+	writeInitFile(t, filepath.Join(dir, "slides", "hello", "template.yaml"),
+		"description: "+description+"\n"+
+			"fields:\n"+
+			"  - name: title\n"+
+			"    type: text\n"+
+			"    required: true\n"+
+			"body:\n"+
+			"  mode: optional\n")
+	writeInitFile(t, filepath.Join(dir, "slides", "hello", "layout.html.tmpl"),
+		"<section><h1>{{.title}}</h1></section>\n")
+	writeInitFile(t, filepath.Join(dir, "slides", "hello", "example.md"),
+		"---\ntemplate: hello\ntitle: Example\n---\n")
+	writeInitFile(t, filepath.Join(dir, "themes", "default", "theme.css"),
+		"/* "+marker+" */\nbody { margin: 0; }\n")
+}
+
+// setInitDefaultTemplateDir writes the `default-template-dir` user-config key
+// under home through the real `kalide config set` command, so the store the
+// init cases read is the one the CLI writes.
+func setInitDefaultTemplateDir(t *testing.T, h *Harness, home, dir string) {
+	t.Helper()
+	stdout, stderr, code := runKalideWithHome(t, h, home, "config", "set", configKeyDefaultTemplateDir, dir)
+	if code != 0 {
+		t.Fatalf("kalide config set %s %s exit = %d, want 0 (stderr = %q)",
+			configKeyDefaultTemplateDir, dir, code, stderr)
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("kalide config set %s %s stdout = %q, stderr = %q, want both empty",
+			configKeyDefaultTemplateDir, dir, stdout, stderr)
+	}
+}
+
+// initDeckTemplates parses dir/kalide.yaml and returns its `templates:` value,
+// so a test asserts the reference written rather than its exact formatting.
+func initDeckTemplates(t *testing.T, dir string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "kalide.yaml"))
+	if err != nil {
+		t.Fatalf("read kalide.yaml: %v", err)
+	}
+	var cfg struct {
+		Templates string `yaml:"templates"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse kalide.yaml: %v", err)
+	}
+	return cfg.Templates
+}
+
+// resetDir empties dir and recreates it, so each subtest starts from a clean
+// working directory when the harness is shared across them.
+func resetDir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("remove %s: %v", dir, err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create %s: %v", dir, err)
+	}
+}
+
+// writeInitFile writes content to path, creating parent directories as needed.
+func writeInitFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create directory for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// assertInitFile fails the test unless path holds exactly want, proving a
+// pre-existing file was left byte-for-byte untouched.
+func assertInitFile(t *testing.T, path, want string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if string(got) != want {
+		t.Errorf("%s = %q, want the pre-existing content %q", path, got, want)
+	}
 }
