@@ -528,20 +528,29 @@ var externalDeckTree = []string{
 // and InitExternal directly on real temporary directories: a valid external
 // library whose default theme resolves writes `templates: <path>`, an empty
 // slides/ with no starter slide, an empty assets/ and no local templates/; the
-// refusal matrix still blocks slides/, assets/ and kalide.yaml while a
-// pre-existing local templates/ is exempt and left untouched; an invalid or
-// missing library, or one whose default theme does not resolve, aborts with
-// nothing written; the no-arg hello-seed path is unchanged, including the
-// empty-string path; and a pre-existing deck-root AGENTS.md never blocks and is
-// left byte-for-byte untouched (agent-authoring).
+// external library is validated ALONE, so the default theme must resolve in its
+// themes/ only, never in a pre-existing deck-root templates/; the refusal matrix
+// still blocks slides/, assets/ and kalide.yaml while a pre-existing local
+// templates/ is exempt and left untouched, including one whose slide name
+// collides with the external library (no failure at init: the collision
+// surfaces only at `kalide start` through the merged-library uniqueness check)
+// and one that is not even a valid library; an invalid or missing library, or
+// one whose default theme does not resolve, aborts with nothing written and the
+// loader error wrapped with the external path as written
+// (`init: external template library <path>: …`); the no-arg hello-seed path is
+// unchanged, including the empty-string path; and a pre-existing deck-root
+// AGENTS.md never blocks and is left byte-for-byte untouched (agent-authoring).
 func TestInitExternal(t *testing.T) {
 	t.Run("valid external library writes an external deck", testInitExternalWrites)
 	t.Run("absolute external path is written as given", testInitExternalAbsolutePath)
 	t.Run("missing external library aborts with nothing written", testInitExternalMissingLibrary)
 	t.Run("invalid external library aborts with nothing written", testInitExternalInvalidLibrary)
 	t.Run("unresolvable default theme aborts with nothing written", testInitExternalUnresolvableTheme)
+	t.Run("external library alone resolves the theme, not a local templates", testInitExternalAloneTheme)
 	t.Run("refusal matrix blocks deck paths", testInitExternalRefusalMatrix)
 	t.Run("pre-existing local templates is exempt and left untouched", testInitExternalTemplatesExempt)
+	t.Run("colliding local templates is left untouched and does not abort init", testInitExternalLocalCollisionUntouched)
+	t.Run("invalid local templates is left untouched and does not abort init", testInitExternalLocalInvalidUntouched)
 	t.Run("pre-existing AGENTS.md is left untouched", testInitExternalPreservesExistingAgentsGuide)
 	t.Run("more than one external path is rejected", testInitExternalRejectsExtraPath)
 	t.Run("empty external path is rejected by InitExternal", testInitExternalEmptyPath)
@@ -627,7 +636,9 @@ func testInitExternalMissingLibrary(t *testing.T) {
 
 // testInitExternalInvalidLibrary asserts an external path that exists but is
 // not a valid template library aborts naming the offending library.yaml and
-// creates nothing at all.
+// creates nothing at all, with the loader error wrapped by InitExternal using
+// the external path as written (`init: external template library ../bad-lib: …`)
+// rather than the resolved path it validated.
 func testInitExternalInvalidLibrary(t *testing.T) {
 	parent := t.TempDir()
 	dir := filepath.Join(parent, "deck")
@@ -643,6 +654,9 @@ func testInitExternalInvalidLibrary(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not a valid name") {
 		t.Errorf("Init error = %q, want the library.yaml name error", err)
+	}
+	if want := "init: external template library ../bad-lib:"; !strings.Contains(err.Error(), want) {
+		t.Errorf("Init error = %q, want the loader error wrapped with the external path as written (%q)", err, want)
 	}
 	assertNothingWritten(t, dir)
 }
@@ -689,6 +703,171 @@ func testInitExternalUnresolvableTheme(t *testing.T) {
 		}
 		assertNothingWritten(t, dir)
 	})
+}
+
+// testInitExternalAloneTheme asserts the deck's default theme is resolved in
+// the external library ALONE: a pre-existing deck-root templates/ is not loaded
+// at init, so its themes never participate. When the local templates/ defines
+// `default` but the external library does not, init must still abort — the
+// local theme is never consulted — and when the local templates/ lacks
+// `default` but the external library defines it, init must still succeed. Either
+// way the local templates/ is left byte-for-byte untouched.
+func testInitExternalAloneTheme(t *testing.T) {
+	t.Run("local default theme is ignored", func(t *testing.T) {
+		parent := t.TempDir()
+		dir := filepath.Join(parent, "deck")
+		// A local templates/ that would resolve the default theme if it were
+		// loaded; the external library, however, defines only a non-default
+		// theme, so init must refuse.
+		writeLocalLibrary(t, filepath.Join(dir, "templates"), "local", "default")
+		lib := filepath.Join(parent, "shared-lib")
+		writeExternalLibrary(t, lib, "shared-lib")
+		writeExternalFile(t, filepath.Join(lib, "themes", "plain", "theme.css"), "body {}\n")
+		if err := os.RemoveAll(filepath.Join(lib, "themes", "default")); err != nil {
+			t.Fatalf("remove external themes/default: %v", err)
+		}
+
+		before := snapshot(t, filepath.Join(dir, "templates"))
+
+		err := Init(dir, "../shared-lib")
+		if err == nil {
+			t.Fatal("Init(dir, ../shared-lib) error = nil, want the external library's missing default theme to abort")
+		}
+		if !strings.Contains(err.Error(), "default") {
+			t.Errorf("Init error = %q, want it to name the unresolvable default theme", err)
+		}
+		if !strings.Contains(err.Error(), "shared-lib") {
+			t.Errorf("Init error = %q, want it to name the external library", err)
+		}
+		if after := snapshot(t, filepath.Join(dir, "templates")); !reflect.DeepEqual(after, before) {
+			t.Errorf("Init modified the pre-existing local templates/ on refusal:\n before %v\n after  %v", before, after)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "kalide.yaml")); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("kalide.yaml exists after a refused init (stat err = %v), want nothing written", err)
+		}
+	})
+
+	t.Run("external default theme resolves though the local templates lacks it", func(t *testing.T) {
+		parent := t.TempDir()
+		dir := filepath.Join(parent, "deck")
+		writeExternalLibrary(t, filepath.Join(parent, "shared-lib"), "shared-lib")
+		// A valid local templates/ that defines only a non-default theme: init
+		// still succeeds because the default theme resolves externally.
+		writeLocalLibrary(t, filepath.Join(dir, "templates"), "local", "plain")
+
+		before := snapshot(t, filepath.Join(dir, "templates"))
+
+		if err := Init(dir, "../shared-lib"); err != nil {
+			t.Fatalf("Init(dir, ../shared-lib) error = %v, want nil (the external library defines the default theme)", err)
+		}
+		if after := snapshot(t, filepath.Join(dir, "templates")); !reflect.DeepEqual(after, before) {
+			t.Errorf("Init modified the pre-existing local templates/:\n before %v\n after  %v", before, after)
+		}
+		if _, templates := externalConfigOf(t, dir); templates != "../shared-lib" {
+			t.Errorf("kalide.yaml templates = %q, want %q", templates, "../shared-lib")
+		}
+	})
+}
+
+// testInitExternalLocalCollisionUntouched asserts a pre-existing deck-root
+// templates/ whose slide NAME collides with a slide in the external library is
+// still left byte-for-byte untouched and does NOT abort init: InitExternal
+// validates the external library ALONE, so the two layers are never merged here
+// and the collision surfaces only at `kalide start` through the merged-library
+// layer-uniqueness check. It covers both external path branches (the relative
+// explicit path and the absolute path).
+func testInitExternalLocalCollisionUntouched(t *testing.T) {
+	paths := []struct {
+		name string
+		arg  func(t *testing.T, dir string) string
+	}{
+		{"relative path", func(t *testing.T, dir string) string {
+			lib := filepath.Join(filepath.Dir(dir), "shared-lib")
+			writeExternalLibrary(t, lib, "shared-lib")
+			writeExternalLibrarySlide(t, lib, "hello")
+			return "../shared-lib"
+		}},
+		{"absolute path", func(t *testing.T, dir string) string {
+			lib := filepath.Join(t.TempDir(), "shared-lib")
+			writeExternalLibrary(t, lib, "shared-lib")
+			writeExternalLibrarySlide(t, lib, "hello")
+			return lib
+		}},
+	}
+
+	for _, p := range paths {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			// A local templates/ defining the same slide name as the external
+			// library: a collision only if the two layers were merged, which
+			// init must not do.
+			local := filepath.Join(dir, "templates")
+			writeLocalLibrary(t, local, "local")
+			writeExternalLibrarySlide(t, local, "hello")
+			arg := p.arg(t, dir)
+
+			before := snapshot(t, local)
+
+			if err := Init(dir, arg); err != nil {
+				t.Fatalf("Init(dir, %s) error = %v, want nil (a colliding local slide must not fail init)", arg, err)
+			}
+
+			if after := snapshot(t, local); !reflect.DeepEqual(after, before) {
+				t.Errorf("Init(dir, %s) modified the colliding local templates/:\n before %v\n after  %v", arg, before, after)
+			}
+			if _, templates := externalConfigOf(t, dir); templates != arg {
+				t.Errorf("kalide.yaml templates = %q, want %q", templates, arg)
+			}
+		})
+	}
+}
+
+// testInitExternalLocalInvalidUntouched asserts a pre-existing deck-root
+// templates/ that is not even a valid template library — a malformed
+// library.yaml — is left byte-for-byte untouched and does NOT abort init: only
+// the external library is validated, so the invalid local directory is never
+// read. It covers both external path branches.
+func testInitExternalLocalInvalidUntouched(t *testing.T) {
+	paths := []struct {
+		name string
+		arg  func(t *testing.T, dir string) string
+	}{
+		{"relative path", func(t *testing.T, dir string) string {
+			writeExternalLibrary(t, filepath.Join(filepath.Dir(dir), "shared-lib"), "shared-lib")
+			return "../shared-lib"
+		}},
+		{"absolute path", func(t *testing.T, dir string) string {
+			lib := filepath.Join(t.TempDir(), "shared-lib")
+			writeExternalLibrary(t, lib, "shared-lib")
+			return lib
+		}},
+	}
+
+	for _, p := range paths {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			local := filepath.Join(dir, "templates")
+			// Not a valid library: library.yaml carries an illegal name (and
+			// there is no default theme). init never loads it, so it cannot
+			// abort.
+			writeExternalFile(t, filepath.Join(local, "library.yaml"), "name: Bad_Name\nformat: 1\n")
+			writeExternalFile(t, filepath.Join(local, "slides", "hello", "template.yaml"), "name: hello\n")
+			arg := p.arg(t, dir)
+
+			before := snapshot(t, local)
+
+			if err := Init(dir, arg); err != nil {
+				t.Fatalf("Init(dir, %s) error = %v, want nil (an invalid local library must not fail init)", arg, err)
+			}
+
+			if after := snapshot(t, local); !reflect.DeepEqual(after, before) {
+				t.Errorf("Init(dir, %s) modified the invalid local templates/:\n before %v\n after  %v", arg, before, after)
+			}
+			if _, templates := externalConfigOf(t, dir); templates != arg {
+				t.Errorf("kalide.yaml templates = %q, want %q", templates, arg)
+			}
+		})
+	}
 }
 
 // testInitExternalRefusalMatrix asserts slides/, assets/ and kalide.yaml — as a
@@ -970,6 +1149,33 @@ func writeExternalLibrary(t *testing.T, dir, name string) {
 	t.Helper()
 	writeExternalFile(t, filepath.Join(dir, "library.yaml"), "name: "+name+"\nformat: 1\n")
 	writeExternalFile(t, filepath.Join(dir, "themes", "default", "theme.css"), "body { margin: 0; }\n")
+}
+
+// writeLocalLibrary writes a valid library directly at dir (the deck-root
+// templates/ of a deck): library.yaml with the given (valid) name and format 1
+// and one theme per themeNames, each with its required theme.css. It is the
+// local counterpart of writeExternalLibrary, used to prove a pre-existing
+// deck-root templates/ is never loaded at init.
+func writeLocalLibrary(t *testing.T, dir, name string, themeNames ...string) {
+	t.Helper()
+	writeExternalFile(t, filepath.Join(dir, "library.yaml"), "name: "+name+"\nformat: 1\n")
+	for _, themeName := range themeNames {
+		writeExternalFile(t, filepath.Join(dir, "themes", themeName, "theme.css"), "body { margin: 0; }\n")
+	}
+}
+
+// writeExternalLibrarySlide adds one slide template, named slideName, to the
+// template library at dir (creating the library structure as needed): the three
+// required files template.yaml, layout.html.tmpl and example.md with a
+// media-free, variable-free layout so the loader and its example run accept it.
+// Callers use it to give an external library and a local templates/ a colliding
+// slide name.
+func writeExternalLibrarySlide(t *testing.T, dir, slideName string) {
+	t.Helper()
+	base := filepath.Join(dir, "slides", slideName)
+	writeExternalFile(t, filepath.Join(base, "template.yaml"), "name: "+slideName+"\n")
+	writeExternalFile(t, filepath.Join(base, "layout.html.tmpl"), "<section><h1>"+slideName+"</h1></section>\n")
+	writeExternalFile(t, filepath.Join(base, "example.md"), "# "+slideName+"\n")
 }
 
 // writeExternalFile is writeFile with parent directories created, for the
