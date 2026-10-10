@@ -345,6 +345,17 @@ type renderer struct {
 	// `media` helper and a single-layer library renders byte-for-byte as before
 	// (section-helper, library-layer-references).
 	layerMediaBase func(*template.LibraryLayer) string
+
+	// layerNamespaces caches, per owning layer, the html/template namespace a
+	// TWO-layer deck's layouts execute against (executeLayeredLayout). Each
+	// entry is built once from every registered layout text with that layer's
+	// func map (funcMapForLayer) — the whole merged library re-parsed so
+	// `{{ template "<name>" . }}` composition still resolves within the layer's
+	// namespace — and reused for every layout of that layer. html/template
+	// resolves a func map at parse time and cannot rebind `media` on an
+	// already-parsed set by cloning, so a layer's namespace must re-Parse the
+	// texts (namespaceForLayer).
+	layerNamespaces map[*template.LibraryLayer]*htmltmpl.Template
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
@@ -682,25 +693,67 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 
 // executeLayeredLayout executes tmpl's layout into buf with the `media` helper
 // bound to layer. When layer is known and the renderer holds a per-layer base
-// hook (renderer.layerMediaBase), the layout is parsed afresh with that layer's
-// media filesystem and served base (funcMapForLayer), so a `{{ media … }}`
-// reference inside the layout resolves in the layer that owns it rather than the
-// merged library's primary media (library-layer-references). Otherwise — a nil
-// layer, or a renderer whose layer→base hook is unset — the layout executes
-// through the shared namespace exactly as before, which keeps single-layer
-// output byte-identical and leaves the per-layer URL scheme to a deck whose
-// layers carry no role. It is the shared building block the render-time
-// section helper, the declared child-section path (renderSection) and the
-// slide's own layout (RenderSlide), all apply in the same way.
+// hook (renderer.layerMediaBase), the layout executes from a namespace built
+// from EVERY registered layout text with that layer's func map
+// (namespaceForLayer), so a layout can still invoke another layout with
+// `{{ template "<name>" . }}` — the composition parseLayouts' shared namespace
+// supports — while each `{{ media … }}` reference resolves in the executing
+// layout's own layer (library-layer-references). Parsing the single target
+// layout text alone would lose the shared namespace and fail such a call with
+// "no such template". Otherwise — a nil layer, or a renderer whose layer→base
+// hook is unset — the layout executes through the shared namespace exactly as
+// before, which keeps single-layer output byte-identical and leaves the
+// per-layer URL scheme to a deck whose layers carry no role. It is the shared
+// building block the render-time section helper, the declared child-section path
+// (renderSection) and the slide's own layout (RenderSlide), all apply in the
+// same way.
 func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Template, layer *template.LibraryLayer, data map[string]any) error {
 	if layer == nil || r.layerMediaBase == nil {
 		return r.root.ExecuteTemplate(buf, layoutName(tmpl), data)
 	}
-	parsed, err := htmltmpl.New(layoutName(tmpl)).Funcs(r.funcMapForLayer(layer)).Parse(tmpl.Layout.Text)
+	namespace, err := r.namespaceForLayer(layer)
 	if err != nil {
 		return fmt.Errorf("parse target layout: %w", err)
 	}
-	return parsed.Execute(buf, data)
+	return namespace.ExecuteTemplate(buf, layoutName(tmpl), data)
+}
+
+// namespaceForLayer returns the html/template namespace a layout owned by layer
+// executes against for a TWO-layer deck: every registered layout text
+// (Registry.Templates — the whole merged library, both layers), parsed together
+// with layer's func map (funcMapForLayer — `media` rebound to layer.Media and
+// layerMediaBase(layer), `section` bound to this renderer), keyed by layout name
+// exactly as parseLayouts keys the shared namespace. Re-parsing the whole set
+// rather than the one target layout keeps that shared namespace — and, because
+// the set is the registry's full layout set, a superset of parseLayouts'
+// reachable walk, it also covers a target reachable only through an authored
+// child instance (a schema-free parent declares no sections) — so
+// `{{ template "<name>" . }}` composition between layouts resolves instead of
+// failing with "no such template", including when the invoked layout is
+// contributed by another layer. The result is cached per layer on the renderer
+// (renderer.layerNamespaces), so each layer's set is built at most once per
+// render. html/template resolves a func map at parse time and cannot rebind
+// `media` on an already-parsed namespace by cloning, which is why the texts are
+// re-parsed rather than cloned. layer is non-nil; executeLayeredLayout takes the
+// skip-the-per-layer-path decision (a nil layer or an unset hook) before calling.
+func (r *renderer) namespaceForLayer(layer *template.LibraryLayer) (*htmltmpl.Template, error) {
+	if ns, ok := r.layerNamespaces[layer]; ok {
+		return ns, nil
+	}
+	namespace := htmltmpl.New("layouts").Funcs(r.funcMapForLayer(layer))
+	for _, t := range r.reg.Templates() {
+		if t.Layout.Text == "" {
+			return nil, fmt.Errorf("template %q has no layout text", t.Name)
+		}
+		if _, err := namespace.New(layoutName(t)).Parse(t.Layout.Text); err != nil {
+			return nil, fmt.Errorf("template %q: parse layout: %w", t.Name, err)
+		}
+	}
+	if r.layerNamespaces == nil {
+		r.layerNamespaces = make(map[*template.LibraryLayer]*htmltmpl.Template)
+	}
+	r.layerNamespaces[layer] = namespace
+	return namespace, nil
 }
 
 // funcMapForLayer returns the html/template func map a layout executes against
