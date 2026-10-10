@@ -242,6 +242,25 @@ type renderer struct {
 	// for the slide layout as well (with a nil parent), so a call from a slide
 	// carries the slide's context.
 	callerCtx *sectionCtx
+
+	// funcMap is the caller's layout func map — the helpers `media`/`section`/
+	// `dict`/`list` plus the number/date format functions
+	// (template.LayoutFuncMap). parseLayouts stores it here so the render-time
+	// `section` helper can build the func map a target executes against: the
+	// same map with `media` rebound to the target's owning layer
+	// (funcMapForLayer), so a media reference inside a called section resolves
+	// in the layer that owns it (section-helper, library-layer-references).
+	funcMap htmltmpl.FuncMap
+
+	// layerMediaBase maps a *template.LibraryLayer to the served media URL base
+	// its `media` helper resolves under. It is the renderer's per-layer URL hook:
+	// while it is nil the renderer holds no per-layer URL scheme, so a called
+	// section keeps the existing (primary) `media` helper and a single-layer
+	// library renders byte-for-byte as before. Task-13 installs the scheme — the
+	// single/primary layer's base and the external layer's distinct prefix — and
+	// leaves nil as the "no per-layer base" default (section-helper,
+	// library-layer-references).
+	layerMediaBase func(*template.LibraryLayer) string
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
@@ -452,11 +471,13 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 // (internal/template): at most a fields map and a body string, each optional;
 // a fields argument that is not a map or a body argument that is not a string
 // is a programming error. Resolution and validation are delegated in full to
-// template.ResolveSectionCall — the target must be a defined section-usage
-// template, the supplied fields are defaults-first validated against the
-// target's schema, and a present body is validated against the target's body
-// rule — so the render-time helper reuses the phase-02 resolution rather than
-// duplicating it. The caller's own field values (renderer.callerFields) are
+// template.ResolveSectionCallLayered — the target must be a defined
+// section-usage template, the supplied fields are defaults-first validated
+// against the target's schema, and a present body is validated against the
+// target's body rule — so the render-time helper reuses the phase-02 resolution
+// rather than duplicating it and the resolved SectionCall carries the target's
+// owning layer (r.reg.LayerOf, the merged-library provenance) for the target's
+// execution. The caller's own field values (renderer.callerFields) are
 // passed as the call's parent, so the target's one-item `.item.parent` is the
 // calling instance's fields; it is nil when the call is made from a slide
 // layout, whose parent is the slide (item-context).
@@ -476,11 +497,14 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 // this instance — its effective field values become a nested call's
 // `.item.parent`, and its deck/slide context is inherited — and restored
 // afterwards, so a `{{ section … }}` call the target's own layout makes
-// resolves against this instance (item-context, template-context). The target's
-// layout runs through the shared namespace (renderer.root), so it is a
-// layout already parsed with this same helper bound, not a fresh parse. The
-// result is the target's trusted HTML, which the calling layout splices
-// unescaped.
+// resolves against this instance (item-context, template-context). The target
+// executes with the `media` helper bound to its OWN owning layer (call.Layer)
+// when the renderer holds a per-layer base hook, so a media reference inside an
+// external-layer section resolves in the external layer rather than the merged
+// library's primary media (executeLayeredLayout, library-layer-references);
+// otherwise it runs through the shared namespace (renderer.root), a layout
+// already parsed with this same helper bound, as before. The result is the
+// target's trusted HTML, which the calling layout splices unescaped.
 func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error) {
 	var fields map[string]any
 	if len(args) >= 1 && args[0] != nil {
@@ -499,11 +523,13 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 		body = s
 	}
 
-	// ResolveSectionCall applies the target's defaults first, validates the
-	// effective fields with CheckValues, checks the body against the target's
-	// body rule, and builds the one-item .item descriptor whose parent is the
-	// calling instance's fields (nil from a slide layout).
-	call, err := template.ResolveSectionCall(r.reg.Lookup, name, fields, body, r.callerFields)
+	// ResolveSectionCallLayered applies the target's defaults first, validates
+	// the effective fields with CheckValues, checks the body against the
+	// target's body rule, builds the one-item .item descriptor whose parent is
+	// the calling instance's fields (nil from a slide layout), and records the
+	// target's owning layer (via r.reg.LayerOf) so its layout executes with that
+	// layer's media helper (library-layer-references).
+	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, r.callerFields)
 	if err != nil {
 		return "", fmt.Errorf("section helper %q: %w", name, err)
 	}
@@ -555,10 +581,60 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 	}()
 
 	var buf bytes.Buffer
-	if err := r.root.ExecuteTemplate(&buf, layoutName(call.Template), data); err != nil {
+	if err := r.executeLayeredLayout(&buf, call.Template, call.Layer, data); err != nil {
 		return "", fmt.Errorf("section helper %q: execute target layout: %w", name, err)
 	}
 	return htmltmpl.HTML(buf.String()), nil
+}
+
+// executeLayeredLayout executes tmpl's layout into buf with the `media` helper
+// bound to layer. When layer is known and the renderer holds a per-layer base
+// hook (renderer.layerMediaBase), the layout is parsed afresh with that layer's
+// media filesystem and served base (funcMapForLayer), so a `{{ media … }}`
+// reference inside the layout resolves in the layer that owns it rather than the
+// merged library's primary media (library-layer-references). Otherwise — a nil
+// layer, or a renderer whose layer→base hook is unset — the layout executes
+// through the shared namespace exactly as before, which keeps single-layer
+// output byte-identical and leaves the per-layer URL scheme to task-13. It is
+// the shared building block the render-time section helper uses and that the
+// declared child-section and slide paths (tasks 12/13) apply in the same way.
+func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Template, layer *template.LibraryLayer, data map[string]any) error {
+	if layer == nil || r.layerMediaBase == nil {
+		return r.root.ExecuteTemplate(buf, layoutName(tmpl), data)
+	}
+	parsed, err := htmltmpl.New(layoutName(tmpl)).Funcs(r.funcMapForLayer(layer)).Parse(tmpl.Layout.Text)
+	if err != nil {
+		return fmt.Errorf("parse target layout: %w", err)
+	}
+	return parsed.Execute(buf, data)
+}
+
+// funcMapForLayer returns the html/template func map a layout executes against
+// when it belongs to layer: the caller's layout func map (renderer.funcMap —
+// the helpers `media`/`section`/`dict`/`list` plus the number/date format
+// functions) with the renderer-backed `section` helper bound and, when layer is
+// known and the renderer holds a per-layer base hook (layerMediaBase), the
+// `media` helper rebound to that layer — media filesystem = layer.Media, URL
+// base = layerMediaBase(layer) — so every media reference inside the layout
+// resolves in the layer that owns it (library-layer-references). A nil layer,
+// or an unset hook, leaves `media` as the existing primary helper, so a
+// single-layer library renders byte-for-byte as before. It is the func-map half
+// of executeLayeredLayout, exposed so the declared child-section and slide paths
+// (tasks 12/13) can bind their own layer the same way.
+func (r *renderer) funcMapForLayer(layer *template.LibraryLayer) htmltmpl.FuncMap {
+	base := r.funcMap
+	if base == nil {
+		base = template.LayoutFuncMap(nil, "")
+	}
+	fm := make(htmltmpl.FuncMap, len(base)+1)
+	for name, fn := range base {
+		fm[name] = fn
+	}
+	if layer != nil && r.layerMediaBase != nil {
+		fm["media"] = template.MediaFunc(layer.Media, r.layerMediaBase(layer))
+	}
+	fm["section"] = r.sectionHelper
+	return fm
 }
 
 // deckContext builds the reserved `deck` execution context
@@ -954,6 +1030,11 @@ func parseLayouts(r *renderer, slideTmpl *template.Template, reg *template.Regis
 	// namespace.New(layoutName(slideTmpl)) shadow that layout with an empty
 	// associated template, so executing the slide layout would fail with "is
 	// an incomplete template".
+	// Store the caller's func map on the renderer so the render-time `section`
+	// helper can derive a target's per-layer func map from it (funcMapForLayer)
+	// without mutating the caller's map. The namespace copy below overrides the
+	// `section` stub with the renderer-backed helper.
+	r.funcMap = funcMap
 	layoutFuncs := make(htmltmpl.FuncMap, len(funcMap)+1)
 	for name, fn := range funcMap {
 		layoutFuncs[name] = fn
