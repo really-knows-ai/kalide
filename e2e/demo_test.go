@@ -117,6 +117,45 @@ func TestDemoProject(t *testing.T) {
 		}
 	}
 
+	// Slide 3 ("team") heads a vertical stack: it renders as
+	// <section id="team" class="demo-slide demo-slide--content"> (the anchor id
+	// first, then the content layout's classes) and its letter slide 3a
+	// ("detail") is nested inside a plain wrapper <section> with no id or class
+	// of its own (vertical-slides). The wrapper is the page's only bare
+	// <section> — every other slide section carries an anchor id and/or layout
+	// classes — so extracting the first exact `<section>` opening tag yields the
+	// wrapper; assert its shape rather than mere co-presence of the ids.
+	const wrapperOpen = "<section>"
+	wrapperHTML, ok := elementFragment(body, wrapperOpen, "section")
+	if !ok {
+		t.Fatalf("served deck page does not carry the vertical-stack wrapper %s:\n%s", wrapperOpen, body)
+	}
+	// The wrapper's first child is the numbered slide's own section, keeping
+	// its anchor id (id first, then the layout's classes). A slide layout's
+	// leading template comment leaves a newline before its <section>, so the
+	// child element itself is found after trimming that whitespace.
+	const teamOpen = `<section id="team"`
+	firstChild := strings.TrimLeft(strings.TrimPrefix(wrapperHTML, wrapperOpen), " \t\r\n")
+	if !strings.HasPrefix(firstChild, teamOpen) {
+		t.Fatalf("vertical-stack wrapper's first child is not the numbered slide %s:\n%s", teamOpen, wrapperHTML)
+	}
+	// The letter slide 3a ("detail") follows inside the same wrapper.
+	detail := strings.Index(wrapperHTML, `id="detail"`)
+	if detail < 0 {
+		t.Fatalf("vertical-stack wrapper does not carry the letter slide id=\"detail\":\n%s", wrapperHTML)
+	}
+	if team := strings.Index(wrapperHTML, `id="team"`); team < 0 || detail < team {
+		t.Errorf("letter slide id=\"detail\" does not follow id=\"team\" inside the wrapper (team=%d detail=%d):\n%s", team, detail, wrapperHTML)
+	}
+	// Exactly two child sections: the numbered slide and its one letter slide.
+	if n := strings.Count(firstChild, "<section"); n != 2 {
+		t.Errorf("vertical-stack wrapper has %d child <section> elements, want 2 (team + detail):\n%s", n, wrapperHTML)
+	}
+	// No dummy empty slide was emitted in place of the letter slide.
+	if strings.Contains(wrapperHTML, "<section></section>") {
+		t.Errorf("vertical-stack wrapper contains a dummy empty slide:\n%s", wrapperHTML)
+	}
+
 	// templates/media/** is served locally: examples/demo/templates/media
 	// holds badge.svg.
 	mediaResp, err := h.Get(server.MediaPath + "badge.svg")
