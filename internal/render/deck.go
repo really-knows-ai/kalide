@@ -216,18 +216,3 @@ func wrapVerticalStack(horizontal string, verticals string) string {
 	}
 	return "<section>" + horizontal + verticals + "</section>"
 }
-
-// insertBeforeSectionClose nests content inside the slide element by inserting
-// it before the fragment's last closing </section>, so a vertical stack becomes
-// the horizontal slide's children. With no closing </section> the content is
-// appended, and empty content leaves the fragment untouched.
-func insertBeforeSectionClose(fragment, content string) string {
-	if content == "" {
-		return fragment
-	}
-	i := strings.LastIndex(fragment, "</section>")
-	if i < 0 {
-		return fragment + content
-	}
-	return fragment[:i] + content + fragment[i:]
-}
