@@ -26,10 +26,11 @@ import (
 // rewritten exactly like a plain reference, and both @import forms are
 // canonicalised to the url() output shape.
 //
-// rewriteThemeCSS is pure: it takes the stylesheet bytes and returns the bytes
-// to serve, with no filesystem access. Whether a referenced file actually
-// exists is phase-01 load-time validation's concern, not this helper's; a
-// reserved-prefix argument reaching here has already been validated.
+// rewriteThemeCSS is pure: it takes the stylesheet bytes plus the serving
+// layer's media/themes base URLs and returns the bytes to serve, with no
+// filesystem access. Whether a referenced file actually exists is phase-01
+// load-time validation's concern, not this helper's; a reserved-prefix
+// argument reaching here has already been validated.
 
 // themeCSSURLPattern matches a CSS url(...) reference, capturing its argument.
 // It has the same shape as the template package's step-6 scanner pattern
@@ -46,17 +47,49 @@ var themeCSSURLPattern = regexp.MustCompile(`url\(\s*['"]?([^'")]+)['"]?\s*\)`)
 // whitespace an @import url(...) target begins with "url", not a quote.
 var themeCSSImportStringPattern = regexp.MustCompile(`@import\s+(?:'([^']*)'|"([^"]*)")`)
 
+// themeCSSBases are the serving layer's route bases rewriteThemeCSS joins a
+// cleaned reserved-prefix path onto: mediaBase roots a rewritten media:
+// reference and themesBase roots a rewritten theme:<name>/ reference. The
+// primary layer passes server.MediaPath and server.ThemesPath; another layer
+// passes its own prefixes (e.g. the external `templates:` layer's
+// /assets/templates/external/media/ and /assets/templates/external/themes/,
+// the phase-02 task-13 URL contract). Each base is normalised to exactly one
+// trailing "/" on use, mirroring the routes' join.
+type themeCSSBases struct {
+	mediaBase  string
+	themesBase string
+}
+
+// primaryThemeCSSBases are the primary layer's bases — server.MediaPath and
+// server.ThemesPath — the zero-argument rewriteThemeCSS default, i.e. the
+// pre-layered behaviour byte-for-byte.
+var primaryThemeCSSBases = themeCSSBases{mediaBase: MediaPath, themesBase: ThemesPath}
+
+// themeCSSBase normalises a serving layer's route prefix to the join shape the
+// media and theme routes use: the prefix with exactly one trailing "/".
+func themeCSSBase(base string) string {
+	return strings.TrimSuffix(base, "/") + "/"
+}
+
 // rewriteThemeCSS rewrites every reserved-prefix reference in css to the URL
 // its route exposes and returns the result.
 //
+// The serving layer's route bases are the optional bases argument. With no
+// bases (the zero-argument form) the primary layer's server.MediaPath and
+// server.ThemesPath are used, exactly the pre-layered behaviour. A caller
+// serving another layer's stylesheet passes one themeCSSBases carrying that
+// layer's own media/themes bases (e.g. the external `templates:` layer's
+// /assets/templates/external/media/ and /assets/templates/external/themes/);
+// at most the first bases argument is read.
+//
 // A reference carrying the canonical media prefix (template.MediaURLPrefix) is
-// rewritten to server.MediaPath + the cleaned path, matching the layout `media`
-// helper's served shape, so url('media:fonts/x.woff2') becomes
-// url("/assets/templates/media/fonts/x.woff2"). A reference carrying the
-// canonical theme prefix (template.ThemeURLPrefix) has the shape
+// rewritten to mediaBase + the cleaned path, matching the layout `media`
+// helper's served shape, so with the primary base url('media:fonts/x.woff2')
+// becomes url("/assets/templates/media/fonts/x.woff2"). A reference carrying
+// the canonical theme prefix (template.ThemeURLPrefix) has the shape
 // theme:<name>/<path>: the remainder after the token is cut on its first "/"
 // into the sibling theme name and the path within that theme, and the output is
-// server.ThemesPath + name + "/" + the cleaned path, so
+// themesBase + name + "/" + the cleaned path, so with the primary base
 // url('theme:default/fonts/x.woff2') becomes
 // url("/assets/templates/themes/default/fonts/x.woff2"). The name-then-path cut
 // matches themeFileHandler's own Cut(rest, "/"), which serves the emitted URL.
@@ -76,16 +109,22 @@ var themeCSSImportStringPattern = regexp.MustCompile(`@import\s+(?:'([^']*)'|"([
 // phase-01 validation rejects such a reference before it can be served.
 //
 // An empty css, and css with nothing to rewrite, is returned unchanged.
-func rewriteThemeCSS(css []byte) []byte {
+func rewriteThemeCSS(css []byte, bases ...themeCSSBases) []byte {
 	if len(css) == 0 {
 		return css
 	}
 	mediaPrefix := template.MediaURLPrefix()
 	themePrefix := template.ThemeURLPrefix()
+	// The serving layer's bases: the primary layer's MediaPath/ThemesPath
+	// unless the caller supplies another layer's own bases.
+	layerBases := primaryThemeCSSBases
+	if len(bases) > 0 {
+		layerBases = bases[0]
+	}
 	// Mirror the routes' join exactly: the route prefix with exactly one
 	// trailing "/" (MediaFunc uses the same shape for media).
-	mediaBase := strings.TrimSuffix(MediaPath, "/") + "/"
-	themeBase := strings.TrimSuffix(ThemesPath, "/") + "/"
+	mediaBase := themeCSSBase(layerBases.mediaBase)
+	themeBase := themeCSSBase(layerBases.themesBase)
 
 	var edits []cssEdit
 
