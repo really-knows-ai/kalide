@@ -212,6 +212,13 @@ type LibraryLayer struct {
 // root. LoadLibrary is the only way to build one; a Library that exists has
 // already passed the templates-dir-validation checks LoadLibrary runs before
 // returning it.
+//
+// A Library is the merged result of one or more contributing LibraryLayers
+// (layered-template-library): the Slides/Sections/Themes/HasMedia/Media fields
+// are the union of the layers' entries, while Layers retains each contributing
+// layer's own root and media alongside them. A Library loaded from a single
+// root has exactly one layer; mergeLibraryLayers merges an ordered layer set
+// into one Library.
 type Library struct {
 	// Root is the templates/ directory, rooted so that "library.yaml",
 	// "slides", "sections", "themes" and "media" are its direct entries.
@@ -222,7 +229,12 @@ type Library struct {
 	// path-qualify errors and to locate the media root for serving.
 	RootPath string
 
-	// Meta is the parsed library.yaml metadata.
+	// Meta is the parsed library.yaml metadata. When this Library is the
+	// merge of several contributing layers, Meta is the PRIMARY layer's
+	// metadata: the external `templates:` layer when the deck configures
+	// one, otherwise the deck-root local templates/ layer. The layers have
+	// equal standing and neither overrides the other; each layer's own
+	// metadata is retained verbatim in Layers.
 	Meta LibraryMeta
 
 	// Slides holds the templates loaded from templates/slides, keyed by
@@ -247,6 +259,17 @@ type Library struct {
 	// path an author writes ("logo.svg", "video/intro.mp4") is a direct
 	// fs.FS path within it. It is nil when HasMedia is false.
 	Media fs.FS
+
+	// Layers holds the contributing layers this Library was merged from, in
+	// resolution order: the external `templates:` layer first when the deck
+	// configures one, then the deck-root local templates/ layer. Each
+	// *LibraryLayer retains its own Root, RootPath, metadata, loaded
+	// templates, themes and media sub-filesystem, alongside the merged maps
+	// above — so a caller can address each layer's own files by that layer's
+	// own root rather than through the merged maps alone. A Library loaded
+	// from a single root has exactly one layer; mergeLibraryLayers builds it
+	// by merging an ordered layer set (layered-template-library).
+	Layers []*LibraryLayer
 }
 
 // TemplateByName returns the slide or section template registered under
