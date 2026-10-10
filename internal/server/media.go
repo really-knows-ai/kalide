@@ -46,19 +46,77 @@ const (
 // and no allow-list beyond "the file exists under its declared root".
 func mediaHandler(lib *template.Library, themes *theme.Registry) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(MediaPath, http.StripPrefix(MediaPath, mediaFileHandler(libraryMediaFS(lib))))
+	mux.Handle(MediaPath, http.StripPrefix(MediaPath, mediaFileHandler(primaryLibraryMediaFS(lib))))
 	mux.Handle(ThemesPath, themeFileHandler(themes))
 	return mux
 }
 
-// libraryMediaFS returns lib's Media filesystem, or nil when lib is nil or
-// has none (Library.HasMedia false) — mediaFileHandler treats a nil
-// filesystem as "nothing is ever found here", not a panic.
-func libraryMediaFS(lib *template.Library) fs.FS {
+// libraryMediaLayer selects which contributing layer of a merged Library a
+// caller wants a media filesystem for. A layer is addressed by this selector,
+// never merged into one namespace, so a media path resolves in exactly the
+// requested layer (layered-template-library).
+type libraryMediaLayer int
+
+const (
+	// libraryPrimaryMedia selects the merged Library's PRIMARY layer: the
+	// sole layer of a single-root library, or the deck-root local templates/
+	// layer of a two-layer deck. It is the layer served under the unprefixed
+	// /assets/templates/media/ URL (MediaPath), today's behaviour.
+	libraryPrimaryMedia libraryMediaLayer = iota
+
+	// libraryExternalMedia selects a two-layer deck's external `templates:`
+	// layer — the layer served under the /assets/templates/external/media/
+	// prefix (phase-04 task-7, phase-02 task-13 URL contract). A single-root
+	// library, or one with no external layer, has no such layer, so it
+	// resolves to nil.
+	libraryExternalMedia
+)
+
+// libraryMediaFS returns the media filesystem of the layer selected by sel,
+// or nil when there is no such layer (a nil Library, a Library with no
+// external layer, or a layer whose media/ directory is absent, HasMedia
+// false) — mediaFileHandler treats a nil filesystem as "nothing is ever
+// found here", not a panic.
+//
+// It never merges layers: every call addresses exactly one layer's own media
+// namespace. libraryPrimaryMedia returns the primary layer's media — exactly
+// the Library.Media convenience field, so today's behaviour is unchanged —
+// while libraryExternalMedia returns a two-layer deck's external `templates:`
+// layer's own media (its Layers entry with Role LayerRoleExternal). The two
+// selectors mirror the two served URL prefixes: the primary layer is served
+// at MediaPath and the external layer at the /assets/templates/external/media/
+// prefix (phase-04 task-7, phase-02 task-13 URL contract).
+func libraryMediaFS(lib *template.Library, sel libraryMediaLayer) fs.FS {
 	if lib == nil {
 		return nil
 	}
+	if sel == libraryExternalMedia {
+		return libraryLayerMedia(lib, template.LayerRoleExternal)
+	}
 	return lib.Media
+}
+
+// primaryLibraryMediaFS is the convenience path for the merged Library's
+// primary layer media — libraryMediaFS(lib, libraryPrimaryMedia), the
+// pre-layered behaviour. It exists so a caller that wants the primary layer
+// (the sole layer of a single-root library, or the deck-root local templates/
+// layer of a two-layer deck) does not need to name the selector. A nil
+// Library returns nil.
+func primaryLibraryMediaFS(lib *template.Library) fs.FS {
+	return libraryMediaFS(lib, libraryPrimaryMedia)
+}
+
+// libraryLayerMedia returns the media filesystem of the contributing layer
+// carrying role, or nil when no contributing layer has that role. A layer
+// with no media/ directory (HasMedia false) has a nil Media, so it resolves
+// to nil here too.
+func libraryLayerMedia(lib *template.Library, role template.LibraryLayerRole) fs.FS {
+	for _, layer := range lib.Layers {
+		if layer != nil && layer.Role == role {
+			return layer.Media
+		}
+	}
+	return nil
 }
 
 // mediaFileHandler serves a single file directly under mediaFS: the request
