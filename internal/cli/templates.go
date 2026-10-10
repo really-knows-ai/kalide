@@ -4,19 +4,22 @@ package cli
 // requirements.requirement.cli-templates-list and
 // requirements.requirement.cli-templates-show.
 //
-//   - `kalide templates` lists every template in the project's resolved
-//     template library (the configured `templates:` path, or the local
-//     templates/ directory when the key is absent): its name, its usage
-//     (slide|section) and its one-line description.
+//   - `kalide templates` lists every template in the project's resolved,
+//     merged, layered template library — every layer the deck draws from: the
+//     external `templates:` library and the deck-root templates/
+//     (layered-template-library): its name, its usage (slide|section) and its
+//     one-line description.
 //   - `kalide templates <name>` documents one template: its fields (type,
 //     required, default, limits, formats, description), its sections (accepted
 //     templates and min/max repeats), its implied body rules and its example
 //     slide, exactly as loaded from the resolved library.
 //
-// The catalogue is the project's resolved template library
+// The catalogue is the project's merged, layered template library
 // (template.LoadDeckLibrary + template.NewRegistryFromLibrary), the same
 // loaded registry the validator and renderer use, so the documentation cannot
-// drift from the behaviour. An unresolvable library is reported the same way
+// drift from the behaviour. A template contributed by either layer is listed
+// exactly once: layer uniqueness rejects a name two layers carry before the
+// merge. An unresolvable library is reported the same way
 // `kalide start` reports it, before any listing is attempted
 // (templates-dir-required, no-built-in-fallback). An unknown name is an author
 // error: it is reported with the closest-match "did you mean …?" suggestion
@@ -45,9 +48,10 @@ import (
 
 // runTemplates implements `kalide templates [name]`.
 //
-// With no arguments it lists every template in the project's resolved
-// template library. With exactly one argument it shows that template's full
-// documentation. It returns the process status code: 0 on success; 1 when
+// With no arguments it lists every template in the project's merged, layered
+// template library (every layer the deck draws from). With exactly one
+// argument it shows that template's full documentation. It returns the
+// process status code: 0 on success; 1 when
 // the project's template library cannot be resolved, when the name is
 // unknown (the error names the available templates and suggests the
 // closest), or when the loaded library cannot be built into a registry,
@@ -59,13 +63,14 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Resolve the deck's template library through the loader's single
-	// root-resolution point (external-template-library): a configured
-	// `templates:` path wins and is authoritative, else the local templates/
-	// directory is used. The resolved root may sit outside the deck, so the
-	// library is loaded from the operating-system path, not through the deck
-	// fs.FS. A missing or unresolvable library is a templates error naming the
-	// path, with no fallback (templates-dir-required).
+	// Resolve the deck's template library — every layer it draws from: the
+	// external `templates:` library and the deck-root templates/ — through the
+	// loader's layered resolution point (layered-template-library). The
+	// resolved roots may sit outside the deck, so each layer is loaded from the
+	// operating-system path that holds it, not through the deck fs.FS, which
+	// cannot express paths above the deck root. A missing or invalid library is
+	// a templates error naming the path, with no fallback
+	// (templates-dir-required).
 	//
 	// The raw `templates:` value is read directly here because deck.LoadConfig
 	// needs a theme registry, which comes from the not-yet-resolved library;
