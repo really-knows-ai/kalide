@@ -558,6 +558,20 @@ type SectionCall struct {
 	// Template is the resolved target, always a section-usage template.
 	Template *Template
 
+	// Layer is the LibraryLayer that owns Template, so a caller that executes
+	// the target resolves the target's own `media` and `theme:<name>/`
+	// references in that layer's root rather than the merged library's
+	// (library-layer-references). It is populated by ResolveSectionCall from
+	// the resolver's provenance.
+	//
+	// It is nil when the registry/library records no provenance for the
+	// resolved target — a single-root library, or a resolver built without
+	// layer information. Consumers must treat nil as "use the
+	// primary/merged root": the primary root is the external `templates:`
+	// layer when it is the deck's only layer, otherwise the deck-root local
+	// templates/ layer.
+	Layer *LibraryLayer
+
 	// Values is the effective field data the target executes with: the call's
 	// supplied fields with the target's field defaults applied for every
 	// declared field the call left out. It is the map CheckValues validated.
