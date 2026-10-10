@@ -1214,3 +1214,355 @@ func TestRegistryValidateOrder(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// plan.phase-02.task-17: the layer-aware registry.
+//
+// Two things are under test here (library-layer-references):
+//
+//   - resolveMergedSectionTarget (library.go): the one lookup that pairs a
+//     section name in a merged Library with the *LibraryLayer that contributed
+//     it, by identity — so a name carried by two layers is never mistaken for
+//     its owner, and a Library that carries no layers still resolves its
+//     sections (with a nil layer).
+//   - NewRegistryFromLibrary's owning-layer provenance and
+//     Registry.checkSections' merged namespace (registrylibrary.go,
+//     registry.go): a registry built over a two-layer merged Library records
+//     every registered template's owning layer through Registry.LayerOf, and
+//     its static section-helper checks resolve a call against the WHOLE merged
+//     namespace — a local template's call to an external section resolves —
+//     while the same checks still reject an unknown name, an undeclared literal
+//     dict key, an omitted required field and a min>0 child section across
+//     layers as well as within one.
+//
+// The two-layer inputs are hand-built exactly as library_test.go's merge tests
+// build them: testLayer/addTestSlide/addTestSection give each layer the shape
+// loadLibrary returns, and mergeLibraryLayers unions them into one Library.
+// Each template carries a parseable manifest (ManifestBytes) and, where a
+// helper call matters, a layout (LayoutText), so NewRegistryFromLibrary parses
+// and registers it without any content filesystem. Everything is in-process
+// and runs under -short.
+
+// layeredSection adds a section-usage LibraryTemplate to layer through
+// addTestSection (library_test.go) and gives it the manifest bytes and layout
+// text that parseManifest and Registry.checkSections read.
+func layeredSection(layer *LibraryLayer, name, manifestYAML, layout string) *LibraryTemplate {
+	lt := addTestSection(layer, name)
+	lt.ManifestBytes = []byte(manifestYAML)
+	lt.LayoutText = layout
+	return lt
+}
+
+// layeredSlide is the slide-usage counterpart of layeredSection.
+func layeredSlide(layer *LibraryLayer, name, manifestYAML, layout string) *LibraryTemplate {
+	lt := addTestSlide(layer, name)
+	lt.ManifestBytes = []byte(manifestYAML)
+	lt.LayoutText = layout
+	return lt
+}
+
+// layeredLibrary builds a merged Library from one external and one local layer,
+// each populated by the corresponding callback (either may be nil for an empty
+// layer). The external layer is first, matching ResolveLibraryLayers' order.
+func layeredLibrary(external, local func(*LibraryLayer)) *Library {
+	ext := testLayer("/deck/external")
+	loc := testLayer("/deck/templates")
+	if external != nil {
+		external(ext)
+	}
+	if local != nil {
+		local(loc)
+	}
+	return mergeLibraryLayers([]*LibraryLayer{ext, loc})
+}
+
+// validateMergedLibrary builds a registry over lib and returns the first error
+// either NewRegistryFromLibrary or Registry.Validate reports.
+func validateMergedLibrary(t *testing.T, lib *Library) error {
+	t.Helper()
+	reg, err := NewRegistryFromLibrary(lib)
+	if err != nil {
+		return err
+	}
+	return reg.Validate()
+}
+
+// TestResolveMergedSectionTarget proves the merged-library section lookup: a
+// nil library, an unknown name and a nil section entry all report no target;
+// a one-layer library resolves its section to that layer; the owning layer is
+// identified by pointer identity, so a same-named template carried by another
+// layer is never mistaken for the owner; and a library that carries no layers
+// still resolves the target, with a nil layer.
+func TestResolveMergedSectionTarget(t *testing.T) {
+	t.Run("a nil library reports no target", func(t *testing.T) {
+		target, layer, ok := resolveMergedSectionTarget(nil, "footer")
+		if ok || target != nil || layer != nil {
+			t.Errorf("resolveMergedSectionTarget(nil, footer) = (%p, %p, %v), want (nil, nil, false)", target, layer, ok)
+		}
+	})
+
+	t.Run("an unknown name reports no target", func(t *testing.T) {
+		lib := layeredLibrary(func(ext *LibraryLayer) {
+			layeredSection(ext, "footer", "", "")
+		}, nil)
+		target, layer, ok := resolveMergedSectionTarget(lib, "missing")
+		if ok || target != nil || layer != nil {
+			t.Errorf("resolveMergedSectionTarget(…, missing) = (%p, %p, %v), want (nil, nil, false)", target, layer, ok)
+		}
+	})
+
+	t.Run("a nil section entry reports no target", func(t *testing.T) {
+		lib := &Library{Sections: map[string]*LibraryTemplate{"footer": nil}}
+		target, layer, ok := resolveMergedSectionTarget(lib, "footer")
+		if ok || target != nil || layer != nil {
+			t.Errorf("resolveMergedSectionTarget(…, footer) = (%p, %p, %v), want (nil, nil, false)", target, layer, ok)
+		}
+	})
+
+	t.Run("a one-layer library returns its own layer", func(t *testing.T) {
+		owner := testLayer("/deck/templates")
+		section := layeredSection(owner, "footer", "", "")
+		lib := mergeLibraryLayers([]*LibraryLayer{owner})
+
+		target, layer, ok := resolveMergedSectionTarget(lib, "footer")
+		if !ok || target != section || layer != owner {
+			t.Errorf("resolveMergedSectionTarget = (%p, %p, %v), want (%p, %p, true)", target, layer, ok, section, owner)
+		}
+	})
+
+	t.Run("the owning layer is found by identity, not by name", func(t *testing.T) {
+		// The decoy layer carries a DIFFERENT *LibraryTemplate under the same
+		// name and comes first in Layers, so a lookup by name alone would
+		// return it; only the pointer identity match returns the true owner.
+		decoy := testLayer("/deck/decoy")
+		layeredSection(decoy, "footer", "", "")
+		owner := testLayer("/deck/owner")
+		section := layeredSection(owner, "footer", "", "")
+
+		lib := &Library{
+			Sections: map[string]*LibraryTemplate{"footer": section},
+			Layers:   []*LibraryLayer{decoy, owner},
+		}
+
+		target, layer, ok := resolveMergedSectionTarget(lib, "footer")
+		if !ok {
+			t.Fatal("resolveMergedSectionTarget ok = false, want true")
+		}
+		if target != section {
+			t.Errorf("target = %p, want the merged pointer %p", target, section)
+		}
+		if layer != owner {
+			t.Errorf("layer = %p, want the identity-matched owner %p (not the same-named decoy %p)", layer, owner, decoy)
+		}
+	})
+
+	t.Run("a library with no layers resolves with a nil layer", func(t *testing.T) {
+		section := &LibraryTemplate{Name: "footer", Kind: KindSection}
+		lib := &Library{Sections: map[string]*LibraryTemplate{"footer": section}}
+
+		target, layer, ok := resolveMergedSectionTarget(lib, "footer")
+		if !ok || target != section || layer != nil {
+			t.Errorf("resolveMergedSectionTarget = (%p, %p, %v), want (%p, nil, true)", target, layer, ok, section)
+		}
+	})
+}
+
+// TestNewRegistryFromLibraryLayerProvenance proves NewRegistryFromLibrary
+// records each registered template's owning layer — sections and slides alike —
+// looked up by identity over a two-layer merged Library, and that every path
+// that cannot identify an owner records none: an unknown name, a registry
+// built in code, and a Library that carries no layers all report nil through
+// Registry.LayerOf.
+func TestNewRegistryFromLibraryLayerProvenance(t *testing.T) {
+	external := testLayer("/deck/external")
+	local := testLayer("/deck/templates")
+	extSection := layeredSection(external, "ext-section", "", "")
+	localSection := layeredSection(local, "local-section", "", "")
+	localSlide := layeredSlide(local, "local-slide", "", "")
+
+	merged := mergeLibraryLayers([]*LibraryLayer{external, local})
+	reg, err := NewRegistryFromLibrary(merged)
+	if err != nil {
+		t.Fatalf("NewRegistryFromLibrary() error = %v, want nil", err)
+	}
+
+	t.Run("sections and slides resolve to their owning layer", func(t *testing.T) {
+		tests := []struct {
+			name string
+			want *LibraryLayer
+			tmpl *LibraryTemplate
+		}{
+			{"ext-section", external, extSection},
+			{"local-section", local, localSection},
+			{"local-slide", local, localSlide},
+		}
+		for _, tt := range tests {
+			if got := reg.LayerOf(tt.name); got != tt.want {
+				t.Errorf("LayerOf(%q) = %p, want %p", tt.name, got, tt.want)
+			}
+			// The merged map must hold the very pointer whose layer was
+			// asserted, or the identity lookup proved nothing.
+			if merged.Sections[tt.name] != tt.tmpl && merged.Slides[tt.name] != tt.tmpl {
+				t.Errorf("merged library does not hold the %q pointer whose layer was asserted", tt.name)
+			}
+		}
+	})
+
+	t.Run("the owning layers are distinct between the two layers", func(t *testing.T) {
+		if reg.LayerOf("ext-section") == reg.LayerOf("local-section") {
+			t.Error("LayerOf(ext-section) and LayerOf(local-section) returned the same layer, want the two contributing layers")
+		}
+	})
+
+	t.Run("an unknown name reports no layer", func(t *testing.T) {
+		if got := reg.LayerOf("missing"); got != nil {
+			t.Errorf("LayerOf(missing) = %p, want nil", got)
+		}
+	})
+
+	t.Run("a registry built in code carries no provenance", func(t *testing.T) {
+		codeReg := NewRegistry(nil)
+		if err := codeReg.Register(regSlide("code-slide")); err != nil {
+			t.Fatalf("Register(code-slide) error = %v, want nil", err)
+		}
+		if got := codeReg.LayerOf("code-slide"); got != nil {
+			t.Errorf("LayerOf(code-slide) = %p, want nil for a code-built registry", got)
+		}
+	})
+
+	t.Run("a library that carries no layers records no provenance", func(t *testing.T) {
+		unowned := &Library{
+			Sections: map[string]*LibraryTemplate{
+				"ghost": {Name: "ghost", Kind: KindSection},
+			},
+		}
+		r, err := NewRegistryFromLibrary(unowned)
+		if err != nil {
+			t.Fatalf("NewRegistryFromLibrary() error = %v, want nil", err)
+		}
+		if got := r.LayerOf("ghost"); got != nil {
+			t.Errorf("LayerOf(ghost) = %p, want nil when the Library carries no layers", got)
+		}
+	})
+
+	t.Run("a nil library builds an empty provenance-less registry", func(t *testing.T) {
+		r, err := NewRegistryFromLibrary(nil)
+		if err != nil {
+			t.Fatalf("NewRegistryFromLibrary(nil) error = %v, want nil", err)
+		}
+		if got := r.LayerOf("anything"); got != nil {
+			t.Errorf("LayerOf(anything) = %p, want nil", got)
+		}
+	})
+}
+
+// TestRegistryCheckSectionsAcrossMergedLayers proves Registry.checkSections
+// resolves through the merged namespace a two-layer registry is built over:
+// a local template's section-helper call to an external section resolves, and
+// the identical call is rejected when the registry is built over the external
+// layer alone. It then proves the load-time checks are unchanged across a
+// layer boundary — an omitted required field, an undeclared literal dict key
+// and a min>0 child section of the EXTERNAL target are all still reported,
+// attributed to the CALLING local template.
+func TestRegistryCheckSectionsAcrossMergedLayers(t *testing.T) {
+	const (
+		requiredTitle = "fields:\n  - name: title\n    type: text\n    required: true\n"
+		optionalTitle = "fields:\n  - name: title\n    type: text\n"
+		childMin      = "sections:\n  - name: widgets\n    accepted: [ext-child]\n    min: 1\n"
+	)
+
+	t.Run("a local template's call to an external section resolves", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) { layeredSection(ext, "ext-footer", optionalTitle, "") },
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-footer" }}`)
+			},
+		)
+		if err := validateMergedLibrary(t, lib); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: the merged namespace resolves the external section", err)
+		}
+	})
+
+	t.Run("the external-only registry rejects a call to a local-only section", func(t *testing.T) {
+		external := testLayer("/deck/external")
+		layeredSlide(external, "ext-slide", "", `{{ section "local-only" }}`)
+		// A one-layer library: the registry sees only the external layer's
+		// namespace, so the local-only name is undefined.
+		lib := mergeLibraryLayers([]*LibraryLayer{external})
+
+		want := `template "ext-slide": section helper call on layout line 1 names "local-only", which is not a defined template`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("over the merged namespace the same external call resolves", func(t *testing.T) {
+		// The contrast for the previous case: in the two-layer merge the local
+		// layer carries local-only, so the external template's call resolves
+		// and the merged pass does not re-check it (the external layer is only
+		// self-contained-checked when loaded standalone).
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSlide(ext, "ext-slide", "", `{{ section "local-only" }}`)
+			},
+			func(loc *LibraryLayer) { layeredSection(loc, "local-only", "", "") },
+		)
+		if err := validateMergedLibrary(t, lib); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: the merged namespace carries local-only", err)
+		}
+	})
+
+	t.Run("a required field of an external section is enforced for a local caller", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) { layeredSection(ext, "ext-footer", requiredTitle, "") },
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-footer" }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1 omits required field "title" of section template "ext-footer", which has no default`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("the required field is satisfied when the local caller supplies it", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) { layeredSection(ext, "ext-footer", requiredTitle, "") },
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-footer" (dict "title" "Hi") }}`)
+			},
+		)
+		if err := validateMergedLibrary(t, lib); err != nil {
+			t.Fatalf("Validate() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("an undeclared dict key of an external section is rejected for a local caller", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) { layeredSection(ext, "ext-footer", optionalTitle, "") },
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-footer" (dict "nope" "v") }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1 supplies field "nope", which section template "ext-footer" does not declare`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a min>0 child section of an external target is rejected for a local caller", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-child", "", "")
+				layeredSection(ext, "ext-parent", childMin, "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1 names section template "ext-parent", which declares child section "widgets" with a minimum of 1; the section helper passes no child sections`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+}
