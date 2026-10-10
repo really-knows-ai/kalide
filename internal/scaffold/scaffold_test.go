@@ -292,7 +292,9 @@ func testInitPreservesExistingAgentsGuide(t *testing.T) {
 // registry and theme registry built from the scaffolded templates/ library
 // itself — via template.LoadLibrary, template.NewRegistryFromLibrary and
 // theme.LoadDir — not template.Builtins/theme.Builtin, which carry no
-// "hello" template and would validate nothing meaningful about this seed.
+// "hello" template and would validate nothing meaningful about this seed. It
+// also pins the seed's minimality: exactly one theme (the neutral default) and
+// a kalide.yaml carrying only the required title key.
 func testInitScaffoldValidates(t *testing.T) {
 	dir := t.TempDir()
 	if err := Init(dir); err != nil {
@@ -307,6 +309,11 @@ func testInitScaffoldValidates(t *testing.T) {
 	if _, err := themes.Lookup(theme.DefaultName); err != nil {
 		t.Fatalf("seed's default theme does not resolve: %v", err)
 	}
+	// The seed ships exactly one theme — the neutral default — and nothing
+	// else: no fonts, logos or extra themes.
+	if names := themes.Names(); !reflect.DeepEqual(names, []string{theme.DefaultName}) {
+		t.Errorf("scaffolded library themes = %v, want exactly the one default theme %q", names, theme.DefaultName)
+	}
 
 	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themes)
 	if err != nil {
@@ -314,6 +321,23 @@ func testInitScaffoldValidates(t *testing.T) {
 	}
 	if strings.TrimSpace(cfg.Title) == "" {
 		t.Error("scaffolded config title is empty, want a non-empty title")
+	}
+	// The minimal seed's kalide.yaml carries the required title and nothing
+	// else — no author, date, theme, navigation, properties or templates key.
+	var rawConfig map[string]any
+	if err := yaml.Unmarshal([]byte(readString(t, filepath.Join(dir, deck.ConfigFile))), &rawConfig); err != nil {
+		t.Fatalf("parse %s: %v", deck.ConfigFile, err)
+	}
+	if len(rawConfig) != 1 {
+		keys := make([]string, 0, len(rawConfig))
+		for k := range rawConfig {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		t.Errorf("seed kalide.yaml keys = %v, want only the required title key", keys)
+	}
+	if _, ok := rawConfig["title"]; !ok {
+		t.Error("seed kalide.yaml has no title key, want the required title")
 	}
 	if _, err := deck.LoadSlides(fsys, deck.SlidesDir); err != nil {
 		t.Fatalf("deck.LoadSlides() error = %v", err)
@@ -669,10 +693,29 @@ func testInitExternalUnresolvableTheme(t *testing.T) {
 
 // testInitExternalRefusalMatrix asserts slides/, assets/ and kalide.yaml — as a
 // file or a directory — still block the external form, naming the path and
-// writing nothing, even though the external library itself is valid.
+// writing nothing, for BOTH external branches: the relative explicit path
+// (`kalide init ../shared-lib`, the explicit-path branch) and the absolute
+// path (the configured-default branch). A pre-existing local templates/ is
+// exempt (covered by testInitExternalTemplatesExempt) and the no-arg seed
+// branch's matrix is testInitRefuses.
 func testInitExternalRefusalMatrix(t *testing.T) {
-	lib := filepath.Join(t.TempDir(), "shared-lib")
-	writeExternalLibrary(t, lib, "shared-lib")
+	paths := []struct {
+		name string
+		// arg installs the external library for a deck at dir and returns the
+		// path to pass to Init: a relative path for the explicit-path branch,
+		// an absolute one for the configured-default branch.
+		arg func(t *testing.T, dir string) string
+	}{
+		{"relative path", func(t *testing.T, dir string) string {
+			writeExternalLibrary(t, filepath.Join(filepath.Dir(dir), "shared-lib"), "shared-lib")
+			return "../shared-lib"
+		}},
+		{"absolute path", func(t *testing.T, dir string) string {
+			lib := filepath.Join(t.TempDir(), "shared-lib")
+			writeExternalLibrary(t, lib, "shared-lib")
+			return lib
+		}},
+	}
 
 	cases := []struct {
 		name    string
@@ -688,61 +731,93 @@ func testInitExternalRefusalMatrix(t *testing.T) {
 		{"existing kalide.yaml directory", "kalide.yaml", true, "kalide.yaml"},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			block := filepath.Join(dir, tc.block)
-			if tc.isDir {
-				mkdir(t, block)
-				writeFile(t, filepath.Join(block, "keep.txt"), "keep")
-			} else {
-				writeFile(t, block, "sentinel")
-			}
+	for _, p := range paths {
+		for _, tc := range cases {
+			t.Run(p.name+"/"+tc.name, func(t *testing.T) {
+				dir := t.TempDir()
+				block := filepath.Join(dir, tc.block)
+				if tc.isDir {
+					mkdir(t, block)
+					writeFile(t, filepath.Join(block, "keep.txt"), "keep")
+				} else {
+					writeFile(t, block, "sentinel")
+				}
+				arg := p.arg(t, dir)
 
-			before := snapshot(t, dir)
+				before := snapshot(t, dir)
 
-			err := Init(dir, lib)
-			if err == nil {
-				t.Fatalf("Init(dir, %s) error = nil, want a refusal naming %q", lib, tc.display)
-			}
-			if !strings.Contains(err.Error(), tc.display) {
-				t.Errorf("Init error = %q, want it to name %q", err, tc.display)
-			}
+				err := Init(dir, arg)
+				if err == nil {
+					t.Fatalf("Init(dir, %s) error = nil, want a refusal naming %q", arg, tc.display)
+				}
+				if !strings.Contains(err.Error(), tc.display) {
+					t.Errorf("Init error = %q, want it to name %q", err, tc.display)
+				}
 
-			if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
-				t.Fatalf("Init modified the directory on refusal:\n before %v\n after  %v", before, after)
-			}
-		})
+				if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
+					t.Fatalf("Init modified the directory on refusal:\n before %v\n after  %v", before, after)
+				}
+			})
+		}
 	}
 }
 
 // testInitExternalTemplatesExempt asserts a pre-existing local templates/ is
-// exempt for the external form: it is left byte-for-byte untouched while the
-// external deck is written. The no-arg form still blocks on it, so the
-// exemption is specific to the external path.
+// exempt for BOTH external branches — the relative explicit path and the
+// absolute configured-default path — and is left byte-for-byte untouched (the
+// templates/ tree snapshots identically) while the external deck is written.
+// The no-arg seed branch still blocks on it, so the exemption is specific to
+// the external path.
 func testInitExternalTemplatesExempt(t *testing.T) {
-	parent := t.TempDir()
-	dir := filepath.Join(parent, "deck")
-	writeExternalLibrary(t, filepath.Join(parent, "shared-lib"), "shared-lib")
-
-	mkdir(t, filepath.Join(dir, "templates"))
-	const sentinel = "local templates content that external init must not touch\n"
-	writeFile(t, filepath.Join(dir, "templates", "keep.txt"), sentinel)
-
-	if err := Init(dir, "../shared-lib"); err != nil {
-		t.Fatalf("Init(dir, ../shared-lib) error = %v, want nil with a pre-existing local templates/", err)
+	paths := []struct {
+		name string
+		arg  func(t *testing.T, dir string) string
+	}{
+		{"relative path", func(t *testing.T, dir string) string {
+			writeExternalLibrary(t, filepath.Join(filepath.Dir(dir), "shared-lib"), "shared-lib")
+			return "../shared-lib"
+		}},
+		{"absolute path", func(t *testing.T, dir string) string {
+			lib := filepath.Join(t.TempDir(), "shared-lib")
+			writeExternalLibrary(t, lib, "shared-lib")
+			return lib
+		}},
 	}
 
-	if got := readString(t, filepath.Join(dir, "templates", "keep.txt")); got != sentinel {
-		t.Errorf("templates/keep.txt = %q, want the pre-existing content unchanged", got)
-	}
-	if _, templates := externalConfigOf(t, dir); templates != "../shared-lib" {
-		t.Errorf("kalide.yaml templates = %q, want %q", templates, "../shared-lib")
-	}
-	for _, name := range []string{"kalide.yaml", "slides", "assets"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Errorf("stat %s after external init: %v, want created", name, err)
-		}
+	for _, p := range paths {
+		t.Run(p.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mkdir(t, filepath.Join(dir, "templates"))
+			const sentinel = "local templates content that external init must not touch\n"
+			writeFile(t, filepath.Join(dir, "templates", "keep.txt"), sentinel)
+			mkdir(t, filepath.Join(dir, "templates", "nested"))
+			writeFile(t, filepath.Join(dir, "templates", "nested", "deep.txt"), sentinel)
+			arg := p.arg(t, dir)
+
+			before := snapshot(t, filepath.Join(dir, "templates"))
+
+			if err := Init(dir, arg); err != nil {
+				t.Fatalf("Init(dir, %s) error = %v, want nil with a pre-existing local templates/", arg, err)
+			}
+
+			if after := snapshot(t, filepath.Join(dir, "templates")); !reflect.DeepEqual(after, before) {
+				t.Errorf("Init(dir, %s) modified the pre-existing templates/:\n before %v\n after  %v", arg, before, after)
+			}
+			if got := readString(t, filepath.Join(dir, "templates", "keep.txt")); got != sentinel {
+				t.Errorf("templates/keep.txt = %q, want the pre-existing content unchanged", got)
+			}
+			if got := readString(t, filepath.Join(dir, "templates", "nested", "deep.txt")); got != sentinel {
+				t.Errorf("templates/nested/deep.txt = %q, want the pre-existing content unchanged", got)
+			}
+			if _, templates := externalConfigOf(t, dir); templates != arg {
+				t.Errorf("kalide.yaml templates = %q, want %q", templates, arg)
+			}
+			for _, name := range []string{"kalide.yaml", "slides", "assets"} {
+				if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+					t.Errorf("stat %s after external init: %v, want created", name, err)
+				}
+			}
+		})
 	}
 
 	// The no-arg form still refuses a pre-existing templates/ (the exemption
@@ -759,46 +834,64 @@ func testInitExternalTemplatesExempt(t *testing.T) {
 }
 
 // testInitExternalPreservesExistingAgentsGuide asserts a pre-existing deck-root
-// AGENTS.md never blocks either external form — Init(dir, lib) and
-// InitExternal(dir, lib) — and is left byte-for-byte untouched, while the
-// external deck is still written (agent-authoring). AGENTS.md is not a
-// deck-owned blockPath, so this is not a relaxation of the refusal matrix.
+// AGENTS.md never blocks either external form — Init(dir, path) and
+// InitExternal(dir, path) — for BOTH external branches (the relative explicit
+// path and the absolute configured-default path), and is left byte-for-byte
+// untouched while the external deck is still written (agent-authoring).
+// AGENTS.md is not a deck-owned blockPath, so this is not a relaxation of the
+// refusal matrix. The seed branch's counterpart is
+// testInitPreservesExistingAgentsGuide.
 func testInitExternalPreservesExistingAgentsGuide(t *testing.T) {
-	lib := filepath.Join(t.TempDir(), "shared-lib")
-	writeExternalLibrary(t, lib, "shared-lib")
-
-	cases := []struct {
+	paths := []struct {
 		name string
-		init func(dir string) error
+		arg  func(t *testing.T, dir string) string
 	}{
-		{"Init(dir, lib)", func(dir string) error { return Init(dir, lib) }},
-		{"InitExternal(dir, lib)", func(dir string) error { return InitExternal(dir, lib) }},
+		{"relative path", func(t *testing.T, dir string) string {
+			writeExternalLibrary(t, filepath.Join(filepath.Dir(dir), "shared-lib"), "shared-lib")
+			return "../shared-lib"
+		}},
+		{"absolute path", func(t *testing.T, dir string) string {
+			lib := filepath.Join(t.TempDir(), "shared-lib")
+			writeExternalLibrary(t, lib, "shared-lib")
+			return lib
+		}},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "deck")
-			mkdir(t, dir)
-			const sentinel = "# my own deck guide\n\nkeep me exactly as I am.\n"
-			writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
+	forms := []struct {
+		name string
+		init func(dir, pathArg string) error
+	}{
+		{"Init(dir, path)", func(dir, pathArg string) error { return Init(dir, pathArg) }},
+		{"InitExternal(dir, path)", func(dir, pathArg string) error { return InitExternal(dir, pathArg) }},
+	}
 
-			if err := tc.init(dir); err != nil {
-				t.Fatalf("%s error = %v, want nil (a pre-existing AGENTS.md must not block)", tc.name, err)
-			}
+	for _, p := range paths {
+		for _, f := range forms {
+			t.Run(p.name+"/"+f.name, func(t *testing.T) {
+				dir := filepath.Join(t.TempDir(), "deck")
+				mkdir(t, dir)
+				pathArg := p.arg(t, dir)
+				const sentinel = "# my own deck guide\n\nkeep me exactly as I am.\n"
+				writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
 
-			if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
-				t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
-			}
-
-			for _, name := range []string{"kalide.yaml", "slides", "assets"} {
-				if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-					t.Errorf("expected %s after %s: %v", name, tc.name, err)
+				if err := f.init(dir, pathArg); err != nil {
+					t.Fatalf("%s error = %v, want nil (a pre-existing AGENTS.md must not block)", f.name, err)
 				}
-			}
-			if _, templates := externalConfigOf(t, dir); templates != lib {
-				t.Errorf("kalide.yaml templates = %q, want %q", templates, lib)
-			}
-		})
+
+				if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
+					t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
+				}
+
+				for _, name := range []string{"kalide.yaml", "slides", "assets"} {
+					if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+						t.Errorf("expected %s after %s: %v", name, f.name, err)
+					}
+				}
+				if _, templates := externalConfigOf(t, dir); templates != pathArg {
+					t.Errorf("kalide.yaml templates = %q, want %q", templates, pathArg)
+				}
+			})
+		}
 	}
 }
 
