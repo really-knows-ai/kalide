@@ -47,7 +47,7 @@ const (
 func mediaHandler(lib *template.Library, themes *theme.Registry) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(MediaPath, mediaFileHandler(primaryLibraryMediaFS(lib), MediaPath, primaryThemeCSSBases))
-	mux.Handle(ThemesPath, themeFileHandler(themes))
+	mux.Handle(ThemesPath, themeFileHandler(themes, ThemesPath, primaryThemeCSSBases))
 	return mux
 }
 
@@ -181,26 +181,39 @@ func mediaFileHandler(mediaFS fs.FS, prefix string, bases themeCSSBases) http.Ha
 	}))
 }
 
-// themeFileHandler serves templates/themes/<name>/<file> requests under
-// ThemesPath: the first path segment after ThemesPath names the theme, looked
-// up in themes (theme.Registry); the rest is resolved against that theme's
-// own Assets filesystem (theme.Theme.Assets, as built by theme.LoadDir) with
-// the same path-cleaning assetHandler uses. An unknown theme name, a missing
-// file or a path escaping the theme's root all 404.
+// themeFileHandler serves templates/themes/<name>/<file> requests for one
+// serving layer: it strips prefix itself (http.StripPrefix), so a caller
+// registers it with a plain mux.Handle(prefix, …) and passes the same prefix
+// here. The first path segment after prefix names the theme, looked up in
+// themes (that layer's own theme.Registry, never a merged one); the rest is
+// resolved against that theme's own Assets filesystem (theme.Theme.Assets, as
+// built by theme.LoadDir) with the same path-cleaning assetHandler uses. An
+// unknown theme name, a missing file or a path escaping the theme's root all
+// 404.
 //
-// A .css theme asset is served through rewriteThemeCSS (theme-shared-media):
-// url() references carrying the reserved media: or theme:<name>/ prefix — and
-// any such reference inside the url() or bare quoted-string form of an @import
-// target — are rewritten to the served templates/media or templates/themes/
-// URL before the bytes reach the client. Every other theme file is served raw,
-// exactly as before. This applies to every .css file the theme tree owns,
+// The prefix names the serving layer's route and bases carries that same
+// layer's media/themes base URLs — the URLs a rewritten .css reference is
+// joined onto. Mounting the single/primary layer passes ThemesPath and
+// primaryThemeCSSBases, today's exact behaviour; a two-layer deck's external
+// `templates:` layer passes its own prefix
+// (/assets/templates/external/themes/) and bases (mediaBase
+// /assets/templates/external/media/, themesBase
+// /assets/templates/external/themes/), so the same theme name addresses each
+// layer independently under its own route.
+//
+// A .css theme asset is served through rewriteThemeCSS (theme-shared-media,
+// with bases): url() references carrying the reserved media: or theme:<name>/
+// prefix — and any such reference inside the url() or bare quoted-string form
+// of an @import target — are rewritten to that serving layer's media/themes
+// URLs before the bytes reach the client. Every other theme file is served
+// raw, exactly as before. This applies to every .css file the theme tree owns,
 // including theme.css itself and any stylesheet reached by an @import from it,
 // and including another theme's stylesheet reached through a reserved
 // theme:<name>/ reference: that stylesheet is then requested at the themes
 // route and served by this same handler, so its own references are rewritten
 // in turn.
-func themeFileHandler(themes *theme.Registry) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func themeFileHandler(themes *theme.Registry, prefix string, bases themeCSSBases) http.Handler {
+	return http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -210,7 +223,9 @@ func themeFileHandler(themes *theme.Registry) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		rest := strings.TrimPrefix(r.URL.Path, ThemesPath)
+		// The prefix is already stripped (http.StripPrefix), so the request
+		// path is exactly <name>/<file> within this layer's themes tree.
+		rest := r.URL.Path
 		themeName, file, found := strings.Cut(rest, "/")
 		if !found || themeName == "" {
 			http.NotFound(w, r)
@@ -231,15 +246,15 @@ func themeFileHandler(themes *theme.Registry) http.Handler {
 			return
 		}
 
-		// A stylesheet may reach the library's shared media tree through the
+		// A stylesheet may reach the layer's shared media tree through the
 		// reserved media: prefix, or a sibling theme through the reserved
 		// theme:<name>/ prefix, whether directly in a url() or as an @import
 		// target; rewrite those references (in every .css file this handler
-		// serves) to the served templates/media or templates/themes/ URL
-		// before writing the bytes. The MIME type is derived from the .css
-		// extension exactly as serveFileFS derives it (via ServeContent's
-		// name), but set explicitly so the rewritten bytes are served as CSS
-		// rather than content-sniffed.
+		// serves) to the serving layer's media/themes URLs (bases) before
+		// writing the bytes. The MIME type is derived from the .css extension
+		// exactly as serveFileFS derives it (via ServeContent's name), but set
+		// explicitly so the rewritten bytes are served as CSS rather than
+		// content-sniffed.
 		info, err := fs.Stat(t.Assets, name)
 		if err != nil {
 			http.NotFound(w, r)
@@ -253,6 +268,6 @@ func themeFileHandler(themes *theme.Registry) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		http.ServeContent(w, r, path.Base(name), info.ModTime(), bytes.NewReader(rewriteThemeCSS(css)))
-	})
+		http.ServeContent(w, r, path.Base(name), info.ModTime(), bytes.NewReader(rewriteThemeCSS(css, bases)))
+	}))
 }
