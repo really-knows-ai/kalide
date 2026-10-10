@@ -626,7 +626,40 @@ type SectionCall struct {
 // values, the body and the one-item .item descriptor. A violation is returned as
 // the first ValueError CheckValues or CheckBody reports, so a caller adapts it
 // through the same positioned path as any other field or body error.
+//
+// ResolveSectionCall records no layer provenance: it delegates to
+// ResolveSectionCallLayered with a nil layerOf, so the returned
+// SectionCall.Layer is always nil. A caller that holds a layer source — the
+// render and load-time example section helpers, whose merged registry answers
+// *Registry.LayerOf — calls ResolveSectionCallLayered directly so the resolved
+// target's owning layer is carried out on SectionCall.Layer
+// (library-layer-references).
 func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, parent map[string]any) (*SectionCall, error) {
+	return ResolveSectionCallLayered(resolve, nil, name, fields, body, parent)
+}
+
+// ResolveSectionCallLayered is ResolveSectionCall plus layer provenance: it
+// applies exactly the same resolution, defaults-first field validation, body
+// checks and error contract (see ResolveSectionCall) and additionally records
+// the owning layer of the resolved target on SectionCall.Layer.
+//
+// resolve is consulted first; only once it has returned a section-usage target
+// is layerOf consulted, so a rejected name or non-section target reports the
+// same error and never touches layerOf. layerOf reports the *LibraryLayer that
+// contributed the template registered under the resolved name, or nil when the
+// caller has no provenance for it — *Registry.LayerOf satisfies it for a
+// registry built from a merged Library (NewRegistryFromLibrary, via setLayer),
+// which is how a call resolves through the merged section namespace and still
+// learns which layer owns the target. The name passed to layerOf is the
+// resolved target's name, so a caller identifies the target's own layer rather
+// than the calling template's.
+//
+// A nil layerOf records no layer (SectionCall.Layer stays nil), which is
+// ResolveSectionCall's behaviour; layerOf may likewise report nil for a name
+// whose owning layer is unknown (a single-root library, or a registry built in
+// code). Consumers treat a nil Layer as "resolve against the primary/merged
+// root" (SectionCall.Layer).
+func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, name string, fields map[string]any, body string, parent map[string]any) (*SectionCall, error) {
 	if resolve == nil {
 		return nil, fmt.Errorf("section helper: no template resolver for %q", name)
 	}
@@ -656,7 +689,7 @@ func ResolveSectionCall(resolve func(name string) (*Template, bool), name string
 		}
 	}
 
-	return &SectionCall{
+	call := &SectionCall{
 		Template: target,
 		Values:   effective,
 		Body:     body,
@@ -670,7 +703,11 @@ func ResolveSectionCall(resolve func(name string) (*Template, bool), name string
 			"template": name,
 			"parent":   parent,
 		},
-	}, nil
+	}
+	if layerOf != nil {
+		call.Layer = layerOf(name)
+	}
+	return call, nil
 }
 
 // applyFieldDefaults returns a fresh copy of fields with every declared field
