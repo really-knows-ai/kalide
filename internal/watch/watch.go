@@ -142,13 +142,22 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 		return nil, nil, fmt.Errorf("watch %s: %w", root, err)
 	}
 
-	// Resolve the deck's template-library root from kalide.yaml (the
-	// configured `templates:` path, else the local templates/) so the resolved
-	// root — possibly an external directory outside the deck root — is watched
-	// too (external-template-library). A missing or unresolvable library is
-	// not an error: the deck's slides/, assets/ and kalide.yaml are still
-	// watched, and the resolved root is picked up later if it appears.
-	library := libraryRoot(root)
+	// Resolve the deck's template-library roots from kalide.yaml (the
+	// configured `templates:` path, else the local templates/) so every
+	// resolved root — possibly an external directory outside the deck root —
+	// is watched too (external-template-library). A missing or unresolvable
+	// library is not an error: the deck's slides/, assets/ and kalide.yaml
+	// are still watched, and a resolved root is picked up later if it appears.
+	//
+	// Until the layered watch retains every resolved root (phase-4 tasks 2-5),
+	// only the first root is registered: it is the external `templates:` root
+	// when configured, else the local templates/ — exactly the single root the
+	// watcher watched before, so single-root behaviour is unchanged.
+	roots := libraryRoot(root)
+	library := ""
+	if len(roots) > 0 {
+		library = roots[0]
+	}
 
 	w := &watcher{
 		root:     root,
@@ -356,24 +365,36 @@ func atOrUnder(dir, name string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-// libraryRoot returns the deck's resolved template-library root as an absolute
-// OS path, or "" when none can be resolved. configured is the raw `templates:`
-// value read from the deck's kalide.yaml; it resolves through the template
-// loader's single resolution point (external-template-library). Resolution
-// requires the directory to exist, but a missing/unresolvable library must not
-// fail the watch: when the key is absent, the local templates/ path is still
-// returned so a directory created there after startup is picked up by the root
-// watch; when a configured path does not resolve, "" is returned and only the
-// deck's own paths are watched.
-func libraryRoot(deckRoot string) string {
+// libraryRoot returns the deck's resolved template-library roots as absolute OS
+// paths, or an empty slice when none can be resolved. configured is the raw
+// `templates:` value read from the deck's kalide.yaml; it resolves through the
+// template loader's layered resolution point (external-template-library), which
+// returns every layer root the deck draws from in order: the external
+// `templates:` root first when configured, then the deck-root templates/
+// whenever that directory exists.
+//
+// Resolution requires each directory to exist, but a missing/unresolvable
+// library must not fail the watch: when neither layer resolves the existing
+// single-root fallback is kept. With no `templates:` key the deck-root
+// templates/ path is still returned so a directory created there after startup
+// is picked up by the root watch; with a configured path that does not resolve,
+// an empty slice is returned and only the deck's own paths are watched. A
+// resolution that fails partway — a configured external root that resolves
+// while the deck-root templates/ exists but is not a directory — falls back to
+// the deck's authoritative single root (ResolveLibraryRoot) so that root stays
+// watched, exactly as the single-root resolver did.
+func libraryRoot(deckRoot string) []string {
 	configured := configuredTemplates(deckRoot)
+	if roots, err := template.ResolveLibraryLayers(deckRoot, configured); err == nil {
+		return roots
+	}
 	if resolved, err := template.ResolveLibraryRoot(deckRoot, configured); err == nil {
-		return resolved
+		return []string{resolved}
 	}
 	if configured == "" {
-		return filepath.Join(deckRoot, template.TemplatesDir)
+		return []string{filepath.Join(deckRoot, template.TemplatesDir)}
 	}
-	return ""
+	return nil
 }
 
 // configuredTemplates returns the deck's raw top-level `templates:` value as
