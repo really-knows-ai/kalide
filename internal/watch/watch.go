@@ -145,29 +145,27 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 	// Resolve the deck's template-library roots from kalide.yaml (the
 	// configured `templates:` path, else the local templates/) so every
 	// resolved root — possibly an external directory outside the deck root —
-	// is watched too (external-template-library). A missing or unresolvable
-	// library is not an error: the deck's slides/, assets/ and kalide.yaml
-	// are still watched, and a resolved root is picked up later if it appears.
+	// is retained for watching (external-template-library). A missing or
+	// unresolvable library is not an error: the deck's slides/, assets/ and
+	// kalide.yaml are still watched, and a resolved root is picked up later if
+	// it appears.
 	//
-	// Until the layered watch retains every resolved root (phase-4 tasks 2-5),
-	// only the first root is registered: it is the external `templates:` root
-	// when configured, else the local templates/ — exactly the single root the
-	// watcher watched before, so single-root behaviour is unchanged.
+	// The watcher retains every resolved layer root (w.libraries); until the
+	// per-layer watch lands (phase-4 tasks 3-5) only the primary root —
+	// libraries[0], the external `templates:` root when configured, else the
+	// local templates/ — is registered, exactly the single root the watcher
+	// watched before, so single-root behaviour is unchanged.
 	roots := libraryRoot(root)
-	library := ""
-	if len(roots) > 0 {
-		library = roots[0]
-	}
 
 	w := &watcher{
-		root:     root,
-		library:  library,
-		fsw:      fsw,
-		debounce: debounce,
-		watched:  make(map[string]struct{}),
-		out:      make(chan Event, 1),
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
+		root:      root,
+		libraries: roots,
+		fsw:       fsw,
+		debounce:  debounce,
+		watched:   make(map[string]struct{}),
+		out:       make(chan Event, 1),
+		stop:      make(chan struct{}),
+		done:      make(chan struct{}),
 	}
 
 	// The root is watched non-recursively. kalide.yaml is observed through it
@@ -181,7 +179,7 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 	}
 	w.addTree(filepath.Join(root, deck.SlidesDir))
 	w.addTree(filepath.Join(root, AssetsDir))
-	if library != "" {
+	if library := w.primaryLibrary(); library != "" {
 		// Only the library's own structure is followed: the root itself
 		// (non-recursively) and its slides/, sections/, themes/ and media/
 		// subtrees. Every other top-level entry in the library root — a .git/
@@ -214,14 +212,21 @@ func Watch(root string, debounce time.Duration) (<-chan Event, func() error, err
 type watcher struct {
 	root string
 
-	// library is the deck's resolved template-library root (external-template-
-	// library): the configured `templates:` path resolved against root, or the
-	// local templates/ when the key is absent. It may be outside root (begins
-	// with ".." relative to it). It is "" when no root could be resolved; a
-	// change to its structure (the root, its library.yaml, or anything at or
-	// beneath slides/, sections/, themes/ or media/) is a deck change even when
-	// it lies outside root.
-	library string
+	// libraries holds the deck's resolved template-library layer roots in
+	// resolution order (external-template-library, layered-template-library):
+	// the external `templates:` root first when configured, then the deck-root
+	// templates/ whenever that directory exists. Each is an absolute OS path
+	// and may lie outside root (begins with ".." relative to it). It is empty
+	// when no root could be resolved; a change to any root's structure (the
+	// root, its library.yaml, or anything at or beneath slides/, sections/,
+	// themes/ or media/) is a deck change even when it lies outside root.
+	//
+	// The watcher retains every resolved root; until the per-layer watch lands
+	// (phase-4 tasks 3-5) only the primary root, libraries[0] — the external
+	// `templates:` root when configured, else the local templates/ — is
+	// registered and consulted, so single-root behaviour is unchanged. Use
+	// primaryLibrary for that root.
+	libraries []string
 
 	fsw      *fsnotify.Watcher
 	debounce time.Duration
@@ -233,6 +238,17 @@ type watcher struct {
 	out  chan Event
 	stop chan struct{}
 	done chan struct{}
+}
+
+// primaryLibrary returns the watcher's primary template-library root — the
+// external `templates:` root when configured, else the deck-root templates/ —
+// or "" when no layer root was resolved. Until the per-layer watch lands
+// (phase-4 tasks 3-5) the watcher registers and consults only this root.
+func (w *watcher) primaryLibrary() string {
+	if len(w.libraries) == 0 {
+		return ""
+	}
+	return w.libraries[0]
 }
 
 // add registers one directory (an absolute path) with the underlying watcher,
@@ -269,7 +285,7 @@ func (w *watcher) addTree(dir string) {
 // never an unrelated entry such as .git/ (templates-dir-layout). Any other
 // relevant directory is registered recursively.
 func (w *watcher) addRelevantTree(dir string) {
-	if w.library != "" && filepath.Clean(dir) == w.library {
+	if library := w.primaryLibrary(); library != "" && filepath.Clean(dir) == library {
 		_ = w.add(dir)
 		for _, d := range libraryWatchDirs {
 			w.addTree(filepath.Join(dir, d))
@@ -337,18 +353,19 @@ func (w *watcher) rel(ev fsnotify.Event) (string, bool) {
 // the library and is ignored, so it never triggers a reload. It is false when
 // no library root was resolved.
 func (w *watcher) libraryRelevant(name string) bool {
-	if w.library == "" {
+	library := w.primaryLibrary()
+	if library == "" {
 		return false
 	}
 	name = filepath.Clean(name)
-	if name == w.library {
+	if name == library {
 		return true
 	}
-	if name == filepath.Join(w.library, template.LibraryFile) {
+	if name == filepath.Join(library, template.LibraryFile) {
 		return true
 	}
 	for _, dir := range libraryWatchDirs {
-		if atOrUnder(filepath.Join(w.library, dir), name) {
+		if atOrUnder(filepath.Join(library, dir), name) {
 			return true
 		}
 	}
