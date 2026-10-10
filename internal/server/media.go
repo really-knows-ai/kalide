@@ -92,11 +92,15 @@ var externalThemeCSSBases = themeCSSBases{mediaBase: ExternalMediaPath, themesBa
 // the primary media route reads the primary layer's media (Library.Media, the
 // primary layer's convenience field) and the external media route reads the
 // external layer's own Layers[i].Media (libraryMediaFS). The primary theme
-// route serves ONLY the primary layer's themes and the external theme route
-// ONLY the external layer's themes (libraryLayerThemeRegistry); when lib has
-// no external-role layer — a single-root library — the passed themes registry
-// is used for the primary route unchanged, so a single-layer library's
-// behaviour is byte-identical.
+// route serves the primary layer's themes with a per-name fallback to the
+// external layer's themes (themeOwnerHandler): a deck theme that only the
+// external `templates:` layer carries is served at the unprefixed URL from
+// that layer's own Assets, rewritten against the external layer's own bases,
+// while a theme the primary layer owns is served locally. The external theme
+// route serves ONLY the external layer's themes
+// (libraryLayerThemeRegistry); when lib has no external-role layer — a
+// single-root library — the passed themes registry is used for the primary
+// route unchanged, so a single-layer library's behaviour is byte-identical.
 //
 // The external routes exist only when lib actually has an external-role
 // layer, so a single-root library mounts exactly the two routes it did
@@ -112,9 +116,16 @@ func mediaHandler(lib *template.Library, themes *theme.Registry) http.Handler {
 	mux := http.NewServeMux()
 	// The primary layer keeps today's exact routes and bases. Its theme
 	// registry is the primary layer's own in a two-layer deck, or the
-	// caller's (merged == the only) registry for a single-root library.
+	// caller's (merged == the only) registry for a single-root library; the
+	// external layer's own registry is the per-name fallback the unprefixed
+	// ThemesPath route serves an external-only deck theme from. For a
+	// single-root library there is no external layer, so themeOwnerHandler
+	// returns the primary themeFileHandler unchanged and the route stays
+	// byte-identical.
+	external := libraryLayerByRole(lib, template.LayerRoleExternal)
+	externalThemes := libraryLayerThemeRegistry(external)
 	mux.Handle(MediaPath, mediaFileHandler(primaryLibraryMediaFS(lib), MediaPath, primaryThemeCSSBases))
-	mux.Handle(ThemesPath, themeFileHandler(primaryThemeRegistry(lib, themes), ThemesPath, primaryThemeCSSBases))
+	mux.Handle(ThemesPath, themeOwnerHandler(ThemesPath, primaryThemeRegistry(lib, themes), externalThemes))
 
 	// A two-layer deck's external `templates:` layer is mounted under its own
 	// prefixes and served from its own root, so it never shares the primary
@@ -122,13 +133,72 @@ func mediaHandler(lib *template.Library, themes *theme.Registry) http.Handler {
 	// themes/ registry; the media route is always mounted for the layer
 	// (mediaFileHandler treats a nil media filesystem as "nothing is ever
 	// found here").
-	if external := libraryLayerByRole(lib, template.LayerRoleExternal); external != nil {
+	if external != nil {
 		mux.Handle(ExternalMediaPath, mediaFileHandler(libraryMediaFS(lib, libraryExternalMedia), ExternalMediaPath, externalThemeCSSBases))
-		if externalThemes := libraryLayerThemeRegistry(external); externalThemes != nil {
+		if externalThemes != nil {
 			mux.Handle(ExternalThemesPath, themeFileHandler(externalThemes, ExternalThemesPath, externalThemeCSSBases))
 		}
 	}
 	return mux
+}
+
+// themeOwnerHandler serves the unprefixed ThemesPath route
+// (/assets/templates/themes/<name>/<file>) for a deck's primary layer, falling
+// back per requested theme NAME to a two-layer deck's external `templates:`
+// layer. It is a small composing handler: for each request it reads the name
+// from the path (`<name>/<file>`), picks the owning layer's registry and bases,
+// and delegates to that layer's themeFileHandler (whose signature is
+// unchanged).
+//
+//   - The primary (local) layer's registry wins whenever it carries the name,
+//     so a locally-owned theme is served locally from the primary layer's own
+//     Assets (primaryThemeCSSBases).
+//   - Otherwise a two-layer deck's external layer serves the theme from ITS
+//     own Assets with its reserved-prefix references rewritten against the
+//     external layer's own bases (externalThemeCSSBases:
+//     ExternalMediaPath/ExternalThemesPath), so an external-only deck theme —
+//     the normal case after `kalide init <external>`, whose default theme is
+//     external — is served at the unprefixed URL and its media:/theme:<name>/
+//     references still resolve in its own layer.
+//   - When neither registry carries the name the primary handler runs and
+//     404s, exactly as before.
+//
+// Theme names are unique across layers (checkLayerUniqueness), so the name
+// alone selects the owner and there is never a merged registry. prefix names
+// the mounted route (ThemesPath) and both delegated handlers strip it
+// themselves, so the request is passed through unstripped. When externalReg is
+// nil — a single-root library, or a two-layer deck whose external layer has no
+// themes/ — there is no fallback and the primary themeFileHandler is returned
+// directly, so single-layer behaviour stays byte-identical. The external-prefix
+// route (ExternalThemesPath) is unaffected: it keeps addressing the external
+// layer's registry directly.
+func themeOwnerHandler(prefix string, primaryReg, externalReg *theme.Registry) http.Handler {
+	primary := themeFileHandler(primaryReg, prefix, primaryThemeCSSBases)
+	if externalReg == nil {
+		return primary
+	}
+	external := themeFileHandler(externalReg, prefix, externalThemeCSSBases)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The full request path is still present here (the delegated handler
+		// strips prefix itself), so trim it to read <name>/<file>.
+		name, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, prefix), "/")
+		if !themeRegistryHas(primaryReg, name) && themeRegistryHas(externalReg, name) {
+			external.ServeHTTP(w, r)
+			return
+		}
+		primary.ServeHTTP(w, r)
+	})
+}
+
+// themeRegistryHas reports whether reg carries a theme named name. A nil
+// registry — a layer with no themes/ directory — and an empty name carry none,
+// so neither is ever treated as an owner.
+func themeRegistryHas(reg *theme.Registry, name string) bool {
+	if reg == nil || name == "" {
+		return false
+	}
+	_, err := reg.Lookup(name)
+	return err == nil
 }
 
 // primaryThemeRegistry returns the theme registry the primary layer's
