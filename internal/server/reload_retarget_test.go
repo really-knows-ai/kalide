@@ -80,13 +80,19 @@ func retargetDeckYAML(title, templates string) string {
 	return yaml
 }
 
-// TestTemplatesRetargeted is the unit-tier proof (plan.phase-02.task-2) of the
-// pure predicate templatesRetargeted: it compares the raw configured
-// `templates:` value exactly as written, so only an byte-identical string is a
-// non-retarget. The table covers every documented shape — an equal value, a
-// different path, a `./`-prefixed spelling of the same path, the key added,
-// the key removed, the key absent throughout, and a value reverted to the
-// startup baseline.
+// TestTemplatesRetargeted is the unit-tier proof (plan.phase-02.task-2,
+// extended by plan.phase-04.task-15) of the pure predicate templatesRetargeted:
+// it compares the raw configured `templates:` value exactly as written, so only
+// a byte-identical string is a non-retarget. Under the layered model
+// `templates:` names the EXTERNAL library layer's root, so this is the only
+// layer selection retargetable through config: the deck-root templates/ local
+// layer is implied by the deck directory and is not addressable through
+// `templates:`, so the predicate only ever switches, adds or removes the
+// external layer, never the local one. The table covers every documented shape —
+// an equal value, a different path, two spellings of the same directory that a
+// resolver would treat as equal (`./`-prefixed and trailing-slash) but that are
+// distinct raw strings, the key added, the key removed, both empty (the key
+// absent throughout), and a value reverted to the startup baseline.
 func TestTemplatesRetargeted(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -97,9 +103,10 @@ func TestTemplatesRetargeted(t *testing.T) {
 		{"equal value", "/srv/deck/templates", "/srv/deck/templates", false},
 		{"different path", retargetStartup, retargetOther, true},
 		{"./-prefixed spelling of the same path", retargetStartup, "./" + retargetStartup, true},
-		{"key added", "", retargetStartup, true},
-		{"key removed", retargetStartup, "", true},
-		{"key absent throughout", "", "", false},
+		{"trailing-slash spelling of the same directory", "../lib", "../lib/", true},
+		{"key added", "", "../lib", true},
+		{"key removed", "../lib", "", true},
+		{"both empty (key absent throughout)", "", "", false},
 		{"reverted to the startup value", retargetStartup, retargetStartup, false},
 	}
 	for _, tc := range cases {
