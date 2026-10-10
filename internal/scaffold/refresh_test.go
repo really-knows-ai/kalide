@@ -608,12 +608,68 @@ func TestRefreshScaffoldLibrary(t *testing.T) {
 
 // TestRefreshScaffoldExternalDeck covers the external-library deck form
 // (external-template-library,
-// requirements.constraint.upgrade-owned-scaffold-scope): refreshScaffold creates
-// no local templates/ and no starter slide, and a leftover local templates/
-// present in the deck is left byte-for-byte untouched — never refreshed, never
-// deleted.
+// requirements.constraint.upgrade-owned-scaffold-scope): the seed-deck
+// predicate needs BOTH no non-empty `templates:` key AND a local templates/
+// directory, so a deck whose kalide.yaml sets a non-empty `templates:` is never
+// a seed deck even when a local templates/ directory exists;
+// refreshScaffold creates no local templates/ and no starter slide for such a
+// deck, and a local templates/ it does carry is author content — a library
+// layer loaded alongside the external library (layered-template-library) — left
+// byte-for-byte and mtime-untouched, even when it holds files named exactly
+// like the no-arg seed's owned paths, never refreshed and never deleted.
 func TestRefreshScaffoldExternalDeck(t *testing.T) {
 	externalConfig := "title: External\ntemplates: ../shared-lib\n"
+
+	t.Run("the seed-deck predicate scopes the owned set", func(t *testing.T) {
+		// Two decks differ only in their `templates:` key; both carry a local
+		// templates/ holding the seed's own templates/library.yaml path. With no
+		// `templates:` key the deck IS a no-arg seed deck, so that path is in
+		// its owned set and is named in the report; with a non-empty
+		// `templates:` key it is an external-library deck and the same path is
+		// author content, never named and never touched.
+		localLibraryRel := deckLibraryFilePath
+		localLibrary := []byte("templates: []\n")
+
+		seedRoot := t.TempDir()
+		refreshWrite(t, filepath.Join(seedRoot, deck.ConfigFile), []byte("title: Mine\n"))
+		refreshWrite(t, refreshAbs(seedRoot, localLibraryRel), localLibrary)
+		refreshPin(t, refreshAbs(seedRoot, localLibraryRel))
+		seedCfg, err := refreshDeckConfig(seedRoot, nil)
+		if err != nil {
+			t.Fatalf("refreshDeckConfig(%s) error = %v", seedRoot, err)
+		}
+		if !detectSeedDeck(seedRoot, seedCfg) {
+			t.Error("detectSeedDeck(no-arg deck with a local templates/) = false, want true")
+		}
+		seedReport, err := refreshScaffold(seedRoot, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", seedRoot, err)
+		}
+		if !refreshIn(seedReport.refreshed, localLibraryRel) && !refreshIn(seedReport.skipped, localLibraryRel) {
+			t.Errorf("report = %v, want a no-arg seed deck's owned %s named", refreshReportSet(seedReport), localLibraryRel)
+		}
+
+		extRoot := t.TempDir()
+		refreshWrite(t, filepath.Join(extRoot, deck.ConfigFile), []byte(externalConfig))
+		refreshWrite(t, refreshAbs(extRoot, localLibraryRel), localLibrary)
+		refreshPin(t, refreshAbs(extRoot, localLibraryRel))
+		extCfg, err := refreshDeckConfig(extRoot, nil)
+		if err != nil {
+			t.Fatalf("refreshDeckConfig(%s) error = %v", extRoot, err)
+		}
+		if detectSeedDeck(extRoot, extCfg) {
+			t.Error("detectSeedDeck(external-library deck with a local templates/) = true, want false")
+		}
+		extReport, err := refreshScaffold(extRoot, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold(%s) error = %v", extRoot, err)
+		}
+		refreshAssertUnchanged(t, refreshAbs(extRoot, localLibraryRel), localLibrary)
+		if refreshIn(extReport.refreshed, localLibraryRel) || refreshIn(extReport.skipped, localLibraryRel) {
+			t.Errorf("report = %v, want an external-library deck's author %s never named",
+				refreshReportSet(extReport), localLibraryRel)
+		}
+	})
 
 	t.Run("no local templates and no starter slide are created", func(t *testing.T) {
 		root := t.TempDir()
@@ -626,6 +682,11 @@ func TestRefreshScaffoldExternalDeck(t *testing.T) {
 
 		refreshAssertAbsent(t, filepath.Join(root, template.TemplatesDir))
 		refreshAssertAbsent(t, refreshAbs(root, starterSlidePath))
+		// The refreshed deck is exactly kalide.yaml plus the guide it wrote:
+		// refreshScaffold created no local templates/ and no starter slide.
+		if got, want := listTree(t, root), []string{agentsGuideName, deck.ConfigFile}; !slices.Equal(got, want) {
+			t.Errorf("deck tree after refresh = %v, want %v (no local templates/, no starter slide)", got, want)
+		}
 
 		// The external-library deck owns only its deck-root guide, which was
 		// absent and so was written.
@@ -635,35 +696,83 @@ func TestRefreshScaffoldExternalDeck(t *testing.T) {
 		refreshAssertReport(t, report, []string{agentsGuideName})
 	})
 
-	t.Run("a leftover local templates is left byte-for-byte untouched", func(t *testing.T) {
+	t.Run("a local templates layer with seed names is author content and never refreshed", func(t *testing.T) {
 		root := t.TempDir()
 		refreshWrite(t, filepath.Join(root, deck.ConfigFile), []byte(externalConfig))
 
-		// A leftover local templates/ holding a catalogued deck theme (the
-		// running binary's bytes) and an author file. Neither is an owned member
-		// of an external-library deck, so neither may be refreshed or deleted.
+		// The local templates/ of an external-library deck is a library layer
+		// loaded alongside the external library (layered-template-library),
+		// author content outside upgrade's scoped refresh set. Populate it with
+		// files whose names ARE the no-arg seed's owned paths — the seed
+		// templates/library.yaml, the hello template's three files, the seed
+		// default theme and the deck-root starter slide — each edited to an
+		// OLDER released version, so a wrong seed-deck classification would
+		// rewrite them (catalogLookup would match the injected digests, and the
+		// pinned mtime would move)
+		// (requirements.constraint.upgrade-owned-scaffold-scope).
+		oldLibrary := []byte("# an older released seed library.yaml\ntemplates: []\n")
+		oldHello := []byte("name: hello\nfields: []\n")
+		oldLayout := []byte("{{/* an older released hello layout */}}<section></section>\n")
+		oldExample := []byte("# an older released hello example\n")
+		oldStarter := []byte("# an older released starter slide\n")
+		refreshSetCatalog(t, refreshCatalogFixture{
+			deckLibraryFileIdentity:   {oldLibrary},
+			deckHelloManifestIdentity: {oldHello},
+			deckHelloLayoutIdentity:   {oldLayout},
+			deckHelloExampleIdentity:  {oldExample},
+			deckStarterSlideIdentity:  {oldStarter},
+		})
+
+		// The seed default theme is written at the running binary's OWN bytes
+		// (the case a seed deck would treat as already-current): a wrong
+		// classification would still name it in the report, which the check
+		// below forbids.
 		themeRel := refreshDeckThemePath
-		theme := refreshAbs(root, themeRel)
-		refreshWrite(t, theme, mustReadSeed(themeRel))
-		refreshPin(t, theme)
+		type seedNamedFile struct {
+			rel  string
+			data []byte
+		}
+		seedNamed := []seedNamedFile{
+			{deckLibraryFilePath, oldLibrary},
+			{helloSlideDirPath + "/" + template.ManifestFile, oldHello},
+			{helloSlideDirPath + "/" + template.LayoutFile, oldLayout},
+			{helloSlideDirPath + "/" + template.ExampleFile, oldExample},
+			{themeRel, mustReadSeed(themeRel)},
+			{starterSlidePath, oldStarter},
+		}
+		for _, f := range seedNamed {
+			p := refreshAbs(root, f.rel)
+			refreshWrite(t, p, f.data)
+			refreshPin(t, p)
+		}
 		authorRel := template.TemplatesDir + "/notes.txt"
-		author := refreshAbs(root, authorRel)
-		refreshWrite(t, author, []byte("leftover local template notes\n"))
-		refreshPin(t, author)
+		author := []byte("leftover local template notes\n")
+		refreshWrite(t, refreshAbs(root, authorRel), author)
+		refreshPin(t, refreshAbs(root, authorRel))
+
+		// Fingerprint the whole local templates/ tree before the refresh: it
+		// must be byte- and mtime-identical afterwards — nothing refreshed,
+		// overwritten, created or deleted.
+		before := refreshFingerprint(t, filepath.Join(root, template.TemplatesDir))
 
 		report, err := refreshScaffold(root, projectKindDeck, nil)
 		if err != nil {
 			t.Fatalf("refreshScaffold error = %v", err)
 		}
 
-		refreshAssertUnchanged(t, theme, mustReadSeed(themeRel))
-		refreshAssertUnchanged(t, author, []byte("leftover local template notes\n"))
-		for _, rel := range []string{themeRel, authorRel} {
-			if refreshIn(report.refreshed, rel) || refreshIn(report.skipped, rel) {
-				t.Errorf("report names %s; a leftover local templates/ is out of scope for an external-library deck", rel)
+		refreshAssertTreeUntouched(t, filepath.Join(root, template.TemplatesDir), before)
+		for _, f := range seedNamed {
+			refreshAssertUnchanged(t, refreshAbs(root, f.rel), f.data)
+		}
+		refreshAssertUnchanged(t, refreshAbs(root, authorRel), author)
+		for _, f := range seedNamed {
+			if refreshIn(report.refreshed, f.rel) || refreshIn(report.skipped, f.rel) {
+				t.Errorf("report names %s; an external-library deck's local templates/ layer is author content", f.rel)
 			}
 		}
-		refreshAssertAbsent(t, refreshAbs(root, starterSlidePath))
+		if refreshIn(report.refreshed, authorRel) || refreshIn(report.skipped, authorRel) {
+			t.Errorf("report names %s; an external-library deck's local templates/ layer is author content", authorRel)
+		}
 		refreshAssertReport(t, report, []string{agentsGuideName})
 	})
 }
