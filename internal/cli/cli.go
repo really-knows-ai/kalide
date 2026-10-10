@@ -21,6 +21,13 @@ Usage:
                              templates/ library; with [path], reference the
                              external template library there
   kalide init-library <path> Create a new, empty template library at <path>
+  kalide config get <key>    Print the value of a set recognised key
+  kalide config set <key> <value>
+                             Write a recognised key, normalising the value
+                             to an absolute path
+  kalide config unset <key>  Remove a recognised key
+  kalide config list         List the set recognised keys; the sole
+                             recognised key is default-template-dir
   kalide start [--port N] [--no-open]
                              Validate and serve the deck, then open a browser
   kalide templates [name]    List the project's templates/ library, or show
