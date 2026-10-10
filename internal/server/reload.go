@@ -183,8 +183,10 @@ type Reloader struct {
 
 	// startupTemplates is the raw top-level `templates:` value exactly as
 	// written in kalide.yaml when the built-in pipeline was built, captured
-	// by NewReloader through configuredTemplates (an absent key is ""). It is
-	// the session's raw-value baseline: renderDefault refuses any run whose
+	// by NewReloader through configuredTemplates (an absent key is ""). Under
+	// the layered model it is the external library layer's configured path —
+	// the deck-root templates/ local layer is not addressable here. It is the
+	// session's raw-value baseline: renderDefault refuses any run whose
 	// currently-configured raw value differs, serving the standard
 	// restart-required error instead (template-retarget-requires-restart). It
 	// is unused by an injected pipeline, which owns its own view of the deck.
@@ -524,11 +526,14 @@ func injectLiveReload(doc htmltmpl.HTML, eventPath string) htmltmpl.HTML {
 // stale or partially-loaded library (never-serve-broken-deck).
 //
 // Before resolving anything it compares the currently-configured raw
-// `templates:` value against the raw value captured at startup: a difference
-// (a different path, or the key added or removed) is not retargeted live — the
-// standard full-page restart-required error is published instead and the
-// server keeps serving (template-retarget-requires-restart). When the value is
-// unchanged the run proceeds exactly as before.
+// `templates:` value against the raw value captured at startup: since
+// `templates:` selects the external library layer, any difference — a
+// different path, or the key added or removed, each changing the resolved layer
+// set — is a retarget that is not applied live. The standard full-page
+// restart-required error is published instead and the server keeps serving
+// (template-retarget-requires-restart). When the value is unchanged the run
+// proceeds exactly as before, and edits under either resolved layer root (the
+// external layer or the deck-root templates/ local layer) still live-reload.
 func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 	if templatesRetargeted(r.startupTemplates, configuredTemplates(fsys)) {
 		return NewErrorPage(r.title, restartRequiredError())
@@ -702,13 +707,22 @@ func configuredTemplates(fsys fs.FS) string {
 
 // templatesRetargeted reports whether the currently-configured raw `templates:`
 // value differs from the raw value captured at startup
-// (template-retarget-requires-restart). The comparison is on the raw configured
-// string exactly as written, NOT on the resolved library root: two different
-// values that resolve to the same directory still count as a change. Any
-// difference is a retarget — a different path, a `./`-prefixed spelling of the
-// same path (`../shared-lib` vs `./../shared-lib`), or the key added or removed
-// ("" vs a value) — while an unchanged string, including "" on both sides (the
-// key absent throughout), is not.
+// (template-retarget-requires-restart). Under the layered model `templates:`
+// names the EXTERNAL library layer's root, so this is the only layer selection
+// retargetable through config: the deck-root templates/ local layer is implied
+// by the deck directory and is not addressable through `templates:`, so a
+// retarget always switches, adds or removes the external layer, never the local
+// one. A difference also changes the layer SET the deck resolves (the external
+// layer alone, the local layer alone, or both), which is why adding the key
+// where it was absent or removing it where it was set is a retarget too — not a
+// resolution error (templates-dir-required): the configured value stays
+// authoritative for the session. The comparison is on the raw configured string
+// exactly as written, NOT on the resolved external root: two different values
+// that resolve to the same directory still count as a change. Any difference is
+// a retarget — a different path, a `./`-prefixed spelling of the same path
+// (`../shared-lib` vs `./../shared-lib`), or the key added or removed ("" vs a
+// value) — while an unchanged string, including "" on both sides (the key
+// absent throughout), is not.
 func templatesRetargeted(startup, current string) bool {
 	return startup != current
 }
