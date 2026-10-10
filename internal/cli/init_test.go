@@ -26,12 +26,16 @@ package cli
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/config"
+	"github.com/really-knows-ai/kalide/internal/template"
+	"github.com/really-knows-ai/kalide/internal/theme"
+	"github.com/really-knows-ai/kalide/internal/validate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -497,8 +501,9 @@ func TestInit(t *testing.T) {
 }
 
 // TestInitExternalLibrary covers the `kalide init [path]` command surface
-// (phase-03 task-8): requirements.requirement.cli-init and
-// requirements.requirement.cli-init-refuse-existing.
+// (phase-03 task-8; phase-03 task-5): requirements.requirement.cli-init,
+// requirements.requirement.cli-init-refuse-existing and
+// requirements.requirement.init-library-resolution.
 //
 // It exercises Run's `init` route through runCLI and asserts the process
 // contract: the optional external path is parsed and scaffolds a deck that
@@ -506,8 +511,21 @@ func TestInit(t *testing.T) {
 // usage error (exit 2, nothing written); an invalid or missing external
 // library, or a library that does not resolve the deck's default theme, exits
 // non-zero with nothing written; a pre-existing local templates/ is exempt;
-// and the no-arg seed path is unchanged. Every case runs in a t.TempDir with
-// t.Chdir, so the package directory is never written to.
+// and the no-arg seed path is unchanged.
+//
+// Its configured-default integration cases drive a REAL per-user config store
+// (isolateConfig) and a REAL external library on disk: `kalide init` (no path)
+// writes a deck whose kalide.yaml carries `templates: <absolute configured
+// path>`, empty slides/ and assets/, no local templates/ and no starter slide,
+// and the deck loads and whole-deck-validates through the same loader path
+// `kalide start` uses; an explicit `kalide init <path>` overrides the
+// configured default and stores the relative path as given; and a configured
+// default that is missing from disk, is not a valid library, or does not
+// resolve the deck's theme fails before writing anything. Those on-disk cases
+// are skipped under -short.
+//
+// Every case runs in a t.TempDir with t.Chdir, so the package directory is
+// never written to.
 func TestInitExternalLibrary(t *testing.T) {
 	// Isolate the per-user config store: the no-arg case below must see an
 	// empty store, never the developer's real default-template-dir.
@@ -572,6 +590,203 @@ func TestInitExternalLibrary(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, "slides", "1-hello.md")); err == nil {
 			t.Errorf("starter slide slides/1-hello.md was written, want none")
 		}
+	})
+
+	// The cases below drive the configured-default resolution over a REAL
+	// per-user config store (isolateConfig) and a REAL external library on
+	// disk, and validate the written deck through the same loader path `kalide
+	// start` uses. They are the file's on-disk integration cases, so each is
+	// skipped under -short.
+
+	t.Run("configured default writes a validating external deck", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("integration test: writes a real per-user config store and external library to disk")
+		}
+		isolateConfig(t)
+		parent, libDir := newInitExternalLibrary(t)
+		if err := config.Set(configKeyDefaultTemplateDir, libDir); err != nil {
+			t.Fatalf("config.Set(%q, %q): %v", configKeyDefaultTemplateDir, libDir, err)
+		}
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		code, stdout, stderr := runCLI("init")
+		if code != 0 {
+			t.Fatalf("Run(init with a configured default) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(init with a configured default) stderr = %q, want empty", stderr)
+		}
+		if want := fmt.Sprintf(initExternalCreatedMessage, libDir); stdout != want {
+			t.Errorf("Run(init with a configured default) stdout = %q, want %q", stdout, want)
+		}
+
+		// kalide.yaml carries the configured default as an absolute path.
+		_, templates := initConfigTemplates(t, dir)
+		if templates != libDir {
+			t.Errorf("kalide.yaml templates = %q, want the absolute configured default %q", templates, libDir)
+		}
+		if !filepath.IsAbs(templates) {
+			t.Errorf("kalide.yaml templates = %q, want an absolute path", templates)
+		}
+
+		// Empty slides/ and assets/, no local templates/ and no starter slide.
+		for _, name := range []string{"slides", "assets"} {
+			entries, err := os.ReadDir(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatalf("ReadDir(%s): %v", name, err)
+			}
+			if len(entries) != 0 {
+				t.Errorf("%s/ contains %d entries, want an empty directory", name, len(entries))
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, "templates")); err == nil {
+			t.Errorf("local templates/ was created by the configured-default init, want none")
+		}
+		if _, err := os.Stat(filepath.Join(dir, "slides", "1-hello.md")); err == nil {
+			t.Errorf("starter slide slides/1-hello.md was written, want none")
+		}
+
+		// The deck loads and whole-deck-validates exactly as `kalide start`
+		// validates it before serving.
+		assertInitDeckLoads(t, dir)
+	})
+
+	t.Run("explicit path overrides the configured default and stays relative", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("integration test: writes a real per-user config store and external libraries to disk")
+		}
+		isolateConfig(t)
+		// A valid configured default that must NOT be used...
+		_, defaultLib := newInitExternalLibrary(t)
+		if err := config.Set(configKeyDefaultTemplateDir, defaultLib); err != nil {
+			t.Fatalf("config.Set(%q, %q): %v", configKeyDefaultTemplateDir, defaultLib, err)
+		}
+		// ...and a different valid library the explicit path resolves to.
+		parent, _ := newInitExternalLibrary(t)
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		code, stdout, stderr := runCLI("init", "../shared-lib")
+		if code != 0 {
+			t.Fatalf("Run(init ../shared-lib) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(init ../shared-lib) stderr = %q, want empty", stderr)
+		}
+		if want := fmt.Sprintf(initExternalCreatedMessage, "../shared-lib"); stdout != want {
+			t.Errorf("Run(init ../shared-lib) stdout = %q, want %q", stdout, want)
+		}
+
+		// The path is stored exactly as given, not the configured absolute
+		// default.
+		_, templates := initConfigTemplates(t, dir)
+		if templates != "../shared-lib" {
+			t.Errorf("kalide.yaml templates = %q, want %q (the explicit path as given)", templates, "../shared-lib")
+		}
+		if templates == defaultLib {
+			t.Errorf("kalide.yaml templates = %q, want the explicit path, not the configured default", templates)
+		}
+		assertInitDeckLoads(t, dir)
+	})
+
+	t.Run("missing configured default fails before writing", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("integration test: writes a real per-user config store to disk")
+		}
+		isolateConfig(t)
+		parent := t.TempDir()
+		missing := filepath.Join(parent, "nope")
+		if err := config.Set(configKeyDefaultTemplateDir, missing); err != nil {
+			t.Fatalf("config.Set(%q, %q): %v", configKeyDefaultTemplateDir, missing, err)
+		}
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		code, stdout, stderr := runCLI("init")
+		if code == 0 {
+			t.Fatalf("Run(init) exit = 0, want non-zero for a missing configured default")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(init) stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, missing) {
+			t.Errorf("Run(init) stderr = %q, want it to name the missing configured path %q", stderr, missing)
+		}
+		assertInitDirEmpty(t, dir)
+	})
+
+	t.Run("invalid configured default fails before writing", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("integration test: writes a real per-user config store and external library to disk")
+		}
+		isolateConfig(t)
+		parent, libDir := newInitExternalLibrary(t)
+		writeExternalFile(t, filepath.Join(libDir, "library.yaml"), "name: Bad_Name\nformat: 1\n")
+		if err := config.Set(configKeyDefaultTemplateDir, libDir); err != nil {
+			t.Fatalf("config.Set(%q, %q): %v", configKeyDefaultTemplateDir, libDir, err)
+		}
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		code, stdout, stderr := runCLI("init")
+		if code == 0 {
+			t.Fatalf("Run(init) exit = 0, want non-zero for an invalid configured default")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(init) stdout = %q, want empty", stdout)
+		}
+		if want := filepath.Join(libDir, "library.yaml"); !strings.Contains(stderr, want) {
+			t.Errorf("Run(init) stderr = %q, want it to name %q", stderr, want)
+		}
+		if !strings.Contains(stderr, "not a valid name") {
+			t.Errorf("Run(init) stderr = %q, want the library.yaml name error", stderr)
+		}
+		assertInitDirEmpty(t, dir)
+	})
+
+	t.Run("configured default without the deck's theme fails before writing", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("integration test: writes a real per-user config store and external library to disk")
+		}
+		isolateConfig(t)
+		parent, libDir := newInitExternalLibrary(t)
+		if err := os.RemoveAll(filepath.Join(libDir, "themes", "default")); err != nil {
+			t.Fatalf("remove themes/default: %v", err)
+		}
+		writeExternalFile(t, filepath.Join(libDir, "themes", "plain", "theme.css"), "body {}\n")
+		if err := config.Set(configKeyDefaultTemplateDir, libDir); err != nil {
+			t.Fatalf("config.Set(%q, %q): %v", configKeyDefaultTemplateDir, libDir, err)
+		}
+		dir := filepath.Join(parent, "deck")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(dir)
+
+		code, stdout, stderr := runCLI("init")
+		if code == 0 {
+			t.Fatalf("Run(init) exit = 0, want non-zero when the configured default does not resolve the deck's theme")
+		}
+		if stdout != "" {
+			t.Fatalf("Run(init) stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, "default") {
+			t.Errorf("Run(init) stderr = %q, want it to name the unresolvable default theme", stderr)
+		}
+		assertInitDirEmpty(t, dir)
 	})
 
 	t.Run("extra arguments are a usage error", func(t *testing.T) {
@@ -759,6 +974,38 @@ func newInitExternalLibrary(t *testing.T) (parent, libDir string) {
 	writeExternalCLILibrary(t, libDir, "shared-lib", "external hello description",
 		"<section><h1>{{.title}}</h1></section>\n")
 	return parent, libDir
+}
+
+// assertInitDeckLoads validates dir exactly as `kalide start` validates a deck
+// before serving: it resolves and loads the deck's template library (honouring
+// the configured `templates:` path), builds the theme and template registries
+// and runs the whole-deck validator, failing the test on the first error. It
+// proves a deck written by `kalide init` is loadable and would serve.
+func assertInitDeckLoads(t *testing.T, dir string) {
+	t.Helper()
+	deckFS := os.DirFS(dir)
+	configured := ""
+	if data, err := fs.ReadFile(deckFS, "kalide.yaml"); err == nil {
+		var raw map[string]any
+		if yaml.Unmarshal(data, &raw) == nil {
+			configured, _ = raw["templates"].(string)
+		}
+	}
+	library, err := template.LoadDeckLibrary(dir, configured)
+	if err != nil {
+		t.Fatalf("init deck %s: template library does not load: %v", dir, err)
+	}
+	themes, err := theme.LoadDir(os.DirFS(library.RootPath), template.ThemesDir)
+	if err != nil {
+		t.Fatalf("init deck %s: theme registry: %v", dir, err)
+	}
+	registry, err := template.NewRegistryFromLibrary(library)
+	if err != nil {
+		t.Fatalf("init deck %s: template registry: %v", dir, err)
+	}
+	if verr, invalid := validate.Validate(deckFS, registry, themes); invalid {
+		t.Fatalf("init deck %s does not validate: %s", dir, validate.Format(verr))
+	}
 }
 
 // initConfigTemplates parses kalide.yaml under dir and returns its title and
