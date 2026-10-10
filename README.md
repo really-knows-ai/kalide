@@ -20,6 +20,8 @@ offline, and there is no separate tool to install or run alongside it.
 - [Supported computers](#supported-computers)
 - [Getting started](#getting-started)
 - [Commands](#commands)
+  - [kalide init](#kalide-init)
+  - [kalide config](#kalide-config)
 - [How a deck is laid out](#how-a-deck-is-laid-out)
 - [The templates/ library](#the-templates-library)
   - [The reserved template context](#the-reserved-template-context)
@@ -133,6 +135,12 @@ save — the browser refreshes by itself. Press **Ctrl+C** in the terminal to st
 Creates a starter deck in the **current folder**:
 
 ```
+kalide init [path] [--local]
+```
+
+With no arguments it writes the built-in starter deck:
+
+```
 AGENTS.md
 kalide.yaml
 slides/1-hello.md
@@ -154,8 +162,81 @@ The `templates/` folder it creates is a minimal, unbranded starter
 library — one `hello` slide template and one `default` theme — not a
 finished design system. Run it once in an empty folder and then edit the
 slides, or add templates and themes of your own (see
-[The templates/ library](#the-templates-library)). `kalide init` takes no
-options. See [what it refuses to do](#what-kalide-init-refuses-to-do) below.
+[The templates/ library](#the-templates-library)).
+
+The template library the deck renders against is resolved **first match wins**:
+
+1. an explicit `[path]` argument — an existing template library the deck
+   references;
+2. the configured `default-template-dir` (see
+   [`kalide config`](#kalide-config) below);
+3. the built-in starter deck, the minimal library embedded in `kalide`.
+
+With an explicit `[path]` or a configured `default-template-dir`, `kalide init`
+writes a deck that **references** that library rather than seeding a local one:
+`kalide.yaml` carries `templates: <path>`, there is no local `templates/`, and
+there is no starter slide. The library is validated **before anything is
+written** — a path that is missing, is not a valid library, or does not define
+the deck's `default` theme stops with an error naming the path and writes
+nothing. An explicit relative `[path]` is stored as written and resolved against
+the deck root; the configured default is stored as an absolute path. On success
+`kalide init` names the library the deck now references.
+
+`--local` forces the built-in starter deck even when a default is configured,
+so it never reads the setting. `--local` together with a `[path]` is a usage
+error (exit code 2, nothing written). There is no `--force`. See
+[what it refuses to do](#what-kalide-init-refuses-to-do) below.
+
+### `kalide config`
+
+Manages `kalide`'s user-level settings: the small `key=value` file kept in your
+operating system's user config directory (Go's `os.UserConfigDir()` — that is
+`~/Library/Application Support/kalide/config` on macOS,
+`$XDG_CONFIG_HOME/kalide/config` or `~/.config/kalide/config` on Linux, and
+`%AppData%\kalide\config` on Windows). The settings are per-user, not
+per-project, and stay on your computer.
+
+```
+kalide config get <key>
+kalide config set <key> <value>
+kalide config unset <key>
+kalide config list
+```
+
+There is exactly one recognised key:
+
+- `default-template-dir` — the directory of the template library `kalide init`
+  uses when it is given no `[path]` and no `--local` (see
+  [`kalide init`](#kalide-init) above).
+
+`set` normalises the value to an **absolute path** before storing it: a leading
+`~` expands to your home directory and a relative path resolves against the
+folder you are in when you run `set`. The stored path therefore does not depend
+on where a later command runs. For example:
+
+```
+kalide config set default-template-dir ~/shared/kalide-library
+kalide config get default-template-dir
+kalide config list
+kalide config unset default-template-dir
+```
+
+- `get <key>` prints the stored value and exits `0`; asking for a recognised key
+  that is not set prints an error naming the key and exits non-zero.
+- `set <key> <value>` writes the value and exits `0`.
+- `unset <key>` removes the key when present, and succeeds even when it is
+  absent.
+- `list` prints one `key=value` line per set recognised key, and nothing when
+  none is set.
+
+Anything else is a **usage error**: a missing or unknown subcommand, a missing
+`<key>`, a `set` missing its `<value>`, or a key outside the recognised set.
+Each prints usage to stderr listing `default-template-dir`, exits `2`, and
+writes nothing.
+
+Only `kalide init` reads `default-template-dir`. `kalide start` and
+`kalide templates` never consult the user config: a deck always renders against
+its own `templates/` library, or the one `kalide.yaml` names.
 
 ### `kalide start [--port N] [--no-open]`
 
@@ -430,17 +511,28 @@ and a media file. Read it alongside this section to see a complete
 whether any of these already exist in the current folder:
 
 - `slides/`
-- `templates/`
 - `assets/`
 - `kalide.yaml`
 
-If **any** of them is present, it stops, prints which one it found, and writes
-nothing. It keeps your existing deck intact.
+If **any** of them is present, it stops in every form of `kalide init`, prints
+which one it found, and writes nothing. It keeps your existing deck intact.
+
+A local `templates/` is the fourth deck-owned entry, and whether it blocks
+depends on which library the deck uses:
+
+- the built-in starter deck (no `[path]`, no `--local`) writes a local
+  `templates/`, so a pre-existing `templates/` blocks it like the three above;
+- an external-library deck (an explicit `[path]`, or the configured
+  `default-template-dir`) references the external library and writes no local
+  `templates/`, so a pre-existing `templates/` is **exempt**: it does not block
+  and is left byte-for-byte untouched.
 
 There is **no `--force` option** and no way to make it overwrite. To start a new
-deck, either run the command in a different (empty) folder, or move the existing
-`slides/`, `templates/`, `assets/` and `kalide.yaml` out of the way first.
-Unrelated files such as a `.git` folder or a `README` do not get in the way.
+deck, either run the command in a different (empty) folder, or move the blocking
+`slides/`, `assets/` and `kalide.yaml` (and, for the built-in deck,
+`templates/`) out of the way first. Unrelated files such as a `.git` folder or a
+`README` do not get in the way, and a pre-existing `AGENTS.md` never blocks
+`kalide init` and is left unchanged.
 
 ## Working offline
 
