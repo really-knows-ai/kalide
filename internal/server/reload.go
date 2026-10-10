@@ -518,12 +518,29 @@ func injectLiveReload(doc htmltmpl.HTML, eventPath string) htmltmpl.HTML {
 // published as the full-page error with its single formatted error; only a
 // valid deck is parsed and rendered.
 //
-// On every call it re-loads the project's templates/ library (registry +
-// themes) from fsys via loadLibrary, unless a test explicitly overrode
-// Registry/Themes, so an edit to the library is picked up on the very next
-// reload without restarting the server. A library that fails to load is
-// reported the same way as an invalid deck — the full-page error, never a
-// stale or partially-loaded library (never-serve-broken-deck).
+// On every call it re-loads the deck's MERGED library (registry + themes)
+// from disk via loadLibrary, unless a test explicitly overrode
+// Registry/Themes, so an edit under any resolved layer — the external
+// `templates:` layer and/or the deck-root templates/ local layer — is picked up
+// on the very next reload without restarting the server. The rebuild is atomic
+// across all layers: loadLibrary either returns the whole merged library (every
+// resolved layer loaded and name-uniqueness checked) or an error, and on any
+// error — a layer that fails to load, a duplicate name across layers, a theme
+// that fails to load, an invalid deck — the full-page error is published and no
+// slides are rendered, never a stale registry/theme set or a partially-loaded
+// deck (never-serve-broken-deck, requirements.requirement.live-reload-error-page).
+//
+// The render func map's fallback `media` helper is bound to the PRIMARY layer's
+// media — Library.Media is exactly the primary layer's media/, the deck-root
+// templates/ local layer of a two-layer deck or the sole layer of a
+// single-layer library — at the primary MediaPath base. It is only the
+// fallback: render.RenderSlide dispatches each layout's `media` helper to that
+// template's OWNING layer through Registry.LayerOf, so a two-layer deck's
+// external-layer layouts resolve against the external layer's own media and
+// served prefix. The registry is built from the merged library by
+// template.NewRegistryFromLibrary (loadLibrary), so that per-layer provenance is
+// carried into rendering; a per-layer file is never resolved through the merged
+// convenience fields.
 //
 // Before resolving anything it compares the currently-configured raw
 // `templates:` value against the raw value captured at startup: since
@@ -544,6 +561,10 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 		return NewErrorPage(r.title, validate.New("templates", 0, nil, err.Error(), ""))
 	}
 
+	// The fallback `media` helper binds the PRIMARY layer's media at the
+	// primary MediaPath base; render.RenderSlide overrides it per layer via
+	// reg.LayerOf, and reg carries that provenance because loadLibrary built it
+	// from the merged library with template.NewRegistryFromLibrary.
 	var mediaFS fs.FS
 	if lib != nil {
 		mediaFS = lib.Media
