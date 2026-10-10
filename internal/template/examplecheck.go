@@ -274,12 +274,14 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // internal/template cannot import internal/render; the render-time renderer
 // binds its own equivalent.
 //
-// The returned func resolves the call with ResolveSectionCall — the same
+// The returned func resolves the call with ResolveSectionCallLayered — the same
 // resolution/validation the render-time helper reuses, so the target must be a
 // section-usage template, the call's fields are defaults-first validated with
 // CheckValues, the body is validated with CheckBody, and a body heading naming
 // one of the target's child sections is rejected — and executes the target's
-// layout against that resolution's result.
+// layout against that resolution's result. layerOf is the library-based
+// provenance lookup (resolveMergedSectionTarget over lib), so the returned
+// SectionCall carries the target's owning layer.
 //
 // The target's execution context mirrors checkLibraryExample's slide/section
 // context so the target sees a consistent shape: the effective field values as
@@ -296,7 +298,13 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // The target's layout is re-parsed under LayoutFuncMap with the `section` entry
 // overridden by this same factory bound to the target's own field values, so a
 // target layout that itself calls `{{ section … }}` both parses and executes —
-// the nested call's `.item.parent` is this target's fields. The returned value
+// the nested call's `.item.parent` is this target's fields — and with the
+// `media` helper bound to the target's OWN owning layer (call.Layer.Media), so
+// an external-layer section's `{{ media … }}` reference resolves in the external
+// layer's media rather than the merged Library's primary media
+// (library-layer-references). When the target's owning layer is unknown
+// (call.Layer nil — a single-layer Library, or no recorded provenance) the
+// helper falls back to lib.Media, the pre-layer behaviour. The returned value
 // is the target's rendered HTML as html/template.HTML, trusted exactly as the
 // renderer returns it, so the caller's layout splices it unescaped.
 func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name string, args ...any) (htmltemplate.HTML, error) {
@@ -306,6 +314,15 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 			return nil, false
 		}
 		return other.Definition, true
+	}
+	// layerOf is the library-based owning-layer provenance lookup, the same one
+	// NewRegistryFromLibrary uses to record LayerOf: a resolved section target's
+	// own *LibraryLayer over the merged lib.Layers, or nil when no layer owns it
+	// (a single-layer Library, or a Library carrying no Layers). It lets
+	// ResolveSectionCallLayered carry the target's layer out on SectionCall.
+	layerOf := func(name string) *LibraryLayer {
+		_, layer, _ := resolveMergedSectionTarget(lib, name)
+		return layer
 	}
 
 	return func(name string, args ...any) (htmltemplate.HTML, error) {
@@ -326,7 +343,7 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 			body = s
 		}
 
-		call, err := ResolveSectionCall(resolve, name, fields, body, callerFields)
+		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, callerFields)
 		if err != nil {
 			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
@@ -355,8 +372,17 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 
 		// A target layout that itself calls {{ section … }} must both parse and
 		// execute: bind this same factory, closing over the target's own field
-		// values as the nested call's caller fields (.item.parent).
-		funcMap := LayoutFuncMap(lib.Media, "/"+MediaDir)
+		// values as the nested call's caller fields (.item.parent). The target's
+		// `media` helper resolves in the target's own owning layer when one is
+		// known (call.Layer.Media), so an external-layer section's own
+		// `{{ media … }}` reference resolves in the external layer rather than
+		// the merged Library's primary media (library-layer-references); a nil
+		// layer falls back to lib.Media, the pre-layer behaviour.
+		mediaFS := lib.Media
+		if call.Layer != nil {
+			mediaFS = call.Layer.Media
+		}
+		funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
 		funcMap["section"] = exampleSectionHelper(lib, call.Values)
 
 		layoutName := call.Template.Layout.Name
