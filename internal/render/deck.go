@@ -196,6 +196,22 @@ func themeStylesheet(name string, reg *theme.Registry) (string, error) {
 	return themesURLPrefix + t.Name + "/" + t.Stylesheet, nil
 }
 
+// wrapVerticalStack groups a numbered slide's rendered <section> (horizontal)
+// with the rendered <section>s of its letter slides (verticals) into one plain
+// wrapper <section> with no id or class of its own. reveal.js treats a
+// <section> that directly contains other <section>s as a pure vertical-stack
+// container: it is not itself a slide, so the numbered slide must remain its
+// own child <section> — keeping its own anchor id and its layout classes —
+// rather than having the letter slides inserted into it. The wrapper is closed
+// by </section>. With empty verticals the horizontal fragment is returned
+// unchanged, so a stack with no letter slides stays a single <section>.
+func wrapVerticalStack(horizontal string, verticals string) string {
+	if verticals == "" {
+		return horizontal
+	}
+	return "<section>" + horizontal + verticals + "</section>"
+}
+
 // insertBeforeSectionClose nests content inside the slide element by inserting
 // it before the fragment's last closing </section>, so a vertical stack becomes
 // the horizontal slide's children. With no closing </section> the content is
