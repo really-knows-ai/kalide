@@ -93,6 +93,8 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 		return runInit(args[2:], stdout, stderr)
 	case "init-library":
 		return runInitLibrary(args[2:], stdout, stderr)
+	case "config":
+		return runConfig(args[2:], stdout, stderr)
 	case "upgrade":
 		return runUpgrade(args[2:], stdout, stderr)
 	case "start":
