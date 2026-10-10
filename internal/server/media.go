@@ -36,19 +36,187 @@ const (
 	// (render/deck.go bakes a theme stylesheet URL with this prefix into the
 	// rendered deck page).
 	ThemesPath = "/assets/templates/themes/"
+
+	// ExternalMediaPath is the URL prefix a TWO-layer deck's external
+	// `templates:` layer's media/** is served under
+	// (layered-template-library). It is the per-layer counterpart of
+	// MediaPath: the deck-root local templates/ layer of a two-layer deck
+	// keeps MediaPath, while the external `templates:` layer is addressed
+	// under this distinct prefix, so each layer's media is served from its
+	// own root rather than a merged namespace. The layer is identified by the
+	// `external` path segment; there is no index and no query tag. It must
+	// match internal/render's externalMediaURLPrefix exactly (render/render.go
+	// emits a `media` URL under this prefix for a layout owned by the
+	// external layer; the two packages cannot share the constant directly
+	// since server imports render).
+	ExternalMediaPath = "/assets/templates/external/media/"
+
+	// ExternalThemesPath is the URL prefix a TWO-layer deck's external
+	// `templates:` layer's themes/<name>/** is served under
+	// (layered-template-library). It is the per-layer counterpart of
+	// ThemesPath: under it a theme name addresses the external layer's own
+	// themes/ registry independently of the deck-root local layer's, never a
+	// merged registry.
+	//
+	// Both external prefixes are more specific than the embedded /assets/
+	// tree (assets.go's AssetsPath) and distinct from MediaPath, ThemesPath,
+	// the /templates gallery and the /events SSE endpoint, so a per-layer
+	// route never collides with a route Listen already registers.
+	ExternalThemesPath = "/assets/templates/external/themes/"
 )
 
-// mediaHandler serves templates/media/** from mediaFS (typically a project
-// Library's Media filesystem) under MediaPath, and templates/themes/<name>/**
-// from themes (typically the project theme.Registry built by theme.LoadDir)
-// under ThemesPath. A request under neither prefix, one for a missing file,
-// or one that resolves outside its root 404s; there is no directory listing
-// and no allow-list beyond "the file exists under its declared root".
+// externalThemeCSSBases are a two-layer deck's external `templates:` layer's
+// serving bases: ExternalMediaPath and ExternalThemesPath, the URLs a .css
+// served from that layer's media/ or themes/ tree has its reserved-prefix
+// references rewritten onto (rewriteThemeCSS, phase-04 tasks 21-22). The
+// primary layer's bases stay primaryThemeCSSBases (MediaPath/ThemesPath).
+var externalThemeCSSBases = themeCSSBases{mediaBase: ExternalMediaPath, themesBase: ExternalThemesPath}
+
+// mediaHandler serves a project library's media and theme files, one serving
+// layer at a time, over the per-layer routes render.RenderSlide addresses
+// (layered-template-library, the phase-02 task-13 URL contract):
+//
+//   - the single/PRIMARY layer — the sole layer of a single-root library, or
+//     the deck-root local templates/ layer of a two-layer deck — is served at
+//     today's exact unprefixed URLs: templates/media/** under MediaPath
+//     (/assets/templates/media/) and templates/themes/<name>/** under
+//     ThemesPath (/assets/templates/themes/), the latter from the primary
+//     layer's own theme registry.
+//   - a two-layer deck's EXTERNAL `templates:` layer is additionally mounted
+//     at the distinct per-layer prefixes ExternalMediaPath
+//     (/assets/templates/external/media/) and ExternalThemesPath
+//     (/assets/templates/external/themes/), resolving in that layer's own
+//     media filesystem and its own theme registry.
+//
+// media and themes are resolved per layer through lib.Layers, never merged:
+// the primary media route reads the primary layer's media (Library.Media, the
+// primary layer's convenience field) and the external media route reads the
+// external layer's own Layers[i].Media (libraryMediaFS). The primary theme
+// route serves ONLY the primary layer's themes and the external theme route
+// ONLY the external layer's themes (libraryLayerThemeRegistry); when lib has
+// no external-role layer — a single-root library — the passed themes registry
+// is used for the primary route unchanged, so a single-layer library's
+// behaviour is byte-identical.
+//
+// The external routes exist only when lib actually has an external-role
+// layer, so a single-root library mounts exactly the two routes it did
+// before. A request under none of the mounted prefixes, one for a missing
+// file, or one that resolves outside its layer's root 404s; there is no
+// directory listing and no allow-list beyond "the file exists under its
+// declared root" (mediaFileHandler, themeFileHandler). The routes are
+// registered here on the returned mux; Listen mounts the same handler at the
+// four prefixes (phase-04 task-11), matching the URLs the renderer emits
+// (MediaPath/ThemesPath for the primary layer,
+// ExternalMediaPath/ExternalThemesPath for the external layer).
 func mediaHandler(lib *template.Library, themes *theme.Registry) http.Handler {
 	mux := http.NewServeMux()
+	// The primary layer keeps today's exact routes and bases. Its theme
+	// registry is the primary layer's own in a two-layer deck, or the
+	// caller's (merged == the only) registry for a single-root library.
 	mux.Handle(MediaPath, mediaFileHandler(primaryLibraryMediaFS(lib), MediaPath, primaryThemeCSSBases))
-	mux.Handle(ThemesPath, themeFileHandler(themes, ThemesPath, primaryThemeCSSBases))
+	mux.Handle(ThemesPath, themeFileHandler(primaryThemeRegistry(lib, themes), ThemesPath, primaryThemeCSSBases))
+
+	// A two-layer deck's external `templates:` layer is mounted under its own
+	// prefixes and served from its own root, so it never shares the primary
+	// layer's namespace. Its theme route is mounted only when the layer has a
+	// themes/ registry; the media route is always mounted for the layer
+	// (mediaFileHandler treats a nil media filesystem as "nothing is ever
+	// found here").
+	if external := libraryLayerByRole(lib, template.LayerRoleExternal); external != nil {
+		mux.Handle(ExternalMediaPath, mediaFileHandler(libraryMediaFS(lib, libraryExternalMedia), ExternalMediaPath, externalThemeCSSBases))
+		if externalThemes := libraryLayerThemeRegistry(external); externalThemes != nil {
+			mux.Handle(ExternalThemesPath, themeFileHandler(externalThemes, ExternalThemesPath, externalThemeCSSBases))
+		}
+	}
 	return mux
+}
+
+// primaryThemeRegistry returns the theme registry the primary layer's
+// ThemesPath route serves. When the Library has a separate external
+// `templates:` layer it is the primary layer's OWN themes, so a two-layer
+// deck's unprefixed theme route never exposes the external layer's themes;
+// otherwise (a single-root library, where merged is exactly the sole layer's
+// registry) it is the passed merged registry unchanged, so single-layer
+// behaviour stays byte-identical. A nil primary layer — a nil Library, or one
+// with no contributing layers — falls back to the passed registry.
+func primaryThemeRegistry(lib *template.Library, merged *theme.Registry) *theme.Registry {
+	if libraryLayerByRole(lib, template.LayerRoleExternal) == nil {
+		return merged
+	}
+	return libraryLayerThemeRegistry(primaryLibraryLayer(lib))
+}
+
+// primaryLibraryLayer returns the merged Library's PRIMARY layer — the layer
+// served at the unprefixed MediaPath/ThemesPath URLs: the deck-root local
+// templates/ layer when one is present, otherwise the last contributing layer
+// (the sole layer of a single-root library). It mirrors mergeLibraryLayers'
+// primary selection. A nil Library, or one with no contributing layers,
+// returns nil.
+func primaryLibraryLayer(lib *template.Library) *template.LibraryLayer {
+	if lib == nil {
+		return nil
+	}
+	var primary *template.LibraryLayer
+	for _, layer := range lib.Layers {
+		if layer == nil {
+			continue
+		}
+		if layer.Role == template.LayerRoleLocal {
+			return layer
+		}
+		primary = layer
+	}
+	return primary
+}
+
+// libraryLayerByRole returns the contributing layer carrying role, or nil
+// when the Library has none (a nil Library, or a single-root Library with no
+// external layer). It never merges layers: it returns exactly one layer, or
+// none.
+func libraryLayerByRole(lib *template.Library, role template.LibraryLayerRole) *template.LibraryLayer {
+	if lib == nil {
+		return nil
+	}
+	for _, layer := range lib.Layers {
+		if layer != nil && layer.Role == role {
+			return layer
+		}
+	}
+	return nil
+}
+
+// libraryLayerThemeRegistry builds the theme registry for exactly one
+// contributing layer from that layer's own loaded themes: each theme's Assets
+// is the layer's themes/<name> sub-filesystem, so a theme file is served from
+// the layer that owns it, never a merged registry. It returns nil when the
+// layer has no themes/ directory (a layer with no themes contributes none) or
+// when its root cannot address a theme directory, which themeFileHandler
+// treats as "no theme is ever found here" rather than a panic.
+func libraryLayerThemeRegistry(layer *template.LibraryLayer) *theme.Registry {
+	if layer == nil || layer.Root == nil || len(layer.Themes) == 0 {
+		return nil
+	}
+	reg := theme.NewRegistry()
+	for name, th := range layer.Themes {
+		if th == nil {
+			continue
+		}
+		assets, err := fs.Sub(layer.Root, th.Dir)
+		if err != nil {
+			return nil
+		}
+		if err := reg.Register(theme.Theme{
+			Name:       name,
+			Stylesheet: theme.Stylesheet,
+			Assets:     assets,
+		}); err != nil {
+			return nil
+		}
+	}
+	if len(reg.Names()) == 0 {
+		return nil
+	}
+	return reg
 }
 
 // libraryMediaLayer selects which contributing layer of a merged Library a
@@ -111,12 +279,11 @@ func primaryLibraryMediaFS(lib *template.Library) fs.FS {
 // with no media/ directory (HasMedia false) has a nil Media, so it resolves
 // to nil here too.
 func libraryLayerMedia(lib *template.Library, role template.LibraryLayerRole) fs.FS {
-	for _, layer := range lib.Layers {
-		if layer != nil && layer.Role == role {
-			return layer.Media
-		}
+	layer := libraryLayerByRole(lib, role)
+	if layer == nil {
+		return nil
 	}
-	return nil
+	return layer.Media
 }
 
 // mediaFileHandler serves a single file directly under mediaFS, for the media
