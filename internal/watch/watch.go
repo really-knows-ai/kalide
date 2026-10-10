@@ -221,11 +221,12 @@ type watcher struct {
 	// root, its library.yaml, or anything at or beneath slides/, sections/,
 	// themes/ or media/) is a deck change even when it lies outside root.
 	//
-	// The watcher retains every resolved root; until the per-layer watch lands
-	// (phase-4 tasks 3-5) only the primary root, libraries[0] — the external
-	// `templates:` root when configured, else the local templates/ — is
-	// registered and consulted, so single-root behaviour is unchanged. Use
-	// primaryLibrary for that root.
+	// The watcher retains every resolved root. libraryRelevant and
+	// addRelevantTree consult every root; until the per-layer startup watch
+	// lands (phase-4 task 5) only the primary root, libraries[0] — the
+	// external `templates:` root when configured, else the local templates/ —
+	// is registered at startup, so single-root startup behaviour is unchanged.
+	// Use primaryLibrary for that root.
 	libraries []string
 
 	fsw      *fsnotify.Watcher
@@ -242,8 +243,9 @@ type watcher struct {
 
 // primaryLibrary returns the watcher's primary template-library root — the
 // external `templates:` root when configured, else the deck-root templates/ —
-// or "" when no layer root was resolved. Until the per-layer watch lands
-// (phase-4 tasks 3-5) the watcher registers and consults only this root.
+// or "" when no layer root was resolved. Until the per-layer startup watch
+// lands (phase-4 task 5) Watch registers only this root at startup; the
+// event-time paths (libraryRelevant, addRelevantTree) already cover every root.
 func (w *watcher) primaryLibrary() string {
 	if len(w.libraries) == 0 {
 		return ""
@@ -279,18 +281,28 @@ func (w *watcher) addTree(dir string) {
 	})
 }
 
-// addRelevantTree registers a newly created directory subtree. For the resolved
-// library root itself it registers only the library's structure — the root
-// (non-recursively) and its slides/, sections/, themes/ and media/ subtrees —
-// never an unrelated entry such as .git/ (templates-dir-layout). Any other
-// relevant directory is registered recursively.
+// addRelevantTree registers a newly created directory subtree. When dir is one
+// of the watcher's resolved template-library layer roots (any root in
+// w.libraries — the external `templates:` root or the deck-root templates/) it
+// registers only that root's structure — the root (non-recursively) and its
+// slides/, sections/, themes/ and media/ subtrees — never an unrelated entry
+// such as .git/ (templates-dir-layout). Any other relevant directory, including
+// a structure directory created under either layer root, is registered
+// recursively. Each root gets the same per-root semantics, so a newly created
+// layer root of either layer is picked up exactly as the single root was.
 func (w *watcher) addRelevantTree(dir string) {
-	if library := w.primaryLibrary(); library != "" && filepath.Clean(dir) == library {
-		_ = w.add(dir)
-		for _, d := range libraryWatchDirs {
-			w.addTree(filepath.Join(dir, d))
+	cleaned := filepath.Clean(dir)
+	for _, library := range w.libraries {
+		if library == "" {
+			continue
 		}
-		return
+		if cleaned == library {
+			_ = w.add(dir)
+			for _, d := range libraryWatchDirs {
+				w.addTree(filepath.Join(dir, d))
+			}
+			return
+		}
 	}
 	w.addTree(dir)
 }
