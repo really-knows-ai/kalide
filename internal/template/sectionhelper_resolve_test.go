@@ -30,6 +30,12 @@ import (
 //   - CheckValues rejects a key the target does not declare;
 //   - CheckBody enforces the target's body rule, and a body heading naming a
 //     declared child section is rejected while a fenced heading is ignored;
+//   - ResolveSectionCallLayered records the resolved target's owning layer on
+//     SectionCall.Layer — the name handed to layerOf is the target's — while
+//     ResolveSectionCall (and a nil or nil-returning layerOf) leaves it nil,
+//     the two entry points agree on fields/body/defaults/`.item`, and a
+//     rejected name is reported without consulting layerOf at all
+//     (library-layer-references);
 //   - the one-item `.item` descriptor is index 0 / number+count 1 / first+last
 //     true / section+template the target name / parent the caller's fields
 //     (nil from a slide); and
@@ -380,6 +386,197 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 			t.Errorf("call.Item[parent] = %v, want the caller's fields %v", call.Item["parent"], parent)
 		}
 	})
+}
+
+// TestResolveSectionCallLayeredCarriesLayer proves the layer half of the two
+// entry points: ResolveSectionCallLayered records the resolved target's owning
+// *LibraryLayer on SectionCall.Layer, keyed by the resolved target's own name
+// (so a caller learns the target's layer, not the calling template's), while
+// ResolveSectionCall — the nil-layerOf entry point — and a layerOf that reports
+// no provenance both leave the field nil for a consumer to read as "the
+// primary/merged root" (library-layer-references).
+func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
+	external := testLayer("/deck/external")
+	target := &Template{Name: "footer", Usage: UsageSection}
+	resolve := resolveSectionCallResolver(target)
+
+	// ownedBy returns a layerOf that yields layer and asserts it is asked about
+	// the resolved target's own name.
+	ownedBy := func(t *testing.T, layer *LibraryLayer) func(string) *LibraryLayer {
+		t.Helper()
+		return func(name string) *LibraryLayer {
+			if name != "footer" {
+				t.Errorf("layerOf(%q), want the resolved target's own name %q", name, "footer")
+			}
+			return layer
+		}
+	}
+
+	t.Run("the resolved target's owning layer is carried", func(t *testing.T) {
+		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, external), "footer", nil, "", nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if call.Layer != external {
+			t.Errorf("call.Layer = %v, want the resolved target's owning layer %p", call.Layer, external)
+		}
+	})
+
+	t.Run("ResolveSectionCall leaves the layer nil", func(t *testing.T) {
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		if call.Layer != nil {
+			t.Errorf("call.Layer = %v, want nil from the non-layered entry point", call.Layer)
+		}
+	})
+
+	t.Run("a nil layerOf records no layer", func(t *testing.T) {
+		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if call.Layer != nil {
+			t.Errorf("call.Layer = %v, want nil when layerOf is nil", call.Layer)
+		}
+	})
+
+	t.Run("a layerOf reporting no provenance records no layer", func(t *testing.T) {
+		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, nil), "footer", nil, "", nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if call.Layer != nil {
+			t.Errorf("call.Layer = %v, want nil when layerOf reports no owning layer", call.Layer)
+		}
+	})
+}
+
+// TestResolveSectionCallLayeredIgnoresLayerOfOnRejection proves layerOf is
+// consulted only once resolve has returned a section-usage target: a nil
+// resolver, an unknown name and a slide-usage template each report the same
+// error as the non-layered entry point and never call layerOf, so a caller's
+// provenance lookup cannot mask or alter a rejection.
+func TestResolveSectionCallLayeredIgnoresLayerOfOnRejection(t *testing.T) {
+	consulted := false
+	layerOf := func(string) *LibraryLayer {
+		consulted = true
+		return testLayer("/deck/external")
+	}
+
+	tests := []struct {
+		name    string
+		resolve func(string) (*Template, bool)
+		target  string
+		want    string
+	}{
+		{
+			name:    "a nil resolver is an error, not a panic",
+			resolve: nil,
+			target:  "footer",
+			want:    `section helper: no template resolver for "footer"`,
+		},
+		{
+			name:    "an unknown target is rejected",
+			resolve: resolveSectionCallResolver(regSection("other")),
+			target:  "missing",
+			want:    `section helper: section template "missing" is not defined`,
+		},
+		{
+			name:    "a slide-usage target is rejected",
+			resolve: resolveSectionCallResolver(regSlide("hero")),
+			target:  "hero",
+			want:    `section helper: template "hero" is not a section-usage template`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			consulted = false
+			_, err := ResolveSectionCallLayered(tt.resolve, layerOf, tt.target, nil, "", nil)
+			if err == nil {
+				t.Fatalf("ResolveSectionCallLayered() error = nil, want %q", tt.want)
+			}
+			if err.Error() != tt.want {
+				t.Errorf("ResolveSectionCallLayered() error = %q, want %q", err.Error(), tt.want)
+			}
+			if consulted {
+				t.Error("layerOf was consulted for a rejected call, want it consulted only for a resolved section target")
+			}
+		})
+	}
+}
+
+// TestResolveSectionCallLayeredMatchesNonLayered proves the two entry points
+// resolve identically: with the target's defaults, a caller-supplied value and
+// the target's body rule exercised, the resolved *Template, the effective
+// Values, the validated Body and the one-item `.item` descriptor are equal
+// between ResolveSectionCall and ResolveSectionCallLayered. The only
+// difference is SectionCall.Layer, which the layered entry point populates.
+func TestResolveSectionCallLayeredMatchesNonLayered(t *testing.T) {
+	target := &Template{
+		Name:   "footer",
+		Usage:  UsageSection,
+		Fields: []Field{{Name: "title", Type: FieldText, Required: true, Default: "Untitled"}},
+		Body:   BodyRule{Mode: BodyOptional},
+	}
+	resolve := resolveSectionCallResolver(target)
+	layer := testLayer("/deck/external")
+	layerOf := func(string) *LibraryLayer { return layer }
+
+	tests := []struct {
+		name   string
+		fields map[string]any
+		body   string
+		want   any // the effective title value: the applied default or the supplied one
+	}{
+		{
+			name: "the target's default is applied identically",
+			body: "prose",
+			want: "Untitled",
+		},
+		{
+			name:   "a caller-supplied value wins identically",
+			fields: map[string]any{"title": "Given"},
+			want:   "Given",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plain, err := ResolveSectionCall(resolve, "footer", tt.fields, tt.body, nil)
+			if err != nil {
+				t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+			}
+			layered, err := ResolveSectionCallLayered(resolve, layerOf, "footer", tt.fields, tt.body, nil)
+			if err != nil {
+				t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+			}
+
+			if plain.Layer != nil {
+				t.Errorf("ResolveSectionCall() Layer = %v, want nil", plain.Layer)
+			}
+			if layered.Layer != layer {
+				t.Errorf("ResolveSectionCallLayered() Layer = %v, want %p", layered.Layer, layer)
+			}
+			if plain.Template != target || layered.Template != target {
+				t.Errorf("resolved Template = %p/%p, want the target %p", plain.Template, layered.Template, target)
+			}
+			if plain.Body != tt.body || layered.Body != tt.body {
+				t.Errorf("Body = %q/%q, want the validated %q", plain.Body, layered.Body, tt.body)
+			}
+			if got := plain.Values["title"]; got != tt.want {
+				t.Errorf("Values[title] = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(plain.Values, layered.Values) {
+				t.Errorf("Values differ: ResolveSectionCall = %v, ResolveSectionCallLayered = %v", plain.Values, layered.Values)
+			}
+			if !reflect.DeepEqual(plain.Item, layered.Item) {
+				t.Errorf("Item differs: ResolveSectionCall = %v, ResolveSectionCallLayered = %v", plain.Item, layered.Item)
+			}
+		})
+	}
 }
 
 // TestExampleSectionHelperRendersTargetHTML proves exampleSectionHelper returns
