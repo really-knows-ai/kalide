@@ -377,15 +377,16 @@ func migrationChain(current, target int, migs []formatMigration) ([]formatMigrat
 }
 
 // validateMigratedLibrary validates a migrated library's result before it is
-// kept: the library re-loads through the template library loader, resolving
-// the library root as dir itself. loadLibraryMeta must accept every format the
-// migrator reads, so a migration whose result the loader cannot load aborts the
-// run rather than being kept
+// kept: the library re-loads as its own single root through
+// template.LoadLibraryAt, so the migrated library directory IS the template
+// root — a nested <dir>/templates/ is not merged as a second local layer.
+// loadLibraryMeta must accept every format the migrator reads, so a migration
+// whose result the loader cannot load aborts the run rather than being kept
 // (requirements.requirement.upgrade-migrate-format). The deck form is not
 // validated here: a deck has no version anchor, so no deck migration runs and
 // no deck result exists to validate.
 func validateMigratedLibrary(dir string) error {
-	if _, err := template.LoadDeckLibrary(dir, "."); err != nil {
+	if _, err := template.LoadLibraryAt(dir); err != nil {
 		return fmt.Errorf("migrated library at %s does not load: %w", dir, err)
 	}
 	return nil
