@@ -431,17 +431,18 @@ func (u *refreshUndo) revert(refreshed []string, cause error) error {
 // per-migration validation, which the migration half owns and Upgrade does not
 // repeat.
 //
-// A library is a template root itself, so it is validated through the template
-// library loader (template.LoadDeckLibrary at "."). A deck is validated exactly
-// as `kalide start` validates before serving: its template library resolves and
-// loads, its theme registry builds, and the whole deck validates through
-// validate.Validate (which loads kalide.yaml through deck.LoadConfig). Loading
-// an external-library deck's configured `templates:` library is read-only and
-// mirrors start; the refresh half never opens it.
+// A library is a template root itself, so it is validated as its own single
+// root through template.LoadLibraryAt: the library directory IS the template
+// root, so a nested <dir>/templates/ is not merged as a second local layer.
+// A deck is validated exactly as `kalide start` validates before serving: its
+// template library resolves and loads, its theme registry builds, and the whole
+// deck validates through validate.Validate (which loads kalide.yaml through
+// deck.LoadConfig). Loading an external-library deck's configured `templates:`
+// library is read-only and mirrors start; the refresh half never opens it.
 func validateUpgradedProject(dir string, kind projectKind) error {
 	switch kind {
 	case projectKindLibrary:
-		if _, err := template.LoadDeckLibrary(dir, "."); err != nil {
+		if _, err := template.LoadLibraryAt(dir); err != nil {
 			return fmt.Errorf("upgrade: validation failed: upgraded library %s does not load: %w", dir, err)
 		}
 		return nil
