@@ -28,19 +28,29 @@ import (
 
 // checkLibraryExamples is templates-dir-validation step 7: validating each
 // template's example.md against its parsed definition and executing its
-// layout. Phase 1 leaves it a no-op hook point wired into LoadLibrary as the
-// last step; phase-2 task-12 fills in the body.
+// layout. It runs once over a merged Library after every layer has loaded.
+//
+// For each template it resolves that template's own owning *LibraryLayer by
+// identity over lib.Layers — resolveMergedSlideLayer for a slide and
+// resolveMergedSectionTarget for a section, the same lookups
+// NewRegistryFromLibrary uses to record LayerOf provenance — and passes the
+// layer to checkLibraryExample, so the executing layout's `media` helper
+// resolves in the layer that owns the template rather than the merged
+// Library's primary media (library-layer-references). A single-layer Library,
+// or a template whose owning layer cannot be identified, passes a nil layer
+// and falls back to lib.Media — the pre-layer behaviour, unchanged.
 func checkLibraryExamples(lib *Library) error {
 	if lib == nil {
 		return nil
 	}
 	for _, name := range sortedLibraryTemplateNames(lib.Slides) {
-		if err := checkLibraryExample(lib, lib.Slides[name]); err != nil {
+		if err := checkLibraryExample(lib, lib.Slides[name], resolveMergedSlideLayer(lib, name)); err != nil {
 			return err
 		}
 	}
 	for _, name := range sortedLibraryTemplateNames(lib.Sections) {
-		if err := checkLibraryExample(lib, lib.Sections[name]); err != nil {
+		_, layer, _ := resolveMergedSectionTarget(lib, name)
+		if err := checkLibraryExample(lib, lib.Sections[name], layer); err != nil {
 			return err
 		}
 	}
@@ -73,7 +83,16 @@ func checkLibraryExamples(lib *Library) error {
 // itself a section instance, so it additionally gets the one-item `.item`
 // descriptor mirroring a section-helper invocation; a slide template's item
 // stays absent.
-func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
+//
+// layer is lt's own owning *LibraryLayer when the merged Library records one
+// (checkLibraryExamples resolves it by identity over lib.Layers), and nil for a
+// single-layer Library or a template whose owning layer cannot be identified.
+// The layer supplies the media sub-filesystem the layout's `media` helper
+// resolves against, so a template contributed by a non-primary layer resolves
+// its own `{{ media … }}` reference in that layer's media rather than the
+// merged Library's primary media (library-layer-references); a nil layer falls
+// back to lib.Media, the pre-layer behaviour.
+func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer) error {
 	if lt == nil || lt.Definition == nil {
 		return nil
 	}
@@ -149,7 +168,17 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate) error {
 	// helper so a layout that calls `{{ section … }}` executes here by
 	// rendering the target instead of failing LoadLibrary's step-7 execution
 	// (templates-dir-validation step 7).
-	funcMap := LayoutFuncMap(lib.Media, "/"+MediaDir)
+	//
+	// The `media` helper resolves in lt's own owning layer, when one is known,
+	// so an external-layer template's own `{{ media … }}` reference resolves in
+	// the external layer's media rather than the merged Library's primary media
+	// (library-layer-references). A nil layer — a single-layer Library, or no
+	// recorded owner — falls back to lib.Media, the pre-layer behaviour.
+	mediaFS := lib.Media
+	if layer != nil {
+		mediaFS = layer.Media
+	}
+	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
 	funcMap["section"] = exampleSectionHelper(lib, callerFields)
 
 	layoutName := lt.Layout.Name()
