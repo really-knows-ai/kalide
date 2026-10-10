@@ -24,6 +24,46 @@ templates/
   media/                     # shared media referenced with media "..."
 ```
 
+## A library as a deck's external layer
+
+A library is deck-ready on its own and can also be the **external library** of a
+deck whose `kalide.yaml` names it with `templates:` (a path relative to the deck
+root, or an absolute path). The deck's own `templates/` directory, when it
+exists, loads as the deck's **local layer**. Both layers are loaded when both
+are present, with equal standing: there is no precedence between them and no
+overriding. The format is identical in both layers; only where the library lives
+differs. This guide describes an **external library**, which is therefore
+self-contained:
+
+- It **validates standalone**. Every reference inside its templates and themes —
+  the layout `media` helper, the reserved `media:` prefix and the reserved
+  `theme:<name>/` prefix (see **Themes** and **Media**) — resolves within this
+  library alone, never in the deck's local layer.
+- Its templates **cannot call a section that lives only in the deck's local
+  layer**. The `section` helper resolves against the merged section namespace, so
+  a call naming a section this library does not define is a validation error even
+  when the deck's local layer declares it. The reverse works: the merged
+  namespace lets a deck's local template invoke an external section like a local
+  one.
+- Its **names must not collide with the deck's local layer**. A slide or section
+  name (the two share one template namespace), a theme name, or a shared `media/`
+  path carried by both layers is a validation error naming the name and both
+  paths — never an override. Give the library names distinct from the deck's
+  local templates.
+
+`kalide init <path>` validates the external library **alone** (fail-fast) before
+writing anything: a missing or invalid library, or one that does not resolve the
+deck's theme, aborts with an error naming the path and nothing is written. It
+then writes a deck referencing the library — an empty `slides/` and no local
+`templates/`; a pre-existing local `templates/` is left untouched and becomes
+the deck's local layer.
+
+When a deck serves this library, `kalide start` validates the merged library
+(both layers) before serving anything. While it runs, an edit under the library
+root live-reloads; changing the deck's configured `templates:` value does not —
+the deck page shows a restart-required error and keeps serving the startup
+library until you restart `kalide start`.
+
 ## library.yaml
 
 `library.yaml` is required at the library root.
@@ -57,7 +97,11 @@ entries are never parsed, validated, rendered, listed or served.
 - A template's **kind** comes only from its directory. `template.yaml` must not
   carry a `usage:` key.
 - A template's **name** is its directory name, and must be unique across
-  `slides/` and `sections/` together.
+  `slides/` and `sections/` together — and, when the library is a deck's external
+  layer, across the merged layers: a name carried by both layers is an error
+  naming the name and both paths, never an override (see **A library as a deck's
+  external layer**). Theme names and `media/` paths each form their own namespace,
+  unique across the merged layers the same way.
 - Every template directory must contain exactly `template.yaml`,
   `layout.html.tmpl` and `example.md`.
 
@@ -281,6 +325,10 @@ suffix are reserved too.
 - A deck selects a theme by name; a library that defines no theme is load-valid,
   but a library that hosts a deck must define the theme that deck resolves (the
   deck's `theme` defaults to `default`).
+- When the library is a deck's external layer, its theme names must not collide
+  with the deck's local layer, and every theme's `media:`/`theme:<name>/`
+  reference resolves in this library alone — a theme reference never reaches the
+  deck's local layer (see **A library as a deck's external layer**).
 - Theme-owned files are referenced from that theme's CSS and are served from
   the theme directory.
 - A theme's `theme.css` — and every CSS it `@import`s, wherever in the library
@@ -344,13 +392,19 @@ deck at it and run `kalide start`:
    exits non-zero, names the format found and the format supported, and changes
    nothing. `kalide upgrade` takes no path argument and has no `--force`.
 2. Create a deck whose `kalide.yaml` resolves your library — either put the
-   library at the deck's `templates/` directory, or set the deck's `templates:`
-   key to the library path (relative to the deck root, or absolute).
+   library at the deck's `templates/` directory (the deck's local layer), or set
+   the deck's `templates:` key to the library path (relative to the deck root, or
+   absolute), which loads the library as the deck's external layer, layered over
+   the deck's own `templates/` when that exists. `kalide init <path>` validates
+   the external library alone and writes such a deck for you.
 3. Run `kalide start`. It validates the library (`library.yaml`, the layout,
-   every template manifest and layout, the themes and every media reference)
-   and the deck, then serves it. Validation is fail-fast: exactly one error is
-   reported, with the file, the line, the path, what is wrong and how to fix
-   it, plus closest-match suggestions for unknown names.
+   every template manifest and layout, the themes and every media reference) —
+   validating an external library as its own root, so it must be self-contained —
+   and then the merged library (both layers) and the deck, before serving.
+   Validation is fail-fast: exactly one error is reported, with the file, the
+   line, the path, what is wrong and how to fix it, plus closest-match
+   suggestions for unknown names. An error is path-qualified with the layer root
+   it comes from.
 4. Use `kalide templates` to list the loaded library, and
    `kalide templates <name>` to inspect one template's fields, sections, body
    rules and example.
