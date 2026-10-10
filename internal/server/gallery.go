@@ -293,29 +293,18 @@ func gallerySlideExample(t *template.Template, reg *template.Registry, funcMap h
 // fragment is embedded unchanged, preserving its body-subheading rendering.
 func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
 	name := galleryFreeName(reg)
-	wrapper := &template.Template{
-		Name:        name,
-		Description: "Synthetic slide wrapping one section template's example.",
-		Usage:       template.UsageSlide,
-		Sections: []template.SectionDecl{{
-			Name:     gallerySectionName,
-			Accepted: []string{t.Name},
-			Min:      1,
-			Max:      1,
-		}},
-		Body: template.BodyRule{Mode: template.BodyOptional},
-		// The wrapper exists only to give the section example a slide to live
-		// in; its layout splices the one section instance's already-rendered
-		// trusted HTML (the renderer executes each section through its own
-		// layout) rather than invoking the section layout itself.
-		Layout: template.Layout{
-			Name: name,
-			Text: `<section class="ey-slide">{{ range .` + gallerySectionName +
-				` }}{{ . }}{{ end }}</section>`,
-		},
-	}
-
-	rebuilt, err := registryWithTemplate(reg, wrapper)
+	// The wrapper slide is built in the two forms the registry rebuilds need:
+	// the in-code *Template the plain rebuild registers directly, and its
+	// *LibraryTemplate mirror the provenance-preserving rebuild hands to
+	// template.NewRegistryFromLibrary (see galleryWrapperTemplate).
+	wrapper, wrapperLT := galleryWrapperTemplate(name, t.Name)
+	// The preview must render the section example with the section template's
+	// OWN owning layer. RenderSlide installs its per-layer media hook from the
+	// SLIDE template's owning layer, so the synthetic wrapper is placed in the
+	// section's layer (registryWithTemplate), while the section instance itself
+	// resolves through Registry.LayerOf(t.Name), which the merged-library
+	// rebuild preserves (library-layer-references).
+	rebuilt, err := registryWithTemplate(reg, wrapper, wrapperLT, reg.LayerOf(t.Name))
 	if err != nil {
 		return "", fmt.Errorf("build synthetic slide context: %w", err)
 	}
@@ -383,11 +372,157 @@ func galleryNestExample(src string) string {
 	return strings.Join(lines, "\n")
 }
 
+// galleryWrapperTemplate returns the synthetic single-section wrapper slide a
+// section-usage template's example is rendered inside, in the two forms the
+// registry rebuilds need: the in-code *Template registryWithTemplate's plain
+// fallback registers, and its *LibraryTemplate mirror the
+// provenance-preserving rebuild feeds to template.NewRegistryFromLibrary (whose
+// registerLibraryTemplate parses the manifest back into an equivalent
+// *Template). The manifest carries the same schema the *Template declares — one
+// section `example` accepting exactly accepted, min 1, max 1, optional body —
+// so both forms resolve the wrapper example identically; only the layered
+// rebuild can carry an owning layer for it. The layout splices the one section
+// instance's already-rendered trusted HTML (the renderer executes each section
+// through its own layout) rather than invoking the section layout itself.
+func galleryWrapperTemplate(name, accepted string) (*template.Template, *template.LibraryTemplate) {
+	const description = "Synthetic slide wrapping one section template's example."
+	layoutText := `<section class="ey-slide">{{ range .` + gallerySectionName +
+		` }}{{ . }}{{ end }}</section>`
+	wrapper := &template.Template{
+		Name:        name,
+		Description: description,
+		Usage:       template.UsageSlide,
+		Sections: []template.SectionDecl{{
+			Name:     gallerySectionName,
+			Accepted: []string{accepted},
+			Min:      1,
+			Max:      1,
+		}},
+		Body:   template.BodyRule{Mode: template.BodyOptional},
+		Layout: template.Layout{Name: name, Text: layoutText},
+	}
+	manifest := fmt.Sprintf(
+		"description: %s\n"+
+			"sections:\n"+
+			"  - name: %s\n"+
+			"    accepted:\n"+
+			"      - %s\n"+
+			"    min: 1\n"+
+			"    max: 1\n"+
+			"body:\n"+
+			"  mode: optional\n",
+		description, gallerySectionName, accepted)
+	lt := &template.LibraryTemplate{
+		Name:          name,
+		Kind:          template.KindSlide,
+		ManifestPath:  name + "/template.yaml",
+		ManifestBytes: []byte(manifest),
+		LayoutPath:    name + "/layout.html.tmpl",
+		LayoutText:    layoutText,
+	}
+	return wrapper, lt
+}
+
 // registryWithTemplate returns a copy of reg with extra registered, so the
 // synthetic wrapper slide can be resolved without mutating the caller's
-// registry. Content loading is skipped (the templates are already loaded);
-// registration runs the same local definition check Register always runs.
-func registryWithTemplate(reg *template.Registry, extra *template.Template) (*template.Registry, error) {
+// registry. owner is the owning layer of the section template the wrapper
+// stands in for (reg.LayerOf(the section name)), which becomes the wrapper's
+// own owning layer: render.RenderSlide installs its per-layer media hook from
+// the SLIDE template's layer, so without it a section example contributed by
+// the external layer would render its `media` references under the merged
+// library's primary base rather than the external per-layer prefix
+// (library-layer-references, layered-template-library).
+//
+// The rebuild is provenance-preserving. A plain rebuild (NewRegistry(nil) plus
+// Register) would carry no owning-layer provenance — setLayer is
+// package-internal to internal/template and no exported setter exists — so a
+// merged-library gallery would lose every template's layer. Instead the copy is
+// built from a synthetic *template.Library whose Layers are recovered from the
+// caller's registry provenance (Registry.LayerOf, the only exported way to read
+// it) and handed to template.NewRegistryFromLibrary, which records each
+// template's owning layer again. The wrapper is placed in its own layer
+// carrying owner's role (media, root and metadata), so RenderSlide sees a
+// non-sole slide layer exactly when the section's own layer is non-sole; a sole
+// layer installs no hook and output stays byte-identical.
+//
+// A registry carrying no owning-layer provenance for some registered template
+// (for example one built by NewRegistry/Register rather than
+// NewRegistryFromLibrary) cannot be reconstructed this way, so it falls back to
+// the plain rebuild: the wrapper still resolves, its preview renders under the
+// primary media base exactly as before this unit.
+func registryWithTemplate(reg *template.Registry, extra *template.Template, extraLT *template.LibraryTemplate, owner *template.LibraryLayer) (*template.Registry, error) {
+	if rebuilt, ok := layeredRegistryWithTemplate(reg, extraLT, owner); ok {
+		return rebuilt, nil
+	}
+	return plainRegistryWithTemplate(reg, extra)
+}
+
+// layeredRegistryWithTemplate rebuilds reg through template.NewRegistryFromLibrary
+// over a synthetic Library that carries every registered template's recovered
+// owning layer plus extraLT in a dedicated layer. ok is false when reg does not
+// carry a recoverable owning layer for a registered template (or one has no
+// LibraryTemplate in its recorded layer), so the caller falls back to the plain
+// rebuild. It never mutates reg or the layers it returns.
+func layeredRegistryWithTemplate(reg *template.Registry, extraLT *template.LibraryTemplate, owner *template.LibraryLayer) (*template.Registry, bool) {
+	names := reg.TemplateNames()
+	layers := make([]*template.LibraryLayer, 0, len(names))
+	seen := make(map[*template.LibraryLayer]bool, len(names))
+	slides := make(map[string]*template.LibraryTemplate, len(names)+1)
+	sections := make(map[string]*template.LibraryTemplate, len(names))
+	for _, name := range names {
+		layer := reg.LayerOf(name)
+		if layer == nil {
+			return nil, false
+		}
+		if !seen[layer] {
+			seen[layer] = true
+			layers = append(layers, layer)
+		}
+		// Each registered template's merged entry is the same *LibraryTemplate
+		// pointer its owning layer holds (mergeLibraryLayers shares, not copies),
+		// so recovering it from that layer keeps the identity
+		// NewRegistryFromLibrary's provenance resolution matches on.
+		if lt, ok := layer.Sections[name]; ok {
+			sections[name] = lt
+			continue
+		}
+		if lt, ok := layer.Slides[name]; ok {
+			slides[name] = lt
+			continue
+		}
+		return nil, false
+	}
+
+	wrapperLayer := &template.LibraryLayer{
+		Slides:   map[string]*template.LibraryTemplate{extraLT.Name: extraLT},
+		Sections: map[string]*template.LibraryTemplate{},
+	}
+	if owner != nil {
+		wrapperLayer.Role = owner.Role
+		wrapperLayer.Root = owner.Root
+		wrapperLayer.RootPath = owner.RootPath
+		wrapperLayer.Meta = owner.Meta
+		wrapperLayer.HasMedia = owner.HasMedia
+		wrapperLayer.Media = owner.Media
+	}
+	slides[extraLT.Name] = extraLT
+
+	rebuilt, err := template.NewRegistryFromLibrary(&template.Library{
+		Slides:   slides,
+		Sections: sections,
+		Layers:   append([]*template.LibraryLayer{wrapperLayer}, layers...),
+	})
+	if err != nil {
+		return nil, false
+	}
+	return rebuilt, true
+}
+
+// plainRegistryWithTemplate returns a copy of reg with extra registered by
+// direct registration, with no owning-layer provenance. It is the fallback for
+// a registry layeredRegistryWithTemplate cannot reconstruct (one not built from
+// a merged Library), preserving the pre-layering behaviour for such a caller.
+func plainRegistryWithTemplate(reg *template.Registry, extra *template.Template) (*template.Registry, error) {
 	rebuilt := template.NewRegistry(nil)
 	for _, t := range reg.Templates() {
 		if t == nil {
