@@ -57,6 +57,17 @@ type Registry struct {
 	// templates are treated as immutable and Register refuses to re-register a
 	// name, so a template's layout text cannot change after it is cached.
 	helperTargets map[string][]string
+
+	// layers records each registered template's owning-layer provenance,
+	// keyed by template name: the *LibraryLayer that contributed the template
+	// when the registry was built from a merged Library
+	// (NewRegistryFromLibrary, via setLayer). A name is absent when no
+	// provenance is known — a registry built in code (NewRegistry/Register),
+	// or a Library whose layer for that template could not be identified —
+	// and LayerOf then reports nil. It is lazily filled on first setLayer and
+	// guarded by mu. Like helperTargets it never needs invalidation:
+	// registered templates are immutable and a name is never re-registered.
+	layers map[string]*LibraryLayer
 }
 
 // NewRegistry returns an empty registry. content is the fs.FS holding each
@@ -244,6 +255,51 @@ func (r *Registry) Lookup(name string) (*Template, bool) {
 	defer r.mu.RUnlock()
 	t, ok := r.templates[name]
 	return t, ok
+}
+
+// LayerOf returns the *LibraryLayer that contributed the template registered
+// under name, or nil when the registry carries no provenance for it. It is how
+// a caller holding only a template name — the render/example paths binding the
+// `media` helper for a slide or a called section, for example — finds that
+// template's owning layer, so every reference inside it resolves in the layer
+// that owns it rather than the merged Library's primary root or media
+// (library-layer-references).
+//
+// Provenance is recorded only when a registry is built from a merged Library
+// (NewRegistryFromLibrary, via setLayer). A registry built in code
+// (NewRegistry/Register), and any name for which no layer was identified,
+// report nil — "no owning layer known" — which a caller treats as the
+// pre-provenance behaviour: resolve against the primary/merged root. A nil
+// receiver also returns nil, so the accessor is safe on an unset registry.
+//
+// The returned *LibraryLayer is the registered (immutable) one; the accessor is
+// safe for concurrent use.
+func (r *Registry) LayerOf(name string) *LibraryLayer {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.layers[name]
+}
+
+// setLayer records that the template registered under name was contributed by
+// layer, so LayerOf(name) can return it. NewRegistryFromLibrary calls it while
+// building a registry over a merged Library, identifying each template's
+// owning layer by identity from the Library's Layers. A nil layer (or an empty
+// name) records nothing: an unknown owning layer is indistinguishable from no
+// provenance, and both report nil through LayerOf. Registration is
+// package-internal; a registry a caller builds with Register records none.
+func (r *Registry) setLayer(name string, layer *LibraryLayer) {
+	if r == nil || name == "" || layer == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.layers == nil {
+		r.layers = make(map[string]*LibraryLayer)
+	}
+	r.layers[name] = layer
 }
 
 // HelperTargets returns the section-template names the named template's layout
