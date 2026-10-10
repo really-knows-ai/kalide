@@ -79,6 +79,27 @@ func Load() (map[string]string, error) {
 	return parse(f, path)
 }
 
+// Get returns the value stored under key in kalide's per-user config file. key
+// must be one of the RecognisedKeys; an unrecognised key is refused and no
+// value is returned. A recognised key that is not set is an error naming the
+// key.
+func Get(key string) (string, error) {
+	if !RecognisedKeys[key] {
+		return "", fmt.Errorf("unrecognised config key %q", key)
+	}
+
+	values, err := Load()
+	if err != nil {
+		return "", err
+	}
+
+	value, ok := values[key]
+	if !ok {
+		return "", fmt.Errorf("config key %q is not set", key)
+	}
+	return value, nil
+}
+
 // Set writes value under key in kalide's per-user config file, creating the
 // file and its parent directory on the first write. key must be one of the
 // RecognisedKeys; an unrecognised key is refused and nothing is written. Other
