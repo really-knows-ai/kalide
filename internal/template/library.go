@@ -158,6 +158,29 @@ type LibraryTheme struct {
 	Files map[string][]byte
 }
 
+// LibraryLayerRole identifies what a LibraryLayer is to the deck whose
+// library it contributes to (layered-template-library). Render derives each
+// layer's served URL prefixes from its role.
+//
+// The zero value is LayerRoleSole, so a hand-built layer or a layer loaded
+// from a single root is sole without any explicit assignment.
+type LibraryLayerRole int
+
+const (
+	// LayerRoleSole is a layer that is a deck's only contributing layer: a
+	// single-root library, whether that root is the deck-root local
+	// templates/ directory or an external library.
+	LayerRoleSole LibraryLayerRole = iota
+
+	// LayerRoleExternal is the external library a two-layer deck names with
+	// its top-level `templates:` key.
+	LayerRoleExternal
+
+	// LayerRoleLocal is the deck-root local templates/ layer of a two-layer
+	// deck.
+	LayerRoleLocal
+)
+
 // LibraryLayer is one contributing library layer: a single templates/
 // directory that contributes its templates, themes and media to a deck's
 // merged template library (library-layer). A deck has up to two layers — the
@@ -172,6 +195,15 @@ type LibraryTheme struct {
 // slide and section templates, its themes and its media sub-filesystem. It is
 // the per-layer counterpart of the merged Library.
 type LibraryLayer struct {
+	// Role identifies this layer's standing in the deck whose library it
+	// contributes to: the external `templates:` layer, the deck-root local
+	// templates/ layer, or the sole layer of a single-root library. Its zero
+	// value is LayerRoleSole, so a hand-built or single-root layer needs no
+	// assignment. LoadDeckLibrary sets it when it resolves a deck's layers;
+	// render derives each layer's served URL prefixes from it
+	// (layered-template-library).
+	Role LibraryLayerRole
+
 	// Root is the layer's templates/ directory, rooted so that "library.yaml",
 	// "slides", "sections", "themes" and "media" are its direct entries.
 	Root fs.FS
