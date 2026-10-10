@@ -242,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/really-knows-ai/kalide/compare/v0.8.0...v0.9.0
