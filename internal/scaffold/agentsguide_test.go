@@ -819,7 +819,6 @@ var agentGuideIllustrativeSnippets = map[string]string{
 	"|kalide.yaml deck-wide settings": "the deck-directory tree is a layout illustration, not a kalide.yaml document",
 	"|templates/":                     "the templates/ directory tree is a layout illustration, not a library.yaml document",
 	"markdown|# people":               "the section-instance example is a fragment inside a slide, not a standalone slide source",
-	"|Ada is the first programmer.":   "the trailing prose of the section-instance example, not a standalone artifact",
 	`|{{ media "logo.svg" }}`:         "a layout action fragment; media resolves against a library at render time, so it is not standalone-loadable",
 	"|slides/3-team.md:12 › column[1] › people[0] › name: required — add a name: value": "an error-message illustration, not a document",
 	"|kalide init [path] Create a deck in the current directory.":                       "the CLI usage listing, not a parseable document",
