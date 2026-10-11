@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-12
+
 ### Added
 
 - Layered template libraries: a deck now renders against one **merged library**
@@ -71,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{{ template "<layout name>" . }}` now loads; previously the check ran each
   layout in isolation and rejected such a library with `no such template`. Each
   example still binds the executing template's own layer's `media`.
+- The section-frontmatter example in the embedded deck author guide now renders
+  correctly: its nested code fence no longer closes the surrounding example
+  block early.
 
 ## [0.11.0] - 2026-10-10
 
@@ -307,7 +312,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...v0.10.0
