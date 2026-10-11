@@ -3,8 +3,9 @@
 `kalide` is a small program that turns a folder of Markdown files into a slide
 deck and shows it in your browser. This guide is for people who want to install
 it with **Homebrew** (macOS) or **Scoop** (Windows), or download the single
-binary directly from GitHub Releases. No programming knowledge, GitHub account
-or token is needed — follow the steps in order.
+binary directly from GitHub Releases. Every step is anonymous — no programming
+knowledge, no account, no sign-in and no token is needed — so just follow the
+steps in order.
 
 If you would rather not use a package manager, you can instead download the
 `kalide` file and run it directly. That simpler route is described in [Manual download](#manual-download)
@@ -15,6 +16,7 @@ below and in the [README](README.md#install).
 - [On Windows (Scoop)](#on-windows-scoop)
 - [On Linux (manual download)](#on-linux-manual-download)
 - [Manual download](#manual-download)
+- [Upgrading kalide versus upgrading a project](#upgrading-kalide-versus-upgrading-a-project)
 - [Supported computers](#supported-computers)
 - [Check the installed version](#check-the-installed-version)
 - [License, changes and trademarks](#license-changes-and-trademarks)
@@ -71,7 +73,7 @@ That is it. Check the install with:
 kalide help
 ```
 
-### Upgrading (macOS)
+### Upgrading the kalide program (macOS)
 
 ```
 brew update
@@ -82,6 +84,10 @@ brew upgrade kalide
 ```
 
 If no newer version is listed, you are already up to date.
+
+This upgrades the **program**. To bring an existing deck or library forward
+instead, see
+[Upgrading kalide versus upgrading a project](#upgrading-kalide-versus-upgrading-a-project).
 
 ### Removing kalide (macOS)
 
@@ -113,7 +119,7 @@ That is it. Check the install with:
 kalide help
 ```
 
-### Upgrading (Windows)
+### Upgrading the kalide program (Windows)
 
 ```
 scoop update
@@ -122,6 +128,10 @@ scoop update
 ```
 scoop update kalide
 ```
+
+This upgrades the **program**. To bring an existing deck or library forward
+instead, see
+[Upgrading kalide versus upgrading a project](#upgrading-kalide-versus-upgrading-a-project).
 
 ### Removing kalide (Windows)
 
@@ -166,16 +176,22 @@ directly:
    kalide help
    ```
 
-### Upgrading (Linux)
+### Upgrading the kalide program (Linux)
 
 Repeat the download, checksum-verification and `chmod +x` steps above with
 the new release's asset.
 
+This upgrades the **program**. To bring an existing deck or library forward
+instead, see
+[Upgrading kalide versus upgrading a project](#upgrading-kalide-versus-upgrading-a-project).
+
 ## Manual download
 
-If you do not want to use Homebrew or Scoop, you can download the matching
-`kalide-<os>-<arch>` binary directly from GitHub releases, in a browser or with
-`curl -LO`:
+If you do not want to use Homebrew (macOS) or Scoop (Windows), you can instead
+download the matching `kalide-<os>-<arch>` binary directly from GitHub Releases,
+in a browser or with `curl -LO`. This is the macOS and Windows fallback; on
+Linux it is the normal route (see [On Linux (manual download)](#on-linux-manual-download)
+above).
 
 <https://github.com/really-knows-ai/kalide/releases>
 
@@ -199,6 +215,39 @@ If you do not want to use Homebrew or Scoop, you can download the matching
 ```
 kalide help
 ```
+
+## Upgrading kalide versus upgrading a project
+
+There are two different things you can upgrade:
+
+- **The `kalide` program** — the file you installed. Use your install channel:
+  `brew upgrade kalide` on macOS, `scoop update kalide` on Windows, or download
+  and replace the file on Linux (see the per-system "Upgrading" steps above).
+  `kalide` never checks for updates on its own and never upgrades itself.
+- **A project** — a deck or template library you made with `kalide`. Bring it
+  forward to the running `kalide` with the `kalide upgrade` command, described
+  next.
+
+### `kalide upgrade`
+
+Run the command from inside your project folder:
+
+```
+kalide upgrade
+```
+
+`kalide upgrade` takes **no path** and has **no `--force`**: any argument at all
+is an error. It always works on the folder you are in and runs entirely
+**offline** — it uses only what the running `kalide` already carries plus your
+project's own files. It **never overwrites author content**: a file you have
+edited is left untouched and reported, and a deleted starter file is not brought
+back. It refreshes the files `kalide` itself owns, applies any project-format
+updates, and prints every path it refreshed and every path it left alone. If the
+project would not validate afterwards, the change is undone and the project is
+left exactly as it was.
+
+This is not the same as `brew upgrade kalide` or `scoop update kalide`, which
+upgrade the **program** (see the per-system "Upgrading" steps above).
 
 ## Supported computers
 
