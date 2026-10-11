@@ -636,7 +636,10 @@ func TestInitConfiguredDefaultFailures(t *testing.T) {
 // binary: a pre-existing local templates/ is exempt (and left byte-for-byte
 // untouched) in the explicit-path and configured-default branches but blocks
 // the seed branch, where slides/, assets/ and kalide.yaml also block; and a
-// pre-existing AGENTS.md never blocks in any branch and is left untouched.
+// pre-existing AGENTS.md never blocks in any branch. It is instead brought to
+// the agent-guide-reference scheme: author content without the reference
+// string keeps its bytes and gains the appended reference line, and the full
+// AGENTS_KALIDE.md guide is written alongside it.
 func TestInitRefusalExemptions(t *testing.T) {
 	if testing.Short() {
 		t.Skip("e2e test builds and drives the real kalide binary")
@@ -716,13 +719,16 @@ func TestInitRefusalExemptions(t *testing.T) {
 		}
 	})
 
-	const agentsSentinel = "hand-written agent guide init must not touch\n"
+	// agentsAuthor is the author's pre-existing AGENTS.md content. init must
+	// preserve it byte-for-byte and append the reference line to it
+	// (agent-guide-reference), never replace it.
+	const agentsAuthor = "hand-written agent guide author bytes\n"
 
 	t.Run("pre-existing AGENTS.md never blocks the external branch", func(t *testing.T) {
 		home := t.TempDir()
 		setInitDefaultTemplateDir(t, h, home, configuredDir)
 		resetDir(t, h.WorkDir())
-		h.WriteFile("AGENTS.md", []byte(agentsSentinel))
+		h.WriteFile("AGENTS.md", []byte(agentsAuthor))
 
 		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
 		if code != 0 {
@@ -734,13 +740,14 @@ func TestInitRefusalExemptions(t *testing.T) {
 		if !strings.Contains(stdout, configuredDir) {
 			t.Errorf("kalide init output does not name the configured library %q:\n%s", configuredDir, stdout)
 		}
-		assertInitFile(t, h.Path("AGENTS.md"), agentsSentinel)
+		assertAgentGuideAppended(t, h.Path("AGENTS.md"), agentsAuthor)
+		assertAgentGuidePair(t, h.WorkDir())
 	})
 
 	t.Run("pre-existing AGENTS.md never blocks the seed branch", func(t *testing.T) {
 		home := t.TempDir()
 		resetDir(t, h.WorkDir())
-		h.WriteFile("AGENTS.md", []byte(agentsSentinel))
+		h.WriteFile("AGENTS.md", []byte(agentsAuthor))
 
 		stdout, stderr, code := runKalideWithHome(t, h, home, "init")
 		if code != 0 {
@@ -752,7 +759,8 @@ func TestInitRefusalExemptions(t *testing.T) {
 		if !strings.Contains(stdout, "slides/1-hello.md") {
 			t.Errorf("kalide init output does not name the seed slide:\n%s", stdout)
 		}
-		assertInitFile(t, h.Path("AGENTS.md"), agentsSentinel)
+		assertAgentGuideAppended(t, h.Path("AGENTS.md"), agentsAuthor)
+		assertAgentGuidePair(t, h.WorkDir())
 	})
 }
 
