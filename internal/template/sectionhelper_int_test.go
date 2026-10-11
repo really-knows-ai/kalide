@@ -765,3 +765,296 @@ func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// plan.phase-01.task-22: the loader's static child/children checks over a real
+// on-disk library.
+//
+// The unit tier (sectionhelper_target_test.go, sectionhelper_fields_test.go,
+// sectionhelper_constraints_test.go, registry_test.go) drives
+// Registry.Validate with in-process fixtures. These integration tests drive the
+// whole loader over real files — LoadLibrary on a single on-disk library, and
+// LoadDeckLibrary over a real two-layer deck — so they pin the child/children
+// half of templates-dir-validation step 4 end to end
+// (requirements.requirement.section-helper-load-checks,
+// requirement.child-constructor, requirement.children-forwarding,
+// requirement.library-layer-references, requirement.nested-section-validation):
+//
+//   - a literal `child` naming a section its target does not declare, and a
+//     statically-known literal child set below the target's declared minimum,
+//     both fail LoadLibrary with a *LibraryError path-qualified to the CALLING
+//     template's template.yaml. This is the same qualification the other
+//     step-4 helper failures use (TestLoadLibrarySectionHelperChecksInt):
+//     Registry.Validate prefixes the failure with `template "<name>":` and
+//     checkLibraryBuild maps that name to its ManifestPath, so Path is the
+//     offending template's template.yaml (line 0 — a whole-manifest
+//     build-check failure) and Error() renders it as "<path>: <message>";
+//   - a layered deck's local caller naming a child its external target does not
+//     declare still fails at the merged pass, path-qualified to the LOCAL
+//     calling template's own file, so resolving the target across the union
+//     namespace is no amnesty for a child that does not resolve;
+//   - a wrapper section whose layout passes a literal `child` argument AND a
+//     `children` forwarding of its authored `.data` list loads cleanly, and the
+//     call the loader extracted carries both child arguments; and
+//   - a child whose instantiated template lives in the OTHER library layer
+//     loads and validates: a local-layer caller's literal `child` resolves an
+//     external-layer template through the merged section namespace, the merged
+//     step-7 example execution instantiates and renders it, and the child
+//     template is owned by the external layer rather than the local one.
+//
+// These tests touch the real filesystem, so they are guarded with
+// testing.Short() and skipped under `go test -short`, like their neighbours.
+// They reuse writeSectionHelperIntLibrary / writeSectionHelperIntLayeredDeck,
+// templateIntFiles, slideIntFiles, sectionIntFiles, mergeIntFiles, writeFile,
+// asLibraryError and the step-7 binding idiom the existing tests use.
+func TestLoadLibraryChildLoadChecksInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	const (
+		// childColumn is the child template a target's declared `column`
+		// section accepts. It declares one optional text field so a literal
+		// `child "column" (dict "title" …)` supplies a real declared field.
+		childColumnManifest = "name: column\nfields:\n  - name: title\n    type: text\n"
+		childColumnLayout   = `<span class="column">{{ .title }}</span>`
+		childColumnExample  = "```\ntitle: A\n```\n"
+
+		// childColumns is the target that declares the `column` child section;
+		// its layout ranges over the resolved child instances. Its example.md
+		// is empty: a template declaring sections is parsed at step 7, and an
+		// empty example declares no instances, which the min-0 declarations
+		// accept.
+		childColumnsLayout = `<div class="columns">{{ range .column }}{{ . }}{{ end }}</div>`
+		childColumnsNoMin  = "name: columns\nsections:\n  - name: column\n    accepted: [column]\n"
+		childColumnsMin2   = "name: columns\nsections:\n  - name: column\n    accepted: [column]\n    min: 2\n"
+	)
+
+	// childColumnFiles returns the standalone `column` child template's three
+	// on-disk files.
+	childColumnFiles := func() map[string]string {
+		return templateIntFiles(SectionsDir, "column", childColumnManifest, childColumnLayout, childColumnExample)
+	}
+
+	t.Run("a child violation fails load path-qualified to the calling template", func(t *testing.T) {
+		tests := []struct {
+			name            string
+			columnsManifest string
+			hostLayout      string
+			wantMessage     string
+		}{
+			{
+				name:            "a literal child naming an undeclared section",
+				columnsManifest: childColumnsNoMin,
+				hostLayout:      `{{ section "columns" nil nil (child "zzzz") }}`,
+				wantMessage:     `template "host": section helper call on layout line 1: child names section "zzzz", which section template "columns" does not declare`,
+			},
+			{
+				name:            "a literal child set below the declared minimum",
+				columnsManifest: childColumnsMin2,
+				hostLayout:      `{{ section "columns" nil nil (child "column") }}`,
+				wantMessage:     `template "host": section helper call on layout line 1: section template "columns" declares child section "column" with a minimum of 2, but the call passes 1`,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				files := mergeIntFiles(
+					slideIntFiles("host", tt.hostLayout),
+					templateIntFiles(SectionsDir, "columns", tt.columnsManifest, childColumnsLayout, ""),
+					childColumnFiles(),
+				)
+				projectDir := writeSectionHelperIntLibrary(t, files)
+
+				lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+				if err == nil {
+					t.Fatalf("LoadLibrary() = %+v, nil; want the child check to fail", lib)
+				}
+				if lib != nil {
+					t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+				}
+				libErr := asLibraryError(t, err)
+				wantPath := TemplatesDir + "/" + SlidesDir + "/host/" + ManifestFile
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want the calling template's manifest %q", libErr.Path, wantPath)
+				}
+				// A whole-manifest build-check failure has no interior line; the
+				// templates error is qualified by path, exactly as the other
+				// step-4 helper failures TestLoadLibrarySectionHelperChecksInt
+				// pins.
+				if libErr.Line != 0 {
+					t.Errorf("Line = %d, want 0 (a whole-manifest build-check failure)", libErr.Line)
+				}
+				if libErr.Message != tt.wantMessage {
+					t.Errorf("Message = %q, want %q", libErr.Message, tt.wantMessage)
+				}
+				if !strings.HasPrefix(libErr.Error(), wantPath+":") {
+					t.Errorf("Error() = %q, want it path-qualified with %q", libErr.Error(), wantPath)
+				}
+			})
+		}
+	})
+
+	t.Run("a child violation across layers fails at the local caller's manifest", func(t *testing.T) {
+		// The external layer alone is self-contained: its target declares an
+		// external child template. The local caller names a section that target
+		// does not declare, so the merged pass must reject it at the LOCAL
+		// caller's own template.yaml rather than accept it because the merged
+		// namespace resolved the target.
+		localFiles := slideIntFiles("host", `{{ section "ext-columns" nil nil (child "zzzz") }}`)
+		externalFiles := mergeIntFiles(
+			templateIntFiles(SectionsDir, "ext-column",
+				"name: ext-column\nfields:\n  - name: title\n    type: text\n",
+				`<i class="ext-column">{{ .title }}</i>`,
+				"```\ntitle: E\n```\n"),
+			templateIntFiles(SectionsDir, "ext-columns",
+				"name: ext-columns\nsections:\n  - name: column\n    accepted: [ext-column]\n",
+				childColumnsLayout,
+				""),
+		)
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t, localFiles, externalFiles)
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if lib != nil {
+			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
+		}
+		libErr := asLibraryError(t, err)
+		wantPath := path.Join(localRoot, SlidesDir, "host", ManifestFile)
+		if libErr.Path != wantPath {
+			t.Errorf("Path = %q, want the local calling template's manifest %q", libErr.Path, wantPath)
+		}
+		if libErr.Line != 0 {
+			t.Errorf("Line = %d, want 0 (a whole-manifest build-check failure)", libErr.Line)
+		}
+		want := `template "host": section helper call on layout line 1: child names section "zzzz", which section template "ext-columns" does not declare`
+		if libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
+	t.Run("a wrapper section passing literal children and a children forwarding loads", func(t *testing.T) {
+		// panel is the wrapper: it declares its own `column` child section so
+		// its example builds a `.data.column` view, which its layout forwards
+		// with `children` alongside a literal `child`. The literal child and the
+		// forwarded entry both instantiate the `column` template.
+		const panelManifest = "name: panel\nsections:\n  - name: column\n    accepted: [column]\n"
+		const panelLayout = `<div class="panel">{{ section "columns" nil nil (child "column" (dict "title" "Literal")) (children "column" .data.column) }}</div>`
+		const panelExample = "# column\n```\ntitle: FromData\n```\n"
+
+		files := mergeIntFiles(
+			templateIntFiles(SectionsDir, "panel", panelManifest, panelLayout, panelExample),
+			templateIntFiles(SectionsDir, "columns", childColumnsNoMin, childColumnsLayout, ""),
+			childColumnFiles(),
+		)
+		projectDir := writeSectionHelperIntLibrary(t, files)
+
+		lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: the wrapper's literal child and children forwarding must resolve", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadLibrary() returned nil Library with nil error")
+		}
+
+		panel, _, ok := lib.TemplateByName("panel")
+		if !ok || panel == nil || panel.Definition == nil {
+			t.Fatal(`TemplateByName("panel") definition not loaded`)
+		}
+		// Prove the unconditionally-executed step-7 call was statically
+		// extracted with BOTH child arguments: the loader would not have loaded
+		// the library if either failed to resolve.
+		calls, err := NewSection(nil).HelperCalls(panel.Definition)
+		if err != nil {
+			t.Fatalf("HelperCalls(panel) error = %v, want nil", err)
+		}
+		if len(calls) != 1 {
+			t.Fatalf("HelperCalls(panel) = %d calls, want 1: %+v", len(calls), calls)
+		}
+		children := calls[0].Children
+		if len(children) != 2 {
+			t.Fatalf("HelperCalls(panel)[0].Children = %d, want 2 (a literal child and a children forwarding): %+v", len(children), children)
+		}
+		if children[0].Section != "column" || children[0].Forward || !children[0].Literal {
+			t.Errorf("Children[0] = %+v, want a literal child of section %q", children[0], "column")
+		}
+		if children[1].Section != "column" || !children[1].Forward {
+			t.Errorf("Children[1] = %+v, want a children forwarding of section %q", children[1], "column")
+		}
+	})
+
+	t.Run("a child whose template lives in the external layer loads and validates", func(t *testing.T) {
+		// The external layer carries the child template (ext-column) and the
+		// section target that declares it (ext-columns); the local layer carries
+		// only the calling slide, whose literal `child` names a section the
+		// external target declares and instantiates the external template. The
+		// local layer's per-layer load defers the cross-template checks, so the
+		// merged pass resolves the child across the layer boundary.
+		localFiles := mergeIntFiles(
+			templateIntFiles(SlidesDir, "host", "name: host\n",
+				`<section>{{ section "ext-columns" nil nil (child "column" (dict "title" "E1")) }}</section>`,
+				"# host\n"),
+		)
+		externalFiles := mergeIntFiles(
+			templateIntFiles(SectionsDir, "ext-column",
+				"name: ext-column\nfields:\n  - name: title\n    type: text\n",
+				`<i class="ext-column">{{ .title }}</i>`,
+				"```\ntitle: E\n```\n"),
+			templateIntFiles(SectionsDir, "ext-columns",
+				"name: ext-columns\nsections:\n  - name: column\n    accepted: [ext-column]\n",
+				childColumnsLayout,
+				""),
+		)
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t, localFiles, externalFiles)
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary() error = %v, want nil: a local caller's child may instantiate an external-layer template", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadDeckLibrary() returned nil Library with nil error")
+		}
+
+		// The child template is owned by the external layer, not the local one:
+		// the merged pass resolved it across the layer boundary.
+		if len(lib.Layers) != 2 {
+			t.Fatalf("len(Layers) = %d, want 2", len(lib.Layers))
+		}
+		if _, ok := lib.Layers[0].Sections["ext-column"]; !ok {
+			t.Errorf("the external layer does not carry ext-column")
+		}
+		if _, ok := lib.Layers[1].Sections["ext-column"]; ok {
+			t.Errorf("the local layer unexpectedly carries ext-column")
+		}
+		extChild, _, ok := lib.TemplateByName("ext-column")
+		if !ok || extChild == nil || extChild.Definition == nil {
+			t.Fatal(`TemplateByName("ext-column") definition not loaded`)
+		}
+
+		// Prove step 7 actually instantiated the external child: repeat its
+		// exact binding — LayoutFuncMap with `section` overridden by the merged
+		// exampleSectionHelper — and assert the external child's HTML is spliced
+		// into the local slide's output. host is a slide, so its call's parent
+		// is nil.
+		host, _, ok := lib.TemplateByName("host")
+		if !ok || host == nil {
+			t.Fatal(`TemplateByName("host") not found in the merged library`)
+		}
+		step7 := LayoutFuncMap(lib.Media, "/"+MediaDir)
+		step7["section"] = exampleSectionHelper(lib, nil)
+		layout, err := htmltemplate.New("host").Funcs(step7).Parse(host.LayoutText)
+		if err != nil {
+			t.Fatalf("parse host layout under the merged example binding: %v", err)
+		}
+		var rendered strings.Builder
+		if err := layout.Execute(&rendered, map[string]any{
+			"deck":  emptyExampleDeckContext(),
+			"slide": emptyExampleSlideContext(),
+		}); err != nil {
+			t.Fatalf("execute host layout under the merged example binding: %v, want nil (LoadDeckLibrary's own step-7 execution succeeded)", err)
+		}
+		if got := rendered.String(); !strings.Contains(got, `<i class="ext-column">E1</i>`) {
+			t.Errorf("merged example execution rendered %q, want the external child's HTML <i class=\"ext-column\">E1</i>", got)
+		}
+	})
+}
