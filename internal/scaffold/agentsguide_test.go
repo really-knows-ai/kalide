@@ -4,17 +4,20 @@ package scaffold
 // (requirements.requirement.agent-guide-drift-check, phase-05 tasks 1-2), plus
 // its per-guide scope tables and minimal helpers.
 //
-// The implemented format vocabulary is derived ONLY from the exported canonical
+// The implemented format vocabulary is derived from the exported canonical
 // accessors — template.ManifestFieldTypes, template.BodyModes,
 // template.ReservedNames, template.ContextKeys, template.ManifestTopLevelKeys,
-// template.LibraryMetaKeys, template.MediaURLPrefix (the reserved `media:`
-// prefix) and template.LayoutFuncMap (the v1 `media` helper), plus
-// deck.ConfigKeys — and the two full AGENTS_KALIDE.md guides are read through
-// mustReadSeed and mustReadLibraryFullGuide, while the AGENTS.md pointers are
-// separately asserted to carry the reference line. It never restates the
-// vocabulary as a hand-maintained fixture list: a format token added to the
-// implementation is returned by an accessor and immediately has to appear in a
-// guide, so a token the union of the two guides omits makes the test fail.
+// template.LibraryMetaKeys, template.MediaURLPrefix / template.ThemeURLPrefix
+// (the reserved theme-CSS prefixes) and template.LayoutFuncMap (the v1 helper
+// set) — plus deck.ConfigKeys — and the two full AGENTS_KALIDE.md guides are
+// read through mustReadSeed and mustReadLibraryFullGuide, while the AGENTS.md
+// pointers are separately asserted to carry the reference line. The
+// `{{ template }}` layout-composition tokens and the composition statements
+// have no canonical accessor, so they are authored scope alongside deckGuideCLI.
+// The vocabulary is never restated as a hand-maintained fixture list: a format
+// token added to the implementation is returned by an accessor and immediately
+// has to appear in a guide, so a token the union of the two guides omits makes
+// the test fail.
 //
 // Coverage is per guide so the test never demands from a guide a token its
 // declared scope does not own:
@@ -22,12 +25,14 @@ package scaffold
 //   - union check: every implemented format token appears in at least one guide;
 //   - deck-guide scope: every kalide.yaml key (deck.ConfigKeys), the full CLI
 //     command set, and the shared format vocabulary (the deck guide is the
-//     complete format reference), including the reserved `media:` prefix;
+//     complete format reference), including the reserved `media:`/`theme:<name>/`
+//     prefixes and the `{{ template }}` layout-composition tokens;
 //   - library-guide scope: the templates/ library layout, the library.yaml
-//     keys, the template.yaml schema and body modes, the layout language, the
-//     reserved context names deck/slide/item/raw/data, the four layout helpers,
-//     the reserved context keys, every field type, the themes/media rules and
-//     the reserved `media:` prefix.
+//     keys, the template.yaml schema and body modes, the layout language and its
+//     `{{ template }}` composition tokens, the reserved context names
+//     deck/slide/item/raw/data, the layout helpers, the reserved context keys,
+//     every field type, the themes/media rules and the reserved
+//     `media:`/`theme:<name>/` prefixes.
 //
 // Negative assertion: the kalide.yaml config keys and the init/version CLI are
 // deliberately OUTSIDE the library-guide scope, so their absence from
@@ -38,10 +43,19 @@ package scaffold
 // Matching is context-aware (feedback-17): a token counts only where the format
 // actually declares it — as a complete backtick code span, as a YAML mapping
 // key (`theme:`, optionally backticked), as a fenced-code-block word, or as a
-// `kalide <cmd>` command. Ordinary prose never satisfies a token, and a token
-// that is merely a substring of another identifier (`init` in `init-library`,
-// `theme` in `themes/` or `theme.css`) does not count. The negative self-check
-// subtest pins that behaviour.
+// `kalide <cmd>` command. Ordinary prose never satisfies a format token, and a
+// token that is merely a substring of another identifier (`init` in
+// `init-library`, `theme` in `themes/` or `theme.css`) does not count. The
+// negative self-check subtest pins that behaviour.
+//
+// The layout-composition statements (local-to-external allowed, external-to-
+// local a templates error, the invoking-layer media binding and the `section`
+// rebind) are the one family matched differently: they are readable prose, not
+// format tokens, so a group marked `literal` matches each statement as a
+// whitespace-normalised literal phrase (agentGuideProseContains), tolerating
+// the guides' hard line wrapping. Every format token — the `{{ template }}`
+// action and root-qualified path form included — keeps the context-aware
+// matching above.
 //
 // A reserved URL prefix (`media:`, `theme:`, feedback-8) is special-cased: the
 // token is a prefix that ends in `:`, so it is inherently ambiguous with a YAML
@@ -115,6 +129,13 @@ var deckGuideCLI = []string{
 type agentGuideTokenGroup struct {
 	name   string
 	tokens []string
+	// literal marks the group's tokens as readable composition statements, not
+	// format tokens: each is matched as a whitespace-normalised literal phrase
+	// anywhere in the guide (agentGuideProseContains) rather than by the
+	// context-aware format-token rules. It exists only for the layout-
+	// composition prose a guide must teach (guide-layout-composition); every
+	// format token keeps the context-aware matching below.
+	literal bool
 }
 
 // TestAgentGuidesMatchFormat is the per-guide drift self-test: it derives the
@@ -133,7 +154,7 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 				continue
 			}
 			for _, token := range group.tokens {
-				if agentGuideContainsToken(deckGuide, token) || agentGuideContainsToken(libraryGuide, token) {
+				if agentGuideGroupCarries(group, deckGuide, token) || agentGuideGroupCarries(group, libraryGuide, token) {
 					continue
 				}
 				t.Errorf("implemented %s %q appears in neither guide; document it in seed/AGENTS_KALIDE.md and/or libraryguide/AGENTS_KALIDE.md", group.name, token)
@@ -319,8 +340,12 @@ func agentGuideTexts(t *testing.T) (deckGuide, libraryGuide string) {
 	return deckGuide, libraryGuide
 }
 
-// agentGuideFormatGroups returns the implemented format vocabulary grouped by
-// family, derived ONLY from the exported canonical accessors.
+// agentGuideFormatGroups returns the format vocabulary the union check and the
+// deck-guide scope check carry, grouped by family: the accessor-derived format
+// tokens plus the authored layout-composition tokens and the deck guide's
+// composition statements. The composition families have no canonical accessor
+// (they document the {{ template }} composition the loader implements), so they
+// are authored scope here, exactly as deckGuideCLI is.
 func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 	t.Helper()
 
@@ -333,7 +358,53 @@ func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "template.yaml top-level key", tokens: template.ManifestTopLevelKeys()},
 		{name: "library.yaml key", tokens: template.LibraryMetaKeys()},
 		{name: "reserved URL prefix", tokens: []string{template.MediaURLPrefix(), template.ThemeURLPrefix()}},
+		{name: "layout composition token", tokens: agentGuideCompositionTokens(t)},
+		{name: "layout composition statement", tokens: agentGuideDeckCompositionStatements, literal: true},
 	}
+}
+
+// agentGuideCompositionTokens returns the `{{ template }}` layout-composition
+// tokens both guides must carry (guide-layout-composition, example-layout-
+// composition): the root-qualified layout path form for a slide and for a
+// section layout, and the `{{ template "<layout name>" . }}` action. The path
+// form is built from the layout-directory constants so a renamed directory
+// carries through; the action is authored here — the composition syntax has no
+// canonical accessor.
+func agentGuideCompositionTokens(t *testing.T) []string {
+	t.Helper()
+
+	rootQualified := "<layer root>/"
+	return []string{
+		`{{ template "<layout name>" . }}`,
+		rootQualified + template.SlidesDir + "/<name>/" + template.LayoutFile,
+		rootQualified + template.SectionsDir + "/<name>/" + template.LayoutFile,
+	}
+}
+
+// agentGuideDeckCompositionStatements are the readable composition statements
+// the deck guide must carry (guide-layout-composition): the deck's local layer
+// may include an external-layer layout (allowed), an external-layer layout that
+// includes a local-layer layout is a templates error, and an included layout's
+// media helper binds to the invoking layer while a `section` call rebinds to
+// the target's own layer.
+var agentGuideDeckCompositionStatements = []string{
+	"a local-layer layout may also include",
+	"external-layer layout that includes a local-layer layout is a templates error",
+	"helper binds to the invoking layer's",
+	"call rebinds to the called template's own layer",
+}
+
+// agentGuideLibraryCompositionStatements are the same readable composition
+// statements in the library guide's wording (guide-layout-composition): a
+// deck's local-layer layout may include this library's layout, a layout here
+// that includes a layout existing only in the deck's local layer is a templates
+// error, and an included layout's media helper binds to the invoking layer
+// while a `section` call rebinds to the target's own layer.
+var agentGuideLibraryCompositionStatements = []string{
+	"local-layer layout may additionally include an external library's layout",
+	"a layout here that includes a layout existing only in the deck's local layer is a templates error",
+	"helper binds to the invoking layer's",
+	"call rebinds to the called template's own layer",
 }
 
 // agentGuideLayoutHelpers returns the non-format helper names
@@ -400,10 +471,11 @@ func agentGuideLibraryReservedContextNames(t *testing.T) []string {
 // agentGuideLibraryScopeGroups returns the token families the library guide
 // owns (agent-guide-drift-check, library-agent-guide): the templates/ library
 // layout, the library.yaml keys, the template.yaml schema and body modes, the
-// layout language, the reserved context names deck/slide/item/raw/data, the
-// layout helpers, the reserved context keys, every field type, the themes/media
-// rules and the reserved `media:` prefix. It deliberately omits the kalide.yaml
-// config keys and the init/version CLI, which are deck-guide-only.
+// layout language and its {{ template }} composition tokens and statements, the
+// reserved context names deck/slide/item/raw/data, the layout helpers, the
+// reserved context keys, every field type, and the themes/media rules and the
+// reserved `media:`/`theme:<name>/` prefixes. It deliberately omits the
+// kalide.yaml config keys and the init/version CLI, which are deck-guide-only.
 func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 	t.Helper()
 
@@ -420,6 +492,8 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "template.yaml top-level key", tokens: template.ManifestTopLevelKeys()},
 		{name: "body mode", tokens: template.BodyModes()},
 		{name: "layout language token", tokens: []string{template.LayoutFile, "html/template"}},
+		{name: "layout composition token", tokens: agentGuideCompositionTokens(t)},
+		{name: "layout composition statement", tokens: agentGuideLibraryCompositionStatements, literal: true},
 		{name: "reserved name", tokens: agentGuideLibraryReservedContextNames(t)},
 		{name: "layout helper", tokens: agentGuideLayoutHelpers(t)},
 		{name: "context key", tokens: template.ContextKeys()},
@@ -429,8 +503,11 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 }
 
 // agentGuideAssertGuideCarries asserts guide contains every token in every
-// group, naming the guide and the token family in each failure. Presence is
-// context-aware (agentGuideContainsToken), never a raw substring match.
+// group, naming the guide and the token family in each failure. A format token
+// is matched context-aware (agentGuideContainsToken), never as a raw substring;
+// a literal group's composition statement is matched as a whitespace-normalised
+// phrase (agentGuideProseContains). Both modes are selected by
+// agentGuideGroupCarries.
 func agentGuideAssertGuideCarries(t *testing.T, guideName, guide string, groups []agentGuideTokenGroup) {
 	t.Helper()
 
@@ -440,11 +517,40 @@ func agentGuideAssertGuideCarries(t *testing.T, guideName, guide string, groups 
 			continue
 		}
 		for _, token := range group.tokens {
-			if !agentGuideContainsToken(guide, token) {
+			if !agentGuideGroupCarries(group, guide, token) {
 				t.Errorf("%s is missing the implemented %s %q", guideName, group.name, token)
 			}
 		}
 	}
+}
+
+// agentGuideGroupCarries reports whether guide carries token under the group's
+// matching mode: a literal group's composition statement is matched as a
+// whitespace-normalised phrase, a format-token group's token by the
+// context-aware rules.
+func agentGuideGroupCarries(group agentGuideTokenGroup, guide, token string) bool {
+	if group.literal {
+		return agentGuideProseContains(guide, token)
+	}
+	return agentGuideContainsToken(guide, token)
+}
+
+// agentGuideProseContains reports whether guide carries phrase as a literal
+// composition statement, tolerating the guides' hard line wrapping: both the
+// guide and the phrase are whitespace-normalised (every run of whitespace,
+// newlines included, collapses to one space) before the substring test, so a
+// statement reflowed across a different line break still matches.
+func agentGuideProseContains(guide, phrase string) bool {
+	if phrase == "" {
+		return false
+	}
+	return strings.Contains(agentGuideCollapseWhitespace(guide), agentGuideCollapseWhitespace(phrase))
+}
+
+// agentGuideCollapseWhitespace collapses every run of whitespace in s to a
+// single space, so a phrase matches across the guides' hard line wraps.
+func agentGuideCollapseWhitespace(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // agentGuideTokenSet flattens token groups into a membership set.
