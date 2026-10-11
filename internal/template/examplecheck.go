@@ -30,6 +30,15 @@ import (
 // template's example.md against its parsed definition and executing its
 // layout. It runs once over a merged Library after every layer has loaded.
 //
+// Each example executes against the merged per-layer layout namespace
+// exampleLayoutNamespace builds from every slide and section of the merged
+// Library — the full layout set render's namespaceForLayer parses from the
+// registry, bound with the executing template's own layer's media and the
+// calling instance's fields — rather than the single target layout text alone.
+// Parsing the whole set into one shared namespace makes a layout's standard
+// `{{ template "<layout name>" . }}` composition call resolve to any other
+// library layout, whichever layer contributed it (example-layout-composition).
+//
 // For each template it resolves that template's own owning *LibraryLayer by
 // identity over lib.Layers — resolveMergedSlideLayer for a slide and
 // resolveMergedSectionTarget for a section, the same lookups
