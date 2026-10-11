@@ -1,5 +1,5 @@
 ---
-description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest,config}, README.md. Implements plan tasks in the project worktree.
+description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest,config}, README.md, docs/**. Implements plan tasks in the project worktree.
 mode: subagent
 hidden: true
 generated: true
@@ -54,6 +54,7 @@ permission:
     "apg/.worktrees/*/go.sum": allow
     "apg/.worktrees/*/Makefile": allow
     "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/docs/**": allow
     "apg/.worktrees/*/.gitignore": allow
     "apg/.worktrees/*/cmd/**": allow
     "apg/.worktrees/*/internal/cli/**": allow
@@ -69,6 +70,7 @@ permission:
     "go.sum": deny
     "Makefile": deny
     "README.md": deny
+    "docs/**": deny
     ".gitignore": deny
     "cmd/**": deny
     "internal/**": deny
@@ -88,6 +90,7 @@ permission:
     "apg/.worktrees/*/go.sum": allow
     "apg/.worktrees/*/Makefile": allow
     "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/docs/**": allow
     "apg/.worktrees/*/.gitignore": allow
     "apg/.worktrees/*/cmd/**": allow
     "apg/.worktrees/*/internal/cli/**": allow
@@ -107,6 +110,7 @@ permission:
     "apg/.worktrees/*/go.sum": allow
     "apg/.worktrees/*/Makefile": allow
     "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/docs/**": allow
     "apg/.worktrees/*/.gitignore": allow
     "apg/.worktrees/*/cmd/**": allow
     "apg/.worktrees/*/internal/cli/**": allow
@@ -126,6 +130,7 @@ permission:
     "apg/.worktrees/*/go.sum": allow
     "apg/.worktrees/*/Makefile": allow
     "apg/.worktrees/*/README.md": allow
+    "apg/.worktrees/*/docs/**": allow
     "apg/.worktrees/*/.gitignore": allow
     "apg/.worktrees/*/cmd/**": allow
     "apg/.worktrees/*/internal/cli/**": allow
@@ -188,7 +193,8 @@ project worktree (`apg/.worktrees/<project>/`); main is never a mutation place.
 `go.mod`, `go.sum`, `Makefile` (the single build entry, incl. the CGO_ENABLED=0
 `cross`/`release` targets for darwin/{arm64,amd64}, windows/{amd64,arm64},
 linux/{amd64,arm64}), `.gitignore`,
-`README.md`, `cmd/**`, `internal/cli/**`, `internal/scaffold/**`,
+`README.md`, `docs/**` (user-facing documentation, e.g. `docs/templates.md`,
+`docs/layered-libraries.md`, `docs/cookbook.md`), `cmd/**`, `internal/cli/**`, `internal/scaffold/**`,
 `internal/suggest/**`, `internal/config/**` (per-user settings store, stdlib
 only; its `config_test.go` is test-implementer's), the root legal/release docs `LICENSE`, `NOTICE`,
 `TRADEMARKS.md`, `CHANGELOG.md`, and `brand/**` (brand source such as `.svg`
