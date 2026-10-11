@@ -2,13 +2,11 @@ package server
 
 import (
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/template"
-	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // This file is the plan.phase-02.task-1 deliverable for
@@ -127,6 +125,13 @@ func TestTemplatesRetargeted(t *testing.T) {
 // library-file edit still live-reloads under the pinned root
 // (template-retarget-requires-restart, never-serve-broken-deck).
 //
+// Its pinned startup theme registry is built the way Reloader.loadLibrary
+// builds it — server.loadLibraryThemeRegistry over EVERY merged library layer
+// (reload.go), not theme.LoadDir on the merged Library's primary root — so a
+// two-layer deck whose theme lives ONLY in the external `templates:` layer
+// still loads and serves (layered-template-library, theme-selection); the
+// external-only-theme case is covered by a subtest.
+//
 // It writes the real deck and external libraries from writeRetargetFixture to
 // temporary directories and drives NewReloader/(Reloader).Reload directly (no
 // watcher, no SSE stream), so it is skipped under -short.
@@ -145,9 +150,9 @@ func TestReloaderRetargetRequiresRestartIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("template.LoadDeckLibrary: %v", err)
 	}
-	themes, err := theme.LoadDir(os.DirFS(lib.RootPath), template.ThemesDir)
+	themes, err := loadLibraryThemeRegistry(lib)
 	if err != nil {
-		t.Fatalf("theme.LoadDir: %v", err)
+		t.Fatalf("loadLibraryThemeRegistry: %v", err)
 	}
 
 	srv := mustListen(t, Options{Root: f.deckDir, Library: lib, Themes: themes})
@@ -226,4 +231,94 @@ func TestReloaderRetargetRequiresRestartIntegration(t *testing.T) {
 	if !strings.Contains(body, `<h1 class="edited">Hi</h1>`) {
 		t.Fatalf("a library-file edit under the pinned root did not live-reload: %q", body)
 	}
+
+	// A two-layer deck whose theme lives ONLY in the external `templates:`
+	// layer still loads and serves: the pinned startup registry is built from
+	// every merged layer through loadLibraryThemeRegistry, so the external-only
+	// theme resolves (layered-template-library, theme-selection).
+	// theme.LoadDir on the merged Library's primary (local) root would find no
+	// themes/ and fail here.
+	t.Run("a two-layer deck whose theme lives only in the external layer serves the pinned startup library", func(t *testing.T) {
+		parent := t.TempDir()
+		deckDir := filepath.Join(parent, "deck")
+		libDir := filepath.Join(parent, "shared-lib")
+		localDir := filepath.Join(deckDir, template.TemplatesDir)
+
+		writeFile(t, filepath.Join(deckDir, "kalide.yaml"),
+			retargetDeckYAML("Retarget Deck", retargetStartup))
+		writeFile(t, filepath.Join(deckDir, "slides", "1-hello.md"),
+			"---\ntemplate: hello\ntitle: Hi\n---\n")
+		writeFile(t, filepath.Join(deckDir, "slides", "2-local.md"),
+			"---\ntemplate: localonly\ntitle: Lo\n---\n")
+
+		// The external `templates:` layer contributes the hello template and
+		// the deck's ONLY theme, default.
+		writeExternalLibrary(t, libDir, "shared-lib", "shared hello description",
+			"<section><h1>{{.title}}</h1></section>\n")
+
+		// The deck-root templates/ local layer contributes a slide but carries
+		// no themes/, so the deck's theme (`default`) lives ONLY in the
+		// external layer.
+		writeFile(t, filepath.Join(localDir, template.LibraryFile),
+			"name: local-lib\ndescription: local deck library\nformat: 1\n")
+		writeFile(t, filepath.Join(localDir, template.SlidesDir, "localonly", template.ManifestFile),
+			"description: local only description\n"+
+				"fields:\n"+
+				"  - name: title\n"+
+				"    type: text\n"+
+				"    required: true\n"+
+				"body:\n"+
+				"  mode: optional\n")
+		writeFile(t, filepath.Join(localDir, template.SlidesDir, "localonly", template.LayoutFile),
+			"<section><h1 class=\"local\">{{.title}}</h1></section>\n")
+		writeFile(t, filepath.Join(localDir, template.SlidesDir, "localonly", template.ExampleFile),
+			"---\ntemplate: localonly\ntitle: Example\n---\n")
+
+		lib, err := template.LoadDeckLibrary(deckDir, retargetStartup)
+		if err != nil {
+			t.Fatalf("template.LoadDeckLibrary: %v", err)
+		}
+		if len(lib.Layers) != 2 {
+			t.Fatalf("startup library has %d layers, want 2 (external + local)", len(lib.Layers))
+		}
+
+		// The per-layer theme registry resolves the deck's default theme even
+		// though it lives only in the external layer.
+		themes, err := loadLibraryThemeRegistry(lib)
+		if err != nil {
+			t.Fatalf("loadLibraryThemeRegistry: %v", err)
+		}
+		if _, err := themes.Lookup("default"); err != nil {
+			t.Fatalf("the external-only theme default did not resolve: %v", err)
+		}
+
+		srv := mustListen(t, Options{Root: deckDir, Library: lib, Themes: themes})
+		rl, err := NewReloader(ReloadOptions{Server: srv, Root: deckDir, Title: "Retarget", Log: io.Discard})
+		if err != nil {
+			t.Fatalf("NewReloader: %v", err)
+		}
+		if err := rl.Start(); err != nil {
+			t.Fatalf("Reloader.Start: %v", err)
+		}
+		t.Cleanup(rl.Stop)
+
+		// The pinned startup library serves the deck from both merged layers
+		// with the external-only theme.
+		body := getBody(t, srv, rootPath)
+		if strings.Contains(body, "Deck error") {
+			t.Fatalf("external-only-theme layered deck serves the error page: %q", body)
+		}
+		if !strings.Contains(body, "<h1>Hi</h1>") {
+			t.Fatalf("external-only-theme layered deck did not render the external layer's hello template: %q", body)
+		}
+		if !strings.Contains(body, `<h1 class="local">Lo</h1>`) {
+			t.Fatalf("external-only-theme layered deck did not render the local layer's localonly template: %q", body)
+		}
+
+		// The pinned per-layer theme route serves the external-only theme from
+		// the external layer's own root (the unprefixed owner fallback).
+		if got := getBody(t, srv, ThemesPath+"default/theme.css"); !strings.Contains(got, "margin: 0") {
+			t.Fatalf("the external-only theme default did not serve from the pinned library: %q", got)
+		}
+	})
 }
