@@ -1,6 +1,9 @@
 package template
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // This file is the home of the `child` and `children` layout constructors: the
 // two constructors a `section` helper call uses to pass child sections to its
@@ -226,4 +229,156 @@ func ChildrenFunc(args ...any) (*ChildRequest, error) {
 		Forward: true,
 		Entries: entries,
 	}, nil
+}
+
+// ResolveChildCall resolves one literal `child` argument against the declared
+// section it fills on its parent template, building the resolved instance the
+// parent renders it as (requirements.requirement.child-constructor,
+// requirements.requirement.section-helper,
+// requirements.requirement.nested-section-validation).
+//
+// lookup and layerOf are the same resolver pair ResolveSectionCallLayered takes:
+// lookup resolves a section-template name in the merged template namespace
+// (either library layer), and layerOf reports the *LibraryLayer that contributed
+// a resolved name, or nil when the caller has no provenance (a single-root
+// library, or a resolver built in code). parent is the template instance the
+// child is a child OF — the `section` helper call's target — whose declared
+// section req.Section the child fills. req is the literal ChildRequest to
+// resolve; a `children` forwarding (req.Forward) is resolved by ResolveChildren,
+// not here, and is refused.
+//
+// index and count place the child among its same-name siblings: index is its
+// zero-based position and count the number of instances in the group, so the
+// `.item` descriptor carries index/number/count/first/last exactly as an authored
+// instance's does (requirements.requirement.item-context). parentFields is the
+// parent instance's field values, carried out as `.item.parent` (nil from a
+// slide layout, where the parent is the slide, not a section instance).
+//
+// Resolution mirrors an authored section instance of the named declaration:
+//
+//   - req.Section must be a section parent declares; an undeclared name is an
+//     error naming the section and the parent template;
+//   - the reserved `template` key is stripped from a COPY of req.Fields and used
+//     as the selector: it is required iff the declaration accepts more than one
+//     template, omitted when exactly one is accepted (that one is instantiated),
+//     and must be one of the accepted names. The stripped copy is what is
+//     validated, so the selector is never counted as an undeclared field and a
+//     template's own `template` field cannot be set through a child
+//     (requirements.requirement.field-rules);
+//   - the instantiated template's declared defaults are materialised FIRST and
+//     the effective map is validated with CheckValues (defaults-first);
+//   - req.Body is validated against the instantiated template's body rule with
+//     CheckBody (requirements.requirement.body-rules). Unlike the `section`
+//     helper's own body, a child body MAY name the instantiated template's
+//     declared child sections: those are the child's own nested instances, so no
+//     child-section heading is rejected here.
+//
+// The resolved instance is returned as a *SectionCall — the same resolved-
+// instance shape ResolveSectionCallLayered returns — because a child resolves
+// exactly like the helper's own target and the two share Template, Values, Body,
+// Item and Layer. `.item.section` is the named declared section (req.Section)
+// while `.item.template` is the instantiated template's name. Layer is
+// layerOf(tmplName), the instantiated template's OWN owning layer, so the child's
+// `media`/`theme:<name>/` references resolve in that layer even when the layout
+// comes from the other library layer (requirements.requirement.library-layer-references);
+// a nil Layer means the primary/merged root.
+//
+// Nested req.Children are deliberately NOT resolved here: a resolved literal
+// child carries no nested instances yet. The recursive resolution of a child's
+// own children — and of a `children` forwarding's entries — belongs to
+// ResolveChildren (phase-1 task 6) and the call-level child plumbing (task 9).
+// ResolveChildCall resolves exactly one literal child's own fields, body and
+// `.item` descriptor; it adds no data access of its own.
+func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, req *ChildRequest, index, count int, parentFields map[string]any) (*SectionCall, error) {
+	if req == nil {
+		return nil, fmt.Errorf("child: request must not be nil")
+	}
+	if req.Forward {
+		return nil, fmt.Errorf("child %q: a children forwarding is resolved by ResolveChildren, not ResolveChildCall", req.Section)
+	}
+	if parent == nil {
+		return nil, fmt.Errorf("child %q: no parent template to resolve the declared section against", req.Section)
+	}
+	if lookup == nil {
+		return nil, fmt.Errorf("child %q: no template resolver", req.Section)
+	}
+
+	decl, declared := declaredSection(parent, req.Section)
+	if !declared {
+		return nil, fmt.Errorf("child: section %q is not declared by parent template %q", req.Section, parent.Name)
+	}
+	if len(decl.Accepted) == 0 {
+		return nil, fmt.Errorf("child: section %q on parent template %q accepts no section template", req.Section, parent.Name)
+	}
+
+	// Strip the `template` selector from a copy of the fields before any field
+	// validation: it is the selector, not a declared field, and stripping it is
+	// what lets it take precedence over a template-declared field of the same
+	// name (which therefore cannot be set through a child).
+	fields := make(map[string]any, len(req.Fields))
+	for k, v := range req.Fields {
+		fields[k] = v
+	}
+	selector, hasSelector := "", false
+	if raw, present := fields["template"]; present {
+		hasSelector = true
+		delete(fields, "template")
+		s, ok := raw.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			return nil, fmt.Errorf("child %q: key %q must name a section template", req.Section, "template")
+		}
+		selector = s
+	}
+
+	var tmplName string
+	if !hasSelector {
+		if len(decl.Accepted) > 1 {
+			return nil, fmt.Errorf("child: section %q on parent template %q accepts more than one template; a %q selector is required",
+				req.Section, parent.Name, "template")
+		}
+		tmplName = decl.Accepted[0]
+	} else {
+		if !containsString(decl.Accepted, selector) {
+			return nil, fmt.Errorf("child: section %q on parent template %q does not accept template %q (accepts %s)",
+				req.Section, parent.Name, selector, strings.Join(decl.Accepted, ", "))
+		}
+		tmplName = selector
+	}
+
+	target, ok := lookup(tmplName)
+	if !ok || target == nil {
+		return nil, fmt.Errorf("child %q: section template %q is not defined", req.Section, tmplName)
+	}
+	if target.Usage != UsageSection {
+		return nil, fmt.Errorf("child %q: template %q is not a section-usage template", req.Section, tmplName)
+	}
+
+	effective := applyFieldDefaults(target, fields)
+	if res := CheckValues(effective, target, lookup); len(res.Errors) > 0 {
+		return nil, res.Errors[0]
+	}
+
+	if ve, invalid := CheckBody(target.Body, req.Body); invalid {
+		return nil, ve
+	}
+
+	call := &SectionCall{
+		Template: target,
+		Values:   effective,
+		Body:     req.Body,
+		Item: map[string]any{
+			"index":    index,
+			"number":   index + 1,
+			"count":    count,
+			"first":    index == 0,
+			"last":     index == count-1,
+			"section":  req.Section,
+			"template": tmplName,
+			"parent":   parentFields,
+		},
+	}
+	if layerOf != nil {
+		call.Layer = layerOf(tmplName)
+	}
+	return call, nil
 }
