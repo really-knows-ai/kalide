@@ -18,9 +18,12 @@ package scaffold
 // same set requirements.constraint.upgrade-owned-scaffold-scope names:
 //
 //   - the embedded seed tree writeHelloSeed copies (seedRoot), walked exactly
-//     as the writer walks it, plus the deck-root AGENTS.md it carries;
-//   - the library-root AGENTS.md, read through mustReadLibraryGuide (the
-//     accessor InitLibrary writes);
+//     as the writer walks it, plus the deck-root AGENTS_KALIDE.md full guide and
+//     its AGENTS.md pointer the walk carries;
+//   - the library-root AGENTS.md pointer, read through mustReadLibraryGuide
+//     (the accessor InitLibrary writes), and the library-root AGENTS_KALIDE.md
+//     full guide, read through mustReadLibraryFullGuide (the pair writer's full
+//     guide);
 //   - the library's seeded themes/default/theme.css, returned by
 //     DefaultThemeCSS() (the accessor InitLibrary writes).
 //
@@ -88,19 +91,26 @@ type shippedScaffoldFile struct {
 // writers rather than from a hand-written list.
 //
 // It is the single derivation the drift self-test consumes: the seed tree and
-// its deck-root AGENTS.md come from the writeHelloSeed walk (derivedSeedScaffold),
-// the library-root AGENTS.md from mustReadLibraryGuide, and the library's
-// seeded themes/default/theme.css from DefaultThemeCSS(). The result is sorted
-// by identity so iteration and any failure output are deterministic.
+// its deck-root AGENTS_KALIDE.md + AGENTS.md guide pair come from the
+// writeHelloSeed walk (derivedSeedScaffold), the library-root AGENTS.md pointer
+// from mustReadLibraryGuide, the library-root AGENTS_KALIDE.md full guide from
+// mustReadLibraryFullGuide, and the library's seeded themes/default/theme.css
+// from DefaultThemeCSS(). The result is sorted by identity so iteration and any
+// failure output are deterministic.
 func derivedShippedScaffold(t *testing.T) []shippedScaffoldFile {
 	t.Helper()
 
 	files := derivedSeedScaffold(t)
 	files = append(files,
 		shippedScaffoldFile{
-			identity: catalogOwnedIdentity(catalogIdentityLibraryForm, "AGENTS.md"),
-			origin:   "mustReadLibraryGuide (InitLibrary library-root guide)",
+			identity: catalogOwnedIdentity(catalogIdentityLibraryForm, agentsGuideName),
+			origin:   "mustReadLibraryGuide (InitLibrary library-root pointer)",
 			data:     mustReadLibraryGuide(),
+		},
+		shippedScaffoldFile{
+			identity: catalogOwnedIdentity(catalogIdentityLibraryForm, agentGuideFullGuideName),
+			origin:   "mustReadLibraryFullGuide (InitLibrary library-root full guide)",
+			data:     mustReadLibraryFullGuide(),
 		},
 		shippedScaffoldFile{
 			identity: catalogOwnedIdentity(catalogIdentityLibraryForm,
@@ -114,12 +124,15 @@ func derivedShippedScaffold(t *testing.T) []shippedScaffoldFile {
 	return files
 }
 
-// derivedSeedScaffold walks the embedded seed tree exactly as writeHelloSeed
-// does (fs.WalkDir over seedRoot, files only, relative slash paths) and returns
-// each seed file paired with its "deck:<path>" catalogue identity. The seed's
-// kalide.yaml is filtered out: it is the author-edited deck configuration, not
-// a whole-file kalide-owned member (requirements.constraint.upgrade-owned-
-// scaffold-scope), and it has no catalogue identity.
+// derivedSeedScaffold walks the embedded seed tree as writeHelloSeed does
+// (fs.WalkDir over seedRoot, files only, relative slash paths) and returns each
+// seed file paired with its "deck:<path>" catalogue identity. The walk carries
+// the deck-root guide pair too, because the embedded seed/AGENTS_KALIDE.md and
+// seed/AGENTS.md are exactly the full-guide and pointer bytes writeHelloSeed's
+// writeAgentGuidePair emits. The seed's kalide.yaml is filtered out: it is the
+// author-edited deck configuration, not a whole-file kalide-owned member
+// (requirements.constraint.upgrade-owned-scaffold-scope), and it has no
+// catalogue identity.
 func derivedSeedScaffold(t *testing.T) []shippedScaffoldFile {
 	t.Helper()
 

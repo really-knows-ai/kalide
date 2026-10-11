@@ -46,13 +46,17 @@ const catalogHelloTemplateName = "hello"
 // The owned-file identities the lookup tests exercise, built with the same
 // form+path schema scaffoldversions.json uses (catalogOwnedIdentity) and the
 // canonical path elements the writers use, so an assertion names an owned file
-// rather than a hand-copied identity string.
+// rather than a hand-copied identity string. The author-guide split gives each
+// form two identities: the AGENTS.md pointer (catalog*AGENTS) and the
+// AGENTS_KALIDE.md full guide (catalog*FullGuide).
 //
 // catalogUnownedConfig is deliberately NOT a kalide-owned whole-file member: it
 // is the author-edited deck configuration, so it has no catalogue identity and
 // catalogLookup must reject it for any bytes.
 var (
-	catalogDeckAGENTS   = catalogOwnedIdentity(catalogIdentityDeckForm, deckGuideSeedPath)
+	catalogDeckAGENTS    = catalogOwnedIdentity(catalogIdentityDeckForm, deckPointerSeedPath)
+	catalogDeckFullGuide = catalogOwnedIdentity(catalogIdentityDeckForm,
+		agentGuideFullGuideName)
 	catalogDeckThemeCSS = catalogOwnedIdentity(catalogIdentityDeckForm,
 		path.Join(template.TemplatesDir, template.ThemesDir, theme.DefaultName, template.ThemeStylesheet))
 	catalogDeckDefaultSlide = catalogOwnedIdentity(catalogIdentityDeckForm,
@@ -60,7 +64,9 @@ var (
 	catalogDeckHelloExample = catalogOwnedIdentity(catalogIdentityDeckForm,
 		path.Join(template.TemplatesDir, template.SlidesDir, catalogHelloTemplateName, template.ExampleFile))
 
-	catalogLibraryAGENTS   = catalogOwnedIdentity(catalogIdentityLibraryForm, deckGuideSeedPath)
+	catalogLibraryAGENTS    = catalogOwnedIdentity(catalogIdentityLibraryForm, deckPointerSeedPath)
+	catalogLibraryFullGuide = catalogOwnedIdentity(catalogIdentityLibraryForm,
+		agentGuideFullGuideName)
 	catalogLibraryThemeCSS = catalogOwnedIdentity(catalogIdentityLibraryForm,
 		path.Join(template.ThemesDir, theme.DefaultName, template.ThemeStylesheet))
 
@@ -102,19 +108,21 @@ func catalogShippedDigest(t *testing.T, identity string) string {
 // nothing, and an unknown identity resolves to nothing even for bytes that are
 // catalogued under some other identity.
 //
-// The concrete cross-identity cases — the seed/library default theme.css
-// collision, a slides/1-hello.md digest presented under AGENTS.md, and an
-// unknown identity — are implemented by upgrade/plan.phase-01.task-11, which
-// consumes the scaffolding above. This skeleton keeps the file compiling and
-// green until then.
+// The concrete cross-identity cases are the seed/library default theme.css
+// collision, the example-template/starter-slide collision, and the author-guide
+// split: the byte-identical AGENTS.md pointers resolve under both AGENTS.md
+// identities but never under an AGENTS_KALIDE.md full-guide identity, and each
+// form's full guide resolves only under its own AGENTS_KALIDE.md identity.
 func TestCatalogLookup(t *testing.T) {
 	t.Run("scaffolding: the shipped lookup fixtures derive to bytes", func(t *testing.T) {
 		fixtures := []string{
 			catalogDeckAGENTS,
+			catalogDeckFullGuide,
 			catalogDeckThemeCSS,
 			catalogDeckDefaultSlide,
 			catalogDeckHelloExample,
 			catalogLibraryAGENTS,
+			catalogLibraryFullGuide,
 			catalogLibraryThemeCSS,
 		}
 		for _, identity := range fixtures {
@@ -158,10 +166,12 @@ func TestCatalogLookup(t *testing.T) {
 	t.Run("a catalogued digest resolves through its own identity", func(t *testing.T) {
 		for _, identity := range []string{
 			catalogDeckAGENTS,
+			catalogDeckFullGuide,
 			catalogDeckThemeCSS,
 			catalogDeckDefaultSlide,
 			catalogDeckHelloExample,
 			catalogLibraryAGENTS,
+			catalogLibraryFullGuide,
 			catalogLibraryThemeCSS,
 		} {
 			data := catalogShippedBytes(t, identity)
@@ -176,6 +186,62 @@ func TestCatalogLookup(t *testing.T) {
 			if versions := knownCatalog.versionsForDigest(identity, digest); len(versions) == 0 {
 				t.Errorf("versionsForDigest(%q, %s) is empty; catalogLookup matched but the identity's entry carries no releases",
 					identity, digest)
+			}
+		}
+	})
+
+	t.Run("the split guide pair resolves only under its own identity", func(t *testing.T) {
+		// The two AGENTS.md pointers are byte-identical (the same fixed
+		// reference file), so the pointer bytes resolve under BOTH AGENTS.md
+		// identities — each catalogues the same pointer digest — but never under
+		// an AGENTS_KALIDE.md full-guide identity.
+		deckPointer := catalogShippedBytes(t, catalogDeckAGENTS)
+		libraryPointer := catalogShippedBytes(t, catalogLibraryAGENTS)
+		if !bytes.Equal(deckPointer, libraryPointer) {
+			t.Fatalf("%s and %s no longer share bytes; the two AGENTS.md pointers are byte-identical",
+				catalogDeckAGENTS, catalogLibraryAGENTS)
+		}
+		for _, identity := range []string{catalogDeckAGENTS, catalogLibraryAGENTS} {
+			if !catalogLookup(identity, deckPointer) {
+				t.Errorf("catalogLookup(%q, the AGENTS.md pointer bytes) = false, want true", identity)
+			}
+		}
+		for _, identity := range []string{catalogDeckFullGuide, catalogLibraryFullGuide} {
+			if catalogLookup(identity, deckPointer) {
+				t.Errorf("catalogLookup(%q, the AGENTS.md pointer bytes) = true; a full-guide identity must not carry the pointer digest",
+					identity)
+			}
+		}
+
+		// The deck and library full guides differ, so each resolves only under
+		// its own AGENTS_KALIDE.md identity, never the other's nor an AGENTS.md
+		// pointer identity.
+		deckFull := catalogShippedBytes(t, catalogDeckFullGuide)
+		libraryFull := catalogShippedBytes(t, catalogLibraryFullGuide)
+		if bytes.Equal(deckFull, libraryFull) {
+			t.Fatalf("%s and %s share bytes; the deck and library full guides must differ",
+				catalogDeckFullGuide, catalogLibraryFullGuide)
+		}
+		if !catalogLookup(catalogDeckFullGuide, deckFull) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogDeckFullGuide)
+		}
+		if !catalogLookup(catalogLibraryFullGuide, libraryFull) {
+			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogLibraryFullGuide)
+		}
+		if catalogLookup(catalogLibraryFullGuide, deckFull) {
+			t.Errorf("catalogLookup(%q, the deck full-guide bytes) = true; identity scoping is broken", catalogLibraryFullGuide)
+		}
+		if catalogLookup(catalogDeckFullGuide, libraryFull) {
+			t.Errorf("catalogLookup(%q, the library full-guide bytes) = true; identity scoping is broken", catalogDeckFullGuide)
+		}
+		for _, identity := range []string{catalogDeckAGENTS, catalogLibraryAGENTS} {
+			if catalogLookup(identity, deckFull) {
+				t.Errorf("catalogLookup(%q, the deck full-guide bytes) = true; an AGENTS.md identity must not carry a full-guide digest",
+					identity)
+			}
+			if catalogLookup(identity, libraryFull) {
+				t.Errorf("catalogLookup(%q, the library full-guide bytes) = true; an AGENTS.md identity must not carry a full-guide digest",
+					identity)
 			}
 		}
 	})
@@ -287,10 +353,12 @@ func TestCatalogLookup(t *testing.T) {
 		// catalogued version of that file.
 		for _, identity := range []string{
 			catalogDeckAGENTS,
+			catalogDeckFullGuide,
 			catalogDeckThemeCSS,
 			catalogDeckDefaultSlide,
 			catalogDeckHelloExample,
 			catalogLibraryAGENTS,
+			catalogLibraryFullGuide,
 			catalogLibraryThemeCSS,
 		} {
 			data := catalogShippedBytes(t, identity)
@@ -320,18 +388,22 @@ const (
 // TestCatalogRollForwardV090 is the unit regression guard for the v0.9.0
 // AGENTS.md digests' roll-forward into scaffoldversions.json
 // (global.constraint.upgrade-known-version-catalog): the v0.9.0 release shipped
-// exactly catalogV090DeckAGENTSDigest for deck:AGENTS.md and
-// catalogV090LibraryAGENTSDigest for library:AGENTS.md, and both must be
-// catalogued under their own identity, never under the other's.
+// exactly catalogV090DeckAGENTSDigest at the deck AGENTS.md path and
+// catalogV090LibraryAGENTSDigest at the library AGENTS.md path, and both must
+// stay catalogued under those same AGENTS.md identities (the known-released
+// full-guide digests the migration resolves), never dropped and never
+// re-pointed at the pointer digest — while the current full-guide digest is
+// catalogued under the new AGENTS_KALIDE.md identities.
 //
 // catalogLookup resolves caller bytes through the per-identity digest map
 // digestsForIdentity enumerates and versionsForDigest reads. A historical
 // release's bytes are not shipped — the catalogue holds digests only — so there
 // is no SHA-256 preimage to hand catalogLookup for these two digests; the
 // digest-keyed recognition is asserted through that same map, which is exactly
-// the membership catalogLookup tests. The two live AGENTS.md identities are
-// additionally driven through catalogLookup itself with the current shipped
-// bytes to prove the identity scoping is real, not a property of the map alone.
+// the membership catalogLookup tests. The live AGENTS.md identities and the
+// AGENTS_KALIDE.md full-guide identities are additionally driven through
+// catalogLookup itself with the current shipped bytes to prove the identity
+// scoping is real, not a property of the map alone.
 func TestCatalogRollForwardV090(t *testing.T) {
 	// The v0.9.0 (identity, digest) pairs, each with the other AGENTS.md
 	// identity its digest must never resolve under.
@@ -407,23 +479,46 @@ func TestCatalogRollForwardV090(t *testing.T) {
 		}
 	})
 
+	t.Run("the current full-guide digest is catalogued under the AGENTS_KALIDE.md identities", func(t *testing.T) {
+		// The split pair adds a full-guide identity per form; each carries the
+		// current full guide as its unreleased entry, so a project left with an
+		// older guide still resolves the released digest under its AGENTS.md
+		// identity while the running binary's bytes resolve under the new one.
+		for _, identity := range []string{catalogDeckFullGuide, catalogLibraryFullGuide} {
+			data := catalogShippedBytes(t, identity)
+			if !catalogLookup(identity, data) {
+				t.Errorf("catalogLookup(%q, its own shipped full-guide bytes) = false, want true", identity)
+				continue
+			}
+			if versions := knownCatalog.versionsForDigest(identity, shippedScaffoldDigest(data)); !slices.Contains(versions, "unreleased") {
+				t.Errorf("versionsForDigest(%q, its current digest) = %v, want the current full guide catalogued as unreleased",
+					identity, versions)
+			}
+		}
+	})
+
 	t.Run("catalogLookup scopes the live AGENTS.md identities", func(t *testing.T) {
-		// Drive the identity-scoped lookup itself on the two identities the
-		// v0.9.0 entries belong to: each identity's current shipped bytes resolve
-		// only through their own identity, never the other's.
+		// The two AGENTS.md pointers are byte-identical, so the current pointer
+		// bytes resolve under BOTH AGENTS.md identities (each catalogues the
+		// same pointer digest). Identity scoping is still real: the pointer
+		// bytes never resolve under the AGENTS_KALIDE.md full-guide identities,
+		// whose entries carry the (different) full-guide digests.
 		deck := catalogShippedBytes(t, catalogDeckAGENTS)
 		library := catalogShippedBytes(t, catalogLibraryAGENTS)
-		if !catalogLookup(catalogDeckAGENTS, deck) {
-			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogDeckAGENTS)
+		if !bytes.Equal(deck, library) {
+			t.Fatalf("%s and %s no longer share bytes; the two AGENTS.md pointers are byte-identical",
+				catalogDeckAGENTS, catalogLibraryAGENTS)
 		}
-		if !catalogLookup(catalogLibraryAGENTS, library) {
-			t.Errorf("catalogLookup(%q, its own shipped bytes) = false, want true", catalogLibraryAGENTS)
+		for _, identity := range []string{catalogDeckAGENTS, catalogLibraryAGENTS} {
+			if !catalogLookup(identity, deck) {
+				t.Errorf("catalogLookup(%q, the shipped AGENTS.md pointer bytes) = false, want true", identity)
+			}
 		}
-		if catalogLookup(catalogDeckAGENTS, library) {
-			t.Errorf("catalogLookup(%q, the library AGENTS.md bytes) = true; the AGENTS.md identities are not scoped", catalogDeckAGENTS)
-		}
-		if catalogLookup(catalogLibraryAGENTS, deck) {
-			t.Errorf("catalogLookup(%q, the deck AGENTS.md bytes) = true; the AGENTS.md identities are not scoped", catalogLibraryAGENTS)
+		for _, identity := range []string{catalogDeckFullGuide, catalogLibraryFullGuide} {
+			if catalogLookup(identity, deck) {
+				t.Errorf("catalogLookup(%q, the AGENTS.md pointer bytes) = true; a full-guide identity must not carry the pointer digest",
+					identity)
+			}
 		}
 	})
 }

@@ -9,11 +9,12 @@ package scaffold
 // template.ReservedNames, template.ContextKeys, template.ManifestTopLevelKeys,
 // template.LibraryMetaKeys, template.MediaURLPrefix (the reserved `media:`
 // prefix) and template.LayoutFuncMap (the v1 `media` helper), plus
-// deck.ConfigKeys — and the two guide byte streams are read through
-// mustReadSeed and mustReadLibraryGuide. It never restates the vocabulary as a
-// hand-maintained fixture list: a format token added to the implementation is
-// returned by an accessor and immediately has to appear in a guide, so a token
-// the union of the two guides omits makes the test fail.
+// deck.ConfigKeys — and the two full AGENTS_KALIDE.md guides are read through
+// mustReadSeed and mustReadLibraryFullGuide, while the AGENTS.md pointers are
+// separately asserted to carry the reference line. It never restates the
+// vocabulary as a hand-maintained fixture list: a format token added to the
+// implementation is returned by an accessor and immediately has to appear in a
+// guide, so a token the union of the two guides omits makes the test fail.
 //
 // Coverage is per guide so the test never demands from a guide a token its
 // declared scope does not own:
@@ -30,8 +31,8 @@ package scaffold
 //
 // Negative assertion: the kalide.yaml config keys and the init/version CLI are
 // deliberately OUTSIDE the library-guide scope, so their absence from
-// libraryguide/AGENTS.md is never asserted and cannot fail the test. The test
-// also never asserts their textual absence — the library guide is free to
+// libraryguide/AGENTS_KALIDE.md is never asserted and cannot fail the test. The
+// test also never asserts their textual absence — the library guide is free to
 // mention them; it just is not required to.
 //
 // Matching is context-aware (feedback-17): a token counts only where the format
@@ -84,9 +85,16 @@ import (
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
-// deckGuideSeedPath is the deck guide's path within the embedded seed tree; it
-// is also the path writeHelloSeed copies it to in a scaffolded deck.
-const deckGuideSeedPath = "AGENTS.md"
+// deckGuideSeedPath is the deck full guide's path within the embedded seed
+// tree (AGENTS_KALIDE.md); it is also the path writeHelloSeed's pair writer
+// writes the full guide to in a scaffolded deck, and the bytes both drift
+// guides are read from.
+const deckGuideSeedPath = agentGuideFullGuideName
+
+// deckPointerSeedPath is the deck AGENTS.md pointer's path within the embedded
+// seed tree; it is also the path the pair writer writes the pointer to in a
+// scaffolded deck, and the path the catalog AGENTS.md identities are keyed by.
+const deckPointerSeedPath = agentsGuideName
 
 // deckGuideCLI is the full CLI command set the deck guide must carry
 // (agent-guide-drift-check, agent-authoring). There is no canonical accessor
@@ -128,24 +136,44 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 				if agentGuideContainsToken(deckGuide, token) || agentGuideContainsToken(libraryGuide, token) {
 					continue
 				}
-				t.Errorf("implemented %s %q appears in neither guide; document it in seed/AGENTS.md and/or libraryguide/AGENTS.md", group.name, token)
+				t.Errorf("implemented %s %q appears in neither guide; document it in seed/AGENTS_KALIDE.md and/or libraryguide/AGENTS_KALIDE.md", group.name, token)
 			}
 		}
 	})
 
 	t.Run("deck guide: every kalide.yaml key and the full CLI set", func(t *testing.T) {
-		agentGuideAssertGuideCarries(t, "deck guide (seed/AGENTS.md)", deckGuide, []agentGuideTokenGroup{
+		agentGuideAssertGuideCarries(t, "deck guide (seed/AGENTS_KALIDE.md)", deckGuide, []agentGuideTokenGroup{
 			{name: "kalide.yaml key", tokens: deck.ConfigKeys()},
 			{name: "CLI command", tokens: deckGuideCLI},
 		})
 	})
 
 	t.Run("deck guide: the shared format vocabulary", func(t *testing.T) {
-		agentGuideAssertGuideCarries(t, "deck guide (seed/AGENTS.md)", deckGuide, agentGuideFormatGroups(t))
+		agentGuideAssertGuideCarries(t, "deck guide (seed/AGENTS_KALIDE.md)", deckGuide, agentGuideFormatGroups(t))
 	})
 
 	t.Run("library guide: layout, keys and format", func(t *testing.T) {
-		agentGuideAssertGuideCarries(t, "library guide (libraryguide/AGENTS.md)", libraryGuide, agentGuideLibraryScopeGroups(t))
+		agentGuideAssertGuideCarries(t, "library guide (libraryguide/AGENTS_KALIDE.md)", libraryGuide, agentGuideLibraryScopeGroups(t))
+	})
+
+	t.Run("the AGENTS.md pointers carry the full-guide reference line", func(t *testing.T) {
+		// The AGENTS.md files are pointers, not guides: each must carry the
+		// exact reference line the pair writer's scheme keys on, so a reader
+		// lands on the full AGENTS_KALIDE.md guide. This is the agent-guide-
+		// reference contract, asserted on the real embedded pointer bytes.
+		pointers := []struct {
+			name string
+			data []byte
+		}{
+			{"seed/" + deckPointerSeedPath, mustReadSeed(deckPointerSeedPath)},
+			{"libraryguide/" + deckPointerSeedPath, mustReadLibraryGuide()},
+		}
+		for _, pointer := range pointers {
+			if !strings.Contains(string(pointer.data), agentGuideReferenceLine) {
+				t.Errorf("%s does not carry the exact reference line %q; the pointer must name the full guide",
+					pointer.name, agentGuideReferenceLine)
+			}
+		}
 	})
 
 	t.Run("negative: deck-only tokens are not required in the library guide", func(t *testing.T) {
@@ -262,28 +290,31 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 	})
 
 	t.Run("the guides' fenced snippets load through the real parsers", func(t *testing.T) {
-		agentGuideAssertSnippetsLoad(t, "deck guide (seed/AGENTS.md)", deckGuide)
-		agentGuideAssertSnippetsLoad(t, "library guide (libraryguide/AGENTS.md)", libraryGuide)
+		agentGuideAssertSnippetsLoad(t, "deck guide (seed/AGENTS_KALIDE.md)", deckGuide)
+		agentGuideAssertSnippetsLoad(t, "library guide (libraryguide/AGENTS_KALIDE.md)", libraryGuide)
 	})
 
 	t.Run("the guides' inline template snippets parse with the layout func map", func(t *testing.T) {
-		agentGuideAssertInlineSnippetsParse(t, "deck guide (seed/AGENTS.md)", deckGuide)
-		agentGuideAssertInlineSnippetsParse(t, "library guide (libraryguide/AGENTS.md)", libraryGuide)
+		agentGuideAssertInlineSnippetsParse(t, "deck guide (seed/AGENTS_KALIDE.md)", deckGuide)
+		agentGuideAssertInlineSnippetsParse(t, "library guide (libraryguide/AGENTS_KALIDE.md)", libraryGuide)
 	})
 }
 
-// agentGuideTexts reads the two embedded guides as strings through the same
-// helpers the scaffold writers use, and fails when either is empty.
+// agentGuideTexts reads the two embedded full guides (the deck's
+// seed/AGENTS_KALIDE.md and the library's libraryguide/AGENTS_KALIDE.md) as
+// strings through the same helpers the scaffold writers and the catalog drift
+// derivation use, and fails when either is empty. The AGENTS.md pointer bytes
+// are asserted separately; the drift vocabulary lives in the full guides.
 func agentGuideTexts(t *testing.T) (deckGuide, libraryGuide string) {
 	t.Helper()
 
 	deckGuide = string(mustReadSeed(deckGuideSeedPath))
-	libraryGuide = string(mustReadLibraryGuide())
+	libraryGuide = string(mustReadLibraryFullGuide())
 	if strings.TrimSpace(deckGuide) == "" {
-		t.Fatalf("embedded deck guide %s is empty", deckGuideSeedPath)
+		t.Fatalf("embedded deck full guide %s is empty", deckGuideSeedPath)
 	}
 	if strings.TrimSpace(libraryGuide) == "" {
-		t.Fatal("embedded library guide is empty")
+		t.Fatal("embedded library full guide is empty")
 	}
 	return deckGuide, libraryGuide
 }
