@@ -14,20 +14,36 @@ browser updating live as you edit.
 Everything needed to render and present is built into the program. It works
 offline, and there is no separate tool to install or run alongside it.
 
-- [kalide](#kalide)
 - [About the name](#about-the-name)
 - [Install](#install)
+  - [Homebrew (macOS)](#homebrew-macos)
+  - [Scoop (Windows)](#scoop-windows)
+  - [Manual download](#manual-download)
+  - [Upgrading the kalide binary](#upgrading-the-kalide-binary)
+  - [Upgrading a project](#upgrading-a-project)
 - [Supported computers](#supported-computers)
 - [Getting started](#getting-started)
 - [Commands](#commands)
-  - [kalide init](#kalide-init)
-  - [kalide config](#kalide-config)
+  - [`kalide init`](#kalide-init)
+  - [`kalide init-library`](#kalide-init-library)
+  - [`kalide config`](#kalide-config)
+  - [`kalide start`](#kalide-start)
+  - [`kalide templates`](#kalide-templates)
+  - [`kalide templates <name>`](#kalide-templates-name)
+  - [`kalide upgrade`](#kalide-upgrade)
+  - [`kalide version`](#kalide-version)
+  - [`kalide help`](#kalide-help)
 - [How a deck is laid out](#how-a-deck-is-laid-out)
 - [The templates/ library](#the-templates-library)
+  - [Layered libraries](#layered-libraries)
   - [The reserved template context](#the-reserved-template-context)
+  - [Layout helpers](#layout-helpers)
+  - [Composing layouts](#composing-layouts)
+  - [Author guides](#author-guides)
 - [What `kalide init` refuses to do](#what-kalide-init-refuses-to-do)
 - [Working offline](#working-offline)
 - [Making a PDF](#making-a-pdf)
+- [Examples](#examples)
 - [Install details](#install-details)
 - [License](#license)
 - [Changelog](#changelog)
@@ -43,7 +59,7 @@ when they're consistent.
 
 ## Install
 
-### Homebrew (macOS, Apple silicon and Intel)
+### Homebrew (macOS)
 
 ```sh
 brew tap really-knows-ai/kalide https://github.com/really-knows-ai/kalide
@@ -51,25 +67,28 @@ brew trust really-knows-ai/kalide
 brew install kalide
 ```
 
+The tap lives inside the main `kalide` repository, so there is **no separate tap
+repository** to add, and the same tap serves Apple silicon and Intel Macs.
 Homebrew 6.0.0 and later requires explicitly trusting a third-party tap before
-installing from it; no account or token is needed.
+installing from it. No GitHub account or token is needed.
 
-To upgrade: `brew update && brew upgrade kalide`.
-
-### Scoop (Windows, amd64 and arm64)
+### Scoop (Windows)
 
 ```powershell
 scoop bucket add kalide https://github.com/really-knows-ai/kalide
 scoop install kalide
 ```
 
-To upgrade: `scoop update; scoop update kalide`.
+The bucket lives inside the main `kalide` repository, so there is **no separate
+bucket repository** to add. It covers both 64-bit Intel/AMD and ARM Windows. No
+GitHub account or token is needed.
 
-### Manual download (Linux, or any platform)
+### Manual download
 
 Download the file for your computer from the
-[releases page](https://github.com/really-knows-ai/kalide/releases). This is
-the route on Linux, and a fallback on macOS and Windows.
+[releases page](https://github.com/really-knows-ai/kalide/releases). This is the
+route on Linux (there is no package-manager channel), and a fallback on macOS
+and Windows.
 
 `kalide` is a **single file**. To install it, copy that one file somewhere on
 your computer and run it. There is no installer, no runtime to install first,
@@ -92,6 +111,32 @@ built-in fallback of any kind. Every one of those comes from the project's
 own `templates/` library (see [The templates/ library](#the-templates-library)
 below); `kalide init` seeds a small unbranded starter library to get you
 going.
+
+### Upgrading the kalide binary
+
+Upgrading the **program** is a different thing from upgrading a **project**
+(below). Use your install channel:
+
+- **Homebrew:** `brew update && brew upgrade kalide`
+- **Scoop:** `scoop update; scoop update kalide`
+- **Manual download:** download the new release asset for your platform and
+  replace the old file.
+
+`kalide` never checks for updates by itself, and it never upgrades itself.
+
+### Upgrading a project
+
+`kalide upgrade` is a different thing entirely: it brings an existing deck or
+template library in the current directory forward to the running `kalide`. It
+runs entirely **offline**, takes **no path** and has **no `--force`**, and it
+**never overwrites author content** — a file you have edited is left untouched
+and reported, and a deleted starter file stays deleted. See
+[`kalide upgrade`](#kalide-upgrade) below, and [`INSTALL.md`](INSTALL.md) for
+the full install and upgrade guide.
+
+Full install, upgrade and uninstall steps for every platform are in
+[`INSTALL.md`](INSTALL.md). Release notes for every version are in
+[`CHANGELOG.md`](CHANGELOG.md); the license is in [`LICENSE`](LICENSE).
 
 ## Supported computers
 
@@ -138,9 +183,11 @@ Creates a starter deck in the **current folder**:
 kalide init [path] [--local]
 ```
 
-With no arguments it writes the built-in starter deck:
+With no arguments it writes the built-in starter deck and its local
+`templates/` library:
 
 ```
+AGENTS_KALIDE.md
 AGENTS.md
 kalide.yaml
 slides/1-hello.md
@@ -152,11 +199,12 @@ templates/themes/default/theme.css
 assets/
 ```
 
-`AGENTS.md` is a plain-text guide for coding agents that documents the deck
-and template format, so an agent can help author slides without guessing. It
-is written only when no `AGENTS.md` already exists: a pre-existing one is left
-untouched, and the file is inert — it is not part of the deck and does not
-affect `kalide start`.
+`AGENTS_KALIDE.md` is a plain-text guide for coding agents that documents the
+deck and template format, so an agent can help author slides without guessing.
+`AGENTS.md` beside it is a short pointer to that guide. Both are written only
+when absent, are preserved or extended rather than overwritten, and are inert:
+they are not part of the deck and do not affect `kalide start`. See
+[Author guides](#author-guides) for the exact scheme.
 
 The `templates/` folder it creates is a minimal, unbranded starter
 library — one `hello` slide template and one `default` theme — not a
@@ -186,6 +234,38 @@ the deck root; the configured default is stored as an absolute path. On success
 so it never reads the setting. `--local` together with a `[path]` is a usage
 error (exit code 2, nothing written). There is no `--force`. See
 [what it refuses to do](#what-kalide-init-refuses-to-do) below.
+
+### `kalide init-library`
+
+Creates a new, deck-ready template library at a required `<path>`:
+
+```
+kalide init-library <path>
+```
+
+```
+Created a template library at <path>:
+  library.yaml
+  AGENTS_KALIDE.md
+  AGENTS.md
+  slides/
+  sections/
+  media/
+  themes/default/theme.css
+```
+
+The library is valid and ready to host a deck, but holds nothing beyond a
+minimal `default` theme and the library-root author-guide pair (see
+[Author guides](#author-guides)); add templates, themes and media yourself.
+The library's `name` is derived from the target directory's base name and must
+match `[a-z0-9][a-z0-9-]*`; an invalid name is an error and nothing is written.
+
+`kalide init-library` refuses to overwrite: if the target already holds a
+`library.yaml` or any of the standard layout entries (`slides/`, `sections/`,
+`themes/`, `media/`), it fails and writes nothing. A target that is missing, or
+that exists and holds only unrelated files (a `.git` directory, a `README`), is
+allowed. A missing, extra or option-looking argument is a usage error (exit
+code 2, nothing written).
 
 ### `kalide config`
 
@@ -238,9 +318,13 @@ Only `kalide init` reads `default-template-dir`. `kalide start` and
 `kalide templates` never consult the user config: a deck always renders against
 its own `templates/` library, or the one `kalide.yaml` names.
 
-### `kalide start [--port N] [--no-open]`
+### `kalide start`
 
-Validates the whole deck and then serves it with live reload.
+Validates the whole deck and then serves it with live reload:
+
+```
+kalide start [--port N] [--no-open]
+```
 
 - The deck is checked **first**. If something is wrong, `kalide start` prints the
   single first problem and stops without serving anything. Fix it and run again.
@@ -256,18 +340,17 @@ Validates the whole deck and then serves it with live reload.
 
 ### `kalide templates`
 
-Lists every template in the project's **own `templates/` library** — its
-name, whether it is a `slide` or a `section`, and a one-line description.
-There is no built-in fallback of any kind: if the current folder has no
-valid `templates/` directory, `kalide templates` (and `kalide start`)
-reports the problem instead of listing anything.
+Lists every template in the project's resolved template library — its name,
+whether it is a `slide` or a `section`, and a one-line description. There is no
+built-in fallback of any kind: if the current folder has no valid library,
+`kalide templates` (and `kalide start`) reports the problem instead of listing
+anything.
 
 ### `kalide templates <name>`
 
 Shows one template's full documentation: its fields (type, whether required,
 default, limits, formats), its sections, the rules for its body text, and a
-copyable example, exactly as loaded from the project's `templates/`
-directory. For example:
+copyable example, exactly as loaded from the project's library. For example:
 
 ```
 kalide templates content
@@ -275,10 +358,35 @@ kalide templates content
 
 If the name is misspelled, `kalide` suggests the closest match.
 
+### `kalide upgrade`
+
+Brings the project in the **current directory** — a deck or a template
+library — forward to the running `kalide`:
+
+```
+kalide upgrade
+```
+
+It takes **no path** and has **no `--force`**: any argument at all is a usage
+error (exit code 2, nothing written). It always works on the current directory
+and runs entirely **offline**.
+
+`kalide upgrade` refreshes kalide-owned scaffold files to the running binary's
+versions and applies kalide's library-format migrations. It **never overwrites
+author content**: a file the author has edited is left untouched, and a deleted
+starter file is never re-created. It prints every refreshed path and every
+path it left alone, including deliberately skipped author-edited files. If the
+upgraded project fails to validate, the work is undone and the project is left
+exactly as it was.
+
+This is not the same as `brew upgrade kalide` or `scoop update kalide`, which
+upgrade the **program** (see [Upgrading the kalide binary](#upgrading-the-kalide-binary)).
+
 ### `kalide version`
 
 Prints the version of the `kalide` you are running (stamped into the binary
-when it was built). Use it to check an install or upgrade worked.
+when it was built). Also `--version` and `-v`. Use it to check an install or
+upgrade worked.
 
 ### `kalide help`
 
@@ -290,7 +398,7 @@ A deck is a folder containing:
 
 ```
 kalide.yaml    deck settings
-templates/     the project's template & theme library
+templates/     the deck's local template & theme library
 slides/        your slides, one Markdown file each
 assets/        your images and other files
 ```
@@ -303,45 +411,58 @@ that appears *under* slide `2`.
 `kalide.yaml` holds the deck-wide settings. Only `title` is required:
 
 ```yaml
-title: My presentation   # required
-author: A. Presenter     # optional
-date: 2026-09-25         # optional, YYYY-MM-DD
-theme: default           # optional, a theme name from templates/themes
-navigation: default      # optional: default, linear or grid
-properties:              # optional, arbitrary deck-wide values for templates
+title: My presentation     # required
+author: A. Presenter       # optional
+date: 2026-09-25           # optional, YYYY-MM-DD
+theme: default             # optional, a theme name from the library
+navigation: default        # optional: default, linear or grid
+properties:                # optional, arbitrary deck-wide values for templates
   audience: Investors
   revision: 3
   confidential: true
+templates: ../shared-lib   # optional, an external template library layer
 ```
 
-`properties` is an arbitrary mapping: any key you like, each holding a
-**typed scalar** — string, number, boolean, or a date written `YYYY-MM-DD`.
-A key whose value is itself a mapping or a list is a config error naming the
-key. `properties` is the one addition to the top-level keys above; any other
-unrecognized top-level key is still an error, and `kalide` suggests the
-closest match if it looks like a typo. These values are for templates to read
-(see [The templates/ library](#the-templates-library)) — `kalide` itself does
-nothing with them beyond loading and typing.
+- `title` (required) — the deck title. Missing or blank is an error.
+- `author` and `date` — the presenter and the presentation date (`YYYY-MM-DD`).
+- `theme` — the theme name; omitted means `default`. It must be a theme in the
+  resolved library.
+- `navigation` — `default`, `linear` or `grid`; omitted means `default`.
+- `properties` — an arbitrary mapping of author keys to **typed scalars** —
+  string, number, boolean, or a date written `YYYY-MM-DD`. A key whose value is
+  itself a mapping or a list is a config error naming the key. These values are
+  for templates to read; `kalide` itself does nothing with them beyond loading
+  and typing them.
+- `templates` — names the deck's **external-library layer**: a template-library
+  directory outside the deck. A **relative** value is resolved against the deck
+  root; an **absolute** value is used as given. The deck-root `templates/`
+  directory is the deck's **local layer**, loaded whenever it exists. Either,
+  both or neither may be present. See [Layered libraries](#layered-libraries).
+
+Any other unrecognized top-level key is an error, and `kalide` suggests the
+closest match if it looks like a typo.
 
 Each slide starts with a short header between `---` lines that names its
 template and fills in the fields, followed by the slide body in Markdown. The
 starter deck created by `kalide init` shows a working example you can copy.
-Use `kalide templates` to see what each template in the project's
-`templates/` library needs.
+Use `kalide templates` to see what each template in the library needs.
 
 ## The templates/ library
 
-Every deck owns its own `templates/` library: the set of slide templates,
-section templates, themes, fonts, logos and media files it renders against.
-There is no built-in, embedded design system of any kind — `kalide init`
-seeds a minimal unbranded starter library, and you extend or replace it as
-the deck needs. Everything visual — every template, theme, font, logo and
-piece of media — comes from this library; the binary supplies none of it.
+Every deck resolves a **template library**: the set of slide templates, section
+templates, themes, fonts, logos and media files it renders against. There is no
+built-in, embedded design system of any kind — `kalide init` seeds a minimal
+unbranded starter library, and you extend or replace it as the deck needs.
+Everything visual — every template, theme, font, logo and piece of media — comes
+from a library; the binary supplies none of it.
+
+A library is a directory with this fixed layout:
 
 ```
 templates/
   library.yaml               library metadata (name, description, format)
-  AGENTS.md                  agent guide for library/template authors (inert)
+  AGENTS_KALIDE.md           library/template-author full guide (inert)
+  AGENTS.md                  short pointer to AGENTS_KALIDE.md (inert)
   slides/
     <name>/
       template.yaml           the template's manifest (fields, sections, body rule)
@@ -355,22 +476,19 @@ templates/
   themes/
     <name>/
       theme.css               the theme's stylesheet
+      ...                     optional theme-owned files (fonts, logos)
   media/
     ...                       images and other files layouts can reference
 ```
 
-- **`library.yaml`** is required at the root of `templates/` and carries the
-  library's `name`, a short `description`, and a `format` version number.
-- **`AGENTS.md`** is the library/template-author agent guide: a plain-text
-  reference to the library and template format that `kalide init-library`
-  writes, so a coding agent can author new templates and themes without
-  guessing. It is inert — the loader ignores it, and no template may rely on
-  it. The loader likewise ignores any other top-level entry that is not part of
-  the library (for example a `.git/` directory or a `README.md`), so a library
-  that is also a git repository loads normally.
+- **`library.yaml`** is required at the root of the library and carries the
+  library's `name` (matching `[a-z0-9][a-z0-9-]*`), a short `description`, and a
+  `format` version number. Exactly `format: 1` is accepted.
 - **`slides/<name>/`** and **`sections/<name>/`** each hold exactly three
   files: `template.yaml`, `layout.html.tmpl` and `example.md`. A template's
-  name is always its directory name.
+  name is always its directory name. A slide name and a section name share one
+  namespace and may not collide; theme names and `media/` paths each form their
+  own namespace.
 - **`template.yaml`** is the manifest: a `description`, a list of `fields`
   (each with a `type` — `text`, `number`, `date`, `boolean`, `enum`, `image`,
   `link`, `list` or `section-template` — plus rules like `required`,
@@ -378,19 +496,63 @@ templates/
   (each naming which section templates it `accepted`s and a `min`/`max`
   count), and a `body` rule (`mode: required|optional|disallowed`, plus
   limits like `max_words`, `max_paragraphs` and `max_list_items`).
-- **`layout.html.tmpl`** is the `html/template` layout that turns a filled-in
-  slide (its fields and any nested sections) into the slide's HTML.
+- **`layout.html.tmpl`** is the standard Go `html/template` layout that turns a
+  filled-in slide (its fields and any nested sections) into the slide's HTML.
+  There is no Markdown helper and no third-party template engine.
 - **`themes/<name>/theme.css`** is a theme's stylesheet, selected in
-  `kalide.yaml` by name.
+  `kalide.yaml` by name. Theme-owned files (fonts, logos) are referenced from
+  that theme's CSS and are served from the theme directory.
 - **`media/`** holds images and other files a layout can reference with the
   `media` template helper, for example `{{ media "logo.svg" }}`. `media`
-  resolves its argument only inside `templates/media` (an absolute path or a
-  path that escapes with `..` is rejected), checks the file exists, and
+  resolves its argument only inside the library's `media/` (an absolute path or
+  a path that escapes with `..` is rejected), checks the file exists, and
   returns the URL the running server serves it under.
+- **`AGENTS_KALIDE.md`** and **`AGENTS.md`** are the library/template-author
+  guide and its pointer (see [Author guides](#author-guides)). They are inert —
+  the loader ignores them — as is any other top-level entry that is not part of
+  the library (for example a `.git/` directory or a `README.md`), so a library
+  that is also a git repository loads normally.
 
-`kalide templates` and `kalide templates <name>` read straight from this
-library, so its documentation output can never drift from what actually
-renders.
+`kalide templates` and `kalide templates <name>` read straight from the
+resolved library, so their output can never drift from what actually renders.
+
+For the full template-author reference — every `template.yaml` key, the field
+types and limits, the layout context and the helper set — see
+[`docs/templates.md`](docs/templates.md). For copyable recipes, see
+[`docs/cookbook.md`](docs/cookbook.md).
+
+### Layered libraries
+
+A deck renders against one **merged library** built from up to two **layers**:
+
+- the deck's **local layer** — the `templates/` directory at the deck root; and
+- the deck's **external layer** — the library named by the top-level
+  `templates:` key in `kalide.yaml` (a path relative to the deck root, or an
+  absolute path).
+
+Both layers load when both are present, with **equal standing**: there is **no
+precedence** and no overriding. The two layers are merged over three
+namespaces — template names (slide and section names share one namespace),
+theme names, and `media/` paths. A name carried by both layers is a
+**validation error naming the name and the path that carries it in each layer**,
+never an override.
+
+References resolve in the layer that owns them: a layout's
+`{{ media "path" }}` and a theme's `media:` / `theme:<name>/` CSS references
+stay inside the layer that owns the layout or theme. The `section` helper, by
+contrast, resolves against the **merged** section namespace, so a local-layer
+layout may call an external-layer section as if it were local (and that section
+then executes with its own layer's `media`). The external library is
+**self-contained and validated standalone**, so it can never call a section
+that exists only in the deck's local layer.
+
+Changing the configured `templates:` value while `kalide start` is running is
+**not applied live**: the deck page shows a restart-required error, and the
+server keeps serving the library it started with until you restart
+`kalide start`. Edits under either resolved layer root still live-reload.
+
+For the full two-layer how-to, see
+[`docs/layered-libraries.md`](docs/layered-libraries.md).
 
 ### The reserved template context
 
@@ -465,6 +627,8 @@ sections.
 may not declare a field or section named `deck`, `slide`, `item`, `raw` or
 `data`. `notes`, `body` and the `_format` suffix are reserved too.
 
+### Layout helpers
+
 The layout **helper** set is exactly `media`, `section`, `dict`, `list`,
 `child` and `children` — functions a layout calls, unlike the reserved context
 values above:
@@ -529,12 +693,70 @@ own `.data` or rendered section lists.
 The built-in number and date format functions (`compact`, `exact`, `percent`,
 `long` and `short`) are also available to layouts.
 
-`examples/demo` in this repository is a small, deliberately non-EY reference
-project that exercises the format end to end: a `demo` library with a
-`title`/`content` slide, a `column`/`person` section pairing (including a
-list of nested section-template instances), a vertical slide, a custom theme
-and a media file. Read it alongside this section to see a complete
-`templates/` library in context.
+### Composing layouts
+
+A layout may include another layout with the standard Go
+`{{ template "<layout name>" . }}` action, so shared markup lives in one layout
+that other slides and sections compose. The included layout is named by its
+**root-qualified path inside its own layer**:
+
+- `<layer root>/slides/<name>/layout.html.tmpl` for a slide layout, and
+- `<layer root>/sections/<name>/layout.html.tmpl` for a section layout,
+
+where `<layer root>` is the directory the layer was loaded from: the deck-root
+`templates/` for the local layer, or the external library's own root. The action
+names that path literally, never the bare template name. For the deck's local
+`hello` slide layout the call is
+
+```
+{{ template "templates/slides/hello/layout.html.tmpl" . }}
+```
+
+A layout may include any layout in its **own layer**. A local-layer layout may
+additionally include an **external-layer** layout by the external layer's own
+root-qualified name. The reverse is **not allowed**: the external library is
+validated standalone, so an external-layer layout that includes a layout
+existing only in the deck's local layer is a templates error.
+
+The included layout executes in the **invoking** layout's namespace, so its
+`{{ media "path" }}` resolves in the invoking layer's `media/`. To have the
+target's own layer supply its media, call it with `section` instead — a
+`section` call rebinds to the called template's own layer. Compose with
+`template` to share markup; call with `section` when the target's own library
+must supply its media.
+
+### Author guides
+
+Every scaffolding command writes a pair of plain-text Markdown files for coding
+agents that document the deck and template format, so an agent can help author
+slides or templates without guessing:
+
+- **`AGENTS_KALIDE.md`** is the full, kalide-owned guide — the complete format
+  reference. It is written **only when absent**: a pre-existing
+  `AGENTS_KALIDE.md` is treated as author content and left byte-for-byte
+  untouched.
+- **`AGENTS.md`** beside it holds only the pointer to that guide. Its reference
+  line is:
+
+  ```
+  Kalide Reference: ./AGENTS_KALIDE.md
+  ```
+
+  When `AGENTS.md` is absent it is created carrying the pointer. When it
+  already contains that line it is left byte-for-byte untouched. Otherwise —
+  an author's own `AGENTS.md` — the reference line is appended while the
+  author's bytes are preserved.
+
+`kalide init` and `kalide init <path>` write the pair at the deck root;
+`kalide init-library <path>` writes it at the library root. Both files are
+inert: the loader ignores them, and they never affect validation, rendering or
+serving.
+
+`kalide upgrade` maintains the pair: it writes the current `AGENTS_KALIDE.md`
+when absent, appends the reference line to an author `AGENTS.md` that lacks it,
+and **migrates** an `AGENTS.md` that is byte-identical to a guide kalide
+released in an older version to the short pointer (writing the current
+`AGENTS_KALIDE.md` alongside it). It never rewrites author content.
 
 ## What `kalide init` refuses to do
 
@@ -562,8 +784,10 @@ There is **no `--force` option** and no way to make it overwrite. To start a new
 deck, either run the command in a different (empty) folder, or move the blocking
 `slides/`, `assets/` and `kalide.yaml` (and, for the built-in deck,
 `templates/`) out of the way first. Unrelated files such as a `.git` folder or a
-`README` do not get in the way, and a pre-existing `AGENTS.md` never blocks
-`kalide init` and is left unchanged.
+`README` do not get in the way. A pre-existing `AGENTS_KALIDE.md` never blocks
+and is left unchanged; a pre-existing `AGENTS.md` never blocks either — it is
+left unchanged when it already points at the guide, and otherwise gains the
+appended reference line with its content preserved.
 
 ## Working offline
 
@@ -573,6 +797,9 @@ inside the `kalide` file itself, and the deck's own `templates/` library
 live on disk next to it. The page it serves contains no links to external
 websites and loads nothing from a CDN. You can author and present on a
 machine with no network.
+
+`kalide upgrade` is offline too: it uses only the content the running binary
+already carries and the project's own local files.
 
 ## Making a PDF
 
@@ -587,6 +814,16 @@ printer built into the reveal.js page:
    destination. Keep backgrounds enabled for the best result.
 
 The print styles come from the reveal.js version bundled inside `kalide`.
+
+## Examples
+
+`examples/demo` in this repository is a small reference project that exercises
+the format end to end: a `demo` library with a `title`/`content` slide, a
+`column`/`person` section pairing (including a list of nested section-template
+instances), a nested `group` section, a vertical slide, a custom theme and a
+media file. Read it alongside
+[The templates/ library](#the-templates-library) to see a complete library in
+context.
 
 ## Install details
 
