@@ -2,6 +2,7 @@ package template
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -1563,6 +1564,257 @@ func TestRegistryCheckSectionsAcrossMergedLayers(t *testing.T) {
 		want := `template "local-slide": section helper call on layout line 1 names section template "ext-parent", which declares child section "widgets" with a minimum of 1; the section helper passes no child sections`
 		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
 			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+}
+
+// TestRegistryCheckSectionsChildChecksAcrossMergedLayers proves
+// Registry.checkSections applies the load-time child checks
+// (requirements.requirement.section-helper-load-checks,
+// requirement.child-constructor, requirement.children-forwarding,
+// requirement.nested-section-validation, requirement.library-layer-references)
+// across a two-layer merged Library, exactly as it applies the section-helper
+// target/field checks: the CALLING template is a local slide, its target is an
+// EXTERNAL section, and the target's declared child sections, accepted
+// templates and instantiated templates all resolve through the merged
+// namespace, so every child failure is attributed to the local caller — the
+// same shape as TestRegistryCheckSectionsAcrossMergedLayers just above.
+//
+// It covers each static child rejection the child constructor introduces:
+//
+//   - a child naming a section the external target does not declare;
+//   - a `template` selector the external declaration does not accept;
+//   - a literal child field the instantiated template does not declare, and an
+//     undefaulted required field the child omits;
+//   - a literal body heading that names a declared child section, both on the
+//     external target itself and on an instantiated child template;
+//   - a statically-known literal child set below the external target's per-
+//     section minimum and above its maximum; and
+//
+// it proves the passing side: a literal child set exactly within the declared
+// bounds loads, and — the cross-layer case — a child whose instantiated
+// template lives in the LOCAL layer while its declaring target lives in the
+// EXTERNAL layer resolves in the merged namespace. For that last case the
+// resolved child's own SectionCall.Layer is asserted to be the instantiated
+// template's owning local layer, independently of the external target's layer,
+// and Registry.LayerOf pins both provenances (library-layer-references).
+//
+// The two-layer inputs are hand-built exactly as the merged-layer test above:
+// testLayer/addTestSlide/addTestSection give each layer loadLibrary's shape and
+// mergeLibraryLayers unions them. Each fixture carries a parseable manifest
+// (ManifestBytes) and layout (LayoutText), so NewRegistryFromLibrary registers
+// it with no content filesystem; registerLibraryTemplate defers the example
+// check, so a declared minimum does not trip the separate min-repeat rule.
+// Everything is in-process and runs under -short.
+func TestRegistryCheckSectionsChildChecksAcrossMergedLayers(t *testing.T) {
+	// parentDecl builds an external target manifest declaring one child section
+	// "widgets" that accepts accepted and carries the given repeat bounds (0 is
+	// omitted: min 0 and an absent max both mean no bound).
+	parentDecl := func(accepted string, min, max int) string {
+		var b strings.Builder
+		b.WriteString("sections:\n  - name: widgets\n    accepted: [")
+		b.WriteString(accepted)
+		b.WriteString("]\n")
+		if min != 0 {
+			fmt.Fprintf(&b, "    min: %d\n", min)
+		}
+		if max != 0 {
+			fmt.Fprintf(&b, "    max: %d\n", max)
+		}
+		return b.String()
+	}
+
+	t.Run("a child naming a section the external target does not declare is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "ghost") }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: child names section "ghost", which section template "ext-parent" does not declare`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a child selector the external declaration does not accept is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				// other is a defined local section, yet it is not among the
+				// external declaration's accepted set, so the rejection is the
+				// acceptance check and not an undefined name.
+				layeredSection(loc, "other", "", "")
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets" (dict "template" "other")) }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: child section "widgets" of section template "ext-parent" does not accept template "other" (accepts ext-widget)`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a literal child field the instantiated template does not declare is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "fields:\n  - name: title\n    type: text\n", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets" (dict "nope" "v")) }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: child section "widgets" supplies field "nope", which section template "ext-widget" does not declare`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("an undefaulted required field of the instantiated template is enforced", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "fields:\n  - name: title\n    type: text\n    required: true\n", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets") }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: child section "widgets" omits required field "title" of section template "ext-widget", which has no default`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a literal body heading naming the external target's child section is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" (dict) "# widgets" }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1 supplies a body whose heading names child section "widgets" of section template "ext-parent"; the section helper passes no child sections`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a child body heading naming the instantiated template's child section is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-gadget", "", "")
+				layeredSection(ext, "ext-widget", "sections:\n  - name: gadgets\n    accepted: [ext-gadget]\n", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets" nil "## gadgets") }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: child section "widgets" supplies a body whose heading names child section "gadgets" of section template "ext-widget"; a child body carries no child sections`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a statically-known child set below the external target's min is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 2, 0), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets") }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: section template "ext-parent" declares child section "widgets" with a minimum of 2, but the call passes 1`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a statically-known child set above the external target's max is rejected", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 0, 1), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets") (child "widgets") }}`)
+			},
+		)
+		want := `template "local-slide": section helper call on layout line 1: section template "ext-parent" declares child section "widgets" with a maximum of 1, but the call passes 2`
+		if err := validateMergedLibrary(t, lib); err == nil || err.Error() != want {
+			t.Fatalf("Validate() error = %v, want %q", err, want)
+		}
+	})
+
+	t.Run("a literal child set exactly within the external target's bounds loads", func(t *testing.T) {
+		lib := layeredLibrary(
+			func(ext *LibraryLayer) {
+				layeredSection(ext, "ext-widget", "", "")
+				layeredSection(ext, "ext-parent", parentDecl("ext-widget", 2, 2), "")
+			},
+			func(loc *LibraryLayer) {
+				layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets") (child "widgets") }}`)
+			},
+		)
+		if err := validateMergedLibrary(t, lib); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: the literal child set is exactly at the declared min and max", err)
+		}
+	})
+
+	t.Run("a child whose instantiated template lives in the other layer resolves in the merged namespace", func(t *testing.T) {
+		// The target is EXTERNAL and accepts a child template that lives in the
+		// LOCAL layer: the child's instantiated template is cross-layer. The
+		// merged namespace resolves it, and the resolved child records the
+		// instantiated template's OWN owning layer, not the target's.
+		ext := testLayer("/deck/external")
+		loc := testLayer("/deck/templates")
+		layeredSection(ext, "ext-parent", parentDecl("local-widget", 0, 0), "")
+		layeredSection(loc, "local-widget", "", "")
+		layeredSlide(loc, "local-slide", "", `{{ section "ext-parent" nil nil (child "widgets") }}`)
+		lib := mergeLibraryLayers([]*LibraryLayer{ext, loc})
+
+		reg, err := NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("NewRegistryFromLibrary() error = %v, want nil", err)
+		}
+		if err := reg.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: the child's instantiated template resolves in the merged namespace", err)
+		}
+
+		if got := reg.LayerOf("local-widget"); got != loc {
+			t.Errorf("LayerOf(local-widget) = %p, want the local layer %p", got, loc)
+		}
+		if got := reg.LayerOf("ext-parent"); got != ext {
+			t.Errorf("LayerOf(ext-parent) = %p, want the external layer %p", got, ext)
+		}
+
+		// Resolution agrees with the load check: the child instantiates the
+		// local template and carries the local layer on its own SectionCall,
+		// independently of the external target's layer.
+		call, err := ResolveSectionCallLayered(reg.Lookup, reg.LayerOf, "ext-parent", nil, "", nil, &ChildRequest{Section: "widgets"})
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if len(call.Children) != 1 {
+			t.Fatalf("len(call.Children) = %d, want the one resolved child", len(call.Children))
+		}
+		child := call.Children[0].Call
+		if got := child.Item["template"]; got != "local-widget" {
+			t.Errorf("child .item.template = %v, want the cross-layer instantiated template %q", got, "local-widget")
+		}
+		if child.Layer != loc {
+			t.Errorf("child SectionCall.Layer = %p, want the instantiated template's own local layer %p", child.Layer, loc)
 		}
 	})
 }
