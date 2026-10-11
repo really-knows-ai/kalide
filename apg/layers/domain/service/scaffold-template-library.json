@@ -2,12 +2,12 @@
   "layer": "domain",
   "type": "service",
   "name": "scaffold-template-library",
-  "body": "Scaffold template library: create a new, deck-ready library at a target path — write `library.yaml` (name derived from the directory base name and validated against the `[a-z0-9][a-z0-9-]*` identifier convention, `format: 1`), the empty layout entries `slides/`, `sections/` and `media/`, and a minimal `themes/default/theme.css` (system fonts and neutral colours only) so that a deck's defaulted `theme` resolves (theme-selection); write only into a target without an existing `library.yaml` or layout entry — a populated target is left untouched and the command exits non-zero, with no `--force` flag (init-library); local filesystem only (offline, no git). It also writes the library-root `AGENTS.md` library/template-author guide (library-agent-guide), an inert non-library root entry (library-guide-layout).",
+  "body": "Scaffold template library: create a new, deck-ready library at a target path — write `library.yaml` (name derived from the directory base name and validated against the `[a-z0-9][a-z0-9-]*` identifier convention, `format: 1`), the empty layout entries `slides/`, `sections/` and `media/`, and a minimal `themes/default/theme.css` (system fonts and neutral colours only) so that a deck's defaulted `theme` resolves (theme-selection); write only into a target without an existing `library.yaml` or layout entry — a populated target is left untouched and the command exits non-zero, with no `--force` flag (init-library); local filesystem only (offline, no git). It also writes the library-root full guide `AGENTS_KALIDE.md` (when absent) plus the `AGENTS.md` pointer per agent-guide-reference; both are inert non-library root entries (library-guide-layout).",
   "properties": {},
   "out": [
     {
       "kind": "realised-by",
-      "target": "solution.component.init-seed",
+      "target": "solution.component.agent-guide",
       "properties": {}
     },
     {
@@ -17,19 +17,19 @@
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.agent-guide",
+      "target": "solution.component.init-seed",
       "properties": {}
     }
   ],
   "in": [
     {
-      "kind": "drives",
-      "source": "requirements.requirement.init-library",
+      "kind": "contains",
+      "source": "domain.group.templating",
       "properties": {}
     },
     {
-      "kind": "contains",
-      "source": "domain.group.templating",
+      "kind": "drives",
+      "source": "requirements.requirement.init-library",
       "properties": {}
     },
     {
