@@ -44,6 +44,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -333,14 +334,19 @@ body:
 //
 // externalInclude is the external include layout's root-qualified name exactly
 // as the loader builds it: path.Join(layer root, "sections/external-include/
-// layout.html.tmpl") (loadlibrary.go). The fixture resolves the running
-// process's canonical external root before writing this layout, so the literal
-// and the namespace key cannot drift.
+// layout.html.tmpl") (loadlibrary.go). path.Join adds forward slashes but does
+// not translate backslashes, so on Windows the name carries the external root's
+// backslashes. The name is therefore emitted through strconv.Quote: the Go
+// text/template lexer then reads those backslashes as literal characters
+// instead of interpreting them as string escapes, so the include matches the
+// registered name exactly. The fixture resolves the running process's canonical
+// external root before writing this layout, so the literal and the namespace
+// key cannot drift.
 func layeredLocalSlideLayout(externalInclude string) string {
 	return `<section class="local-slide">
   <h1 class="local-heading">{{ .heading }}</h1>
   <img class="own" src="{{ media "local-logo.svg" }}">
-  {{ template "` + externalInclude + `" . }}
+  {{ template ` + strconv.Quote(externalInclude) + ` . }}
   {{ section "external-notice" }}
 </section>
 `
@@ -657,8 +663,10 @@ func assertLayeredExternalPage(t *testing.T, body string) {
 // for a template carried by the layer at layerRel (relative to the harness
 // working directory): the layer root resolved to the canonical path the running
 // binary's os.Getwd reports, joined with the template's kind directory and
-// name. The loader builds that path with path.Join, so it always uses forward
-// slashes even where the root itself is a Windows path.
+// name. The loader builds that path with path.Join, which joins with forward
+// slashes and cleans the `/` segments it joins in, but does NOT translate
+// backslashes: where the layer root is a Windows path its own backslashes are
+// preserved, so the reported path is not forward-slash-only there.
 func layeredLayerManifestPath(t *testing.T, h *Harness, layerRel, kindDir, name string) string {
 	t.Helper()
 
@@ -674,9 +682,11 @@ func layeredLayerManifestPath(t *testing.T, h *Harness, layerRel, kindDir, name 
 // harness working directory): the layer root resolved to the canonical path the
 // running binary's os.Getwd reports, joined with the template's kind directory,
 // name and layout file. It is the name a `{{ template "<name>" . }}`
-// composition call must use (loadlibrary.go: path.Join(root, layoutRel)), and
-// it is built with path.Join so it always uses forward slashes even where the
-// root itself is a Windows path.
+// composition call must use (loadlibrary.go: path.Join(root, layoutRel)). Like
+// the loader's, this path.Join joins with forward slashes but does not
+// translate backslashes, so on Windows the name retains the layer root's own
+// backslashes — the caller must quote it (strconv.Quote) before splicing it
+// into a template rather than wrapping it in hand-written quotes.
 func layeredLayerLayoutPath(t *testing.T, h *Harness, layerRel, kindDir, name string) string {
 	t.Helper()
 
