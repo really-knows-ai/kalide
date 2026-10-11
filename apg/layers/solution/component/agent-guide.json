@@ -39,6 +39,31 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/seed/AGENTS.md",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/seed/AGENTS_KALIDE.md",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/scaffold/libraryguide/AGENTS_KALIDE.md",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.writeAgentGuidePair",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.ensureAgentGuidePointer",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.mustReadLibraryFullGuide",
+      "properties": {}
     }
   ],
   "in": [
