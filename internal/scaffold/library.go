@@ -3,9 +3,10 @@
 //
 // It creates a new, deck-ready template library at path: a library.yaml, the
 // standard top-level layout entries slides/, sections/ and media/ created
-// empty, a minimal themes/default/theme.css, and the library-root AGENTS.md
-// library/template-author guide (library-agent-guide) written verbatim from the
-// embedded guide when none exists. Nothing else is seeded — no starter
+// empty, a minimal themes/default/theme.css, and the library-root
+// AGENTS_KALIDE.md + AGENTS.md library/template-author guide pair
+// (library-agent-guide, agent-guide-reference) written through
+// writeAgentGuidePair. Nothing else is seeded — no starter
 // template, no media file, no extra theme — so the library is "empty
 // but valid": it loads cleanly through the template loader
 // (templates-dir-validation) and its default theme lets a deck whose optional
@@ -100,11 +101,14 @@ type libraryConfig struct {
 // created as needed and the library is written: library.yaml (name, format 1)
 // and the empty slides/, sections/ and media/ directories plus
 // themes/default/theme.css (DefaultThemeCSS). It also writes the library-root
-// AGENTS.md library/template-author guide (library-agent-guide) verbatim from
-// the embedded guide, but only when no AGENTS.md already exists at the target:
-// a pre-existing one never blocks and is left byte-for-byte untouched. The
-// guide is the one inert non-template root entry the library layout permits
-// (library-guide-layout), so the created library still loads cleanly.
+// AGENTS_KALIDE.md + AGENTS.md library/template-author guide pair
+// (library-agent-guide, agent-guide-reference) through writeAgentGuidePair:
+// the full AGENTS_KALIDE.md verbatim but only when absent, and the AGENTS.md
+// pointer created, left byte-for-byte untouched or appended per the
+// reference-line scheme. A pre-existing author guide never blocks and its bytes
+// are preserved. The pair is the inert non-template root entry the library
+// layout permits (library-guide-layout), so the created library still loads
+// cleanly.
 //
 // dir may be relative or absolute and need not exist yet. InitLibrary is
 // deterministic and uses only the local filesystem: it never reaches the
@@ -155,19 +159,14 @@ func InitLibrary(dir string) error {
 			template.ThemesDir, theme.DefaultName, template.ThemeStylesheet, err)
 	}
 
-	// Write the library-root agent guide (library-agent-guide) verbatim from
-	// the embedded library guide, only when no AGENTS.md exists at the target.
-	// A pre-existing one is left byte-for-byte untouched and never blocks
-	// init-library: AGENTS.md is not one of libraryBlockPaths, and the library
-	// layout permits it as the single inert non-template root entry
-	// (library-guide-layout).
-	guide := filepath.Join(dir, "AGENTS.md")
-	if _, statErr := os.Lstat(guide); errors.Is(statErr, fs.ErrNotExist) {
-		if err := os.WriteFile(guide, mustReadLibraryGuide(), 0o644); err != nil {
-			return fmt.Errorf("init-library: write AGENTS.md: %w", err)
-		}
-	} else if statErr != nil {
-		return fmt.Errorf("init-library: inspect AGENTS.md: %w", statErr)
+	// Write the library-root agent-guide pair (library-agent-guide,
+	// agent-guide-reference): the full AGENTS_KALIDE.md guide verbatim when
+	// absent, then the AGENTS.md pointer via the reference-line scheme. An
+	// existing author guide never blocks init-library: the pair is not in
+	// libraryBlockPaths, and the library layout permits these as the inert
+	// non-template root entries (library-guide-layout).
+	if err := writeAgentGuidePair(dir, mustReadLibraryFullGuide(), mustReadLibraryGuide()); err != nil {
+		return fmt.Errorf("init-library: write author guide pair: %w", err)
 	}
 	return nil
 }
@@ -241,9 +240,11 @@ func mustReadSeed(name string) []byte {
 }
 
 // mustReadLibraryGuide returns the content of the embedded library/template-
-// author agent guide (libraryguide/AGENTS.md). The embed directive in
+// author AGENTS.md pointer (libraryguide/AGENTS.md), the pointer half of the
+// library AGENTS_KALIDE.md + AGENTS.md guide pair. The embed directive in
 // libraryguide.go is the source of truth, so a failure here is a programming
-// error, not a runtime condition; it mirrors mustReadSeed.
+// error, not a runtime condition; it mirrors mustReadSeed. The full guide is
+// returned by mustReadLibraryFullGuide in agentsguide.go.
 func mustReadLibraryGuide() []byte {
 	data, err := fs.ReadFile(libraryGuideRoot, "AGENTS.md")
 	if err != nil {

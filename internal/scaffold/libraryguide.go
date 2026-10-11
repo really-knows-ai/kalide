@@ -1,13 +1,16 @@
-// This file declares the embedded library/template-author agent guide:
-// internal/scaffold/libraryguide/AGENTS.md
+// This file declares the embedded library/template-author agent guide pair:
+// internal/scaffold/libraryguide/AGENTS_KALIDE.md (the full guide) and
+// internal/scaffold/libraryguide/AGENTS.md (its pointer)
 // (requirements.requirement.library-agent-guide).
 //
-// The guide lives outside the seed/ tree so writeHelloSeed never copies it
-// into a deck: it is the library author's counterpart to the deck-root
-// AGENTS.md the seed carries. Like the seed it is a static, authored file
-// embedded here in internal/scaffold, unbranded and text-only, and it is not
-// a template asset. The embed declaration only; the read helper that returns
-// its bytes is mustReadLibraryGuide in library.go, mirroring mustReadSeed.
+// The guides live outside the seed/ tree so writeHelloSeed never copies them
+// into a deck: they are the library author's counterpart to the deck-root
+// AGENTS_KALIDE.md/AGENTS.md pair the seed carries. Like the seed they are
+// static, authored files embedded here in internal/scaffold, unbranded and
+// text-only, and they are not template assets. The embed declaration only; the
+// read helpers that return their bytes are mustReadLibraryGuide (the AGENTS.md
+// pointer) in library.go and mustReadLibraryFullGuide (the AGENTS_KALIDE.md
+// full guide) in agentsguide.go, mirroring mustReadSeed.
 package scaffold
 
 import "embed"
@@ -15,7 +18,7 @@ import "embed"
 // libraryGuideEmbed is the embedded library guide tree, rooted so that
 // "libraryguide" is its direct entry.
 //
-//go:embed libraryguide/AGENTS.md
+//go:embed libraryguide/AGENTS.md libraryguide/AGENTS_KALIDE.md
 var libraryGuideEmbed embed.FS
 
 // libraryGuideRoot is the sub-tree of libraryGuideEmbed rooted at

@@ -136,3 +136,18 @@ func appendAgentGuideReference(existing []byte) []byte {
 	out = append(out, '\n')
 	return out
 }
+
+// mustReadLibraryFullGuide returns the content of the embedded full
+// library/template-author guide (libraryguide/AGENTS_KALIDE.md), the full-guide
+// half of the library AGENTS_KALIDE.md + AGENTS.md pair. The library pair's
+// bytes are embedded in libraryguide.go; this reads the full guide from that
+// tree, mirroring mustReadLibraryGuide (which returns the AGENTS.md pointer)
+// and mustReadSeed. A failure here is a programming error, not a runtime
+// condition.
+func mustReadLibraryFullGuide() []byte {
+	data, err := fs.ReadFile(libraryGuideRoot, agentGuideFullGuideName)
+	if err != nil {
+		panic("scaffold: missing embedded library full guide " + agentGuideFullGuideName + ": " + err.Error())
+	}
+	return data
+}
