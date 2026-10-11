@@ -163,35 +163,29 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 		}
 	}
 
-	// Step 3 parsed lt.Layout with LayoutFuncMap's parse-resolvable `section`
-	// stub; re-parse its source with that entry overridden by the load-time
-	// helper so a layout that calls `{{ section … }}` executes here by
-	// rendering the target instead of failing LoadLibrary's step-7 execution
-	// (templates-dir-validation step 7).
-	//
-	// The `media` helper resolves in lt's own owning layer, when one is known,
-	// so an external-layer template's own `{{ media … }}` reference resolves in
-	// the external layer's media rather than the merged Library's primary media
-	// (library-layer-references). A nil layer — a single-layer Library, or no
-	// recorded owner — falls back to lib.Media, the pre-layer behaviour.
-	mediaFS := lib.Media
-	if layer != nil {
-		mediaFS = layer.Media
+	// Execute lt.Layout against the merged library layout namespace
+	// (exampleLayoutNamespace): every library layout text parsed together,
+	// keyed by layout name, with step 3's `section` stub overridden by the
+	// load-time helper so a layout that calls `{{ section … }}` renders the
+	// target instead of failing LoadLibrary's step-7 execution, and with the
+	// `media` helper bound to lt's own owning layer when one is known so an
+	// external-layer template's own `{{ media … }}` reference resolves in the
+	// external layer's media rather than the merged Library's primary media
+	// (templates-dir-validation step 7, library-layer-references). Parsing the
+	// whole set — rather than lt.LayoutText alone — keeps the shared namespace,
+	// so a layout's `{{ template "<layout name>" . }}` composition call
+	// resolves too (example-layout-composition).
+	namespace, err := exampleLayoutNamespace(lib, layer, callerFields)
+	if err != nil {
+		return libraryErrorf(lt.LayoutPath, 0, "parse: %v", err)
 	}
-	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
-	funcMap["section"] = exampleSectionHelper(lib, callerFields)
 
 	layoutName := lt.Layout.Name()
 	if layoutName == "" {
 		layoutName = lt.Name
 	}
-	layout, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(lt.LayoutText)
-	if err != nil {
-		return libraryErrorf(lt.LayoutPath, 0, "parse: %v", err)
-	}
-
 	var buf strings.Builder
-	if err := layout.Execute(&buf, ctx); err != nil {
+	if err := namespace.ExecuteTemplate(&buf, layoutName, ctx); err != nil {
 		return libraryErrorf(lt.LayoutPath, 0, "execute: %v", err)
 	}
 	return nil
