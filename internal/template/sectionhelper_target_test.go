@@ -121,3 +121,140 @@ func TestSectionHelperTargetResolutionIsValidateStage(t *testing.T) {
 		t.Fatal("Validate() = nil, want the unresolved target to fail validation")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// plan.phase-01.task-15: child target/section resolution.
+//
+// A `section` helper call's trailing child arguments (child.go) name a declared
+// section of the call's target and resolve exactly like an authored instance of
+// that declaration (requirements.requirement.child-constructor,
+// requirements.requirement.section-helper,
+// requirements.requirement.nested-section-validation). These tests pin that
+// resolution through the same two entry points the load-time path uses:
+//
+//   - Registry.checkSections, reached through Registry.Validate, statically
+//     rejects a literal `child` naming a section the target does not declare —
+//     a templates error naming the section and the declaring template — and a
+//     literal `child` whose reserved `template` selector names a template its
+//     declaration does not accept, naming the section, the declaration and the
+//     accepted set; and
+//   - ResolveSectionCallLayered resolves a call's children, so each resolved
+//     child's own `.item.section` is the declared section it fills while
+//     `.item.template` is the instantiated template — distinct values when a
+//     `template` selector picks among several accepted templates (item-context).
+//
+// Everything is in-process with no content filesystem, so the tests run under
+// -short. It reuses the registry fixtures declared in registry_test.go
+// (regSection), regLayout from this file, and the childSectionTarget /
+// validateRegistered / resolveSectionCallResolver helpers declared alongside
+// the section-helper tests.
+
+// TestSectionHelperChildTargetResolution is table-driven over the static
+// child target/section failures: each fixture registers cleanly (Register never
+// inspects a layout), so it is Validate, through checkSections, that reports the
+// specific error. The exact text is asserted so both the named section and the
+// declaration it fills are pinned. A literal child naming a properly declared
+// section validates, so the positive case is covered beside the failures.
+func TestSectionHelperChildTargetResolution(t *testing.T) {
+	tests := []struct {
+		name   string
+		layout string
+		extra  []*Template
+		want   string
+	}{
+		{
+			name:   "a child naming an undeclared section is rejected",
+			layout: `{{ section "footer" nil nil (child "ghost") }}`,
+			want:   `template "host": section helper call on layout line 1: child names section "ghost", which section template "footer" does not declare`,
+		},
+		{
+			name:   "a child selector the declaration does not accept is rejected",
+			layout: `{{ section "footer" nil nil (child "widgets" (dict "template" "other")) }}`,
+			extra:  []*Template{regSection("other")},
+			want:   `template "host": section helper call on layout line 1: child section "widgets" of section template "footer" does not accept template "other" (accepts widgets-tpl)`,
+		},
+		{
+			name:   "a literal child naming a declared section loads",
+			layout: `{{ section "footer" nil nil (child "widgets") }}`,
+			want:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host := regLayout("host", tt.layout)
+			target, accepted := childSectionTarget("footer", "widgets", 0)
+			templates := append([]*Template{host, target, accepted}, tt.extra...)
+
+			err := validateRegistered(t, templates...)
+			if tt.want == "" {
+				if err != nil {
+					t.Fatalf("Validate() error = %v, want nil: the child names a declared section the target accepts", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() = nil, want error %q", tt.want)
+			}
+			if err.Error() != tt.want {
+				t.Errorf("Validate() error = %q, want %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
+// TestSectionHelperChildItemDescriptor proves the resolved child's own `.item`
+// descriptor carries the declared section it fills and the template its
+// declaration instantiated, reached through ResolveSectionCallLayered's child
+// resolution — the same path the load-time example helper and the renderer
+// reuse. The two are asserted to be distinct when a multi-template declaration's
+// `template` selector picks a template whose name differs from the section's, so
+// neither is mistaken for the other (item-context).
+func TestSectionHelperChildItemDescriptor(t *testing.T) {
+	t.Run("names the declared section and the single instantiated template", func(t *testing.T) {
+		target, accepted := childSectionTarget("footer", "widgets", 0)
+		resolve := resolveSectionCallResolver(target, accepted)
+
+		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil, &ChildRequest{Section: "widgets"})
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if len(call.Children) != 1 {
+			t.Fatalf("len(call.Children) = %d, want the one resolved child", len(call.Children))
+		}
+		item := call.Children[0].Call.Item
+		if got := item["section"]; got != "widgets" {
+			t.Errorf("child .item.section = %v, want the declared section %q", got, "widgets")
+		}
+		if got := item["template"]; got != "widgets-tpl" {
+			t.Errorf("child .item.template = %v, want the instantiated template %q", got, "widgets-tpl")
+		}
+	})
+
+	t.Run("a selector makes .item.template the selected template, distinct from the section", func(t *testing.T) {
+		person := &Template{Name: "person", Usage: UsageSection}
+		company := &Template{Name: "company", Usage: UsageSection}
+		parent := &Template{
+			Name:     "cards",
+			Usage:    UsageSection,
+			Sections: []SectionDecl{{Name: "card", Accepted: []string{"person", "company"}}},
+		}
+		resolve := resolveSectionCallResolver(parent, person, company)
+
+		req := &ChildRequest{Section: "card", Fields: map[string]any{"template": "company"}}
+		call, err := ResolveSectionCallLayered(resolve, nil, "cards", nil, "", nil, req)
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if len(call.Children) != 1 {
+			t.Fatalf("len(call.Children) = %d, want the one resolved child", len(call.Children))
+		}
+		item := call.Children[0].Call.Item
+		if got := item["section"]; got != "card" {
+			t.Errorf("child .item.section = %v, want the named declared section %q", got, "card")
+		}
+		if got := item["template"]; got != "company" {
+			t.Errorf("child .item.template = %v, want the selected template %q", got, "company")
+		}
+	})
+}
