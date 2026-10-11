@@ -262,6 +262,12 @@ type ResolvedChild struct {
 	// children were passed. It is nil/empty when the child declares no child
 	// sections. When checkCounts is false an empty nested set is not walked, so
 	// a child with no children carries a nil Children in that case.
+	//
+	// The same slice is recorded on the child's own Call.Children, so a consumer
+	// rendering the child's own SectionCall reads its grandchildren from there
+	// and publishes them to the child template's own `.data` and rendered
+	// child-section lists; ResolvedChild.Children is the wrapper-facing view of
+	// the same tree (section-data-context).
 	Children []*ResolvedChild
 }
 
@@ -489,7 +495,13 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 // Nested children — a literal request's Children and a forwarded entry's `.data`
 // — are resolved recursively with the child's OWN instantiated template as the
 // parent, so grandchildren name that template's declared sections; the recursion
-// carries checkCounts through unchanged (nested-section-validation).
+// carries checkCounts through unchanged (nested-section-validation). Each
+// resolved nested set is recorded BOTH on the wrapper ResolvedChild (its
+// Children) and on the child's own SectionCall.Children, so a caller rendering
+// the child's own resolved instance reads its grandchildren from that instance
+// and publishes them to the child template's own `.data.<grandchild>` view and
+// rendered child-section lists, not only to the parent's `.data` view
+// (section-data-context, child-constructor, children-forwarding).
 //
 // When checkCounts is true, every section parent declares has its min/max
 // enforced over the passed set — the count of literal children and expanded
@@ -567,6 +579,19 @@ func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(na
 				return nil, err
 			}
 			rc.Children = nested
+			// The child's OWN resolved instance also carries its nested
+			// children on its SectionCall, not only on the wrapper ResolvedChild:
+			// a consumer that renders the child's own SectionCall (the load-time
+			// example runner and the render-time instance renderer) reads
+			// call.Children to build the child's own `.data.<grandchild>` view
+			// and its own rendered grandchild lists, so a nested helper child
+			// publishes its grandchildren to its own template. Without this the
+			// child's own SectionCall would carry no children and its `.data`
+			// and rendered child lists would be empty at every depth below the
+			// first (requirements.requirement.child-constructor,
+			// requirements.requirement.children-forwarding,
+			// requirements.requirement.section-data-context).
+			call.Children = nested
 		}
 		out = append(out, rc)
 	}
