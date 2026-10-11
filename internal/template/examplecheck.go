@@ -197,6 +197,86 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	return nil
 }
 
+// exampleLayoutNamespace builds the html/template namespace a library layout
+// executes against at the load-time example check: the load-time mirror of the
+// render-time renderer.namespaceForLayer (example-layout-composition,
+// library-layer-references).
+//
+// Every library layout is parsed into one shared namespace, keyed by its layout
+// name, so a layout's standard `{{ template "<layout name>" . }}` composition
+// call resolves at step 7 instead of failing with "no such template" — the bug
+// this helper fixes, where executing the single target layout text in a fresh
+// namespace left no other template to invoke. The namespace holds every slide
+// and every section of the merged Library, whichever layer contributed it, so
+// the set is exactly the layout set render's namespaceForLayer parses from the
+// registry (Registry.Templates) — the union of the layers.
+//
+// The layout name is the one the loader builds and render registers each layout
+// under: lt.Layout.Name(), the layout's path within its own layer
+// (`path.Join(root, slides|sections/<name>/layout.html.tmpl)`, loadlibrary.go),
+// falling back to lt.Name when the loader did not set one — the same
+// lt.Layout.Name()-else-lt.Name fallback layoutName uses in render.go. Because
+// each layer's layouts keep their own root-qualified path name, a two-layer
+// deck resolves a cross-layer include by the target's own root-qualified name
+// (library-layer-references).
+//
+// layer is the example-checked template's own owning *LibraryLayer, when the
+// merged Library records one; it supplies the media sub-filesystem every
+// layout's `media` helper resolves against, so each `{{ media … }}` reference
+// binds to that layer's media rather than the merged Library's primary media
+// (library-layer-references). A nil layer — a single-layer Library, or no
+// recorded owner — falls back to lib.Media, the pre-layer behaviour.
+// callerFields is the calling instance's field values, bound as the `section`
+// helper's parent exactly as checkLibraryExample binds it (item-context); a
+// slide template passes nil. Parsing re-parses the layout sources rather than
+// cloning an already-parsed namespace because html/template resolves a func map
+// at parse time and cannot rebind `media`/`section` on a parsed set.
+//
+// The returned namespace's root template is "layouts"; a caller executes a
+// specific layout with ExecuteTemplate under that layout's name. A library
+// template with no layout text is an error, mirroring render.namespaceForLayer.
+func exampleLayoutNamespace(lib *Library, layer *LibraryLayer, callerFields map[string]any) (*htmltemplate.Template, error) {
+	if lib == nil {
+		return nil, fmt.Errorf("example layout namespace: no library")
+	}
+	mediaFS := lib.Media
+	if layer != nil {
+		mediaFS = layer.Media
+	}
+	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
+	funcMap["section"] = exampleSectionHelper(lib, callerFields)
+
+	namespace := htmltemplate.New("layouts").Funcs(funcMap)
+	add := func(lt *LibraryTemplate) error {
+		if lt == nil {
+			return nil
+		}
+		name := lt.Name
+		if lt.Layout != nil && lt.Layout.Name() != "" {
+			name = lt.Layout.Name()
+		}
+		if lt.LayoutText == "" {
+			return fmt.Errorf("template %q has no layout text", name)
+		}
+		if _, err := namespace.New(name).Parse(lt.LayoutText); err != nil {
+			return fmt.Errorf("template %q: parse layout: %w", name, err)
+		}
+		return nil
+	}
+
+	for _, name := range sortedLibraryTemplateNames(lib.Slides) {
+		if err := add(lib.Slides[name]); err != nil {
+			return nil, err
+		}
+	}
+	for _, name := range sortedLibraryTemplateNames(lib.Sections) {
+		if err := add(lib.Sections[name]); err != nil {
+			return nil, err
+		}
+	}
+	return namespace, nil
+}
+
 // exampleContextNodes adapts the load-time example tree into the neutral
 // []ContextNode the shared DataContext walks (section-data-context,
 // raw-source-context, item-context, template-context). It replaces the old
