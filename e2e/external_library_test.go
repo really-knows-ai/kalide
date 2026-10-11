@@ -323,17 +323,46 @@ body:
 `
 
 // layeredLocalSlideLayout is the local slide's layout. It renders its own
-// `local-logo.svg` at the primary media base and then composes the EXTERNAL
-// section `external-notice` through the `section` helper: the call resolves
-// against the MERGED section namespace (section-helper,
-// library-layer-references), so the external section executes with its own
-// layer's media binding.
-const layeredLocalSlideLayout = `<section class="local-slide">
+// `local-logo.svg` at the primary media base, includes the EXTERNAL layer's
+// `external-include` layout by that layout's own root-qualified name with the
+// standard `{{ template "<name>" . }}` composition call (example-layout-
+// composition), and then composes the EXTERNAL section `external-notice`
+// through the `section` helper: the section call resolves against the MERGED
+// section namespace (section-helper, library-layer-references), so the external
+// section executes with its own layer's media binding.
+//
+// externalInclude is the external include layout's root-qualified name exactly
+// as the loader builds it: path.Join(layer root, "sections/external-include/
+// layout.html.tmpl") (loadlibrary.go). The fixture resolves the running
+// process's canonical external root before writing this layout, so the literal
+// and the namespace key cannot drift.
+func layeredLocalSlideLayout(externalInclude string) string {
+	return `<section class="local-slide">
   <h1 class="local-heading">{{ .heading }}</h1>
   <img class="own" src="{{ media "local-logo.svg" }}">
+  {{ template "` + externalInclude + `" . }}
   {{ section "external-notice" }}
 </section>
 `
+}
+
+// layeredExternalIncludeManifest is the external layer's include layout's
+// manifest: no fields and no body, so the local slide's `{{ template "<name>"
+// . }}` include passes only the slide context and the layout renders standalone.
+// It validates as part of the external layer's full standalone load.
+const layeredExternalIncludeManifest = `description: an external layout included across layers
+fields: []
+body:
+  mode: disallowed
+`
+
+// layeredExternalIncludeLayout is the external layout the local slide includes
+// with `{{ template "<name>" . }}`. It is deliberately FREE OF MEDIA
+// REFERENCES: an included layout executes in the invoking (local) layer's
+// namespace, so its `media` helper would resolve against the LOCAL layer's
+// media, not its own external layer's. Keeping it media-free makes the include a
+// pure cross-layer composition that cannot mis-bind a media route.
+const layeredExternalIncludeLayout = `<aside class="external-include">External layout include</aside>` + "\n"
 
 // layeredExternalNoticeManifest is the external layer's section manifest: no
 // fields and no body, so the helper call passes nothing and the section renders
@@ -378,17 +407,21 @@ body:
 const localLogoMarkup = "<svg class=\"local-logo\"/>\n"
 
 // TestExternalLibraryLayeredOverLocal is the plan.phase-05 task-5 end-to-end
-// test for a deck that draws from BOTH resolved library layers
-// (layered-template-library, library-layer-uniqueness, library-layer-references,
-// live-reload): an external `templates: ../shared-lib` library AND a deck-root
-// templates/ directory. It drives the real kalide binary the harness builds
-// (harness.go), so it exercises the whole path an author takes:
+// test, extended by plan.phase-02 task-1, for a deck that draws from BOTH
+// resolved library layers (layered-template-library, library-layer-uniqueness,
+// library-layer-references, example-layout-composition, live-reload): an
+// external `templates: ../shared-lib` library AND a deck-root templates/
+// directory. It drives the real kalide binary the harness builds (harness.go),
+// so it exercises the whole path an author takes:
 //
 //   - the merged library serves the deck: the local layer's `local-slide`
 //     renders with its own media at the primary /assets/templates/media/ route,
-//     and the `{{ section "external-notice" }}` call its layout makes resolves
-//     against the merged section namespace and executes the EXTERNAL layer's
-//     section, whose own `media` reference is served from the external layer at
+//     includes the EXTERNAL layer's `external-include` layout by that layout's
+//     own root-qualified name with the standard `{{ template "<name>" . }}`
+//     composition call (example-layout-composition), and its
+//     `{{ section "external-notice" }}` call resolves against the merged section
+//     namespace and executes the EXTERNAL layer's section, whose own `media`
+//     reference is served from the external layer at
 //     /assets/templates/external/media/ (cross-layer section call,
 //     library-layer-references);
 //   - each layer's media file is served from its own root at its own route;
@@ -412,7 +445,7 @@ func TestExternalLibraryLayeredOverLocal(t *testing.T) {
 	}
 
 	h := NewHarness(t)
-	writeLayeredExternalLibraryFixture(h)
+	writeLayeredExternalLibraryFixture(t, h)
 
 	h.Start()
 
@@ -420,7 +453,9 @@ func TestExternalLibraryLayeredOverLocal(t *testing.T) {
 		t.Fatalf("start printed URL %q, want http://127.0.0.1:<port>/", got)
 	}
 
-	// The merged library drives the deck page: the local slide renders and its
+	// The merged library drives the deck page: the local slide renders, its
+	// `{{ template "<external root>/sections/external-include/layout.html.tmpl"
+	// . }}` include splices in the EXTERNAL layer's layout, and its
 	// `{{ section "external-notice" }}` call splices in the EXTERNAL layer's
 	// section, whose media resolves under the external prefix.
 	body, err := h.GetString("/")
@@ -546,15 +581,44 @@ func TestExternalLibraryLayeredOverLocal(t *testing.T) {
 
 // writeLayeredExternalLibraryFixture lays down the two-layer deck the test
 // serves: kalide.yaml, one slide for the local layer's template, the deck-root
-// templates/ local layer (a `local-slide` whose layout calls the external
+// templates/ local layer (a `local-slide` whose layout includes the external
+// `external-include` layout by its root-qualified name and calls the external
 // section through the `section` helper, its own media and theme), and the
-// external `../shared-lib` layer (the `external-notice` section, its own media
-// and metadata). No name — slide, section, theme or media path — is carried by
-// both layers, so the merged library passes library-layer-uniqueness.
-func writeLayeredExternalLibraryFixture(h *Harness) {
+// external `../shared-lib` layer (the `external-include` and `external-notice`
+// sections, its own media and metadata). No name — slide, section, theme or
+// media path — is carried by both layers, so the merged library passes
+// library-layer-uniqueness.
+//
+// The local `local-slide` layout must name the external include layout by the
+// exact root-qualified name the running process resolves, so the external layer
+// is written first, then its canonical root-qualified `external-include` layout
+// name is read back and spliced into the local layout before that is written.
+func writeLayeredExternalLibraryFixture(t *testing.T, h *Harness) {
+	t.Helper()
+
 	h.WriteFile("kalide.yaml", []byte(layeredExternalLibraryDeckConfig))
 	h.WriteFile("slides/1-notice.md",
 		[]byte("---\ntemplate: local-slide\nheading: Layered Notice\n---\n"))
+
+	// The external `templates: ../shared-lib` layer, written first so its
+	// canonical root exists when the local layout names the include layout.
+	h.WriteFile("../shared-lib/library.yaml",
+		[]byte("name: "+layeredExternalLibName+"\ndescription: external deck layer\nformat: 1\n"))
+	h.WriteFile("../shared-lib/sections/external-include/template.yaml", []byte(layeredExternalIncludeManifest))
+	h.WriteFile("../shared-lib/sections/external-include/layout.html.tmpl",
+		[]byte(layeredExternalIncludeLayout))
+	h.WriteFile("../shared-lib/sections/external-include/example.md", []byte("# external-include\n"))
+	h.WriteFile("../shared-lib/sections/external-notice/template.yaml", []byte(layeredExternalNoticeManifest))
+	h.WriteFile("../shared-lib/sections/external-notice/layout.html.tmpl",
+		[]byte(layeredExternalNoticeLayout("")))
+	h.WriteFile("../shared-lib/sections/external-notice/example.md", []byte("# external-notice\n"))
+	h.WriteFile("../shared-lib/media/ext-icon.svg", []byte("<svg class=\"ext-icon\"/>\n"))
+
+	// The local slide layout includes the external layout by the loader-built
+	// root-qualified name (path.Join(external root, sections/<name>/
+	// layout.html.tmpl)), resolved against the canonical root the running
+	// process's os.Getwd reports.
+	externalInclude := layeredLayerLayoutPath(t, h, "../shared-lib", "sections", "external-include")
 
 	// The deck-root templates/ local layer.
 	h.WriteFile("templates/library.yaml",
@@ -563,24 +627,16 @@ func writeLayeredExternalLibraryFixture(h *Harness) {
 		[]byte("/* local-layer-theme */\nbody { margin: 0; }\n"))
 	h.WriteFile("templates/media/local-logo.svg", []byte(localLogoMarkup))
 	h.WriteFile("templates/slides/local-slide/template.yaml", []byte(layeredLocalSlideManifest))
-	h.WriteFile("templates/slides/local-slide/layout.html.tmpl", []byte(layeredLocalSlideLayout))
+	h.WriteFile("templates/slides/local-slide/layout.html.tmpl", []byte(layeredLocalSlideLayout(externalInclude)))
 	h.WriteFile("templates/slides/local-slide/example.md",
 		[]byte("---\ntemplate: local-slide\nheading: Example\n---\n"))
-
-	// The external `templates: ../shared-lib` layer.
-	h.WriteFile("../shared-lib/library.yaml",
-		[]byte("name: "+layeredExternalLibName+"\ndescription: external deck layer\nformat: 1\n"))
-	h.WriteFile("../shared-lib/sections/external-notice/template.yaml", []byte(layeredExternalNoticeManifest))
-	h.WriteFile("../shared-lib/sections/external-notice/layout.html.tmpl",
-		[]byte(layeredExternalNoticeLayout("")))
-	h.WriteFile("../shared-lib/sections/external-notice/example.md", []byte("# external-notice\n"))
-	h.WriteFile("../shared-lib/media/ext-icon.svg", []byte("<svg class=\"ext-icon\"/>\n"))
 }
 
 // assertLayeredExternalPage asserts the served two-layer page carries the
-// local slide, its own primary-base media, and the external section the local
-// layout invoked cross-layer, with that section's media under the external
-// prefix.
+// local slide, its own primary-base media, the external layout the local layout
+// included cross-layer by its root-qualified name, and the external section the
+// local layout invoked cross-layer, with that section's media under the
+// external prefix.
 func assertLayeredExternalPage(t *testing.T, body string) {
 	t.Helper()
 
@@ -588,6 +644,7 @@ func assertLayeredExternalPage(t *testing.T, body string) {
 		"Layered External Library Deck",
 		`<h1 class="local-heading">Layered Notice</h1>`,
 		`<img class="own" src="` + server.MediaPath + `local-logo.svg">`,
+		`<aside class="external-include">External layout include</aside>`,
 		`<aside class="external-notice"><img src="` + server.ExternalMediaPath + `ext-icon.svg"></aside>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -610,4 +667,22 @@ func layeredLayerManifestPath(t *testing.T, h *Harness, layerRel, kindDir, name 
 		t.Fatalf("resolve library layer root %s: %v", layerRel, err)
 	}
 	return path.Join(root, kindDir, name, "template.yaml")
+}
+
+// layeredLayerLayoutPath returns the root-qualified layout name the loader
+// builds for a template carried by the layer at layerRel (relative to the
+// harness working directory): the layer root resolved to the canonical path the
+// running binary's os.Getwd reports, joined with the template's kind directory,
+// name and layout file. It is the name a `{{ template "<name>" . }}`
+// composition call must use (loadlibrary.go: path.Join(root, layoutRel)), and
+// it is built with path.Join so it always uses forward slashes even where the
+// root itself is a Windows path.
+func layeredLayerLayoutPath(t *testing.T, h *Harness, layerRel, kindDir, name string) string {
+	t.Helper()
+
+	root, err := filepath.EvalSymlinks(h.Path(layerRel))
+	if err != nil {
+		t.Fatalf("resolve library layer root %s: %v", layerRel, err)
+	}
+	return path.Join(root, kindDir, name, "layout.html.tmpl")
 }
