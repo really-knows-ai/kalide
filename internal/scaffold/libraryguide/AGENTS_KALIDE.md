@@ -84,11 +84,12 @@ library intended to **host a deck** must provide the deck's theme (the deck's
 `theme` defaults to `default`, so a `themes/default/` directory is normally
 required).
 
-A root-level `AGENTS.md` (this guide) is ignored by the loader, as is any other
-top-level entry that is not part of the library (`library.yaml`, `slides/`,
-`sections/`, `themes/`, `media/`) — for example a `.git/` directory or a
-`README.md`. A library that is also a git repo therefore still loads; ignored
-entries are never parsed, validated, rendered, listed or served.
+A root-level `AGENTS.md` and `AGENTS_KALIDE.md` (this guide and the pointer that
+references it) are ignored by the loader, as is any other top-level entry that
+is not part of the library (`library.yaml`, `slides/`, `sections/`, `themes/`,
+`media/`) — for example a `.git/` directory or a `README.md`. A library that is
+also a git repo therefore still loads; ignored entries are never parsed,
+validated, rendered, listed or served.
 
 ## Slides and sections
 
@@ -367,6 +368,42 @@ The built-in number and date format functions (`compact`, `exact`, `percent`,
 cannot be declared as fields or sections. `notes`, `body` and the `_format`
 suffix are reserved too.
 
+### Composing layouts
+
+A layout may include another library layout with the standard Go
+`{{ template "<layout name>" . }}` action, so shared markup lives in one layout
+that the slides and sections which need it compose. The layout name is the
+included layout's **root-qualified path inside its own layer**:
+
+- `<layer root>/slides/<name>/layout.html.tmpl` for a slide layout, and
+- `<layer root>/sections/<name>/layout.html.tmpl` for a section layout,
+
+where `<layer root>` is the directory the library was loaded from — the
+deck-root `templates/` when the library is the deck's local layer, or the
+external library's root when it is the deck's external layer. That is exactly
+the name the loader builds and registers each layout under, so the action names
+the path literally, never the bare template name. For a `hello` slide layout the
+call is `{{ template "slides/hello/layout.html.tmpl" . }}`, with `<layer root>`
+elided only here for brevity.
+
+A layout may include any layout in its **own library** by that root-qualified
+name. A deck's local-layer layout may additionally include an external library's
+layout by the external layer's own root-qualified name (see **A library as a
+deck's external layer**). The reverse is not allowed: this library is validated
+standalone before the merge, so a layout here that includes a layout existing
+only in the deck's local layer is a templates error ("no such template")
+reported at this library's own layout file. Keep an external library
+self-contained.
+
+The included layout executes in the **invoking** layout's namespace, so its
+`media` helper binds to the invoking layer's `media/`: an included layout's
+`{{ media "logo.svg" }}` resolves in the layer of the layout that named it, not
+in the layer that owns the included layout. A `section` call rebinds to the
+called template's own layer instead, so the called template's
+`{{ media "logo.svg" }}` resolves in that template's own library. Compose with
+the `template` action to share markup; call with `section` when the target's own
+library must supply its media.
+
 ## Themes
 
 - Themes live at `themes/<name>/`, and each requires a `theme.css`.
@@ -399,7 +436,8 @@ suffix are reserved too.
   prefixes. An unprefixed relative reference stays inside the stylesheet's own
   tree: no absolute paths, no `..` leaving that tree, no other scheme, nothing
   outside the library, and no references into non-servable entries (`slides/`,
-  `sections/`, `library.yaml`, `AGENTS.md`). The path after `media:` is relative
+  `sections/`, `library.yaml`, `AGENTS.md`, `AGENTS_KALIDE.md`). The path after
+  `media:` is relative
   to the library's `media/` — the same base the layout `{{ media "path" }}`
   helper uses — and the path after `theme:<name>/` is relative to
   `themes/<name>/`; an unknown `theme:<name>` is an error. Both prefixes work in

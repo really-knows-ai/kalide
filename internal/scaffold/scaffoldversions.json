@@ -33,7 +33,7 @@
       "identity": "deck:AGENTS_KALIDE.md",
       "digests": [
         {
-          "digest": "1301891b724e338256f44452cd9d49b3b69ad9aa0133fd0992edec4df92efaa2",
+          "digest": "9131ef5f8e1192239cde6b1e53462fb4d4ab1b057153b3c683f4ff0214570a39",
           "versions": ["unreleased"]
         }
       ]
@@ -125,7 +125,7 @@
       "identity": "library:AGENTS_KALIDE.md",
       "digests": [
         {
-          "digest": "d3ec556a5cf4add5e901df6e706e267844ac9cab8b1eb5096e16416804fd3518",
+          "digest": "201155f1e3bed58099f957813a5c38e85ce7a3f338991891f411ec1263d8de3e",
           "versions": ["unreleased"]
         }
       ]

@@ -205,12 +205,12 @@ templates/
 - `themes/<name>/` holds `theme.css` plus any fonts, logos or other files the
   theme owns.
 - `media/` is optional shared media of any type.
-- A root-level `AGENTS.md` (a library and template-author guide) is ignored, as
-  is any other top-level entry that is not part of the library (`library.yaml`,
-  `slides/`, `sections/`, `themes/`, `media/`) — for example a `.git/`
-  directory or a `README.md`. A library that is also a git repo therefore still
-  loads; ignored entries are never parsed, validated, rendered, listed or
-  served.
+- A root-level `AGENTS.md` and `AGENTS_KALIDE.md` (the library author guide and
+  the pointer that references it) are ignored, as is any other top-level entry
+  that is not part of the library (`library.yaml`, `slides/`, `sections/`,
+  `themes/`, `media/`) — for example a `.git/` directory or a `README.md`. A
+  library that is also a git repo therefore still loads; ignored entries are
+  never parsed, validated, rendered, listed or served.
 
 ## template.yaml
 
@@ -469,6 +469,41 @@ The built-in number and date format functions (`compact`, `exact`, `percent`,
 template may not declare a field or section named `deck`, `slide`, `item`,
 `raw` or `data`. `notes`, `body` and the `_format` suffix are reserved too.
 
+### Composing layouts
+
+A layout may include another library layout with the standard Go
+`{{ template "<layout name>" . }}` action, so shared markup lives in one layout
+that the slides and sections which need it compose. The layout name is the
+included layout's **root-qualified path inside its own layer**:
+
+- `<layer root>/slides/<name>/layout.html.tmpl` for a slide layout, and
+- `<layer root>/sections/<name>/layout.html.tmpl` for a section layout,
+
+where `<layer root>` is the directory the layer was loaded from — the
+deck-root `templates/` of the local layer, or the external library's root. That
+is exactly the name the loader builds and registers each layout under, so the
+action names the path literally, never the bare template name. For the deck's
+local `hello` slide layout the call is
+`{{ template "templates/slides/hello/layout.html.tmpl" . }}`.
+
+A layout may include any layout in its **own layer** by that root-qualified
+name. In a two-layer deck a local-layer layout may also include an
+**external-layer** layout by the external layout's own root-qualified name: the
+merged layout namespace keys every layer's layouts, so the call resolves. The
+reverse is not allowed — the external library is validated standalone before the
+merge, so an external-layer layout that includes a local-layer layout is a
+templates error ("no such template") reported at the external layout's own file.
+An external library may never depend on the deck's local layer.
+
+The included layout executes in the **invoking** layout's namespace, so its
+`media` helper binds to the invoking layer's `media/`: an included layout's
+`{{ media "logo.svg" }}` resolves in the layer of the layout that named it, not
+in the layer that owns the included layout. A `section` call rebinds to the
+called template's own layer instead, so the called template's
+`{{ media "logo.svg" }}` resolves in that template's own owning layer. Compose
+with the `template` action to share markup; call with `section` when the
+target's own layer must supply its media.
+
 ## Themes
 
 - `theme` is deck-wide only, never per slide. Omitted means `default`.
@@ -498,7 +533,8 @@ template may not declare a field or section named `deck`, `slide`, `item`,
   prefixes. An unprefixed relative reference stays inside the stylesheet's own
   tree: no absolute paths, no `..` leaving that tree, no other scheme, nothing
   outside that layer, and no references into non-servable entries (`slides/`,
-  `sections/`, `library.yaml`, `AGENTS.md`). The path after `media:` is relative
+  `sections/`, `library.yaml`, `AGENTS.md`, `AGENTS_KALIDE.md`). The path after
+  `media:` is relative
   to that layer's `media/` — the same base the layout `{{ media "path" }}`
   helper uses — and the path after `theme:<name>/` is relative to
   `themes/<name>/`; an unknown `theme:<name>` is an error. Both prefixes work in
