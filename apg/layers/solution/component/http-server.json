@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "http-server",
-  "body": "HTTP server: binds 127.0.0.1 only; default port 8080 with automatic fallback through 8081..8099 (20 ports total) when busy, then a startup error advising `--port` if all are busy; an explicit `--port` that is busy is a startup error rather than a fallback; reports the actual bound port for the printed link. Serves deck page or error page, embedded assets, deck assets/, each resolved layer's `media/` (the URLs returned by the layout `media` helper) and each resolved layer's `themes/<name>/` directory, content type by file extension, serving only paths confined to those roots. Every stylesheet served from those routes — `theme.css`, every `.css` served from a theme directory, and every `.css` served from `media/` — is passed through the serve-time rewrite: a `media:` reference becomes the served media URL and a `theme:<name>/` reference becomes that theme's served file URL, so a reference in an imported stylesheet is rewritten exactly as one in `theme.css` (theme-media-references). Also serves the /templates gallery and the live-reload endpoint, which pushes each deck-rebuilt notification to connected browsers. The reload pipeline pins the external layer's root to the configured `templates:` value captured at startup; a mid-session change to that value serves the full-page restart-required error on the served deck page, and the process keeps running. The `/templates` gallery and the library media/theme routes are static surfaces pinned at `server.Listen` time and keep serving the startup library, remaining outside the restart-required scope (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
+  "body": "HTTP server: binds 127.0.0.1 only; default port 8080 with automatic fallback through 8081..8099 (20 ports total) when busy, then a startup error advising `--port` if all are busy; an explicit `--port` that is busy is a startup error rather than a fallback; reports the actual bound port for the printed link. Serves deck page or error page, embedded assets, deck assets/, and each resolved library layer's `media/` and `themes/<name>/` directories from that layer's own root, content type by file extension, serving only paths confined to those roots. Each layer is addressed by its own URL prefix: the primary layer — the sole layer of a single-root library, or the deck-root local `templates/` layer of a two-layer deck — is served at the unprefixed `/assets/templates/media/` and `/assets/templates/themes/<name>/`, while a two-layer deck's external `templates:` layer is served at `/assets/templates/external/media/` and `/assets/templates/external/themes/<name>/`; the external routes are mounted only when the library has an external layer, so a single-root library's routes are unchanged. The unprefixed themes route resolves the requested theme name in the primary layer first and falls back to the external layer's themes, so a theme carried only by the external layer is served at the unprefixed URL with its `media:` and `theme:<name>/` references rewritten against the external layer's own bases; the external themes route serves only the external layer's registry. Every stylesheet served from those routes — `theme.css`, every `.css` served from a theme directory, and every `.css` served from `media/` — is passed through the serve-time rewrite against the serving layer's own bases: a `media:` reference becomes that layer's served media URL and a `theme:<name>/` reference becomes that theme's served file URL, so a reference in an imported stylesheet is rewritten exactly as one in `theme.css` (theme-media-references). Also serves the /templates gallery and the live-reload endpoint, which pushes each deck-rebuilt notification to connected browsers. The reload pipeline pins the external layer's root to the configured `templates:` value captured at startup; a mid-session change to that value serves the full-page restart-required error on the served deck page, and the process keeps running. The `/templates` gallery and the library media/theme routes are static surfaces pinned at `server.Listen` time and keep serving the startup library, remaining outside the restart-required scope (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
   "properties": {},
   "out": [
     {
@@ -37,6 +37,11 @@
     },
     {
       "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/server.templatesRetargeted",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/server.themeFileHandler",
       "properties": {}
     },
@@ -63,11 +68,6 @@
     {
       "kind": "implemented-by",
       "target": "internal/server/themecss.go",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/server.templatesRetargeted",
       "properties": {}
     }
   ],
