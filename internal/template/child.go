@@ -292,10 +292,11 @@ type ResolvedChild struct {
 //   - the instantiated template's declared defaults are materialised FIRST and
 //     the effective map is validated with CheckValues (defaults-first);
 //   - req.Body is validated against the instantiated template's body rule with
-//     CheckBody (requirements.requirement.body-rules). Unlike the `section`
-//     helper's own body, a child body MAY name the instantiated template's
-//     declared child sections: those are the child's own nested instances, so no
-//     child-section heading is rejected here.
+//     CheckBody, and a body whose heading names one of the instantiated
+//     template's declared child sections is rejected (requirements.requirement.
+//     body-rules): a child body carries no child sections either, so its nested
+//     children pass only through nested `child` arguments, never through the
+//     body — the same rejection the `section` helper's own body produces.
 //
 // The resolved instance is returned as a *SectionCall — the same resolved-
 // instance shape ResolveSectionCallLayered returns — because a child resolves
@@ -384,6 +385,20 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 
 	if ve, invalid := CheckBody(target.Body, req.Body); invalid {
 		return nil, ve
+	}
+	// A child body carries no child sections either: its nested children pass
+	// only through nested `child` arguments, so a heading naming one of the
+	// instantiated template's declared child sections is rejected rather than
+	// silently dropped, exactly as for the section helper's own body
+	// (requirements.requirement.body-rules, requirements.requirement.child-constructor).
+	if child, named := bodyNamesChildSection(target, req.Body); named {
+		return nil, ValueError{
+			Path:  []PathSegment{{Name: bodyField}},
+			Rule:  "subheadings",
+			Value: req.Body,
+			What:  fmt.Sprintf("subheadings: the body heading names child section %q, but a child body carries no child sections", child),
+			Fix:   "remove the heading; pass the nested child with a child argument instead",
+		}
 	}
 
 	call := &SectionCall{
