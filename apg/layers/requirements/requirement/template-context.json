@@ -81,11 +81,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.section-helpers-requirements",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "solution.note.nested-sections-coverage-reconcile",
       "properties": {}
     }

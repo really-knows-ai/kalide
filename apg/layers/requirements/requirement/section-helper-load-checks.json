@@ -23,11 +23,6 @@
       "kind": "details",
       "source": "requirements.note.helper-refs-precomputed",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.section-helpers-requirements",
-      "properties": {}
     }
   ]
 }

@@ -9,7 +9,7 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.raw-source",
+      "target": "domain.service.load-template-library",
       "properties": {}
     },
     {
@@ -19,7 +19,7 @@
     },
     {
       "kind": "drives",
-      "target": "domain.service.load-template-library",
+      "target": "domain.value.raw-source",
       "properties": {}
     }
   ],
@@ -27,11 +27,6 @@
     {
       "kind": "contains",
       "source": "requirements.requirement.template-context",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.section-helpers-requirements",
       "properties": {}
     },
     {

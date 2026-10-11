@@ -76,11 +76,6 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.section-helpers-requirements",
-      "properties": {}
-    },
-    {
-      "kind": "details",
       "source": "requirements.note.spine-agent-guide-drift-check",
       "properties": {}
     },
