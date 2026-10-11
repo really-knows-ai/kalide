@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// This file is the home of the `child` and `children` layout constructors: the
+// This file is the home for the `child` and `children` layout constructors: the
 // two constructors a `section` helper call uses to pass child sections to its
 // target (requirements.requirement.child-constructor,
 // requirements.requirement.children-forwarding). It holds their request value
