@@ -2,14 +2,14 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "example-layout-composition",
-  "body": "Load-time example layout composition: the example check — templates-dir-validation step 7 — executes each template's layout against the library's layout set rather than that layout's text alone. Every layout text the merged library contributes — each slide layout and each section layout, whichever layer carries it — is parsed into one html/template namespace keyed by layout name, so a layout's `{{ template \"<name>\" . }}` call resolves the named library layout exactly as it resolves against the render-time shared namespace (template-language, library-layer-references). The namespace is built with the example-checked template's own function map and its own owning layer's `media` sub-filesystem, so the layout's `media` helper resolves in the layer that owns the template, matching the render-time per-layer namespaces (library-layer-references); the `section` helper is the load-time example helper — the re-parse override of the parse-resolvable `section` stub — so a `{{ section \"<name>\" }}` call renders its target at step 7 instead of failing. A `{{ template }}` call naming no library layout remains a step-7 execute error, file:line-qualified to the offending layout (template-language, templates-dir-validation). This holds for a single-layer library and for each layer of a two-layer library.\n\nAC: a library whose layout calls `{{ template \"hello\" . }}` to include another layout loads cleanly at step 7 and the example check executes the invoked layout's markup; the named layout resolves whether it is a slide layout or a section layout; the example-checked layout's `{{ media \"<path>\" }}` still resolves in its own owning layer; a layout calling `{{ section \"<name>\" }}` still executes its target at step 7; a `{{ template }}` call naming no library layout fails step 7 with a file:line-qualified templates error.",
+  "body": "Load-time example layout composition: the example check — templates-dir-validation step 7 — executes each template's layout against the library's layout set rather than that layout's text alone. A library layout's name is its layout file path: the layer root joined with the layout's path within its layer — `<layer root>/slides/<template-name>/layout.html.tmpl` for a slide layout and `<layer root>/sections/<template-name>/layout.html.tmpl` for a section layout, the name the loader builds (`path.Join(root, layoutRel)`, loadlibrary.go) and that render registers each layout under (`layoutName` / `namespaceForLayer`, render.go). Every layout text the merged library contributes — each slide layout and each section layout, whichever layer carries it — is parsed into one html/template namespace keyed by that layout name, so a layout's `{{ template \"<layer root>/slides|sections/<template-name>/layout.html.tmpl\" . }}` call resolves the named library layout exactly as it resolves against the render-time shared namespace (template-language, library-layer-references). A two-layer library keys each layer's layouts under that layer's own root, so a layout in one layer invokes a layout in the other layer by the target's own root-qualified name (for example `{{ template \"<external root>/sections/<template-name>/layout.html.tmpl\" . }}`). The namespace is built with the example-checked template's own function map and its own owning layer's `media` sub-filesystem, so the layout's `media` helper resolves in the layer that owns the template, matching the render-time per-layer namespaces (library-layer-references); the `section` helper is the load-time example helper — the re-parse override of the parse-resolvable `section` stub — so a `{{ section \"<name>\" }}` call renders its target at step 7 instead of failing. A `{{ template }}` call naming no library layout fails step 7 with a file:line-qualified templates error (template-language, templates-dir-validation). This holds for a single-layer library and for each layer of a two-layer library.\n\nAC: a layout that invokes another library layout names it by the target's layout name, e.g. `{{ template \"<layer root>/slides/<template-name>/layout.html.tmpl\" . }}`; the example check executes the invoked layout's markup at step 7; the named layout resolves whether it is a slide layout (`<layer root>/slides/<template-name>/layout.html.tmpl`) or a section layout (`<layer root>/sections/<template-name>/layout.html.tmpl`); in a two-layer library a local-layer layout resolves an external-layer layout by the external layer's own root-qualified name; the example-checked layout's `{{ media \"<path>\" }}` still resolves in its own owning layer; a layout calling `{{ section \"<name>\" }}` still executes its target at step 7; a `{{ template }}` call naming no library layout fails step 7 with a file:line-qualified templates error.",
   "properties": {
     "feature": "layered-template-libraries"
   },
   "out": [
     {
       "kind": "drives",
-      "target": "domain.service.template-registry",
+      "target": "domain.entity.template",
       "properties": {}
     },
     {
@@ -19,12 +19,12 @@
     },
     {
       "kind": "drives",
-      "target": "domain.value.library-layer",
+      "target": "domain.service.template-registry",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.entity.template",
+      "target": "domain.value.library-layer",
       "properties": {}
     }
   ],
