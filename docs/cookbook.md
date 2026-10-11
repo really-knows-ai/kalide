@@ -287,5 +287,3 @@ in that theme's **own** layer, never in the other layer
 
 - [docs/templates.md](templates.md) — the template-author reference.
 - [docs/layered-libraries.md](layered-libraries.md) — the two-layer how-to.
-
-<!-- -->

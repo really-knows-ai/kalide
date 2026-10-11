@@ -423,5 +423,3 @@ the open sections back to its parent. Where the enclosing template declares no
 child sections, a deeper heading stays in the enclosing body as an ordinary
 Markdown subheading — allowed `##`/`###` only where that template's body rule
 permits subheadings.
-
-<!-- -->

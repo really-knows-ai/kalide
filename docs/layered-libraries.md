@@ -171,5 +171,3 @@ set, or even two spellings of the same directory.
 - [docs/templates.md](templates.md) — the template-author reference: library
   layout, `template.yaml`, layout context and helper set.
 - [docs/cookbook.md](cookbook.md) — copyable layout and YAML recipes.
-
-<!-- -->
