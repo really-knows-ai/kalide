@@ -1026,11 +1026,15 @@ func (s *Section) walkHelperCommand(cmd *parse.CommandNode, tmplName, text strin
 //
 // The arguments after the target name are positional: the second is the
 // optional fields expression and the third the optional body, matching the
-// `[fields] [body]` grammar. Either may be the `nil` placeholder, which is a
-// present-but-non-literal argument, distinct from an omitted one the length
-// check reports absent. Every further argument (position four onward) is a
-// child argument — the value of a `child`/`children` constructor, or any other
-// expression the call passes as a child — and is recorded on
+// `[fields] [body]` grammar. A literal `nil` in either slot is treated as an
+// OMITTED argument — HasFields/HasBody stay false — exactly as the render-time
+// helper reads a nil argument, so a
+// `{{ section "columns" nil nil (child …) }}` call supplies no fields and no
+// body and the load checks apply the target's defaults and required-field rules
+// against a known-empty supplied set. (The `nil` placeholder is how a call
+// reaches its trailing child arguments.) Every further argument (position four
+// onward) is a child argument — the value of a `child`/`children` constructor,
+// or any other expression the call passes as a child — and is recorded on
 // HelperCall.Children, in source order, by extractHelperChild. A child call
 // therefore never occupies the fields or body slot, so the existing field/body
 // reading is unchanged.
@@ -1059,17 +1063,21 @@ func extractSectionHelperCall(cmd *parse.CommandNode, tmplName, text string) (He
 	call.Name = name.Text
 
 	if len(args) >= 2 {
-		call.HasFields = true
-		if keys, ok := literalDictKeys(args[1]); ok {
-			call.FieldsLiteral = true
-			call.FieldKeys = keys
+		if _, omitted := args[1].(*parse.NilNode); !omitted {
+			call.HasFields = true
+			if keys, ok := literalDictKeys(args[1]); ok {
+				call.FieldsLiteral = true
+				call.FieldKeys = keys
+			}
 		}
 	}
 	if len(args) >= 3 {
-		call.HasBody = true
-		if body, ok := args[2].(*parse.StringNode); ok {
-			call.BodyLiteral = true
-			call.Body = body.Text
+		if _, omitted := args[2].(*parse.NilNode); !omitted {
+			call.HasBody = true
+			if body, ok := args[2].(*parse.StringNode); ok {
+				call.BodyLiteral = true
+				call.Body = body.Text
+			}
 		}
 	}
 	if len(args) > 3 {
