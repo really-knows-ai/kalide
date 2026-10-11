@@ -1,0 +1,43 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "example-layout-composition",
+  "body": "Load-time example layout composition: the example check — templates-dir-validation step 7 — executes each template's layout against the library's layout set rather than that layout's text alone. Every layout text the merged library contributes — each slide layout and each section layout, whichever layer carries it — is parsed into one html/template namespace keyed by layout name, so a layout's `{{ template \"<name>\" . }}` call resolves the named library layout exactly as it resolves against the render-time shared namespace (template-language, library-layer-references). The namespace is built with the example-checked template's own function map and its own owning layer's `media` sub-filesystem, so the layout's `media` helper resolves in the layer that owns the template, matching the render-time per-layer namespaces (library-layer-references); the `section` helper is the load-time example helper — the re-parse override of the parse-resolvable `section` stub — so a `{{ section \"<name>\" }}` call renders its target at step 7 instead of failing. A `{{ template }}` call naming no library layout remains a step-7 execute error, file:line-qualified to the offending layout (template-language, templates-dir-validation). This holds for a single-layer library and for each layer of a two-layer library.\n\nAC: a library whose layout calls `{{ template \"hello\" . }}` to include another layout loads cleanly at step 7 and the example check executes the invoked layout's markup; the named layout resolves whether it is a slide layout or a section layout; the example-checked layout's `{{ media \"<path>\" }}` still resolves in its own owning layer; a layout calling `{{ section \"<name>\" }}` still executes its target at step 7; a `{{ template }}` call naming no library layout fails step 7 with a file:line-qualified templates error.",
+  "properties": {
+    "feature": "layered-template-libraries"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-layer",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.layered-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.layout-composition-resolution",
+      "properties": {}
+    }
+  ]
+}

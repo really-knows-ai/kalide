@@ -13,7 +13,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.external-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.layered-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.library-layer-references",
       "properties": {}
     },
     {
@@ -23,12 +33,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.external-template-library",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.library-layer-references",
+      "source": "requirements.requirement.example-layout-composition",
       "properties": {}
     }
   ]
