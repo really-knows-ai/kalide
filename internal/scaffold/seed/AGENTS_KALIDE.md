@@ -147,14 +147,14 @@ only where that template's body rule permits subheadings.
 A section's frontmatter is an optional plain fence (three backticks, no
 language tag) immediately after its heading, at any depth:
 
-```markdown
+````markdown
 # people
 ```
 name: Ada Lovelace
 role: Mathematician
 ```
 Ada is the first programmer.
-```
+````
 
 - `template:` is required on a section instance **only when** the section
   accepts more than one section template; with exactly one accepted template it
