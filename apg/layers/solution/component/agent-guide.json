@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "component",
   "name": "agent-guide",
-  "body": "Agent guide: the embedded `AGENTS.md` seed content and its verbatim write for all three scaffolding forms — the shared deck-author guide written by `kalide init` and `kalide init <path>` (agent-authoring) and the library/template-author guide written by `kalide init-library` (library-agent-guide, library-guide-layout). Realised by the scaffold package's embedded seed and writers (internal/scaffold) and announced by the CLI handlers (internal/cli) — Init, writeHelloSeed, InitExternal and InitLibrary.",
+  "body": "Agent guide: the embedded author-guide content and its verbatim write for all three scaffolding forms — the deck-root full guide `AGENTS_KALIDE.md` plus its `AGENTS.md` pointer, written by `kalide init` and `kalide init <path>` (agent-authoring, agent-guide-reference), and the library-root full guide plus its pointer, written by `kalide init-library` (library-agent-guide, library-guide-layout). The `AGENTS.md` pointer is written per the reference rule (created, left untouched, or appended to); the full guide is written only when absent. Realised by the scaffold package's embedded guide files and writers (internal/scaffold) — Init, writeHelloSeed, InitExternal and InitLibrary — and announced by the CLI handlers (internal/cli). The build/test-time drift self-test (agent-guide-drift-check) guards both full guides and the pointer content.",
   "properties": {},
   "out": [
     {

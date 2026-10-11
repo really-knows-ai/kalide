@@ -2,7 +2,7 @@
   "layer": "solution",
   "type": "constraint",
   "name": "agent-guide-unbranded-inert",
-  "body": "The embedded AGENTS.md guide content must remain unbranded (no corporate branding and no reference to files under `brand/`), text-only and offline, format-accurate (no drift from the format the code implements; see agent-guide-drift-check), and inert: written verbatim by scaffolding, permitted by the library layout only as the single non-template root entry (library-guide-layout), and never read by the load/validate/render/serve/list code paths. It is not a template asset and must not be referenced as one.",
+  "body": "The embedded author-guide content must remain unbranded (no corporate branding and no reference to files under `brand/`), text-only and offline, format-accurate (no drift from the format the code implements; see agent-guide-drift-check), and inert. Each guide is delivered as a kalide-owned full guide `AGENTS_KALIDE.md`, written verbatim by scaffolding, plus an `AGENTS.md` pointer carrying the reference line `Kalide Reference: ./AGENTS_KALIDE.md` (agent-guide-reference); the pointer is the one file a scaffolding command may append the reference line to, and it is otherwise author-preserving. The library layout permits both as inert non-template root entries (library-guide-layout). Neither file is ever read by the load/validate/render/serve/list code paths, and neither is a template asset nor referenced as one.",
   "properties": {},
   "out": [],
   "in": []

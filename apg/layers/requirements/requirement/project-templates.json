@@ -39,6 +39,11 @@
     },
     {
       "kind": "contains",
+      "target": "requirements.requirement.layered-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.library-agent-guide",
       "properties": {}
     },
@@ -104,7 +109,12 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.layered-template-library",
+      "target": "requirements.requirement.agent-guide-reference",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.guide-layout-composition",
       "properties": {}
     }
   ],

@@ -70,6 +70,11 @@
     },
     {
       "kind": "contains",
+      "target": "domain.value.library-layer",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "domain.value.library-manifest",
       "properties": {}
     },
@@ -99,8 +104,8 @@
       "properties": {}
     },
     {
-      "kind": "contains",
-      "target": "domain.value.library-layer",
+      "kind": "realised-by",
+      "target": "solution.component.docs",
       "properties": {}
     }
   ],
@@ -123,6 +128,21 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.template-context",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.agent-guide-reference",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.docs-templates",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.docs-cookbook",
       "properties": {}
     }
   ]

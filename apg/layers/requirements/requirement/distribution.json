@@ -9,6 +9,66 @@
   "out": [
     {
       "kind": "contains",
+      "target": "requirements.requirement.brand-identity",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.changelog",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.github-releases",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.homebrew-install",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.install-docs",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.license",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.linux-install",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.native-ci-verification",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.package-manifest-update",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-install-front-loading",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-presentation",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.scoop-install",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.source-repo",
       "properties": {}
     },
@@ -19,42 +79,7 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.github-releases",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.native-ci-verification",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.homebrew-install",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.scoop-install",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.tap-bucket-location",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.package-manifest-update",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.install-docs",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "target": "domain.group.distribution",
       "properties": {}
     },
     {
@@ -63,38 +88,43 @@
       "properties": {}
     },
     {
-      "kind": "contains",
-      "target": "requirements.requirement.changelog",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.license",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.brand-identity",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.readme-presentation",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.linux-install",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.readme-install-front-loading",
+      "kind": "drives",
+      "target": "domain.group.distribution",
       "properties": {}
     },
     {
       "kind": "drives",
       "target": "domain.service.verify-changes",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-commands",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-templates-key",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.readme-layered-libraries",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.docs-templates",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.docs-layered-libraries",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.docs-cookbook",
       "properties": {}
     }
   ],

@@ -71,6 +71,11 @@
       "kind": "drives",
       "source": "requirements.requirement.template-language",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.docs-cookbook",
+      "properties": {}
     }
   ]
 }

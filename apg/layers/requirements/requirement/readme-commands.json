@@ -1,0 +1,38 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "readme-commands",
+  "body": "README command reference: README.md documents every user-facing command — `init` (with its optional `[path]` argument and `--local` flag), `init-library`, `config`, `start`, `templates`, `templates <name>`, `upgrade`, `version`, and `help` — each with its usage, and its table of contents resolves to every section (no stale or missing entries).\n\nAC: README.md documents `init`, `init-library`, `config`, `start`, `templates`, `templates <name>`, `upgrade`, `version` and `help`; `upgrade` is documented with its no-path-argument, no-`--force` behaviour; every table-of-contents entry links to a heading that exists, and every command section is reachable from the table of contents.",
+  "properties": {
+    "feature": "docs"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.group.authoring",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.serve-deck",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.scaffold-deck",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.distribution",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.readme-presentation",
+      "properties": {}
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "docs-templates",
+  "body": "Template-author reference (docs/templates.md): a repo `docs/templates.md` is the template-author reference — the library layout (`library.yaml`, `slides/<name>/`, `sections/<name>/`, `themes/<name>/`, `media/`, and the inert non-library root entries), the `template.yaml` manifest fields (every field type and key: `description`, `fields` with type/required/default/limits/variants/formats/description, `sections` with accepted/min/max, and the `body` rule), the reserved `.deck`/`.slide`/`.item`/`.raw`/`.data` context and the reserved names `deck`/`slide`/`item`/`raw`/`data`, the `media`/`section`/`dict`/`list`/`child`/`children` helper set, and the theme and media reference rules (theme-owned files, token-only themes, and the reserved `media:` and `theme:<name>/` URL prefixes). It documents the format the code implements and is not a template asset. README.md links to it.\n\nAC: docs/templates.md exists and is linked from README.md; it documents the library layout, every `template.yaml` field type and key, the reserved context and names, the helper set, and the theme/media reference rules, consistently with templates-dir-layout, template-manifest, field-types, template-context, template-language, theme-media-references and template-media.",
+  "properties": {
+    "feature": "docs"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.distribution",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.readme-presentation",
+      "properties": {}
+    }
+  ]
+}

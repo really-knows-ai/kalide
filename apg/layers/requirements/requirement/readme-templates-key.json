@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "readme-templates-key",
+  "body": "README documents the `templates:` key: README.md's deck-layout section documents the optional top-level `kalide.yaml` `templates:` key — it names the deck's external template-library layer, is resolved against the deck root when relative and used as given when absolute, and the deck-root `templates/` directory binds the local layer (layered-template-library). The README's `kalide.yaml` example and key list include `templates:` alongside `title`, `author`, `date`, `theme`, `navigation` and `properties`.\n\nAC: README.md's `kalide.yaml` example and key list include `templates:` with its meaning, consistently with deck-config and layered-template-library.",
+  "properties": {
+    "feature": "docs"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.deck-config",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.distribution",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.readme-presentation",
+      "properties": {}
+    }
+  ]
+}

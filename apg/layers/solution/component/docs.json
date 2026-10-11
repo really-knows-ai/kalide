@@ -1,0 +1,20 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "docs",
+  "body": "Author documentation (docs/): the repo's task-oriented author references linked from README.md — docs/templates.md (the template-author reference: library layout, `template.yaml` manifest fields, reserved context and names, layout helpers, themes and media), docs/layered-libraries.md (the two-layer how-to with a worked example and the cross-layer rules), and docs/cookbook.md (task recipes: footer via `.slide`, nested child/children, wrapper layouts, theme `media:`/`theme:<name>/` references). They document the format the code implements and are not template assets. Realised by the docs/ Markdown files.",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.package-channels",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.group.templating",
+      "properties": {}
+    }
+  ]
+}

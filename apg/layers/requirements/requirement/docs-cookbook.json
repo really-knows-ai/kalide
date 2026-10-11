@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "docs-cookbook",
+  "body": "Cookbook (docs/cookbook.md): a repo `docs/cookbook.md` is a task-recipe reference for template authors, each recipe a small copyable layout or YAML snippet. It includes at least: a reusable footer rendered via the `.slide` context (`{{ .slide.number }} / {{ .slide.total }}`), a nested child/children composition (a `section` call passing `child` arguments and `children` forwardings), a wrapper layout that forwards its own authored children with `children`, and theme `media:`/`theme:<name>/` references. README.md links to it.\n\nAC: docs/cookbook.md exists and is linked from README.md; it contains at least the footer-via-`.slide`, nested child/children, wrapper-layout, and theme `media:`/`theme:<name>/` recipes, each a copyable snippet consistent with section-helper, child-constructor, children-forwarding and theme-media-references.",
+  "properties": {
+    "feature": "docs"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.render-sections",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.distribution",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
+      "source": "requirements.requirement.readme-presentation",
+      "properties": {}
+    }
+  ]
+}

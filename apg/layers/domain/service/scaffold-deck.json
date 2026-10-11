@@ -51,6 +51,11 @@
       "kind": "drives",
       "source": "requirements.requirement.init-library-resolution",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.readme-commands",
+      "properties": {}
     }
   ]
 }

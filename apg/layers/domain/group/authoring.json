@@ -15,7 +15,7 @@
     },
     {
       "kind": "contains",
-      "target": "domain.value.deck-config",
+      "target": "domain.entity.section",
       "properties": {}
     },
     {
@@ -25,22 +25,7 @@
     },
     {
       "kind": "contains",
-      "target": "domain.value.slide-position",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.entity.section",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.value.body",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "domain.value.link-target",
+      "target": "domain.service.load-deck",
       "properties": {}
     },
     {
@@ -50,12 +35,17 @@
     },
     {
       "kind": "contains",
-      "target": "domain.service.load-deck",
+      "target": "domain.value.agent-guide",
       "properties": {}
     },
     {
-      "kind": "realised-by",
-      "target": "solution.container.cli-binary",
+      "kind": "contains",
+      "target": "domain.value.body",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.deck-config",
       "properties": {}
     },
     {
@@ -65,21 +55,26 @@
     },
     {
       "kind": "contains",
-      "target": "domain.value.agent-guide",
+      "target": "domain.value.link-target",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.slide-position",
       "properties": {}
     },
     {
       "kind": "realised-by",
       "target": "solution.component.agent-guide",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.container.cli-binary",
+      "properties": {}
     }
   ],
   "in": [
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.single-binary",
-      "properties": {}
-    },
     {
       "kind": "drives",
       "source": "requirements.requirement.agent-authoring",
@@ -88,6 +83,21 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.agent-guide-drift-check",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.single-binary",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.agent-guide-reference",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.readme-commands",
       "properties": {}
     }
   ]
