@@ -2,19 +2,19 @@
   "layer": "domain",
   "type": "entity",
   "name": "section",
-  "body": "A section: an instance of a section template. It is named by a heading in a slide, with optional plain-fence YAML frontmatter and a body — heading depth is nesting depth: a depth-n heading starts a child section of the most recent depth-(n-1) section, from `#` down to `######` (slide-sections) — or created directly by the `section` layout helper, whose `fields` are validated like a fence's YAML and whose body against the target's body rule (section-helper). Nesting also arises from section-typed fields (structured YAML data) and from declared child sections; a helper-invoked instance carries no child sections in v1 (section-helper-load-checks).",
+  "body": "A section: an instance of a section template. It is named by a heading in a slide, with optional plain-fence YAML frontmatter and a body — heading depth is nesting depth: a depth-n heading starts a child section of the most recent depth-(n-1) section, from `#` down to `######` (slide-sections) — or created directly by the `section` layout helper, whose `fields` are validated like a fence's YAML and whose body against the target's body rule (section-helper). Nesting also arises from section-typed fields (structured YAML data) and from declared child sections; a helper-invoked instance carries the child sections passed as child arguments, each resolved like an authored instance against the target's declared sections (child-constructor, children-forwarding).",
   "properties": {
     "kind": "entity"
   },
   "out": [
     {
       "kind": "realised-by",
-      "target": "solution.component.slide-parser",
+      "target": "solution.component.renderer",
       "properties": {}
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.renderer",
+      "target": "solution.component.slide-parser",
       "properties": {}
     }
   ],
@@ -25,8 +25,18 @@
       "properties": {}
     },
     {
+      "kind": "details",
+      "source": "domain.note.nested-sections-domain",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "domain.note.section-helpers-domain",
+      "properties": {}
+    },
+    {
       "kind": "drives",
-      "source": "requirements.requirement.slide-sections",
+      "source": "requirements.requirement.nested-section-validation",
       "properties": {}
     },
     {
@@ -36,27 +46,27 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.section-helper",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.section-template-context",
       "properties": {}
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.nested-section-validation",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.nested-sections-domain",
+      "source": "requirements.requirement.slide-sections",
       "properties": {}
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.section-helper",
+      "source": "requirements.requirement.child-constructor",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
+      "kind": "drives",
+      "source": "requirements.requirement.children-forwarding",
       "properties": {}
     }
   ]

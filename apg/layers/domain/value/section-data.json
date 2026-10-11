@@ -2,18 +2,18 @@
   "layer": "domain",
   "type": "value",
   "name": "section-data",
-  "body": "The authored section tree exposed to a layout as data under the reserved `.data` context, parallel to the rendered-HTML list for each declared section: `.data.<section>` is a source-ordered list of instance data, each carrying `.raw` (original source field values), `.item` (its sibling descriptor) and `.data` (its own child sections). A data value, not a helper. A section invoked by the `section` helper is a render call, not an authored instance, so it is not part of the caller's `.data`.",
+  "body": "The authored section tree exposed to a layout as data under the reserved `.data` context, parallel to the rendered-HTML list for each declared section: `.data.<section>` is a source-ordered list of instance data, each carrying `.raw` (original source field values), `.item` (its sibling descriptor) and `.data` (its own child sections). A data value, not a helper. A section invoked by the `section` helper is a render call, not an authored instance, so it is not part of the caller's `.data`; the called target's own `.data.<child>` is populated from the child arguments the helper passes (child-constructor, children-forwarding).",
   "properties": {},
   "out": [],
   "in": [
     {
-      "kind": "drives",
-      "source": "requirements.requirement.section-data-context",
+      "kind": "details",
+      "source": "domain.note.section-helpers-domain",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
+      "kind": "drives",
+      "source": "requirements.requirement.section-data-context",
       "properties": {}
     }
   ]

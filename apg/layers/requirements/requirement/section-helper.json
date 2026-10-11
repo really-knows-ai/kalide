@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "section-helper",
-  "body": "A layout can render a section template directly with the `section` helper, exactly as if the instance had been written in Markdown: `{{ section \"<name>\" [fields] [body] }}`. `<name>` names a section-usage template; the call executes that template's own `layout.html.tmpl` and yields the same trusted HTML a Markdown-authored instance of the same template produces. `fields` is an optional map of source values (typically built with `dict`), validated like a section fence's YAML against the target's field schema (field-rules); when omitted, the target's defaults apply. `body` is an optional Markdown string, validated against the target's body rule (body-rules): a literal body string in the layout is checked with the rest of the template set at load (section-helper-load-checks), and a non-literal body expression is validated — and rejected — against the target's body rule at render/example time. The rendered instance is executed with the reserved `deck`/`slide` context and with an `.item` descriptor that treats it as a one-item group: `section` and `template` are the target name, `index` 0, `number` 1, `count` 1, `first` and `last` true, and `parent` is the calling instance's fields — the fields of the section instance whose layout made the call, or nil when the call is made from a slide layout. `.raw` carries the values the call supplied (raw-source-context). No child sections pass through the helper in v1: a target that declares a child section with min > 0 is a load error, and a helper body whose heading names a declared child section of the target is rejected rather than silently dropped — at load for a literal body string (section-helper-load-checks), and at render/example time when a non-literal body is validated against the target's body rule (no child section is rendered through the helper).\n\nAC: a slide layout calling `{{ section \"footer\" }}` renders the `footer` section template's HTML on the slide; `{{ section \"number-heading\" (dict \"number\" .item.number \"heading\" .raw.title) }}` renders that template with those field values; `{{ section \"callout\" (dict \"label\" \"Proposition\") .raw.body }}` renders `callout` with a literal field and the slide's original body as its body; the rendered instance reads `{{.item.index}}`/`{{.item.number}}`/`{{.item.count}}`/`{{.item.first}}`/`{{.item.last}}` as 0/1/1/true/true, `{{.item.section}}`/`{{.item.template}}` as the target name, and `{{.item.parent.<field>}}` as the calling section instance's field (nil from a slide layout).",
+  "body": "A layout can render a section template directly with the `section` helper, exactly as if the instance had been written in Markdown: `{{ section \"<name>\" [fields] [body] [child…] }}`. `<name>` names a section-usage template; the call executes that template's own `layout.html.tmpl` and yields the same trusted HTML a Markdown-authored instance of the same template produces. `fields` is an optional map of source values (typically built with `dict`), validated like a section fence's YAML against the target's field schema (field-rules); when omitted, the target's defaults apply. `body` is an optional Markdown string, validated against the target's body rule (body-rules): a literal body string in the layout is checked with the rest of the template set at load (section-helper-load-checks), and a non-literal body expression is validated — and rejected — against the target's body rule at render/example time. Any arguments after `fields` and `body` are child sections passed to the target, each the result of a `child` constructor (child-constructor) or a `children` forwarding call (children-forwarding); the target renders those children exactly as authored child instances — the accepted-template check against its declared `sections:`, the declaration's min/max over the set passed, each child's field defaults and validation, each child's body rule, each child's own nested children, and each child's own `.item` descriptor — so a target that declares a mandatory child section is satisfied when the call passes the required children. The rendered instance is executed with the reserved `deck`/`slide` context and with an `.item` descriptor that treats it as a one-item group: `section` and `template` are the target name, `index` 0, `number` 1, `count` 1, `first` and `last` true, and `parent` is the calling instance's fields — the fields of the section instance whose layout made the call, or nil when the call is made from a slide layout. `.raw` carries the values the call supplied (raw-source-context). The target's own `.data.<child>` and rendered child-section lists are populated from the passed children, while the call itself adds nothing to the caller's `.data` or rendered section list (section-data-context). A `body` is the target's own body and carries no child sections: children pass only through child arguments, so a helper body whose heading names a declared child section of the target is rejected rather than silently dropped — at load for a literal body string (section-helper-load-checks), and at render/example time when a non-literal body is validated against the target's body rule.\n\nAC: a slide layout calling `{{ section \"footer\" }}` renders the `footer` section template's HTML on the slide; `{{ section \"number-heading\" (dict \"number\" .item.number \"heading\" .raw.title) }}` renders that template with those field values; `{{ section \"callout\" (dict \"label\" \"Proposition\") .raw.body }}` renders `callout` with a literal field and the slide's original body as its body; `{{ section \"columns\" nil nil (child \"column\" (dict \"title\" \"A\")) (child \"column\" (dict \"title\" \"B\")) }}` renders `columns` with two `column` children, each reading its own `{{.item.index}}`/`{{.item.count}}`; `{{ section \"columns\" nil nil (children \"column\" .data.columns) }}` re-instantiates the caller's authored `column` entries as children; the rendered instance reads `{{.item.index}}`/`{{.item.number}}`/`{{.item.count}}`/`{{.item.first}}`/`{{.item.last}}` as 0/1/1/true/true, `{{.item.section}}`/`{{.item.template}}` as the target name, and `{{.item.parent.<field>}}` as the calling section instance's field (nil from a slide layout); the target reads `{{ len .data.columns }}` as its passed-child count.",
   "properties": {
     "feature": "project-templates"
   },
@@ -14,12 +14,12 @@
     },
     {
       "kind": "drives",
-      "target": "domain.service.render-sections",
+      "target": "domain.service.load-template-library",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.load-template-library",
+      "target": "domain.service.render-sections",
       "properties": {}
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "kind": "details",
-      "source": "requirements.note.section-helpers-requirements",
+      "source": "requirements.note.feedback-11-load-time-traceability",
       "properties": {}
     },
     {
       "kind": "details",
-      "source": "requirements.note.feedback-11-load-time-traceability",
+      "source": "requirements.note.section-helpers-requirements",
       "properties": {}
     }
   ]

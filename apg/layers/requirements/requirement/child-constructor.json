@@ -1,0 +1,38 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "child-constructor",
+  "body": "`child` is a layout constructor that names one child section to pass to the `section` helper: `(child \"<name>\" [fields] [body] [child…])`. `<name>` names the section template to instantiate and is one the helper target's declared `sections:` accept; `fields` is an optional map validated against that child template's field schema exactly as an authored instance's frontmatter is (field-rules); `body` is an optional Markdown string validated against the child template's body rule (body-rules); any further arguments are nested `child` calls that instantiate the child's own declared child sections, so grandchildren pass the same way. A child resolves exactly like an authored instance of the target's declared section: the accepted-template check applies, `template:` disambiguation is required when the declaration accepts more than one section template, the declaration's min/max are counted over the children actually passed to that parent, the child template's defaults are applied and its fields validated, its body is checked against its body rule, and it receives its own `.item` descriptor — its 0-based `index`, 1-based `number`, `count`, `first`/`last` among the target's children, its `section` and `template`, and `parent` the target instance's fields (item-context). The child's template resolves in the merged section namespace, so it may come from either library layer, and the child's own `media`/`theme:`-based references resolve in that child template's own owning layer (library-layer-references). `child` reads nothing outside its arguments and adds no data access of its own; a `child` value is consumed only as a child argument of a `section` call.\n\nAC: `{{ section \"columns\" nil nil (child \"column\" (dict \"title\" \"A\")) (child \"column\" (dict \"title\" \"B\")) }}` renders two `column` children, the first reading `{{.item.index}}` 0/`{{.item.count}}` 2 and the second 1/2; a child whose template declares child sections takes further `child` arguments for its own children; a `child` naming a template the target's declared `sections:` do not accept is a templates error naming the template and the declaration; a `child` whose literal `dict` supplies a key its template does not declare is a templates error; a child template invoked from another library layer's layout resolves and its `media` helper resolves in that child template's own layer.",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.render-sections",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.section",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.template-language",
+      "properties": {}
+    }
+  ]
+}

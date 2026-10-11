@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "section-template-context",
-  "body": "A section template is executed with the same reserved `deck`, `slide`, `item`, `raw` and `data` context as a slide layout, in addition to the section instance's own field values and rendered body. A section therefore can render the current slide's position label/total or any deck property — the motivating case is a footer section rendering `{{.slide.number}}/{{.slide.total}}` (e.g. `2a / 12`) on the slide it sits on — and can render its own place among its siblings via `{{.item.*}}` (item-context), including `{{.item.parent.<field>}}` to read the parent instance's fields. A section invoked by the `section` helper executes with the same context, its `.item` the one-item descriptor and its `.item.parent` the calling instance's fields (nil from a slide layout), and its `.raw` the values the call supplied (section-helper, raw-source-context). The context is present at every composition depth: a section template nested inside another section also receives it. Section instance fields stay directly addressable, unchanged; `deck`, `slide`, `item`, `raw` and `data` are the only additions.\n\nAC: a footer section template containing `{{.slide.number}} / {{.slide.total}}` on the vertical slide `2a` of a twelve-slide deck renders `2a / 12`; the same section can render `{{.deck.title}}`; a section nested one level deeper still renders both, and its `{{.item.index}}`/`{{.item.number}}` reflect its position among its siblings; a section rendered by the `section` helper reads the same `deck`/`slide`/`item`/`raw`/`data` context.",
+  "body": "A section template is executed with the same reserved `deck`, `slide`, `item`, `raw` and `data` context as a slide layout, in addition to the section instance's own field values and rendered body. A section therefore can render the current slide's position label/total or any deck property — the motivating case is a footer section rendering `{{.slide.number}}/{{.slide.total}}` (e.g. `2a / 12`) on the slide it sits on — and can render its own place among its siblings via `{{.item.*}}` (item-context), including `{{.item.parent.<field>}}` to read the parent instance's fields. A section invoked by the `section` helper executes with the same context, its `.item` the one-item descriptor and its `.item.parent` the calling instance's fields (nil from a slide layout), and its `.raw` the values the call supplied (section-helper, raw-source-context). A child section the `section` helper passes executes with the same context and its own sibling `.item` descriptor, and the target's own `.data.<child>` is populated from the passed children (child-constructor, section-data-context). The context is present at every composition depth: a section template nested inside another section also receives it. Section instance fields stay directly addressable, unchanged; `deck`, `slide`, `item`, `raw` and `data` are the only additions.\n\nAC: a footer section template containing `{{.slide.number}} / {{.slide.total}}` on the vertical slide `2a` of a twelve-slide deck renders `2a / 12`; the same section can render `{{.deck.title}}`; a section nested one level deeper still renders both, and its `{{.item.index}}`/`{{.item.number}}` reflect its position among its siblings; a section rendered by the `section` helper reads the same `deck`/`slide`/`item`/`raw`/`data` context; a child passed to the `section` helper reads the same context and its own sibling `.item` descriptor.",
   "properties": {
     "feature": "project-templates"
   },
@@ -36,12 +36,12 @@
     },
     {
       "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
+      "source": "requirements.note.section-helpers-requirements",
       "properties": {}
     },
     {
       "kind": "details",
-      "source": "requirements.note.section-helpers-requirements",
+      "source": "solution.note.nested-sections-coverage-reconcile",
       "properties": {}
     }
   ]
