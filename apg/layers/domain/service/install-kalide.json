@@ -7,7 +7,7 @@
   "out": [
     {
       "kind": "realised-by",
-      "target": "solution.component.install-docs",
+      "target": "solution.component.anonymous-install-e2e",
       "properties": {}
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.scoop-manifest",
+      "target": "solution.component.install-docs",
       "properties": {}
     },
     {
@@ -27,14 +27,14 @@
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.anonymous-install-e2e",
+      "target": "solution.component.scoop-manifest",
       "properties": {}
     }
   ],
   "in": [
     {
-      "kind": "drives",
-      "source": "requirements.requirement.scoop-install",
+      "kind": "contains",
+      "source": "domain.group.distribution",
       "properties": {}
     },
     {
@@ -45,16 +45,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.install-docs",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "source": "domain.group.distribution",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.readme-presentation",
       "properties": {}
     },
     {
@@ -69,7 +59,27 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.readme-presentation",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.scoop-install",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.tap-bucket-location",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.readme-layered-libraries",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.readme-templates-key",
       "properties": {}
     }
   ]

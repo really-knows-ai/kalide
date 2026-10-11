@@ -9,12 +9,17 @@
   "out": [
     {
       "kind": "drives",
+      "target": "domain.entity.template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "target": "domain.value.deck-config",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.entity.template-library",
+      "target": "domain.service.install-kalide",
       "properties": {}
     }
   ],
