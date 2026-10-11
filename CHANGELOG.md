@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-12
+
+### Fixed
+
+- v0.12.0 was tagged, but its release builds failed in the Windows end-to-end
+  tests because of a test-fixture quoting bug, so no v0.12.0 release was
+  published. kalide's behaviour has not changed: v0.12.1 carries the same
+  changes as 0.12.0 and is the first published release since 0.11.0.
+
 ## [0.12.0] - 2026-10-12
 
 ### Added
@@ -312,7 +321,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/really-knows-ai/kalide/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
