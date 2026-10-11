@@ -163,3 +163,67 @@ func ChildFunc(args ...any) (*ChildRequest, error) {
 		Children: children,
 	}, nil
 }
+
+// ChildrenFunc is the `children` layout constructor:
+// `{{ children "<section>" .data.<section> }}`. It names one declared section
+// of a `section` helper call's target and forwards the caller's already
+// authored `.data` entries for that section as its children, building the
+// ChildRequest that call passes as a child argument; the value is consumed only
+// there, and the constructor reads nothing outside its arguments and adds no
+// data access of its own (children-forwarding, template-language).
+//
+// Argument handling mirrors ChildFunc's: the first argument names the declared
+// section and must be a string; the second is the `.data.<section>` list to
+// forward. That list is whatever the shared data builder produces for the
+// section — a []map[string]any (template.DataContext, the single builder both
+// the load-time example execution and the render-time execution use) — or a
+// []any a layout built in the template, and it is nil when the caller authored
+// no entries for the section (a missing `.data.<section>` map key evaluates to
+// nil, which is an empty forwarded set, not a malformed call). Any other type
+// is an error, and a call that supplies no entries argument or extra arguments
+// is an error too, so a malformed call fails the whole template execution
+// rather than building a partial request, exactly as a malformed `child` does.
+//
+// Section, Forward and Entries are filled for later resolution; Fields, Body,
+// HasBody and Children are left zero, since only the `child` constructor builds
+// those.
+func ChildrenFunc(args ...any) (*ChildRequest, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("children: section must be a string, got no arguments")
+	}
+	section, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("children: section must be a string, got %s", describeValue(args[0]))
+	}
+	if len(args) < 2 {
+		return nil, fmt.Errorf("children %q: entries must be a list, got no argument", section)
+	}
+	if len(args) > 2 {
+		return nil, fmt.Errorf(
+			"children %q: expected a section and entries, got %d arguments", section, len(args))
+	}
+
+	var entries []any
+	switch list := args[1].(type) {
+	case nil:
+		// The caller authored no entries for the section: a missing
+		// `.data.<section>` key evaluates to nil, so the forwarded set is
+		// empty rather than malformed and Entries stays nil.
+	case []any:
+		entries = list
+	case []map[string]any:
+		entries = make([]any, len(list))
+		for i := range list {
+			entries[i] = list[i]
+		}
+	default:
+		return nil, fmt.Errorf(
+			"children %q: entries must be a list, got %T", section, args[1])
+	}
+
+	return &ChildRequest{
+		Section: section,
+		Forward: true,
+		Entries: entries,
+	}, nil
+}
