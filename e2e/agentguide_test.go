@@ -194,5 +194,3 @@ func assertAgentGuideAppended(t *testing.T, path, author string) {
 		t.Errorf("%s = %q, want the author bytes with the appended reference line %q", path, got, want)
 	}
 }
-
-// rescan marker
