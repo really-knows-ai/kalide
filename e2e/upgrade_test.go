@@ -14,8 +14,9 @@ package e2e
 //   - `kalide upgrade` runs as a bare invocation (no path, no --force) in the
 //     project's directory and prints its report: the detected form plus every
 //     refreshed path and every left-alone/skipped path;
-//   - a second run is a no-op that exits 0, and an author-edited owned file is
-//     skipped, named and exits 0;
+//   - a second run is a no-op that exits 0, and an author-edited AGENTS.md
+//     without the reference line gains the appended reference line with its
+//     author bytes preserved;
 //   - an external-library deck's configured `templates:` library is left
 //     byte-for-byte (and mtime-) untouched and no local templates/ is created;
 //   - the upgraded deck is then served by the real binary (`kalide start
@@ -51,11 +52,13 @@ import (
 
 // upgradeDeckMemberPaths is the kalide-owned deck member set refreshScaffold
 // visits, in visit order (internal/scaffold/refresh.go deckOwnedMembers): the
-// deck-root guide, the local library.yaml, the hello template's three files, the
+// deck-root author-guide pair (the AGENTS.md pointer then the AGENTS_KALIDE.md
+// full guide), the local library.yaml, the hello template's three files, the
 // default theme and the starter slide. It is the deck form's report path set the
 // e2e test asserts `kalide upgrade` names.
 var upgradeDeckMemberPaths = []string{
 	"AGENTS.md",
+	agentGuideFullGuideName,
 	template.TemplatesDir + "/" + template.LibraryFile,
 	template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ExampleFile,
 	template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.LayoutFile,
@@ -66,11 +69,24 @@ var upgradeDeckMemberPaths = []string{
 
 // upgradeLibraryMemberPaths is the library-owned member set refreshScaffold
 // visits, in visit order (internal/scaffold/refresh.go libraryOwnedMembers): the
-// library-root guide and the seeded default theme. It is the library form's
-// report path set.
+// library-root author-guide pair (the AGENTS.md pointer then the
+// AGENTS_KALIDE.md full guide) and the seeded default theme. It is the library
+// form's report path set.
 var upgradeLibraryMemberPaths = []string{
 	"AGENTS.md",
+	agentGuideFullGuideName,
 	template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
+}
+
+// upgradeExternalDeckMemberPaths is the kalide-owned member set of a deck
+// configured to use an external `templates:` library: only the deck-root
+// author-guide pair (internal/scaffold/refresh.go deckGuideMember then
+// deckFullGuideMember), in visit order. Its configured library and any leftover
+// local templates/ are out of scope and left byte-for-byte untouched. It is the
+// external-library deck form's report path set.
+var upgradeExternalDeckMemberPaths = []string{
+	"AGENTS.md",
+	agentGuideFullGuideName,
 }
 
 // assertUpgradeReportCounts asserts the printed report's refreshed and skipped
@@ -294,34 +310,80 @@ func assertUpgradeTreeUnchanged(t *testing.T, root string, before map[string]upg
 	}
 }
 
+// assertUpgradeTreeUnchangedExcept is assertUpgradeTreeUnchanged for a tree in
+// which one owned file — the author AGENTS.md that gained the appended reference
+// line — was deliberately rewritten: every captured path other than the excluded
+// ones must be present and byte-for-byte and modification-time identical, so
+// everything else in the tree was left untouched. The excluded paths are only
+// checked for existence, not content, since the caller asserts their new bytes
+// directly.
+func assertUpgradeTreeUnchangedExcept(t *testing.T, root string, before map[string]upgradeFileState, except ...string) {
+	t.Helper()
+
+	skip := make(map[string]bool, len(except))
+	for _, rel := range except {
+		skip[rel] = true
+	}
+
+	after := snapshotUpgradeTree(t, root)
+	for path := range before {
+		if skip[path] {
+			continue
+		}
+		if _, ok := after[path]; !ok {
+			t.Errorf("%s was removed, want the tree untouched", path)
+		}
+	}
+	for path, state := range after {
+		if skip[path] {
+			continue
+		}
+		want, ok := before[path]
+		if !ok {
+			t.Errorf("%s was created, want the tree untouched", path)
+			continue
+		}
+		if !bytes.Equal(state.data, want.data) {
+			t.Errorf("%s bytes changed, want byte-for-byte untouched", path)
+		}
+		if !state.modTime.Equal(want.modTime) {
+			t.Errorf("%s mtime = %v, want unchanged %v", path, state.modTime, want.modTime)
+		}
+	}
+}
+
 // TestUpgrade is the end-to-end test for `kalide upgrade`
 // (upgrade/plan.phase-04.task-11): it drives the real built binary through
 // `kalide init`/`kalide init-library`, one or more `kalide upgrade` runs and a
 // final `kalide start --no-open`, offline, asserting the report, idempotence,
-// that author-edited files are skipped and that an external-library deck's
+// the AGENTS_KALIDE.md + AGENTS.md author-guide pair (delivered, left alone, or
+// brought to the reference scheme) and that an external-library deck's
 // configured library is left untouched.
 //
 // It is four cases, each with its own Harness (and therefore its own clean
 // working directory and its own build of cmd/kalide):
 //
 //   - "seed deck": `kalide init` in the working directory; `kalide upgrade`
-//     twice (the report names every owned path skipped and the second run is a
-//     byte-for-byte no-op), an author-edited owned file skipped and left
-//     untouched, a run with a PATH holding no git, and `kalide start --no-open`
-//     serving the upgraded deck under the assertOffline connection sampler;
+//     twice (the report names every owned path — the author-guide pair included
+//     — skipped and the second run is a byte-for-byte no-op), an author
+//     AGENTS.md without the reference line gaining the appended reference line
+//     with its bytes preserved, a run with a PATH holding no git, and `kalide
+//     start --no-open` serving the upgraded deck under the assertOffline
+//     connection sampler;
 //   - "scaffolded library": `kalide init-library ../shared-lib`, the reachable
-//     refresh write (the absent library guide) and the second-run no-op, run in
-//     the library directory through runUpgradeCommand;
+//     refresh write (the absent library AGENTS.md pointer, re-created while the
+//     AGENTS_KALIDE.md full guide stays in place) and the second-run no-op, run
+//     in the library directory through runUpgradeCommand;
 //   - "external-library deck": `kalide init-library ../shared-lib` plus
 //     `kalide init ../shared-lib`, then `kalide upgrade` in the deck, asserting
-//     the configured library is byte-for-byte and mtime-untouched and no local
-//     templates/ is created;
+//     the deck-root author-guide pair is left alone, the configured library is
+//     byte-for-byte and mtime-untouched and no local templates/ is created;
 //   - "deleted seed starters": `kalide init`, then the author deletes the
 //     starter slide, the hello template directory and the seed default theme
 //     directory and adds a valid author slide/template/theme; `kalide start`
 //     captures the rendered page, `kalide upgrade` names every deleted member
-//     skipped (re-creating none), and a restart serves a byte-for-byte
-//     identical page (AC 3 of
+//     and the author-guide pair skipped/reported (re-creating none), and a
+//     restart serves a byte-for-byte identical page (AC 3 of
 //     requirements.requirement.upgrade-refresh-owned-scaffold).
 //
 // Every upgrade run is proxy-armed (runUpgradeOffline / EnableOfflineProxy), so
@@ -368,8 +430,11 @@ func TestUpgrade(t *testing.T) {
 		assertUpgradeReportCounts(t, stdout, 0, len(upgradeDeckMemberPaths))
 		assertUpgradeTreeUnchanged(t, h.WorkDir(), before)
 
-		// An author-edited owned member is skipped, named and exits 0, left
-		// byte-for-byte untouched (never clobbered).
+		// An author AGENTS.md without the reference line gains the appended
+		// reference line with the author's bytes preserved — the
+		// agent-guide-reference scheme — so this is the one refreshed member of
+		// the run; every other owned member, the AGENTS_KALIDE.md full guide
+		// included, is left byte-for-byte untouched. It exits 0.
 		authorGuide := []byte("# my own deck guide\n\nDo not overwrite me.\n")
 		h.WriteFile("AGENTS.md", authorGuide)
 		before = snapshotUpgradeTree(t, h.WorkDir())
@@ -381,19 +446,21 @@ func TestUpgrade(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("kalide upgrade over an author-edited guide stderr = %q, want empty", stderr)
 		}
-		assertUpgradeReportCounts(t, stdout, 0, len(upgradeDeckMemberPaths))
+		assertUpgradeReportCounts(t, stdout, 1, len(upgradeDeckMemberPaths)-1)
 		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
-			t.Errorf("kalide upgrade stdout = %q, want the skipped author-edited AGENTS.md named", stdout)
+			t.Errorf("kalide upgrade stdout = %q, want the refreshed author-edited AGENTS.md named", stdout)
 		}
-		if got, err := os.ReadFile(h.Path("AGENTS.md")); err != nil {
-			t.Fatalf("read author-edited AGENTS.md: %v", err)
-		} else if !bytes.Equal(got, authorGuide) {
-			t.Errorf("author-edited AGENTS.md = %q, want the author bytes untouched", got)
+		if !upgradeReportNamesPath(stdout, agentGuideFullGuideName) {
+			t.Errorf("kalide upgrade stdout = %q, want the left-alone %s named", stdout, agentGuideFullGuideName)
 		}
-		assertUpgradeTreeUnchanged(t, h.WorkDir(), before)
+		// The author's bytes are preserved and only the reference line is
+		// appended (assertAgentGuideAppended, agentguide_test.go).
+		assertAgentGuideAppended(t, h.Path("AGENTS.md"), string(authorGuide))
+		assertUpgradeTreeUnchangedExcept(t, h.WorkDir(), before, "AGENTS.md")
 
 		// One run with a PATH that holds no git at all: upgrade still exits 0
-		// and reports exactly as before, proving it never shells out to git.
+		// and — the AGENTS.md reference line now present — reports every member
+		// left alone, proving it never shells out to git.
 		stdout, stderr, code = runUpgradeWithoutGit(t, h)
 		if code != 0 {
 			t.Fatalf("kalide upgrade without git on PATH exit = %d, want 0 (stdout = %q, stderr = %q)",
@@ -423,14 +490,18 @@ func TestUpgrade(t *testing.T) {
 	})
 
 	// Case 2: a scaffolded template library, upgraded in its own directory. The
-	// library guide is removed first so the run has the one refresh write
-	// reachable from the built binary (an absent AGENTS.md is written); the
-	// second run is then the no-op idempotence case.
+	// library AGENTS.md pointer is removed first so the run has the one refresh
+	// write reachable from the built binary (an absent AGENTS.md is written);
+	// the AGENTS_KALIDE.md full guide stays in place. The second run is then the
+	// no-op idempotence case.
 	t.Run("scaffolded library", func(t *testing.T) {
 		h := NewHarness(t)
 		libDir := initUpgradeLibrary(t, h, "../shared-lib")
 
-		guide, err := os.ReadFile(filepath.Join(libDir, "AGENTS.md"))
+		// The scaffold delivered the author-guide pair; the AGENTS.md pointer is
+		// what the absent-write refresh re-creates.
+		assertAgentGuidePair(t, libDir)
+		pointer, err := os.ReadFile(filepath.Join(libDir, "AGENTS.md"))
 		if err != nil {
 			t.Fatalf("read library AGENTS.md: %v", err)
 		}
@@ -455,9 +526,12 @@ func TestUpgrade(t *testing.T) {
 		assertUpgradeReportNamesPaths(t, stdout, upgradeLibraryMemberPaths)
 		if got, err := os.ReadFile(filepath.Join(libDir, "AGENTS.md")); err != nil {
 			t.Fatalf("read written library AGENTS.md: %v", err)
-		} else if !bytes.Equal(got, guide) {
-			t.Errorf("written library AGENTS.md does not equal the scaffolded library guide")
+		} else if !bytes.Equal(got, pointer) {
+			t.Errorf("written library AGENTS.md does not equal the scaffolded library pointer")
 		}
+		// The written pointer references the full guide and the full guide
+		// stayed in place, so the library still carries the pair.
+		assertAgentGuidePair(t, libDir)
 
 		// The second run changes nothing.
 		before := snapshotUpgradeTree(t, libDir)
@@ -476,7 +550,8 @@ func TestUpgrade(t *testing.T) {
 	})
 
 	// Case 3: a deck configured to use an external library. Upgrade runs in the
-	// deck; its only owned member is the deck-root guide, and the configured
+	// deck; its only owned members are the deck-root author-guide pair (the
+	// AGENTS.md pointer and the AGENTS_KALIDE.md full guide), and the configured
 	// library is never touched.
 	t.Run("external-library deck", func(t *testing.T) {
 		h := NewHarness(t)
@@ -495,11 +570,9 @@ func TestUpgrade(t *testing.T) {
 		if !strings.Contains(stdout, "kalide upgrade: deck") {
 			t.Fatalf("kalide upgrade in external-library deck stdout = %q, want the deck report header", stdout)
 		}
-		// An external-library deck owns only its deck-root guide.
-		assertUpgradeReportCounts(t, stdout, 0, 1)
-		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
-			t.Errorf("kalide upgrade stdout = %q, want the skipped deck guide named", stdout)
-		}
+		// An external-library deck owns only its deck-root author-guide pair.
+		assertUpgradeReportCounts(t, stdout, 0, len(upgradeExternalDeckMemberPaths))
+		assertUpgradeReportNamesPaths(t, stdout, upgradeExternalDeckMemberPaths)
 
 		// The configured `templates:` library is byte-for-byte and
 		// mtime-identical: nothing under it was written, refreshed or deleted.
@@ -522,7 +595,7 @@ func TestUpgrade(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("second kalide upgrade in external-library deck stderr = %q, want empty", stderr)
 		}
-		assertUpgradeReportCounts(t, stdout, 0, 1)
+		assertUpgradeReportCounts(t, stdout, 0, len(upgradeExternalDeckMemberPaths))
 		assertUpgradeTreeUnchanged(t, h.WorkDir(), deckBefore)
 		assertUpgradeTreeUnchanged(t, libDir, before)
 	})
@@ -532,7 +605,10 @@ func TestUpgrade(t *testing.T) {
 	// theme. AC 3 of requirements.requirement.upgrade-refresh-owned-scaffold
 	// has two halves: the deleted seed starters are never re-created, and the
 	// deck the author left valid still serves with identical rendered output
-	// before and after the upgrade.
+	// before and after the upgrade. The deck-root author-guide pair is present
+	// throughout and is reported left alone: the AGENTS_KALIDE.md full guide is
+	// never refreshed over an existing file and the AGENTS.md pointer already
+	// references it.
 	t.Run("deleted seed starters", func(t *testing.T) {
 		h := NewHarness(t)
 		initUpgradeSeedDeck(t, h)
@@ -637,6 +713,9 @@ The author's slide body.
 			t.Fatalf("kalide upgrade stdout = %q, want the deck report header", stdout)
 		}
 		assertUpgradeReportCounts(t, stdout, 0, len(upgradeDeckMemberPaths))
+		// Every owned member is named left alone: the deleted seed starters and
+		// the deck-root author-guide pair alike.
+		assertUpgradeReportNamesPaths(t, stdout, upgradeDeckMemberPaths)
 		assertUpgradeReportNamesPaths(t, stdout, deleted)
 
 		for _, rel := range deleted {
