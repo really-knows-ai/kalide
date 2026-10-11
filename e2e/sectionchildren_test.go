@@ -10,7 +10,7 @@ package e2e
 // requirements.requirement.library-layer-references,
 // requirements.requirement.section-data-context,
 // requirements.requirement.item-context,
-// requirements.requirement.template-context). It drives the real kalide binary
+// requirements.requirement.template-context). It drives the actual kalide binary
 // the harness builds (harness.go) through a served deck, rather than any
 // internal package, so it exercises the whole path an author takes.
 //
