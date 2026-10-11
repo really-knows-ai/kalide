@@ -627,18 +627,26 @@ func (s *Section) HelperCalls(tmpl *Template) ([]HelperCall, error) {
 // requirements.constraint.section-cycle-error-chain).
 //
 // It is built on HelperCalls: every extracted call contributes its target
-// Name, so a call anywhere in the layout — the root, a `define`/`block` body or
-// a control-action branch — is a reference. A non-literal target name is the
+// Name, and — because a `child` constructor's instantiated template is itself a
+// reference (requirements.requirement.template-composition) — every call also
+// contributes the template its literal `child` arguments instantiate and, for a
+// `children` forwarding, the accepted templates of the forwarded declared
+// section, nested child arguments included. A child whose section or template
+// cannot be resolved statically (a non-literal child, or an unknown target)
+// contributes no child edge; the load-time check reports that separately. A
+// call anywhere in the layout — the root, a `define`/`block` body or a
+// control-action branch — is a reference. A non-literal target name is the
 // error HelperCalls reports, and a layout that does not parse with the
 // canonical layout func map is likewise an error.
 //
 // Repeated names are de-duplicated, keeping the first occurrence's position, so
 // the result is the edge set of the reference graph rather than its call list:
-// two calls to the same target are one edge for cycle rejection. That is
-// deliberate — the per-call detail (literal dict keys, literal body and the
-// literal/non-literal markers) stays available through HelperCalls, which the
-// registry's load-time checks consume; HelperRefs exists only to feed the
-// reference-graph walk.
+// two calls to the same target — or a call target and a child that both
+// instantiate the same template — are one edge for cycle rejection. That is
+// deliberate — the per-call detail (literal dict keys, literal body, child
+// arguments and the literal/non-literal markers) stays available through
+// HelperCalls, which the registry's load-time checks consume; HelperRefs exists
+// only to feed the reference-graph walk.
 func (s *Section) HelperRefs(tmpl *Template) ([]string, error) {
 	calls, err := s.HelperCalls(tmpl)
 	if err != nil {
@@ -650,14 +658,104 @@ func (s *Section) HelperRefs(tmpl *Template) ([]string, error) {
 	out := make([]string, 0, len(calls))
 	seen := make(map[string]bool, len(calls))
 	for i := range calls {
-		name := calls[i].Name
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
-		out = append(out, name)
+		call := &calls[i]
+		appendRef(seen, &out, call.Name)
+		s.childRefs(call.Name, call.Children, seen, &out)
 	}
 	return out, nil
+}
+
+// childRefs appends the section-template names the child arguments of a call on
+// targetName reference — the template each literal `child` instantiates, the
+// accepted templates of a forwarded `children` declared section, and the same
+// for their nested children — to out, de-duplicating through seen. It resolves
+// targetName through s.resolve, so a nil resolver (a Section built without one)
+// or an unknown target contributes no child edge. expanded guards the recursion
+// so a child chain that closes a cycle terminates here: Walk, not HelperRefs,
+// is what reports the cycle.
+func (s *Section) childRefs(targetName string, children []HelperChild, seen map[string]bool, out *[]string) {
+	if len(children) == 0 || s == nil || s.resolve == nil {
+		return
+	}
+	target, ok := s.resolve(targetName)
+	if !ok || target == nil {
+		return
+	}
+	expanded := map[string]bool{targetName: true}
+	s.childRefsFor(target, children, seen, expanded, out)
+}
+
+// childRefsFor walks one level of child arguments against parent and appends
+// every template name they reference, recursing into a literal child's nested
+// children with that child's instantiated template as the new parent. expanded
+// records templates already walked so a cycle among child references terminates
+// here (Walk reports it); a template reached twice contributes its edges once.
+func (s *Section) childRefsFor(parent *Template, children []HelperChild, seen, expanded map[string]bool, out *[]string) {
+	for i := range children {
+		c := &children[i]
+		if c.Forward {
+			if c.Section == "" {
+				continue
+			}
+			if decl, ok := declaredSection(parent, c.Section); ok {
+				for _, name := range decl.Accepted {
+					appendRef(seen, out, name)
+				}
+			}
+			continue
+		}
+		if !c.Literal {
+			continue
+		}
+		decl, ok := declaredSection(parent, c.Section)
+		if !ok {
+			continue
+		}
+		name := instantiatedChildRefName(decl, c)
+		if name == "" {
+			for _, accepted := range decl.Accepted {
+				appendRef(seen, out, accepted)
+			}
+			continue
+		}
+		appendRef(seen, out, name)
+		if expanded[name] {
+			continue
+		}
+		expanded[name] = true
+		if childTmpl, ok := s.resolve(name); ok && childTmpl != nil {
+			s.childRefsFor(childTmpl, c.Children, seen, expanded, out)
+		}
+	}
+}
+
+// instantiatedChildRefName returns the template a literal child argument
+// instantiates, or "" when the declaration accepts more than one template and
+// the child carries no usable `template` selector (or accepts none). The
+// selector is the reserved `template` key of the child's literal fields; when
+// it is absent the single accepted template is instantiated.
+func instantiatedChildRefName(decl SectionDecl, c *HelperChild) string {
+	if c.Fields != nil {
+		if raw, present := c.Fields["template"]; present {
+			if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
+				return s
+			}
+		}
+	}
+	if len(decl.Accepted) == 1 {
+		return decl.Accepted[0]
+	}
+	return ""
+}
+
+// appendRef adds name to *out unless it is empty or already in seen, keeping
+// first-occurrence order.
+func appendRef(seen map[string]bool, out *[]string, name string) {
+	if name == "" || seen[name] {
+		return
+	}
+	seen[name] = true
+	*out = append(*out, name)
 }
 
 // SectionCall is the resolved runtime execution input of one `section` helper

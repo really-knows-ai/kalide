@@ -305,11 +305,15 @@ func (r *Registry) setLayer(name string, layer *LibraryLayer) {
 // HelperTargets returns the section-template names the named template's layout
 // references through the `section` helper, in source order and de-duplicated —
 // the helper-call edges the render path follows when it decides which layouts
-// belong in a slide's shared namespace.
+// belong in a slide's shared namespace. A call's `child`/`children` arguments
+// are references too, so the target's declared section's instantiated template
+// (a literal `child`) or accepted templates (a `children` forwarding) are
+// included, making the set the full reference set a renderer must carry.
 //
 // It is the registry-level, lazily memoised accessor over Section.HelperRefs:
 // the first call for a name re-parses that template's Layout.Text with the
-// canonical layout func map (media/section/dict/list) and caches the result, so
+// canonical layout func map (media/section/dict/list/child/children) and caches
+// the result, so
 // a renderer walking a whole slide need not re-parse every reachable layout per
 // RenderSlide. Repeated calls return the identical cached slice.
 //
@@ -598,14 +602,32 @@ func checkDeclaredName(kind, tmpl, name string) error {
 //   - the target's required fields must be present among those keys or carry a
 //     default (when `fields` is omitted every required field must be
 //     defaulted);
-//   - a target declaring a child section with min > 0 is rejected, because v1
-//     passes no child sections through the helper;
+//   - each literal `child` argument names a section the target declares, its
+//     instantiated template (selected by the reserved `template` key among its
+//     fields, required iff the declaration accepts more than one) is accepted
+//     by that declaration, its literal `dict` keys are fields the instantiated
+//     template declares (the `template` key removed first), its required fields
+//     are supplied or defaulted, its literal body names no declared child
+//     section of its own instantiated template, and its nested `child`
+//     arguments are checked the same way, recursively
+//     (requirements.requirement.child-constructor);
+//   - when the call's whole child set is statically known — every child
+//     argument a literal `child`, nested likewise — each of the target's
+//     declared sections has its min/max enforced over the literal set; a
+//     target declaring a child section with min > 0 that the call leaves
+//     entirely unfilled is rejected with the no-children message, and a mixed
+//     call (any `children` forwarding or other non-literal child argument)
+//     validates each literal child individually and defers the target's min/max
+//     to render (requirements.requirement.children-forwarding,
+//     requirements.requirement.nested-section-validation);
 //   - a literal body whose heading names a declared child section of the target
-//     is rejected, for the same reason.
+//     is rejected, because children pass only through child arguments, never
+//     through the helper body.
 //
-// A non-literal `fields` or `body` expression is a permitted pass-through and
-// is not checked here: its keys and body are validated against the target's
-// field and body rules when the target renders (field-rules). Every error
+// A non-literal `fields`, `body` or child argument is a permitted pass-through
+// and is not checked here: its keys, body and child sections are validated
+// against the target's field, body and section rules when the target renders
+// (field-rules, child-constructor). Every error
 // carries the `template "<name>":` prefix naming the CALLING template (t.Name)
 // — not the resolved target — even when the failure is about that target (an
 // undefined name, a missing required field, a child section). The templates
@@ -685,36 +707,230 @@ func (r *Registry) checkSections(t *Template) error {
 			}
 		}
 
-		for si := range target.Sections {
-			child := &target.Sections[si]
-			if child.Min > 0 {
-				return fmt.Errorf("template %q: section helper call on layout line %d names section template %q, which declares child section %q with a minimum of %d; the section helper passes no child sections", t.Name, call.Line, call.Name, child.Name, child.Min)
-			}
+		// Child-section arguments: each literal `child` is inspected here; a
+		// `children` forwarding or any other non-literal child argument is a
+		// permitted pass-through, deferred to render exactly like a non-literal
+		// fields/body expression (child-constructor, children-forwarding,
+		// section-helper-load-checks).
+		if err := r.checkChildArgs(t, call, target); err != nil {
+			return err
 		}
 
 		// A literal body is parsed at load: a heading naming a declared child
 		// section of the target is the same rejection the body rule produces
-		// when the body is validated, since no child section passes through the
-		// helper.
+		// when the body is validated, since children pass only through child
+		// arguments, never through the helper body.
 		if call.BodyLiteral {
-			inFence := false
-			for _, line := range strings.Split(call.Body, "\n") {
-				if strings.HasPrefix(strings.TrimSpace(line), "```") {
-					inFence = !inFence
-					continue
-				}
-				if inFence {
-					continue
-				}
-				if _, name, ok := exampleHeadingLevel(line); ok {
-					if _, declared := declaredSection(target, name); declared {
-						return fmt.Errorf("template %q: section helper call on layout line %d supplies a body whose heading names child section %q of section template %q; the section helper passes no child sections", t.Name, call.Line, name, call.Name)
-					}
-				}
+			if name, named := bodyNamesChildSection(target, call.Body); named {
+				return fmt.Errorf("template %q: section helper call on layout line %d supplies a body whose heading names child section %q of section template %q; the section helper passes no child sections", t.Name, call.Line, name, call.Name)
 			}
 		}
 	}
 	return nil
+}
+
+// checkChildArgs applies the static child-section checks of one `section` helper
+// call to its target (requirements.requirement.section-helper-load-checks,
+// requirement.child-constructor, requirement.children-forwarding,
+// requirement.nested-section-validation).
+//
+// The target's child set is statically known when every child argument is a
+// literal `child` call, nested `child` arguments likewise: then each of the
+// target's declared sections has its min/max enforced over the literal set. A
+// call that mixes literal `child` arguments with a `children` forwarding or any
+// other non-literal child argument validates each literal child individually
+// and skips the min/max counts, because the full set is known only at render.
+func (r *Registry) checkChildArgs(t *Template, call *HelperCall, target *Template) error {
+	staticallyKnown := allChildrenLiteral(call.Children)
+	return r.checkChildSet(t, call, target, call.Children, staticallyKnown, true)
+}
+
+// allChildrenLiteral reports whether every child argument in the set — and
+// every nested child argument, recursively — is a literal `child` call the
+// load-time checks can inspect. A `children` forwarding or a `child` carrying a
+// non-literal section, fields or body piece makes the set not statically known,
+// so the enclosing call's min/max child counts are deferred to render.
+func allChildrenLiteral(children []HelperChild) bool {
+	for i := range children {
+		c := &children[i]
+		if !c.Literal {
+			return false
+		}
+		if !allChildrenLiteral(c.Children) {
+			return false
+		}
+	}
+	return true
+}
+
+// checkChildSet validates one level of child arguments against parent's declared
+// sections and, when checkCounts is true, enforces each declaration's min/max
+// over the literal set. A non-literal child is skipped (a permitted
+// pass-through); a literal child is fully checked and its own nested children
+// recurse with the child's instantiated template as the new parent. topLevel
+// distinguishes the call's own child set, whose empty-and-min>0 case keeps the
+// historical "the section helper passes no child sections" message, from a
+// nested child's set. caller is the template whose layout made the call and is
+// what every error is path-qualified to.
+func (r *Registry) checkChildSet(caller *Template, call *HelperCall, parent *Template, children []HelperChild, checkCounts, topLevel bool) error {
+	counts := make(map[string]int, len(parent.Sections))
+	for i := range children {
+		c := &children[i]
+		if !c.Literal {
+			// A `children` forwarding of a runtime `.data` list, or any other
+			// non-literal child argument, is not inspected at load.
+			continue
+		}
+
+		decl, declared := declaredSection(parent, c.Section)
+		if !declared {
+			msg := fmt.Sprintf("template %q: section helper call on layout line %d: child names section %q, which section template %q does not declare", caller.Name, call.Line, c.Section, parent.Name)
+			if closest := suggest.Closest(c.Section, declaredSectionNames(parent)); closest != "" {
+				msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+			}
+			return errors.New(msg)
+		}
+
+		tmplName, err := r.instantiatedChildTemplate(caller, call, parent, decl, c)
+		if err != nil {
+			return err
+		}
+		childTmpl, ok := r.Lookup(tmplName)
+		if !ok || childTmpl == nil {
+			msg := fmt.Sprintf("template %q: section helper call on layout line %d: child section %q of section template %q instantiates %q, which is not a defined template", caller.Name, call.Line, c.Section, parent.Name, tmplName)
+			if closest := suggest.Closest(tmplName, r.TemplateNames()); closest != "" {
+				msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+			}
+			return errors.New(msg)
+		}
+		if childTmpl.Usage == UsageSlide {
+			return fmt.Errorf("template %q: section helper call on layout line %d: child section %q of section template %q instantiates %q, which is a slide-usage template; sections accept only section-usage templates", caller.Name, call.Line, c.Section, parent.Name, tmplName)
+		}
+
+		if err := r.checkChildFields(caller, call, c, childTmpl); err != nil {
+			return err
+		}
+
+		// A child body carries no child sections either: its nested children
+		// pass through nested child arguments, so a heading naming one of the
+		// instantiated template's declared child sections is rejected rather
+		// than silently dropped, exactly as for the helper's own body
+		// (child-constructor, body-rules).
+		if c.BodyLiteral {
+			if name, named := bodyNamesChildSection(childTmpl, c.Body); named {
+				return fmt.Errorf("template %q: section helper call on layout line %d: child section %q supplies a body whose heading names child section %q of section template %q; a child body carries no child sections", caller.Name, call.Line, c.Section, name, childTmpl.Name)
+			}
+		}
+
+		if err := r.checkChildSet(caller, call, childTmpl, c.Children, checkCounts, false); err != nil {
+			return err
+		}
+		counts[c.Section]++
+	}
+
+	if !checkCounts {
+		return nil
+	}
+	for si := range parent.Sections {
+		d := &parent.Sections[si]
+		n := counts[d.Name]
+		if d.Max > 0 && n > d.Max {
+			return fmt.Errorf("template %q: section helper call on layout line %d: section template %q declares child section %q with a maximum of %d, but the call passes %d", caller.Name, call.Line, parent.Name, d.Name, d.Max, n)
+		}
+		if d.Min > 0 && n < d.Min {
+			if topLevel && len(children) == 0 {
+				return fmt.Errorf("template %q: section helper call on layout line %d names section template %q, which declares child section %q with a minimum of %d; the section helper passes no child sections", caller.Name, call.Line, parent.Name, d.Name, d.Min)
+			}
+			return fmt.Errorf("template %q: section helper call on layout line %d: section template %q declares child section %q with a minimum of %d, but the call passes %d", caller.Name, call.Line, parent.Name, d.Name, d.Min, n)
+		}
+	}
+	return nil
+}
+
+// instantiatedChildTemplate resolves the template a literal `child` argument
+// instantiates from the declaration it fills: the reserved `template` key of
+// the child's literal fields selects among decl.Accepted and is required iff
+// the declaration accepts more than one; otherwise the declaration must accept
+// exactly one and that one is instantiated. The selector is read from the
+// child's fields but never counted as a declared field (checkChildFields
+// removes it before the undeclared-key check). An unknown or non-string
+// selector, and a declaration accepting no template, are errors naming the
+// child section and the parent.
+func (r *Registry) instantiatedChildTemplate(caller *Template, call *HelperCall, parent *Template, decl SectionDecl, c *HelperChild) (string, error) {
+	if len(decl.Accepted) == 0 {
+		return "", fmt.Errorf("template %q: section helper call on layout line %d: child section %q of section template %q accepts no section template", caller.Name, call.Line, c.Section, parent.Name)
+	}
+
+	selector, hasSelector := "", false
+	if c.Fields != nil {
+		if raw, present := c.Fields["template"]; present {
+			hasSelector = true
+			s, ok := raw.(string)
+			if !ok || strings.TrimSpace(s) == "" {
+				return "", fmt.Errorf("template %q: section helper call on layout line %d: child section %q of section template %q: key %q must name a section template", caller.Name, call.Line, c.Section, parent.Name, "template")
+			}
+			selector = s
+		}
+	}
+	if !hasSelector {
+		if len(decl.Accepted) > 1 {
+			return "", fmt.Errorf("template %q: section helper call on layout line %d: child section %q of section template %q accepts more than one template; a %q selector is required", caller.Name, call.Line, c.Section, parent.Name, "template")
+		}
+		return decl.Accepted[0], nil
+	}
+	if !containsString(decl.Accepted, selector) {
+		return "", fmt.Errorf("template %q: section helper call on layout line %d: child section %q of section template %q does not accept template %q (accepts %s)", caller.Name, call.Line, c.Section, parent.Name, selector, strings.Join(decl.Accepted, ", "))
+	}
+	return selector, nil
+}
+
+// checkChildFields applies the literal-fields half of the static child checks:
+// every literal key the child supplies (the reserved `template` selector
+// removed) must be a field the instantiated template declares, and every
+// required field of the instantiated template must be supplied or carry a
+// default. An omitted fields argument and a literal empty `dict` are both
+// checked (the target's defaults apply in the latter case exactly as they do
+// for the `section` helper's own fields).
+func (r *Registry) checkChildFields(caller *Template, call *HelperCall, c *HelperChild, childTmpl *Template) error {
+	declared := make(map[string]struct{}, len(childTmpl.Fields))
+	for fi := range childTmpl.Fields {
+		declared[childTmpl.Fields[fi].Name] = struct{}{}
+	}
+	supplied := make(map[string]struct{}, len(c.Fields))
+	for key := range c.Fields {
+		if key == "template" {
+			// The selector is consumed, never a declared field a child sets.
+			continue
+		}
+		if _, ok := declared[key]; !ok {
+			return fmt.Errorf("template %q: section helper call on layout line %d: child section %q supplies field %q, which section template %q does not declare", caller.Name, call.Line, c.Section, key, childTmpl.Name)
+		}
+		supplied[key] = struct{}{}
+	}
+	for fi := range childTmpl.Fields {
+		f := &childTmpl.Fields[fi]
+		if !f.Required || f.Default != nil {
+			continue
+		}
+		if _, present := supplied[f.Name]; !present {
+			return fmt.Errorf("template %q: section helper call on layout line %d: child section %q omits required field %q of section template %q, which has no default", caller.Name, call.Line, c.Section, f.Name, childTmpl.Name)
+		}
+	}
+	return nil
+}
+
+// declaredSectionNames returns the names of the sections t declares, in
+// declaration order, for a closest-match "did you mean …?" suggestion when a
+// child names an undeclared section. It is nil for a nil template.
+func declaredSectionNames(t *Template) []string {
+	if t == nil {
+		return nil
+	}
+	names := make([]string, 0, len(t.Sections))
+	for i := range t.Sections {
+		names = append(names, t.Sections[i].Name)
+	}
+	return names
 }
 
 // checkFieldTypes rejects a section-template field (or list item) that names no
