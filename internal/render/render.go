@@ -448,46 +448,25 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	return data, nil
 }
 
-// renderSection renders one section instance through its own layout.html.tmpl,
-// deepest first: it first renders every child section instance (each through
-// its own layout, recursively) and attaches them to its execution context as
-// lists of trusted HTML — one element per child instance, in source order — so
-// a parent layout splices each child's rendered markup with
-// `{{ range .blocks }}{{ . }}{{ end }}` rather than ranging over data maps
-// (template-language). The returned HTML is what the parent receives, so
-// section markup composes bottom-up at every depth and at the top level.
+// renderSection renders one AUTHORED section instance: it builds the
+// instance's own reserved `.raw` context — the source view of its authored
+// frontmatter and body — and `.data` context — its authored child sections as
+// data, each child's `.item.parent` being this instance's source field values,
+// as template.DataContext's parent rule requires — from the shared builders
+// (template.RawContext and template.DataContext over this instance's child
+// context nodes), so a section template sees its source view and its authored
+// children as data at every depth (raw-source-context, section-data-context).
 //
-// secCtx is the instance's execution context. Its own reserved `.raw` context —
-// the source view of its authored frontmatter and body — and `.data` context —
-// its authored child sections as data, each child's `.item.parent` being this
-// instance's source field values, as template.DataContext's parent rule requires
-// — are built here by the shared builders, `.raw` by template.RawContext and
-// `.data` by template.DataContext over this instance's child context nodes, and
-// merged into the instance map by
-// values, next to the converted field values and the reserved
-// `deck`/`slide`/`item` entries, at every composition depth
-// (raw-source-context, section-data-context). Its body is
-// rendered, and its resolved template's layout runs in the shared namespace
-// (renderer.root) with `deck`/`slide`/`item`/`raw`/`data` plus the instance's
-// own fields. A child's rendered `.item.parent` is this instance's field values
-// (item-context); at the top level the parent is the slide, so the descriptor
-// carries nil.
+// With the instance's reserved context built, it hands the resolved instance to
+// renderInstance — the single section-instance path an authored instance and a
+// helper child both go through — which converts the field values, renders the
+// body and layout, renders and splices the child instances and publishes the
+// instance as the caller context for a nested `{{ section … }}` call.
 //
-// The instance's field values are also published as the renderer's caller
-// context for the duration of its layout execution and restored afterwards, so
-// a `{{ section … }}` call the layout makes resolves its target's `.item.parent`
-// from this instance and inherits its deck/slide context (item-context,
-// template-context). A call made from a slide layout sees a nil parent, since
-// RenderSlide publishes the slide context with no calling instance.
-//
-// The instance's layout executes with the `media` helper bound to its own
-// template's owning layer when the renderer holds a per-layer base hook
-// (executeLayeredLayout, keyed by r.reg.LayerOf(tmpl.Name)), so a declared
-// child section contributed by the external layer resolves a media reference in
-// that layer rather than the merged library's primary media
-// (library-layer-references). A template whose owning layer is unknown, or a
-// renderer whose per-layer base hook is unset, executes through the shared
-// namespace exactly as before, keeping single-layer output byte-identical.
+// The instance's own template's owning layer (r.reg.LayerOf(tmpl.Name)) is
+// passed as the instance's layer, so a declared child section contributed by
+// the external layer resolves a media reference in that layer rather than the
+// merged library's primary media (library-layer-references).
 func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, secCtx *sectionCtx) (htmltmpl.HTML, error) {
 	// Every section instance, at every composition depth, carries its own
 	// reserved `.raw` (its authored source field values and body) and `.data`
@@ -498,7 +477,60 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	// two halves cannot drift (template-context).
 	secCtx.raw = template.RawContext(sec.Frontmatter, tmpl, sec.Body)
 	secCtx.data = template.DataContext(r.contextNodes(sec.Children), secCtx.raw)
+	return r.renderInstance(sec, tmpl, r.reg.LayerOf(tmpl.Name), secCtx)
+}
 
+// renderInstance renders one RESOLVED section instance through its own
+// layout.html.tmpl, deepest first, and is the single section-instance path
+// every instance goes through: an authored instance rendered by renderSection
+// and a helper child instantiated from a `child`/`children` argument by
+// renderChildren both enter here, so an authored child and its equivalent
+// helper child cannot drift and produce identical rendered HTML and identical
+// reserved context (template-context, item-context, section-data-context,
+// raw-source-context).
+//
+// The resolved instance is carried by:
+//
+//   - sec, whose Frontmatter and Body are its EFFECTIVE field values and body
+//     source and whose Children are the child instances it composes;
+//   - tmpl, its resolved section template;
+//   - layer, its owning layer (a helper child's resolved layer, or
+//     r.reg.LayerOf(tmpl.Name) for an authored instance);
+//   - secCtx, its execution context: the reserved `.item` descriptor and the
+//     `.raw`/`.data` contexts its caller built for it, plus the deck/slide
+//     `cfg`/`meta`/`total`.
+//
+// It first renders every child section instance (each through its own reserved
+// context, recursively) and attaches them to its execution context as lists of
+// trusted HTML — one element per child instance, in source order — so a parent
+// layout splices each child's rendered markup with
+// `{{ range .blocks }}{{ . }}{{ end }}` rather than ranging over data maps
+// (template-language). The returned HTML is what the parent receives, so
+// section markup composes bottom-up at every depth and at the top level.
+//
+// The instance's effective field values are converted with values, which merges
+// the reserved `deck`/`slide`/`item`/`raw`/`data` entries into the instance map
+// next to the converted field values, at every composition depth
+// (template-context, item-context, raw-source-context, section-data-context).
+// Its body is rendered to block HTML and exposed as `body`. A child's rendered
+// `.item.parent` is this instance's converted field values (item-context); at
+// the top level the parent is the slide, so the descriptor carries nil.
+//
+// The instance's field values are also published as the renderer's caller
+// context for the duration of its layout execution and restored afterwards, so
+// a `{{ section … }}` call the layout makes resolves its target's `.item.parent`
+// from this instance and inherits its deck/slide context (item-context,
+// template-context). A call made from a slide layout sees a nil parent, since
+// RenderSlide publishes the slide context with no calling instance.
+//
+// The instance's layout executes with the `media` helper bound to layer when
+// the renderer holds a per-layer base hook (executeLayeredLayout), so a
+// declared child section contributed by the external layer resolves a media
+// reference in that layer rather than the merged library's primary media
+// (library-layer-references). A template whose owning layer is unknown, or a
+// renderer whose per-layer base hook is unset, executes through the shared
+// namespace exactly as before, keeping single-layer output byte-identical.
+func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, layer *template.LibraryLayer, secCtx *sectionCtx) (htmltmpl.HTML, error) {
 	data, err := r.values(sec.Frontmatter, tmpl, secCtx)
 	if err != nil {
 		return "", err
@@ -557,7 +589,7 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	}()
 
 	var buf bytes.Buffer
-	if err := r.executeLayeredLayout(&buf, tmpl, r.reg.LayerOf(tmpl.Name), data); err != nil {
+	if err := r.executeLayeredLayout(&buf, tmpl, layer, data); err != nil {
 		return "", fmt.Errorf("execute layout: %w", err)
 	}
 	return htmltmpl.HTML(buf.String()), nil
