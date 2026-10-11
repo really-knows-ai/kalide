@@ -544,8 +544,9 @@ func (s *Section) HelperRefs(tmpl *Template) ([]string, error) {
 // SectionCall is the resolved runtime execution input of one `section` helper
 // invocation: the target template a `{{ section "<name>" [fields] [body] }}`
 // call resolves to, the effective field values the target executes with, the
-// validated body, and the one-item `.item` descriptor it is rendered under. It
-// is what ResolveSectionCall builds.
+// validated body, the resolved child section arguments the call passes to the
+// target, and the one-item `.item` descriptor it is rendered under. It is what
+// ResolveSectionCall builds.
 //
 // SectionCall is the runtime counterpart of HelperCall: HelperCall is the
 // static, load-time record of a call extracted from a layout's text (its target
@@ -582,6 +583,13 @@ type SectionCall struct {
 	// Body is the validated body the call supplies, exactly as written; it is
 	// "" when the call supplies none.
 	Body string
+
+	// Children are the resolved child section instances the call passes to the
+	// target, in passed order. Each entry is the child's own resolved instance
+	// together with that child's own recursively resolved children, the tree
+	// shape ResolvedChild carries. It is nil when the call passes no child
+	// sections.
+	Children []*ResolvedChild
 
 	// Item is the one-item `.item` descriptor the target executes under
 	// (item-context): index 0, number and count 1, first and last true,
