@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -285,7 +286,7 @@ func TestLoadDeckLibraryExternalToLocalLayoutIncludeErrorInt(t *testing.T) {
 	// (external→local) include. The include is unguarded, so the external
 	// layer's own step-7 execution reaches it. The local name is real in the
 	// deck; it is simply not in the external layer's standalone namespace.
-	extHostLayout := `{{ template "` + localTargetLayout + `" . }}`
+	extHostLayout := `{{ template ` + strconv.Quote(localTargetLayout) + ` . }}`
 	externalFiles := slideIntFiles("ext-host", extHostLayout)
 
 	// The local layer really carries the named layout, so the failure is the
