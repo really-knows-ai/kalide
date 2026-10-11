@@ -236,3 +236,103 @@ func TestLoadDeckLibraryCrossLayerLayoutIncludeInt(t *testing.T) {
 		t.Errorf("ext-badge rendered = %q, want its media resolved in the external layer", got)
 	}
 }
+
+// TestLoadDeckLibraryExternalToLocalLayoutIncludeErrorInt is the negative,
+// external-to-local counterpart of TestLoadDeckLibraryCrossLayerLayoutIncludeInt
+// (templates-dir-validation step 6a, example-layout-composition,
+// library-layer-references).
+//
+// A reference runs one way only. The merged-namespace composition the phase
+// adds lets a LOCAL layer's layout include an EXTERNAL layer's layout by the
+// external root-qualified name, because the local layer is loaded deferred and
+// the merged pass parses every layer's layouts into one namespace. The reverse
+// direction is not granted: a layered deck's external `templates:` layer is
+// loaded first and FULLY (libraryLayerFull), validated as a self-contained
+// standalone library before any merge, so its step-7 example check runs against
+// a namespace holding only the external layer's own layouts. The external layer
+// may never depend on the local one.
+//
+// This test drives the real layered loader (LoadDeckLibrary) over a two-layer
+// deck on disk whose EXTERNAL-layer slide `ext-host` includes a LOCAL-layer
+// layout by the local root-qualified name
+// `{{ template "<deckRoot>/templates/slides/local-target/layout.html.tmpl" . }}`
+// — exactly the name loadlibrary.go builds for the local layer
+// (`path.Join(root, layoutRel)`, loadlibrary.go:709) — while the local layer
+// really carries that layout. The name is real in the deck but absent from the
+// external layer's standalone namespace, so the external layer's own step-7
+// example execution fails "no such template" and LoadDeckLibrary returns that
+// failure as a *LibraryError positioned at the EXTERNAL layout's own file
+// (never the local target's), with the underlying html/template execute error —
+// which names the missing local layout — in the Message.
+//
+// It touches the real filesystem, so it is guarded with testing.Short() and
+// skipped under `go test -short`, like its sibling. It reuses
+// writeSectionHelperIntRoot and slideIntFiles.
+func TestLoadDeckLibraryExternalToLocalLayoutIncludeErrorInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	// The deck root must exist before the external layout text can name the
+	// local layer's root-qualified layout path, so create it first and compute
+	// the local root (deckRoot/templates) and the exact layout name the local
+	// layer's loader will build.
+	deckRoot := t.TempDir()
+	localRoot := filepath.Join(deckRoot, TemplatesDir)
+	localTargetLayout := path.Join(localRoot, SlidesDir, "local-target", LayoutFile)
+
+	// ext-host is the external-layer slide that makes the cross-layer
+	// (external→local) include. The include is unguarded, so the external
+	// layer's own step-7 execution reaches it. The local name is real in the
+	// deck; it is simply not in the external layer's standalone namespace.
+	extHostLayout := `{{ template "` + localTargetLayout + `" . }}`
+	externalFiles := slideIntFiles("ext-host", extHostLayout)
+
+	// The local layer really carries the named layout, so the failure is the
+	// external layer's missing namespace — a name that resolves in the merged
+	// deck but not against the external layer alone — rather than a typo.
+	localFiles := slideIntFiles("local-target", `<section class="local-target"></section>`)
+
+	externalRoot := t.TempDir()
+	writeSectionHelperIntRoot(t, externalRoot, "external", externalFiles)
+	writeSectionHelperIntRoot(t, localRoot, "local", localFiles)
+
+	// LoadDeckLibrary loads the external layer first and fully — standalone,
+	// before the merge — so the external layout's include cannot see the local
+	// layer's layouts and step 7 must fail at the external layout's own file.
+	lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+	if lib != nil {
+		t.Fatalf("LoadDeckLibrary() Library = %+v, want nil: the external layout's include names a local-only layout", lib)
+	}
+	libErr := asLibraryError(t, err)
+	wantPath := path.Join(externalRoot, SlidesDir, "ext-host", LayoutFile)
+	if libErr.Path != wantPath {
+		t.Errorf("Path = %q, want the external layer's own layout %q", libErr.Path, wantPath)
+	}
+	if libErr.Line != 0 {
+		t.Errorf("Line = %d, want 0 (a whole-layout step-7 execute failure)", libErr.Line)
+	}
+	if !strings.Contains(libErr.Message, "execute") {
+		t.Errorf("Message = %q, want a step-7 execute failure", libErr.Message)
+	}
+	if !strings.Contains(libErr.Message, localTargetLayout) {
+		t.Errorf("Message = %q, want it to name the missing local layout %q", libErr.Message, localTargetLayout)
+	}
+
+	// Loading the external root ALONE fails identically, pinning the failure to
+	// the external layer's own standalone load rather than to the merge: the
+	// external layer is validated as a self-contained library and may never
+	// depend on the deck's local layer.
+	extLib, err := LoadLibraryAt(externalRoot)
+	if extLib != nil {
+		t.Fatalf("LoadLibraryAt(external) Library = %+v, want nil", extLib)
+	}
+	extErr := asLibraryError(t, err)
+	if extErr.Path != wantPath {
+		t.Errorf("LoadLibraryAt Path = %q, want the external layout %q", extErr.Path, wantPath)
+	}
+	if !strings.Contains(extErr.Message, "execute") ||
+		!strings.Contains(extErr.Message, localTargetLayout) {
+		t.Errorf("LoadLibraryAt Message = %q, want the same step-7 execute failure naming %q", extErr.Message, localTargetLayout)
+	}
+}
