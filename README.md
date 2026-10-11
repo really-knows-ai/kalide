@@ -465,8 +465,9 @@ sections.
 may not declare a field or section named `deck`, `slide`, `item`, `raw` or
 `data`. `notes`, `body` and the `_format` suffix are reserved too.
 
-The layout **helper** set is exactly `media`, `section`, `dict` and `list` —
-functions a layout calls, unlike the reserved context values above:
+The layout **helper** set is exactly `media`, `section`, `dict`, `list`,
+`child` and `children` — functions a layout calls, unlike the reserved context
+values above:
 
 - **`media`** resolves a path relative to the library's `media/` directory
   and returns the URL the running server serves it under. The path must not
@@ -474,12 +475,14 @@ functions a layout calls, unlike the reserved context values above:
   never resolves into a theme directory. For example `{{ media "logo.svg" }}`.
 - **`section`** renders a section template directly, exactly as if an
   instance of it had been written in Markdown. Its form is
-  `{{ section "name" (dict ...) [body] }}`:
+  `{{ section "name" (dict ...) [body] [child…] }}`:
   - `{{ section "name" }}` renders the `name` section template with its
     declared defaults and no body.
   - the optional `(dict ...)` supplies the instance's field values.
   - the optional `[body]` supplies its body source, for example
     `{{ section "callout" (dict "label" "Proposition") .raw.body }}`.
+  - any further arguments are the target's **child sections**, passed with
+    `child` and `children` (below).
   Omitted fields take the target's defaults. The target's fields are
   validated against its schema and the body against its body rule. The
   rendered instance is treated as a **one-item group**: `.item` reports
@@ -487,6 +490,24 @@ functions a layout calls, unlike the reserved context values above:
   `template` the target name, and `parent` the calling instance's fields. A
   section-helper call is a direct render call, not an authored instance, so
   it appends nothing to `.data` or to the rendered section list.
+- **`child`** names one **declared section of the `section` call's target**
+  and renders it, exactly as if an instance of it had been authored. Its form
+  is `{{ child "<section>" (dict ...) [body] [child…] }}`: the section name,
+  an optional `(dict ...)` of field values, an optional `[body]`, and any
+  number of nested `child` arguments for that child's own declared children.
+  The optional `template` key in the fields selects which accepted template
+  is instantiated; it is required only when the declaration accepts more than
+  one, and it is a selector, never a field of the template. A `child` call
+  reads nothing outside its arguments. For example
+  `{{ section "columns" nil nil (child "column" (dict "template" "half" "title" .raw.title)) }}`
+  renders one `column` child of the `columns` section.
+- **`children`** forwards the caller's **authored** `.data.<section>` entries
+  as that declared section's children, so a wrapper layout hands its own
+  authored children to the section it wraps, for example
+  `{{ section "wrapper" nil nil (children "item" .data.item) }}`. Each
+  forwarded entry re-instantiates as a real child, keeping its own `template`
+  (its `.item.template`), its `.raw` fields and body, and its own nested
+  `.data`.
 - **`dict`** builds a map from alternating key/value arguments, the syntax
   for passing named fields to `section`, for example
   `{{ dict "number" .item.number "heading" .raw.title }}`. Keys must be
@@ -494,6 +515,16 @@ functions a layout calls, unlike the reserved context values above:
   error.
 - **`list`** returns its arguments as a sequence, the layout syntax for a
   literal list-typed field value, for example `{{ list "a" "b" }}`.
+
+Each child — literal or forwarded — gets its own `.item`, `.raw` and `.data`
+context exactly as an authored child does, and the target's own rendered
+child-section lists and its `.data.<child>` are populated from the passed
+children. Literal `child` arguments are checked at load: the named section
+must be declared, the `template` accepted, the fields and body valid, and,
+when every child is literal, the declaration's `min`/`max` over the whole
+passed set; a forwarded or otherwise non-literal child is validated when the
+target renders. A `child`/`children` call contributes nothing to the caller's
+own `.data` or rendered section lists.
 
 The built-in number and date format functions (`compact`, `exact`, `percent`,
 `long` and `short`) are also available to layouts.
