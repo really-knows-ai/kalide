@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Layered template libraries: a deck now renders against one **merged library**
+  built from up to two **layers** — its deck-root `templates/` **local layer**
+  and the library named by the top-level `templates:` key in `kalide.yaml`
+  **external layer**. Both load when both are present, with equal standing and no
+  precedence: a template name (slide and section names share one namespace), a
+  theme name, or a `media/` path carried by both layers is a validation error
+  naming the name and the path that carries it in each layer. References resolve
+  in the layer that owns them — a layout's `{{ media "…" }}`, a theme's `media:`
+  and `theme:<name>/` CSS — except the `section` helper, which resolves against
+  the merged section namespace so a local-layer layout can call an external-layer
+  section. The external library is validated standalone (self-contained), so it
+  can never call a section that exists only in the deck's local layer; an
+  external-layer layout may likewise not include a local-layer-only layout. This
+  supersedes the v0.6.0 rule that a configured `templates:` won over a local
+  `templates/`.
+- Layout helpers `child` and `children`, the section-helper child constructors.
+  `{{ child "<section>" (dict …) [body] [child…] }}` names one declared child
+  section of a `section` call's target and renders it, and
+  `{{ children "<section>" .data.<section> }}` forwards the caller's authored
+  `.data` entries as that declared section's children. Each constructed child —
+  literal or forwarded — gets its own `.item`, `.raw` and `.data` context exactly
+  as an authored child, and populates the target's rendered child lists and
+  `.data.<child>`. Literal `child` arguments are checked at load time (declared
+  section, accepted `template`, valid fields and body, and, when every child is
+  literal, the declaration's `min`/`max`); a forwarded or otherwise non-literal
+  child is validated when the target renders.
+- The author-guide pair: the kalide-owned full guide is now `AGENTS_KALIDE.md`,
+  and `AGENTS.md` beside it holds only the pointer line
+  `Kalide Reference: ./AGENTS_KALIDE.md`. `kalide init`, `kalide init <path>`
+  and `kalide init-library <path>` write `AGENTS_KALIDE.md` only when absent,
+  create `AGENTS.md` carrying the pointer when absent, leave it byte-for-byte
+  untouched when it already points at the guide, and otherwise append the
+  pointer while preserving the author's bytes. `kalide upgrade` migrates an
+  `AGENTS.md` that is byte-identical to a guide kalide released in an older
+  version to the short pointer (writing the current `AGENTS_KALIDE.md` alongside
+  it), and never rewrites author content.
+
+### Changed
+
+- Documentation is reworked around the layered library and authoring workflow.
+  `README.md` is rewritten as kalide's front page; `docs/templates.md` (the
+  template-author reference), `docs/layered-libraries.md` (the two-layer how-to)
+  and `docs/cookbook.md` (copyable recipes) are new, and both embedded author
+  guides document the layered library and the `child`/`children` helpers.
+- Layout composition is now documented in the README and both embedded author
+  guides: a layout may include another layout with the standard
+  `{{ template "<layout name>" . }}` action, naming the included layout by its
+  root-qualified path inside its own layer
+  (`<layer root>/slides/<name>/layout.html.tmpl`); the included layout executes
+  in the invoking layer's namespace.
+- `INSTALL.md` and the README separate upgrading the kalide **program** (your
+  install channel) from running `kalide upgrade` in a **project**.
+
+### Fixed
+
+- The load-time example check (step 7 of library validation) now executes each
+  template's `example.md` against the **merged** library layout namespace —
+  every slide and section layout of every layer — rather than the single target
+  layout text alone. A layout that composes another library layout with
+  `{{ template "<layout name>" . }}` now loads; previously the check ran each
+  layout in isolation and rejected such a library with `no such template`. Each
+  example still binds the executing template's own layer's `media`.
+
 ## [0.11.0] - 2026-10-10
 
 ### Added
