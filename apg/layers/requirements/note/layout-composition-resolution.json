@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "note",
   "name": "layout-composition-resolution",
-  "body": "Layout composition resolution: `{{ template \"<name>\" . }}` is the standard Go html/template action over the library's shared layout namespace, not one of the six layout helpers (template-language). It names a library layout by its layout name, so a layout invokes another slide layout or section layout alike, and the example check resolves the name against the same library layout set render uses (example-layout-composition).",
+  "body": "Layout composition resolution: `{{ template \"<name>\" . }}` is the standard Go html/template action over the library's shared layout namespace, not one of the six layout helpers (template-language). Its name is the library layout's file path — the layer root joined with the layout's path within its layer: `<layer root>/slides/<template-name>/layout.html.tmpl` for a slide layout and `<layer root>/sections/<template-name>/layout.html.tmpl` for a section layout. That path is the name the loader builds (`path.Join(root, layoutRel)`, loadlibrary.go) and the name render registers each layout under (`layoutName` / `namespaceForLayer`, render.go); it is the layout's path, not the template name. A layout invokes another layout in its own layer, a slide layout or a section layout alike, by that path name, and in a two-layer library a layout invokes a layout in the other layer by the target's own root-qualified path name (for example `{{ template \"<external root>/sections/<template-name>/layout.html.tmpl\" . }}`). The example check resolves the name against the same library layout set render uses (example-layout-composition).",
   "properties": {},
   "out": [
     {
