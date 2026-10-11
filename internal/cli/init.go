@@ -58,10 +58,12 @@ const initDefaultTemplateDirKey = "default-template-dir"
 
 // initCreatedMessage is the success text for `kalide init`. It lists the
 // top-level entries scaffold.Init creates from the embedded hello seed,
-// spelled as deck-relative, slash-separated paths: the deck-root agent guide,
-// the deck config, the starter slide, the hello slide template and default
-// theme, and the empty assets/ directory for the author's images.
+// spelled as deck-relative, slash-separated paths: the deck-root author-guide
+// pair (the full AGENTS_KALIDE.md guide and its AGENTS.md pointer), the deck
+// config, the starter slide, the hello slide template and default theme, and
+// the empty assets/ directory for the author's images.
 const initCreatedMessage = `Created a starter deck:
+  AGENTS_KALIDE.md
   AGENTS.md
   kalide.yaml
   slides/1-hello.md
@@ -76,11 +78,13 @@ const initCreatedMessage = `Created a starter deck:
 // initExternalCreatedMessage is the success text for the external-library
 // branches of `kalide init`: an explicit path argument, or the configured
 // default-template-dir. It names the external library the deck references and
-// lists the top-level entries InitExternal creates: the deck-root agent guide,
-// the deck config and the empty slides/ and assets/ directories (an empty
-// directory is not a file, so it is listed with its trailing slash). There is
-// deliberately no local templates/ entry.
+// lists the top-level entries InitExternal creates: the deck-root author-guide
+// pair (the full AGENTS_KALIDE.md guide and its AGENTS.md pointer), the deck
+// config and the empty slides/ and assets/ directories (an empty directory is
+// not a file, so it is listed with its trailing slash). There is deliberately
+// no local templates/ entry.
 const initExternalCreatedMessage = `Created a deck referencing the external template library %s:
+  AGENTS_KALIDE.md
   AGENTS.md
   kalide.yaml
   slides/

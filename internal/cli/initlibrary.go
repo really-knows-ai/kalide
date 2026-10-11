@@ -28,9 +28,12 @@ import (
 
 // initLibraryCreatedMessage is the success text for `kalide init-library`. It
 // names the library's target path and lists the root entries InitLibrary
-// creates; the empty directories are spelled with a trailing slash.
+// creates; the empty directories are spelled with a trailing slash. The
+// library-root author-guide pair is the full AGENTS_KALIDE.md guide and its
+// AGENTS.md pointer.
 const initLibraryCreatedMessage = `Created a template library at %s:
   library.yaml
+  AGENTS_KALIDE.md
   AGENTS.md
   slides/
   sections/

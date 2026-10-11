@@ -14,7 +14,6 @@ package scaffold
 
 import (
 	"embed"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -36,22 +35,33 @@ var seedEmbed embed.FS
 // add error handling that can never trigger at runtime.
 var seedRoot = mustSeedSub(seedEmbed, "seed")
 
-// writeHelloSeed walks the embedded seed tree and copies every file to the
-// same relative path under dir, creating parent directories as needed. The
-// seed tree's layout is exactly the layout of a deck directory (kalide.yaml,
-// slides/, templates/), so the relative path of each embedded file is its
-// destination path.
+// writeHelloSeed writes the minimal starter deck into dir: it walks the
+// embedded seed tree and copies every non-guide file to the same relative path
+// under dir, creating parent directories as needed. The seed tree's layout is
+// exactly the layout of a deck directory (kalide.yaml, slides/, templates/), so
+// the relative path of each embedded file is its destination path. The empty
+// assets/ directory is created by the caller, Init, since an empty directory is
+// not embeddable.
 //
-// The one special case is the deck-root AGENTS.md agent guide
-// (agent-authoring): it is written only when no AGENTS.md exists at the
-// target. A pre-existing guide is left byte-for-byte untouched and never
-// blocks init; every other seed file is copied as usual.
+// The deck-root author-guide pair — the full AGENTS_KALIDE.md and its AGENTS.md
+// pointer (agent-authoring, agent-guide-reference) — is not copied by the walk:
+// writeAgentGuidePair owns the pair's rules, so a pre-existing AGENTS_KALIDE.md
+// is left byte-for-byte untouched (only written when absent) and a pre-existing
+// AGENTS.md gains the reference line unless it already carries it, with the
+// author's bytes preserved. The pair never blocks init.
 func writeHelloSeed(dir string) error {
-	return fs.WalkDir(seedRoot, ".", func(path string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(seedRoot, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("init: read embedded seed: %w", err)
 		}
 		if path == "." {
+			return nil
+		}
+
+		// The deck-root author-guide pair is written by writeAgentGuidePair
+		// below, not copied here: it alone owns the absent-only full guide and
+		// the reference-line pointer scheme.
+		if path == agentGuideFullGuideName || path == agentsGuideName {
 			return nil
 		}
 
@@ -61,18 +71,6 @@ func writeHelloSeed(dir string) error {
 				return fmt.Errorf("init: create %s: %w", filepath.ToSlash(path), err)
 			}
 			return nil
-		}
-
-		// The deck-root agent guide (agent-authoring) is copied like every
-		// other seed file, but only when no AGENTS.md already exists at the
-		// target: a pre-existing one is left byte-for-byte untouched and
-		// never blocks init.
-		if path == "AGENTS.md" {
-			if _, statErr := os.Lstat(target); statErr == nil {
-				return nil
-			} else if !errors.Is(statErr, fs.ErrNotExist) {
-				return fmt.Errorf("init: inspect %s: %w", filepath.ToSlash(path), statErr)
-			}
 		}
 
 		data, err := fs.ReadFile(seedRoot, path)
@@ -87,6 +85,11 @@ func writeHelloSeed(dir string) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	return writeAgentGuidePair(dir, deckAgentGuideFull, deckAgentGuidePointer)
 }
 
 // mustSeedSub returns the sub-tree of fsys rooted at dir, panicking when dir

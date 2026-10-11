@@ -26,9 +26,7 @@
 package scaffold
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -67,10 +65,12 @@ type externalConfig struct {
 // it. A missing or invalid library, or an unresolvable theme, aborts with a
 // non-zero error naming the path and writes nothing.
 //
-// It also writes the deck-root AGENTS.md agent guide (agent-authoring)
-// verbatim from the embedded deck seed, but only when no AGENTS.md already
-// exists at dir: a pre-existing guide is left byte-for-byte untouched and
-// never blocks init.
+// It also writes the deck-root author-guide pair (agent-authoring,
+// agent-guide-reference) through writeAgentGuidePair: the full AGENTS_KALIDE.md
+// verbatim only when absent, and the AGENTS.md pointer created, left
+// byte-for-byte untouched or appended per the reference-line scheme. Neither
+// file is one of the deck-owned blockPaths, so a pre-existing author guide is
+// preserved and never blocks init.
 //
 // dir may be relative or absolute and need not exist yet; it is created as
 // needed. InitExternal is deterministic and uses only the local filesystem: it
@@ -139,17 +139,14 @@ func InitExternal(dir, externalPath string) error {
 		}
 	}
 
-	// Write the deck-root agent guide (agent-authoring) verbatim from the
-	// embedded deck seed, only when no AGENTS.md exists at the target. A
-	// pre-existing one is left byte-for-byte untouched and never blocks init:
-	// AGENTS.md is not one of the deck-owned blockPaths.
-	guide := filepath.Join(dir, "AGENTS.md")
-	if _, statErr := os.Lstat(guide); errors.Is(statErr, fs.ErrNotExist) {
-		if err := os.WriteFile(guide, mustReadSeed("AGENTS.md"), 0o644); err != nil {
-			return fmt.Errorf("init: write AGENTS.md: %w", err)
-		}
-	} else if statErr != nil {
-		return fmt.Errorf("init: inspect AGENTS.md: %w", statErr)
+	// Write the deck-root author-guide pair (agent-authoring,
+	// agent-guide-reference): the full AGENTS_KALIDE.md verbatim only when
+	// absent, then the AGENTS.md pointer created, left byte-for-byte untouched
+	// or appended per the reference-line scheme. A pre-existing author guide
+	// never blocks init: neither guide file is one of the deck-owned
+	// blockPaths, and the pair writer preserves the author's bytes.
+	if err := writeAgentGuidePair(dir, deckAgentGuideFull, deckAgentGuidePointer); err != nil {
+		return fmt.Errorf("init: write author guide pair: %w", err)
 	}
 	return nil
 }
