@@ -7,21 +7,5 @@
     "attaches-to": "requirements.requirement.template-media"
   },
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-syntax",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-propagated",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-media-references-feedback-1",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

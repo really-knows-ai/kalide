@@ -63,31 +63,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.nested-sections-solution",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.renderer-implementedby-anchors",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.section-helpers-supersede-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.entity.section",
       "properties": {}

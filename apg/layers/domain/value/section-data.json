@@ -7,11 +7,6 @@
   "out": [],
   "in": [
     {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
-      "properties": {}
-    },
-    {
       "kind": "drives",
       "source": "requirements.requirement.section-data-context",
       "properties": {}

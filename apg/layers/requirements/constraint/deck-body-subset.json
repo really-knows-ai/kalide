@@ -7,11 +7,5 @@
     "attaches-to": "requirements.requirement.markdown-allowed-subset"
   },
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-requirements",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

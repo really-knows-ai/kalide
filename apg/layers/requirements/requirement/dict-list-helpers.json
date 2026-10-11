@@ -23,11 +23,6 @@
       "kind": "contains",
       "source": "requirements.requirement.template-language",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.dict-list-helpers-traceability-reconcile",
-      "properties": {}
     }
   ]
 }

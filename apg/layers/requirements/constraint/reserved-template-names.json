@@ -7,11 +7,5 @@
     "attaches-to": "requirements.requirement.template-context"
   },
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-law-choices",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

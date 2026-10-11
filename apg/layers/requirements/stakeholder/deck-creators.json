@@ -32,6 +32,11 @@
     },
     {
       "kind": "contains",
+      "target": "requirements.requirement.default-template-dir",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
     },
@@ -54,18 +59,7 @@
       "kind": "contains",
       "target": "requirements.requirement.whole-deck-validation",
       "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.default-template-dir",
-      "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-stakeholder-reachability",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

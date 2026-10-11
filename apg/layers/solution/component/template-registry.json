@@ -153,36 +153,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.feedback-11-load-time-traceability",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.nested-sections-solution",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.section-helpers-supersede-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.theme-library-reach",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.entity.template",
       "properties": {}

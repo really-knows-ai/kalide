@@ -9,22 +9,12 @@
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.upgrade-migrate-format",
       "properties": {}
     },
     {
-      "kind": "drives",
-      "target": "domain.group.upgrade",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "target": "domain.service.upgrade-project",
+      "kind": "contains",
+      "target": "requirements.requirement.upgrade-refresh-owned-scaffold",
       "properties": {}
     },
     {
@@ -41,37 +31,22 @@
       "kind": "depends-on",
       "target": "requirements.requirement.version-command",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.upgrade",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.upgrade-project",
+      "properties": {}
     }
   ],
   "in": [
     {
       "kind": "contains",
       "source": "requirements.requirement.project-templates",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-deck-vs-library",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-migrate-framework-scope",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-acs-feedback-4",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-scope-feedback-6",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-reconciliation-final-review",
       "properties": {}
     },
     {

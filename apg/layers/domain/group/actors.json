@@ -14,25 +14,14 @@
     },
     {
       "kind": "contains",
-      "target": "domain.entity.template-author",
+      "target": "domain.entity.maintainer",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "domain.entity.maintainer",
+      "target": "domain.entity.template-author",
       "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "domain.note.actor-entities",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "global.note.represents-actor-tier",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

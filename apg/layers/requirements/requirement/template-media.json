@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.media-asset",
+      "target": "domain.entity.template-library",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.entity.template-library",
+      "target": "domain.value.media-asset",
       "properties": {}
     }
   ],
@@ -26,7 +26,7 @@
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.template-language",
+      "source": "requirements.requirement.agent-authoring",
       "properties": {}
     },
     {
@@ -36,22 +36,17 @@
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.agent-authoring",
-      "properties": {}
-    },
-    {
-      "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.theme-media-references",
+      "source": "requirements.requirement.template-language",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-propagated",
+      "kind": "depends-on",
+      "source": "requirements.requirement.theme-media-references",
       "properties": {}
     }
   ]

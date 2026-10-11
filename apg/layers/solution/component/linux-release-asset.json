@@ -26,11 +26,6 @@
       "kind": "realised-by",
       "source": "domain.service.install-kalide",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-tier3-anchors",
-      "properties": {}
     }
   ]
 }

@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "contains",
-      "target": "domain.value.validation-error",
+      "target": "domain.service.validate-deck",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "domain.service.validate-deck",
+      "target": "domain.value.validation-error",
       "properties": {}
     },
     {
@@ -27,11 +27,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.single-binary",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.group-less-domains-audit",
       "properties": {}
     }
   ]

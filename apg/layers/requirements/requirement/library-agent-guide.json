@@ -128,11 +128,6 @@
       "kind": "depends-on",
       "source": "requirements.requirement.upgrade-refresh-owned-scaffold",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-propagated",
-      "properties": {}
     }
   ]
 }

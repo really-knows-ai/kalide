@@ -18,8 +18,13 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "domain.note.theme-library-reach",
+      "kind": "drives",
+      "source": "requirements.requirement.child-constructor",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.children-forwarding",
       "properties": {}
     },
     {
@@ -75,16 +80,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.theme-media-references",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.child-constructor",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.children-forwarding",
       "properties": {}
     }
   ]

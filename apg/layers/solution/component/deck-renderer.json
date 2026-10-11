@@ -23,16 +23,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.service.render-deck",
       "properties": {}

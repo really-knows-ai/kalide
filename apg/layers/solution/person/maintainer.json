@@ -16,11 +16,6 @@
       "kind": "represents",
       "source": "domain.entity.maintainer",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "global.note.represents-actor-tier",
-      "properties": {}
     }
   ]
 }

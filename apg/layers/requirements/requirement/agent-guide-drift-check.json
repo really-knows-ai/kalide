@@ -68,21 +68,6 @@
       "kind": "contains",
       "source": "requirements.requirement.project-templates",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.agent-guide-test-anchor-removed",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-agent-guide-drift-check",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-propagated",
-      "properties": {}
     }
   ]
 }

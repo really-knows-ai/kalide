@@ -14,12 +14,12 @@
     },
     {
       "kind": "drives",
-      "target": "domain.value.deck-properties",
+      "target": "domain.service.render-sections",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.render-sections",
+      "target": "domain.value.deck-properties",
       "properties": {}
     }
   ],
@@ -37,11 +37,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-deck-data-in-templates",
       "properties": {}
     }
   ]

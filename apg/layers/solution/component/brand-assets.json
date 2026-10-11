@@ -7,12 +7,7 @@
   "out": [
     {
       "kind": "implemented-by",
-      "target": "brand/logo_dark.svg",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "brand/logo_light.svg",
+      "target": "TRADEMARKS.md",
       "properties": {}
     },
     {
@@ -22,24 +17,24 @@
     },
     {
       "kind": "implemented-by",
-      "target": "TRADEMARKS.md",
+      "target": "brand/logo_dark.svg",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "brand/logo_light.svg",
       "properties": {}
     }
   ],
   "in": [
-    {
-      "kind": "realised-by",
-      "source": "domain.group.distribution",
-      "properties": {}
-    },
     {
       "kind": "contains",
       "source": "solution.container.package-channels",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.brand-mark-source",
+      "kind": "realised-by",
+      "source": "domain.group.distribution",
       "properties": {}
     }
   ]

@@ -24,6 +24,11 @@
     },
     {
       "kind": "contains",
+      "target": "solution.component.config-command",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "solution.component.deck-loader",
       "properties": {}
     },
@@ -94,11 +99,6 @@
     },
     {
       "kind": "contains",
-      "target": "solution.component.config-command",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "solution.component.user-config-store",
       "properties": {}
     }
@@ -107,11 +107,6 @@
     {
       "kind": "contains",
       "source": "solution.system.kalide",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-tier3-anchors",
       "properties": {}
     },
     {

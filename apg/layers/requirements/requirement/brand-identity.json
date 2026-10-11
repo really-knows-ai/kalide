@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.brand-identity",
+      "target": "domain.group.distribution",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.group.distribution",
+      "target": "domain.value.brand-identity",
       "properties": {}
     }
   ],
@@ -27,16 +27,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.readme-presentation",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.brand-mark-source",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-brand-identity",
       "properties": {}
     }
   ]

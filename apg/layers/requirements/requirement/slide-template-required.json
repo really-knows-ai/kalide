@@ -13,17 +13,22 @@
       "properties": {}
     },
     {
-      "kind": "drives",
-      "target": "domain.entity.slide",
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-definition",
       "properties": {}
     },
     {
-      "kind": "depends-on",
-      "target": "requirements.requirement.template-definition",
+      "kind": "drives",
+      "target": "domain.entity.slide",
       "properties": {}
     }
   ],
   "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
+    },
     {
       "kind": "contains",
       "source": "requirements.user.deck-author",
@@ -32,16 +37,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-slide-parser-anchors",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "source": "requirements.stakeholder.deck-creators",
       "properties": {}
     }
   ]

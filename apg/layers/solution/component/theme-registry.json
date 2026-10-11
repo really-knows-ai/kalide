@@ -33,16 +33,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.theme-library-reach",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.entity.theme",
       "properties": {}

@@ -12,11 +12,6 @@
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.writeHelloSeed",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.InitExternal",
       "properties": {}
     },
@@ -27,17 +22,22 @@
     },
     {
       "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.writeHelloSeed",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
       "target": "internal/scaffold/libraryguide.go",
       "properties": {}
     },
     {
       "kind": "implemented-by",
-      "target": "internal/scaffold/seed/AGENTS.md",
+      "target": "internal/scaffold/libraryguide/AGENTS.md",
       "properties": {}
     },
     {
       "kind": "implemented-by",
-      "target": "internal/scaffold/libraryguide/AGENTS.md",
+      "target": "internal/scaffold/seed/AGENTS.md",
       "properties": {}
     }
   ],
@@ -65,26 +65,6 @@
     {
       "kind": "realised-by",
       "source": "domain.service.scaffold-template-library",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.agent-guide-test-anchor-removed",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.feedback-11-load-time-traceability",
       "properties": {}
     }
   ]

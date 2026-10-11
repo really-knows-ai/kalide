@@ -7,17 +7,7 @@
   "out": [
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.migrateLibrary",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.runMigrations",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.registeredMigrations",
+      "target": "go.github.com/really-knows-ai/kalide/internal/cli.runUpgrade",
       "properties": {}
     },
     {
@@ -27,22 +17,37 @@
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.refreshScaffold",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.writeMember",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.detectSeedDeck",
       "properties": {}
     },
     {
       "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.migrateLibrary",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.refreshReport.refreshMember",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.refreshScaffold",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.registeredMigrations",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.runMigrations",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/scaffold.writeMember",
       "properties": {}
     },
     {
@@ -69,11 +74,6 @@
       "kind": "implemented-by",
       "target": "internal/scaffold/upgrade.go",
       "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/cli.runUpgrade",
-      "properties": {}
     }
   ],
   "in": [
@@ -90,21 +90,6 @@
     {
       "kind": "realised-by",
       "source": "domain.service.upgrade-project",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.upgrade-implementation-pending",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.upgrade-body-current-code",
       "properties": {}
     }
   ]

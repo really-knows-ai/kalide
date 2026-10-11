@@ -28,11 +28,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.entity.deck-changed",
       "properties": {}

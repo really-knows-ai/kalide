@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.package-manifest",
+      "target": "domain.service.install-kalide",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.install-kalide",
+      "target": "domain.value.package-manifest",
       "properties": {}
     }
   ],
@@ -32,11 +32,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.scoop-install",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-tap-bucket-location",
       "properties": {}
     }
   ]

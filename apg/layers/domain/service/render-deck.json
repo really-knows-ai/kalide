@@ -23,8 +23,8 @@
   ],
   "in": [
     {
-      "kind": "contains",
-      "source": "domain.group.presentation",
+      "kind": "calls",
+      "source": "domain.service.serve-deck",
       "properties": {}
     },
     {
@@ -33,8 +33,13 @@
       "properties": {}
     },
     {
-      "kind": "calls",
-      "source": "domain.service.serve-deck",
+      "kind": "contains",
+      "source": "domain.group.presentation",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.navigation-mode",
       "properties": {}
     },
     {
@@ -45,16 +50,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.slide-metadata",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.navigation-mode",
       "properties": {}
     }
   ]

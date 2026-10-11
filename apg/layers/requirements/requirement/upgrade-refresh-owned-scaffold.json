@@ -43,26 +43,6 @@
       "kind": "contains",
       "source": "requirements.requirement.deck-library-upgrade",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-upgrade-refresh-owned-scaffold",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-propagated",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-refresh-absent-rule",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.upgrade-refresh-drift",
-      "properties": {}
     }
   ]
 }

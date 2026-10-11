@@ -9,22 +9,22 @@
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.number-date-formats",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.field-rules",
       "properties": {}
     },
     {
-      "kind": "drives",
-      "target": "domain.value.field-type",
+      "kind": "contains",
+      "target": "requirements.requirement.number-date-formats",
       "properties": {}
     },
     {
       "kind": "drives",
       "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.field-type",
       "properties": {}
     }
   ],
@@ -41,17 +41,12 @@
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.library-agent-guide",
-      "properties": {}
-    },
-    {
-      "kind": "depends-on",
       "source": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.spine-field-types",
+      "kind": "depends-on",
+      "source": "requirements.requirement.library-agent-guide",
       "properties": {}
     }
   ]

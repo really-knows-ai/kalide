@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.target-platform",
+      "target": "domain.service.publish-release",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.publish-release",
+      "target": "domain.value.target-platform",
       "properties": {}
     }
   ],
@@ -32,11 +32,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.single-binary",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-supported-platforms",
       "properties": {}
     }
   ]

@@ -12,21 +12,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "domain.note.group-less-domains-audit",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.nested-sections-domain",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
-      "properties": {}
-    },
-    {
       "kind": "drives",
       "source": "requirements.requirement.item-context",
       "properties": {}

@@ -10,11 +10,6 @@
       "kind": "drives",
       "source": "requirements.requirement.raw-source-context",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
-      "properties": {}
     }
   ]
 }

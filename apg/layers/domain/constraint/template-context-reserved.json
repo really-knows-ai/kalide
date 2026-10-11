@@ -7,16 +7,5 @@
     "attaches-to": "domain.group.templating"
   },
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "domain.note.nested-sections-domain",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

@@ -26,16 +26,6 @@
       "kind": "realised-by",
       "source": "domain.service.install-kalide",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.test-harness-test-code-anchors",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.agent-guide-test-anchor-removed",
-      "properties": {}
     }
   ]
 }

@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.validation-error",
+      "target": "domain.service.validate-deck",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.validate-deck",
+      "target": "domain.value.validation-error",
       "properties": {}
     }
   ],
@@ -27,11 +27,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-closest-match-suggestions",
       "properties": {}
     }
   ]

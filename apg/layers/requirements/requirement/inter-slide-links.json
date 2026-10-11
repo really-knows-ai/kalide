@@ -8,11 +8,6 @@
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.value.link-target",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "target": "requirements.requirement.unique-slide-labels",
       "properties": {}
@@ -21,17 +16,17 @@
       "kind": "drives",
       "target": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.link-target",
+      "properties": {}
     }
   ],
   "in": [
     {
       "kind": "contains",
       "source": "requirements.requirement.markdown-allowed-subset",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-inter-slide-links",
       "properties": {}
     }
   ]

@@ -7,11 +7,5 @@
     "attaches-to": "requirements.requirement.template-build-checks"
   },
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.helper-refs-precomputed",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

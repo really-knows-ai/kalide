@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.body",
+      "target": "domain.service.validate-deck",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.validate-deck",
+      "target": "domain.value.body",
       "properties": {}
     }
   ],
@@ -22,11 +22,6 @@
     {
       "kind": "contains",
       "source": "requirements.requirement.markdown-allowed-subset",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-markdown-disallowed-errors",
       "properties": {}
     }
   ]

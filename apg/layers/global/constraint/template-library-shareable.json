@@ -5,16 +5,5 @@
   "body": "Each library layer is a self-contained, relocatable unit: every reference stays inside the library — a layer's own root, or, for a local template's `section` helper call, the merged library (library-layer-references) — with paths relative and resolved within the library, no absolute paths, no `..` escapes and no references into `slides/` or the project `assets/`; it carries its identity and format version in its own `library.yaml`, and it holds no machine- or project-specific state, so it can later be the root of (or be pulled from) its own git repository without layout changes. The external layer references only the external library, so it validates on its own (library-layer-references); the layers merge into one library with no overriding (library-layer-uniqueness). Within a layer, a theme's `theme.css` — and every CSS it imports — may reach any servable file: its own theme directory, that layer's shared `media/` tree (via the reserved `media:` URL prefix) and another theme's files (via the reserved `theme:<name>/` prefix), both valid for `url()` and `@import` and both resolved inside the layer root (theme-media-references). Every target lives inside a layer and no reference escapes the library, so the self-contained/relocatable property is preserved. (Forward compatibility with git-based sharing; git-based sharing itself is out of scope now.)",
   "properties": {},
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "global.note.template-library-shareable-amended",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-library-reach-syntax",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

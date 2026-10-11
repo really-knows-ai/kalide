@@ -28,16 +28,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.nested-sections-solution",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
-      "properties": {}
-    },
-    {
       "kind": "realised-by",
       "source": "domain.service.serve-deck",
       "properties": {}

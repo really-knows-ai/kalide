@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.validation-error",
+      "target": "domain.service.validate-deck",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.validate-deck",
+      "target": "domain.value.validation-error",
       "properties": {}
     }
   ],
@@ -26,27 +26,17 @@
     },
     {
       "kind": "depends-on",
+      "source": "requirements.requirement.agent-authoring",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
       "source": "requirements.requirement.live-reload-error-page",
       "properties": {}
     },
     {
       "kind": "depends-on",
       "source": "requirements.requirement.templates-dir-validation",
-      "properties": {}
-    },
-    {
-      "kind": "depends-on",
-      "source": "requirements.requirement.agent-authoring",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-error-format-reconciled",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-error-reporting",
       "properties": {}
     }
   ]

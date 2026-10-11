@@ -7,28 +7,18 @@
   "out": [],
   "in": [
     {
-      "kind": "drives",
-      "source": "requirements.requirement.template-media",
-      "properties": {}
-    },
-    {
       "kind": "contains",
       "source": "domain.group.templating",
       "properties": {}
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.template-media",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.theme-media-references",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "domain.note.theme-library-reach",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.theme-media-references-feedback-1",
       "properties": {}
     }
   ]

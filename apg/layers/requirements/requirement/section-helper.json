@@ -33,11 +33,6 @@
       "kind": "contains",
       "source": "requirements.requirement.template-language",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.feedback-11-load-time-traceability",
-      "properties": {}
     }
   ]
 }

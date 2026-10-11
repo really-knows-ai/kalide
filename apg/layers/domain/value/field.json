@@ -12,16 +12,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "domain.note.section-helpers-domain",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.required-default-consistency",
-      "properties": {}
-    },
-    {
       "kind": "drives",
       "source": "requirements.requirement.field-rules",
       "properties": {}

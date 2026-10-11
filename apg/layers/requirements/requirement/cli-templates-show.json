@@ -8,13 +8,13 @@
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.service.template-registry",
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-definition",
       "properties": {}
     },
     {
-      "kind": "depends-on",
-      "target": "requirements.requirement.template-definition",
+      "kind": "drives",
+      "target": "domain.service.template-registry",
       "properties": {}
     }
   ],
@@ -32,11 +32,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-requirements",
       "properties": {}
     }
   ]

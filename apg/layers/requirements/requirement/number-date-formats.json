@@ -8,11 +8,6 @@
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.value.format",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "target": "requirements.requirement.template-build-checks",
       "properties": {}
@@ -21,17 +16,17 @@
       "kind": "drives",
       "target": "domain.service.template-registry",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.format",
+      "properties": {}
     }
   ],
   "in": [
     {
       "kind": "contains",
       "source": "requirements.requirement.field-types",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-number-date-formats",
       "properties": {}
     }
   ]

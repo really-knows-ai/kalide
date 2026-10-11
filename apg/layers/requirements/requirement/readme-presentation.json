@@ -43,11 +43,6 @@
       "kind": "contains",
       "source": "requirements.requirement.distribution",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.readme-format-feature-coverage",
-      "properties": {}
     }
   ]
 }

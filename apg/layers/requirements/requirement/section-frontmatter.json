@@ -8,13 +8,13 @@
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.entity.section",
+      "kind": "depends-on",
+      "target": "requirements.requirement.template-composition",
       "properties": {}
     },
     {
-      "kind": "depends-on",
-      "target": "requirements.requirement.template-composition",
+      "kind": "drives",
+      "target": "domain.entity.section",
       "properties": {}
     }
   ],
@@ -27,16 +27,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.agent-authoring",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-requirements",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-slide-parser-anchors",
       "properties": {}
     }
   ]

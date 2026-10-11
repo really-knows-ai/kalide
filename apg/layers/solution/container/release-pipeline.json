@@ -9,17 +9,7 @@
   "out": [
     {
       "kind": "contains",
-      "target": "solution.component.native-e2e-ci",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.release-workflow",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.demo-fixture",
+      "target": "solution.component.anonymous-install-e2e",
       "properties": {}
     },
     {
@@ -29,44 +19,39 @@
     },
     {
       "kind": "contains",
+      "target": "solution.component.ci-workflow",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.demo-fixture",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "solution.component.license-notice",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "solution.component.anonymous-install-e2e",
+      "target": "solution.component.native-e2e-ci",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "solution.component.ci-workflow",
+      "target": "solution.component.release-workflow",
       "properties": {}
     }
   ],
   "in": [
-    {
-      "kind": "realised-by",
-      "source": "domain.group.distribution",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.distribution-solution",
-      "properties": {}
-    },
     {
       "kind": "contains",
       "source": "solution.system.kalide",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.spine-tier3-anchors",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.workflow-file-ownership",
+      "kind": "realised-by",
+      "source": "domain.group.distribution",
       "properties": {}
     }
   ]

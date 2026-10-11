@@ -23,21 +23,6 @@
       "kind": "contains",
       "source": "requirements.requirement.template-context",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.item-context-feedback-1",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-requirements",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.nested-sections-coverage-reconcile",
-      "properties": {}
     }
   ]
 }

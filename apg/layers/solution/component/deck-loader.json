@@ -12,17 +12,22 @@
     },
     {
       "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/deck.parseProperties",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/deck.LoadSlides",
       "properties": {}
     },
     {
       "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/deck.parseProperties",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
       "target": "go.github.com/really-knows-ai/kalide/internal/deck.parseSlideFilename",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/suggest.Closest",
       "properties": {}
     },
     {
@@ -33,11 +38,6 @@
     {
       "kind": "implemented-by",
       "target": "internal/deck/slides.go",
-      "properties": {}
-    },
-    {
-      "kind": "implemented-by",
-      "target": "go.github.com/really-knows-ai/kalide/internal/suggest.Closest",
       "properties": {}
     }
   ],
@@ -55,11 +55,6 @@
     {
       "kind": "realised-by",
       "source": "domain.service.load-deck",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-backfill-reconcile",
       "properties": {}
     }
   ]

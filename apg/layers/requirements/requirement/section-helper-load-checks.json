@@ -18,11 +18,6 @@
       "kind": "contains",
       "source": "requirements.requirement.template-build-checks",
       "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.helper-refs-precomputed",
-      "properties": {}
     }
   ]
 }

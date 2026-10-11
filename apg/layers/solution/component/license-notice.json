@@ -28,18 +28,13 @@
   ],
   "in": [
     {
-      "kind": "realised-by",
-      "source": "domain.entity.release",
-      "properties": {}
-    },
-    {
       "kind": "contains",
       "source": "solution.container.release-pipeline",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.spine-tier3-anchors",
+      "kind": "realised-by",
+      "source": "domain.entity.release",
       "properties": {}
     }
   ]

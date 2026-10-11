@@ -34,32 +34,17 @@
     },
     {
       "kind": "uses",
+      "source": "solution.person.deck-author",
+      "properties": {}
+    },
+    {
+      "kind": "uses",
       "source": "solution.person.maintainer",
       "properties": {}
     },
     {
       "kind": "uses",
       "source": "solution.person.template-author",
-      "properties": {}
-    },
-    {
-      "kind": "uses",
-      "source": "solution.person.deck-author",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-values-and-tier4",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.spine-tier3-anchors",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "global.note.spine-widened-invariants-audit",
       "properties": {}
     }
   ]

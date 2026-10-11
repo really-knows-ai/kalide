@@ -8,16 +8,6 @@
   },
   "out": [
     {
-      "kind": "drives",
-      "target": "domain.value.library-manifest",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "target": "domain.value.version",
-      "properties": {}
-    },
-    {
       "kind": "depends-on",
       "target": "requirements.requirement.template-manifest",
       "properties": {}
@@ -29,12 +19,22 @@
     },
     {
       "kind": "drives",
+      "target": "domain.service.upgrade-project",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "target": "domain.value.format-migration",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.upgrade-project",
+      "target": "domain.value.library-manifest",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.version",
       "properties": {}
     }
   ],
@@ -42,21 +42,6 @@
     {
       "kind": "contains",
       "source": "requirements.requirement.deck-library-upgrade",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-migrate-framework-scope",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.upgrade-reconciliation-final-review",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-upgrade-migrate-format",
       "properties": {}
     }
   ]

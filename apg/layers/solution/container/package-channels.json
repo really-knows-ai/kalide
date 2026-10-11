@@ -9,12 +9,12 @@
   "out": [
     {
       "kind": "contains",
-      "target": "solution.component.homebrew-formula",
+      "target": "solution.component.brand-assets",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "solution.component.scoop-manifest",
+      "target": "solution.component.homebrew-formula",
       "properties": {}
     },
     {
@@ -24,34 +24,24 @@
     },
     {
       "kind": "contains",
-      "target": "solution.component.brand-assets",
+      "target": "solution.component.linux-release-asset",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "solution.component.linux-release-asset",
+      "target": "solution.component.scoop-manifest",
       "properties": {}
     }
   ],
   "in": [
-    {
-      "kind": "realised-by",
-      "source": "domain.group.distribution",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "solution.note.distribution-solution",
-      "properties": {}
-    },
     {
       "kind": "contains",
       "source": "solution.system.kalide",
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "solution.note.spine-tier3-anchors",
+      "kind": "realised-by",
+      "source": "domain.group.distribution",
       "properties": {}
     }
   ]

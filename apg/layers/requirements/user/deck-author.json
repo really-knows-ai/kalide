@@ -32,6 +32,11 @@
     },
     {
       "kind": "contains",
+      "target": "requirements.requirement.default-template-dir",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
     },
@@ -54,23 +59,7 @@
       "kind": "represents",
       "target": "domain.entity.deck-author",
       "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.default-template-dir",
-      "properties": {}
     }
   ],
-  "in": [
-    {
-      "kind": "details",
-      "source": "global.note.represents-actor-tier",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-stakeholder-reachability",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

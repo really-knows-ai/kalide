@@ -23,11 +23,6 @@
       "properties": {}
     },
     {
-      "kind": "details",
-      "source": "requirements.note.upgrade-migrate-framework-scope",
-      "properties": {}
-    },
-    {
       "kind": "drives",
       "source": "requirements.requirement.upgrade-migrate-format",
       "properties": {}

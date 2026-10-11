@@ -7,11 +7,5 @@
     "attaches-to": "requirements.requirement.template-composition"
   },
   "out": [],
-  "in": [
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-law-choices",
-      "properties": {}
-    }
-  ]
+  "in": []
 }

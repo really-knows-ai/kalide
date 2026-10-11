@@ -9,26 +9,31 @@
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.markdown-disallowed-errors",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.inter-slide-links",
       "properties": {}
     },
     {
-      "kind": "drives",
-      "target": "domain.value.body",
+      "kind": "contains",
+      "target": "requirements.requirement.markdown-disallowed-errors",
       "properties": {}
     },
     {
       "kind": "drives",
       "target": "domain.service.validate-deck",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.body",
+      "properties": {}
     }
   ],
   "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
+    },
     {
       "kind": "contains",
       "source": "requirements.user.deck-author",
@@ -37,21 +42,6 @@
     {
       "kind": "depends-on",
       "source": "requirements.requirement.body-rules",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.nested-sections-requirements",
-      "properties": {}
-    },
-    {
-      "kind": "details",
-      "source": "requirements.note.spine-markdown-allowed-subset",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "source": "requirements.stakeholder.deck-creators",
       "properties": {}
     }
   ]
