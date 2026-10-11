@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "library-agent-guide",
-  "body": "Agent guide (library) value: the library-root coding-agent author reference, delivered as a kalide-owned full guide `AGENTS_KALIDE.md` written verbatim by `kalide init-library` plus a library-root `AGENTS.md` pointer carrying the single line `Kalide Reference: ./AGENTS_KALIDE.md` (agent-guide-reference). The full guide is a single unbranded, text-only, offline Markdown reference to the current library/template format, an inert non-library root entry (templates-dir-layout, library-guide-layout), scaffold content inert to loading (solution.constraint.agent-guide-unbranded-inert). It is a descriptor of the templating domain (like domain.value.library-manifest), realising through its containing domain.group.templating rather than carrying its own `realised-by` edge.",
+  "body": "Agent guide (library) value: the library-root coding-agent author reference, delivered as a kalide-owned full guide `AGENTS_KALIDE.md` written verbatim by `kalide init-library` plus a library-root `AGENTS.md` pointer that contains the reference line `Kalide Reference: ./AGENTS_KALIDE.md` (agent-guide-reference). The full guide is a single unbranded, text-only, offline Markdown reference to the current library/template format, an inert non-library root entry (templates-dir-layout, library-guide-layout), scaffold content inert to loading (solution.constraint.agent-guide-unbranded-inert); the pointer is author-preserving (created carrying the embedded pointer content when absent, left untouched when it already carries the string, otherwise appended to with the reference line). It is a descriptor of the templating domain (like domain.value.library-manifest), realising through its containing domain.group.templating rather than carrying its own `realised-by` edge.",
   "properties": {},
   "out": [],
   "in": [
@@ -18,6 +18,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.agent-guide-reference",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
     },
@@ -29,11 +34,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.upgrade-refresh-owned-scaffold",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.agent-guide-reference",
       "properties": {}
     }
   ]
