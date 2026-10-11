@@ -247,6 +247,16 @@ type ResolvedChild struct {
 	// validated Body, one-item Item descriptor and owning Layer.
 	Call *SectionCall
 
+	// Source is the child's authored source field values BEFORE the
+	// instantiated template's defaults were applied: a copy of the child's
+	// Fields with the reserved `template` selector removed, exactly the map
+	// ResolveChildCall validated (field-rules, raw-source-context). It is empty
+	// when the child supplied no fields. A consumer builds the child's reserved
+	// `.raw` view from it — the child body is Call.Body — so a materialised
+	// default never leaks into `.raw` as an authored value; it is
+	// Call.Source carried out for the example/render consumers.
+	Source map[string]any
+
 	// Children are the resolved instances of the child's own child arguments,
 	// recursively, each in turn a *ResolvedChild, in the order the child's own
 	// children were passed. It is nil/empty when the child declares no child
@@ -300,8 +310,12 @@ type ResolvedChild struct {
 //
 // The resolved instance is returned as a *SectionCall — the same resolved-
 // instance shape ResolveSectionCallLayered returns — because a child resolves
-// exactly like the helper's own target and the two share Template, Values, Body,
-// Item and Layer. `.item.section` is the named declared section (req.Section)
+// exactly like the helper's own target and the two share Template, Values,
+// Source, Body, Item and Layer. Source is the stripped authored fields (the
+// supplied fields with the `template` selector removed, before defaults), which
+// ResolveChildren carries out as ResolvedChild.Source so a consumer builds the
+// child's `.raw` from its authored values rather than its defaulted effective
+// ones. `.item.section` is the named declared section (req.Section)
 // while `.item.template` is the instantiated template's name. Layer is
 // layerOf(tmplName), the instantiated template's OWN owning layer, so the child's
 // `media`/`theme:<name>/` references resolve in that layer even when the layout
@@ -404,6 +418,7 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 	call := &SectionCall{
 		Template: target,
 		Values:   effective,
+		Source:   fields,
 		Body:     req.Body,
 		Item: map[string]any{
 			"index":    index,
@@ -540,7 +555,7 @@ func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(na
 			return nil, err
 		}
 
-		rc := &ResolvedChild{Call: call}
+		rc := &ResolvedChild{Call: call, Source: call.Source}
 		// Recurse into the child's own children. An empty nested set is still
 		// walked when min/max are being checked, so a literal child that omits
 		// a mandatory child section of its own instantiated template is

@@ -797,6 +797,18 @@ type SectionCall struct {
 	// declared field the call left out. It is the map CheckValues validated.
 	Values map[string]any
 
+	// Source is the call's authored source field values BEFORE the target's
+	// declared defaults were applied — the caller-supplied fields, with the
+	// reserved `template` selector removed for a child argument (ResolveChildCall)
+	// — so a default materialised into Values is never mistaken for an authored
+	// source value. It is the map the reserved `.raw` source view is built from
+	// (RawContext), and is nil or empty when the call supplied no fields
+	// (raw-source-context). ResolveSectionCallLayered sets it to the call's
+	// supplied fields and ResolveChildCall to the stripped child fields;
+	// ResolvedChild.Source carries it out to a consumer building a child's
+	// `.raw`.
+	Source map[string]any
+
 	// Body is the validated body the call supplies, exactly as written; it is
 	// "" when the call supplies none.
 	Body string
@@ -953,6 +965,7 @@ func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), laye
 	call := &SectionCall{
 		Template: target,
 		Values:   effective,
+		Source:   fields,
 		Body:     body,
 		Children: resolved,
 		Item: map[string]any{

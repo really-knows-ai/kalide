@@ -350,7 +350,7 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
 
-		rendered, err := runner.render(call, fields)
+		rendered, err := runner.render(call)
 		if err != nil {
 			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
@@ -421,26 +421,24 @@ type exampleSectionRunner struct {
 }
 
 // render executes call's target layout with the context the render-time helper
-// gives the same resolved call and returns its trusted HTML. rawSource is the
-// call's authored source map: the helper's parsed fields for the outer call,
-// and — for a child the runner renders — the child's own resolved values
-// (ResolvedChild carries no separate authored source map), copied by RawContext
-// through the child template's declared fields exactly as an authored
-// instance's frontmatter is.
+// gives the same resolved call and returns its trusted HTML.
 //
 // The context mirrors checkLibraryExample's slide/section context so the target
 // sees a consistent shape: its effective field values as top-level entries, the
 // reserved `deck`/`slide` entries (the empty example stand-ins), the resolved
 // `.item` descriptor (parent callerFields, or the parent target's values for a
-// child), the reserved `.raw` source view built by the shared RawContext, and
-// the reserved `.data` entry built by the shared DataContext over the call's
-// resolved children — so an unguarded `{{ .data.<child> }}` (and a nested
-// `children "<section>" .data.<section>` forwarding its entries) executes at
-// load exactly as at render time (section-data-context, children-forwarding).
-// Each resolved child is rendered through this same method and its HTML
-// appended to the target's rendered child-section list keyed by its declared
-// section name, the list a target layout ranges over to splice child markup
-// (template-language). The body is set only when the call supplies one.
+// child), the reserved `.raw` source view built by the shared RawContext from
+// the call's AUTHORED Source — the supplied fields before the target's defaults,
+// so a default never leaks into `.raw` as an authored value
+// (raw-source-context) — and the reserved `.data` entry built by the shared
+// DataContext over the call's resolved children, so an unguarded
+// `{{ .data.<child> }}` (and a nested `children "<section>" .data.<section>`
+// forwarding its entries) executes at load exactly as at render time
+// (section-data-context, children-forwarding). Each resolved child is rendered
+// through this same method and its HTML appended to the target's rendered
+// child-section list keyed by its declared section name, the list a target
+// layout ranges over to splice child markup (template-language). The body is
+// set only when the call supplies one.
 //
 // The target's layout is re-parsed under LayoutFuncMap with the `section` entry
 // overridden by exampleSectionHelper bound to the target's own effective values,
@@ -449,7 +447,7 @@ type exampleSectionRunner struct {
 // with the `media` helper bound to the target's OWN owning layer
 // (call.Layer.Media) when one is known (library-layer-references); a nil layer
 // falls back to lib.Media, the pre-layer behaviour.
-func (ex *exampleSectionRunner) render(call *SectionCall, rawSource map[string]any) (htmltemplate.HTML, error) {
+func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, error) {
 	ctx := make(map[string]any, len(call.Values)+6)
 	for k, v := range call.Values {
 		ctx[k] = v
@@ -457,11 +455,12 @@ func (ex *exampleSectionRunner) render(call *SectionCall, rawSource map[string]a
 	ctx["deck"] = emptyExampleDeckContext()
 	ctx["slide"] = emptyExampleSlideContext()
 	ctx["item"] = call.Item
-	// `.raw` is the instance's authored source view and, exactly as
+	// `.raw` is the instance's authored source view — RawContext over the
+	// call's Source (supplied fields, before defaults) — and, exactly as
 	// renderSection passes secCtx.raw, it is also the parent each child's
 	// `.data` entry carries as `.item.parent`, so the load-time and render-time
 	// data views agree (raw-source-context, section-data-context).
-	raw := RawContext(rawSource, call.Template, call.Body)
+	raw := RawContext(call.Source, call.Template, call.Body)
 	ctx["raw"] = raw
 	ctx["data"] = DataContext(exampleChildNodes(call.Children), raw)
 	if strings.TrimSpace(call.Body) != "" {
@@ -506,7 +505,7 @@ func (ex *exampleSectionRunner) renderChildLists(ctx map[string]any, children []
 			continue
 		}
 		name := exampleChildName(child.Call)
-		rendered, err := ex.render(child.Call, child.Call.Values)
+		rendered, err := ex.render(child.Call)
 		if err != nil {
 			return fmt.Errorf("child %q: %w", name, err)
 		}
@@ -522,10 +521,11 @@ func (ex *exampleSectionRunner) renderChildLists(ctx map[string]any, children []
 // child instances (section-data-context, children-forwarding). Each node's
 // Template is the child's resolved template, its Name/Index the child's declared
 // section and sibling position from its resolved `.item`, its Source the child's
-// resolved values (ResolvedChild carries no separate authored source map) and
-// its Body the child's body; nested resolved children recurse. The order is the
-// resolved passed order, so sibling index/count match the `.item` descriptors
-// ResolveChildren assigned.
+// AUTHORED supplied fields (ResolvedChild.Source, the fields before the
+// instantiated template's defaults, so a default never appears in the child's
+// `.raw`) and its Body the child's body; nested resolved children recurse. The
+// order is the resolved passed order, so sibling index/count match the `.item`
+// descriptors ResolveChildren assigned.
 func exampleChildNodes(children []*ResolvedChild) []ContextNode {
 	if len(children) == 0 {
 		return nil
@@ -540,7 +540,7 @@ func exampleChildNodes(children []*ResolvedChild) []ContextNode {
 			Name:     exampleChildName(call),
 			Index:    exampleChildIndex(call),
 			Template: call.Template,
-			Source:   call.Values,
+			Source:   child.Source,
 			Body:     call.Body,
 			Children: exampleChildNodes(child.Children),
 		})
