@@ -7,11 +7,13 @@ package scaffold
 // directories: a fresh target receives the deck-ready layout — library.yaml
 // whose name is the target's base name and whose format is 1, the empty
 // slides/, sections/ and media/ directories, themes/default/theme.css and the
-// library-root AGENTS.md library/template-author guide written verbatim from
-// the embedded guide (library-agent-guide); an invalid base name is a hard
-// error writing nothing; a pre-existing library.yaml or layout entry refuses
-// and writes nothing; a pre-existing AGENTS.md is not a blocking entry — it is
-// left byte-for-byte untouched while the library is still created; a
+// library-root author-guide pair — the full AGENTS_KALIDE.md library/
+// template-author guide written verbatim when absent plus the AGENTS.md pointer
+// carrying the reference line (library-agent-guide, agent-guide-reference); an
+// invalid base name is a hard error writing nothing; a pre-existing
+// library.yaml or layout entry refuses and writes nothing; a pre-existing
+// AGENTS.md is not a blocking entry — it is left byte-for-byte untouched or
+// gains the appended reference line while the library is still created; a
 // non-directory target is an error leaving it untouched; unrelated pre-existing
 // entries never block and are left untouched; and the created library (with its
 // guide) loads cleanly through the template loader (template.LoadLibrary /
@@ -36,11 +38,13 @@ import (
 
 // libraryTree is the exact set of library-relative slash paths InitLibrary must
 // produce for a fresh target: the metadata file, the three empty content
-// directories and the one default theme with its stylesheet. It is deliberately
-// minimal — no starter template, no section, no media file, and no nested
-// templates/ entry (a library's root IS the templates directory).
+// directories, the one default theme with its stylesheet, and the library-root
+// author-guide pair (the full AGENTS_KALIDE.md guide and its AGENTS.md pointer).
+// It is deliberately minimal — no starter template, no section, no media file,
+// and no nested templates/ entry (a library's root IS the templates directory).
 var libraryTree = []string{
 	"AGENTS.md",
+	"AGENTS_KALIDE.md",
 	"library.yaml",
 	"media",
 	"sections",
@@ -101,14 +105,34 @@ func testInitLibraryFresh(t *testing.T) {
 		t.Error("DefaultThemeCSS is empty, want the minimal default theme")
 	}
 
-	// The library-root AGENTS.md guide (library-agent-guide) is written
-	// verbatim from the embedded guide.
-	wantGuide := string(mustReadLibraryGuide())
-	if wantGuide == "" {
-		t.Fatal("mustReadLibraryGuide() is empty, want the embedded library guide")
+	// The library-root AGENTS.md is the POINTER to the full guide
+	// (agent-guide-reference): it carries the fixed reference line, never the
+	// full guide. The full AGENTS_KALIDE.md is the embedded full guide
+	// (library-agent-guide).
+	wantPointer := string(mustReadLibraryGuide())
+	if wantPointer == "" {
+		t.Fatal("mustReadLibraryGuide() is empty, want the embedded library pointer")
 	}
-	if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != wantGuide {
-		t.Errorf("AGENTS.md differs from the embedded library guide:\n got %q\nwant %q", got, wantGuide)
+	if !strings.Contains(wantPointer, agentGuideReferenceLine) {
+		t.Fatalf("embedded library AGENTS.md does not carry %q", agentGuideReferenceLine)
+	}
+	gotPointer := readString(t, filepath.Join(dir, agentsGuideName))
+	if gotPointer != wantPointer {
+		t.Errorf("AGENTS.md differs from the embedded library pointer:\n got %q\nwant %q", gotPointer, wantPointer)
+	}
+	if !strings.Contains(gotPointer, agentGuideReferenceLine) {
+		t.Errorf("AGENTS.md = %q, want it to carry the reference line %q", gotPointer, agentGuideReferenceLine)
+	}
+
+	wantFull := string(mustReadLibraryFullGuide())
+	if wantFull == "" {
+		t.Fatal("mustReadLibraryFullGuide() is empty, want the embedded library full guide")
+	}
+	if gotFull := readString(t, filepath.Join(dir, agentGuideFullGuideName)); gotFull != wantFull {
+		t.Errorf("AGENTS_KALIDE.md differs from the embedded library full guide:\n got %q\nwant %q", gotFull, wantFull)
+	}
+	if wantFull == wantPointer {
+		t.Error("embedded library full guide and pointer are identical, want the pointer to be the short reference file")
 	}
 
 	if got := listTree(t, dir); !reflect.DeepEqual(got, libraryTree) {
@@ -305,35 +329,63 @@ func testInitLibraryUnrelated(t *testing.T) {
 	}
 }
 
-// testInitLibraryPreservesExistingAgentsGuide asserts a pre-existing
-// library-root AGENTS.md never blocks InitLibrary — it is not one of
-// libraryBlockPaths — and is left byte-for-byte untouched, while the library is
-// still created around it and loads cleanly (library-agent-guide,
-// library-guide-layout).
+// testInitLibraryPreservesExistingAgentsGuide asserts the init-library pointer
+// rule (agent-guide-reference): a pre-existing library-root AGENTS.md that
+// already carries the reference line "Kalide Reference: ./AGENTS_KALIDE.md" is
+// left byte-for-byte untouched, while author content without it gains that line
+// appended with the author's bytes preserved. AGENTS.md is not one of
+// libraryBlockPaths, so it never blocks; the full AGENTS_KALIDE.md is written
+// when absent and the library still loads cleanly around the pair
+// (library-agent-guide, library-guide-layout).
 func testInitLibraryPreservesExistingAgentsGuide(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "my-lib")
-	mkdir(t, dir)
-	const sentinel = "# my own library guide\n\nkeep me exactly as I am.\n"
-	writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
-
-	if err := InitLibrary(dir); err != nil {
-		t.Fatalf("InitLibrary(%s) error = %v, want nil (a pre-existing AGENTS.md must not block)", dir, err)
+	cases := []struct {
+		name    string
+		initial string
+		want    string
+	}{
+		{
+			name:    "author content without the reference line is appended",
+			initial: "# my own library guide\n\nkeep me exactly as I am.\n",
+			want:    "# my own library guide\n\nkeep me exactly as I am.\n" + agentGuideReferenceLine + "\n",
+		},
+		{
+			name:    "author content already carrying the reference line is untouched",
+			initial: "# my own library guide\n\n" + agentGuideReferenceLine + "\nextra notes stay put.\n",
+			want:    "# my own library guide\n\n" + agentGuideReferenceLine + "\nextra notes stay put.\n",
+		},
 	}
 
-	if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
-		t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "my-lib")
+			mkdir(t, dir)
+			writeFile(t, filepath.Join(dir, agentsGuideName), tc.initial)
 
-	for _, rel := range []string{template.LibraryFile, template.SlidesDir, template.SectionsDir, template.ThemesDir, template.MediaDir} {
-		if _, err := os.Lstat(filepath.Join(dir, rel)); err != nil {
-			t.Errorf("expected %s after InitLibrary: %v", rel, err)
-		}
-	}
+			if err := InitLibrary(dir); err != nil {
+				t.Fatalf("InitLibrary(%s) error = %v, want nil (a pre-existing AGENTS.md must not block)", dir, err)
+			}
 
-	// The kept guide is the single permitted inert root entry, so the created
-	// library still loads cleanly with the pre-existing content.
-	if _, err := template.LoadLibrary(os.DirFS(dir), "."); err != nil {
-		t.Errorf("template.LoadLibrary() error = %v, want the created library to load cleanly", err)
+			if got := readString(t, filepath.Join(dir, agentsGuideName)); got != tc.want {
+				t.Errorf("AGENTS.md = %q, want %q", got, tc.want)
+			}
+			// The full guide is written when absent (library-agent-guide).
+			if got, want := readString(t, filepath.Join(dir, agentGuideFullGuideName)), string(mustReadLibraryFullGuide()); got != want {
+				t.Errorf("AGENTS_KALIDE.md differs from the embedded library full guide:\n got %q\nwant %q", got, want)
+			}
+
+			for _, rel := range []string{template.LibraryFile, template.SlidesDir, template.SectionsDir, template.ThemesDir, template.MediaDir} {
+				if _, err := os.Lstat(filepath.Join(dir, rel)); err != nil {
+					t.Errorf("expected %s after InitLibrary: %v", rel, err)
+				}
+			}
+
+			// The author-guide pair are the permitted inert root entries, so
+			// the created library still loads cleanly with the pre-existing
+			// content.
+			if _, err := template.LoadLibrary(os.DirFS(dir), "."); err != nil {
+				t.Errorf("template.LoadLibrary() error = %v, want the created library to load cleanly", err)
+			}
+		})
 	}
 }
 
@@ -348,11 +400,15 @@ func testInitLibraryLoads(t *testing.T) {
 		t.Fatalf("InitLibrary(%s) error = %v", dir, err)
 	}
 
-	// The created library carries the inert library-root AGENTS.md guide
-	// (library-agent-guide); the loader must still reach success
-	// (library-guide-layout).
-	if got, want := readString(t, filepath.Join(dir, "AGENTS.md")), string(mustReadLibraryGuide()); got != want {
-		t.Fatalf("AGENTS.md differs from the embedded library guide:\n got %q\nwant %q", got, want)
+	// The created library carries the inert library-root author-guide pair: the
+	// full AGENTS_KALIDE.md guide and the AGENTS.md pointer that references it
+	// (library-agent-guide, agent-guide-reference); the loader must still reach
+	// success (library-guide-layout).
+	if got, want := readString(t, filepath.Join(dir, agentGuideFullGuideName)), string(mustReadLibraryFullGuide()); got != want {
+		t.Fatalf("AGENTS_KALIDE.md differs from the embedded library full guide:\n got %q\nwant %q", got, want)
+	}
+	if got, want := readString(t, filepath.Join(dir, agentsGuideName)), string(mustReadLibraryGuide()); got != want {
+		t.Fatalf("AGENTS.md differs from the embedded library pointer:\n got %q\nwant %q", got, want)
 	}
 
 	lib, err := template.LoadLibrary(os.DirFS(dir), ".")

@@ -27,9 +27,10 @@ import (
 // validation with zero errors, using the registry built from the seed's own
 // templates/ library (template.LoadLibrary + template.NewRegistryFromLibrary)
 // rather than the Go-builtins registry, which has no "hello" template. The seed
-// includes the deck-root AGENTS.md guide (agent-authoring), written verbatim
-// and byte-for-byte; a pre-existing AGENTS.md never blocks and is left
-// untouched.
+// includes the deck-root author-guide pair (agent-authoring,
+// agent-guide-reference): the full AGENTS_KALIDE.md written verbatim when
+// absent and the AGENTS.md pointer brought to the reference-line scheme; a
+// pre-existing guide never blocks and the author's bytes are preserved.
 func TestInit(t *testing.T) {
 	t.Run("clean directory creates the starter deck", testInitClean)
 	t.Run("existing block path refuses and writes nothing", testInitRefuses)
@@ -46,6 +47,7 @@ func TestInit(t *testing.T) {
 // plus the empty assets/ directory Init creates itself.
 var wantSeedTree = []string{
 	"AGENTS.md",
+	"AGENTS_KALIDE.md",
 	"assets",
 	"kalide.yaml",
 	"slides",
@@ -63,9 +65,11 @@ var wantSeedTree = []string{
 }
 
 // wantSeedFiles are the embedded seed's files, checked byte-for-byte against
-// what Init writes.
+// what Init writes. The deck-root author-guide pair is the full AGENTS_KALIDE.md
+// and the AGENTS.md pointer (agent-authoring, agent-guide-reference).
 var wantSeedFiles = []string{
 	"AGENTS.md",
+	"AGENTS_KALIDE.md",
 	"kalide.yaml",
 	"slides/1-hello.md",
 	"templates/library.yaml",
@@ -244,12 +248,45 @@ func testInitExistingEypresYAML(t *testing.T) {
 	}
 }
 
-// testInitPreservesExistingAgentsGuide asserts a pre-existing deck-root
-// AGENTS.md never blocks the no-arg seed form — neither Init(dir) nor
-// Init(dir, "") — and is left byte-for-byte untouched, while the rest of the
-// starter deck is still written (agent-authoring).
+// testInitPreservesExistingAgentsGuide asserts the no-arg seed form's AGENTS.md
+// pointer rule (agent-guide-reference) for both Init(dir) and Init(dir, ""): a
+// pre-existing AGENTS.md that already carries the reference line
+// "Kalide Reference: ./AGENTS_KALIDE.md" is left byte-for-byte untouched, while
+// author content without it gains that line appended with the author's bytes
+// preserved. A pre-existing guide never blocks, and the full AGENTS_KALIDE.md
+// is still written when absent (agent-authoring) while the rest of the starter
+// deck is written.
 func testInitPreservesExistingAgentsGuide(t *testing.T) {
+	// Each case is a pre-existing deck-root AGENTS.md and the exact bytes the
+	// pointer scheme must leave behind.
 	cases := []struct {
+		name    string
+		initial string
+		want    string
+	}{
+		{
+			name:    "author content without the reference line is appended",
+			initial: "# my own deck guide\n\nkeep me exactly as I am.\n",
+			want:    "# my own deck guide\n\nkeep me exactly as I am.\n" + agentGuideReferenceLine + "\n",
+		},
+		{
+			name:    "author content not newline-terminated is appended after a separating newline",
+			initial: "keep me exactly as I am",
+			want:    "keep me exactly as I am\n" + agentGuideReferenceLine + "\n",
+		},
+		{
+			name:    "an empty AGENTS.md gains only the reference line",
+			initial: "",
+			want:    agentGuideReferenceLine + "\n",
+		},
+		{
+			name:    "author content already carrying the reference line is untouched",
+			initial: "# my own deck guide\n\n" + agentGuideReferenceLine + "\nextra notes stay put.\n",
+			want:    "# my own deck guide\n\n" + agentGuideReferenceLine + "\nextra notes stay put.\n",
+		},
+	}
+
+	forms := []struct {
 		name string
 		args []string
 	}{
@@ -258,32 +295,35 @@ func testInitPreservesExistingAgentsGuide(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			const sentinel = "# my own deck guide\n\nkeep me exactly as I am.\n"
-			writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
+		for _, f := range forms {
+			t.Run(f.name+"/"+tc.name, func(t *testing.T) {
+				dir := t.TempDir()
+				writeFile(t, filepath.Join(dir, agentsGuideName), tc.initial)
 
-			if err := Init(dir, tc.args...); err != nil {
-				t.Fatalf("Init(dir, %v) error = %v, want nil (a pre-existing AGENTS.md must not block)", tc.args, err)
-			}
-
-			if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
-				t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
-			}
-
-			// The rest of the seed is still written around the kept guide.
-			for _, name := range wantSeedFiles {
-				if name == "AGENTS.md" {
-					continue
+				if err := Init(dir, f.args...); err != nil {
+					t.Fatalf("Init(dir, %v) error = %v, want nil (a pre-existing AGENTS.md must not block)", f.args, err)
 				}
-				if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
-					t.Errorf("expected %s after Init: %v", name, err)
+
+				if got := readString(t, filepath.Join(dir, agentsGuideName)); got != tc.want {
+					t.Errorf("AGENTS.md = %q, want %q", got, tc.want)
 				}
-			}
-			if _, err := os.Stat(filepath.Join(dir, "assets")); err != nil {
-				t.Errorf("expected assets/ after Init: %v", err)
-			}
-		})
+				// The full guide is written when absent (agent-authoring).
+				assertFileEqualsSeed(t, dir, agentGuideFullGuideName)
+
+				// The rest of the seed is still written around the kept guide.
+				for _, name := range wantSeedFiles {
+					if name == agentsGuideName {
+						continue
+					}
+					if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+						t.Errorf("expected %s after Init: %v", name, err)
+					}
+				}
+				if _, err := os.Stat(filepath.Join(dir, "assets")); err != nil {
+					t.Errorf("expected assets/ after Init: %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -510,11 +550,13 @@ func readString(t *testing.T, path string) string {
 }
 
 // externalDeckTree is the exact deck-relative set of entries InitExternal
-// writes: kalide.yaml and the empty slides/ and assets/ directories, and
+// writes: kalide.yaml and the empty slides/ and assets/ directories, the
+// deck-root author-guide pair (AGENTS_KALIDE.md and the AGENTS.md pointer), and
 // deliberately no local templates/ and no starter slide. It is the external
 // counterpart of wantSeedTree.
 var externalDeckTree = []string{
 	"AGENTS.md",
+	"AGENTS_KALIDE.md",
 	"assets",
 	"kalide.yaml",
 	"slides",
@@ -539,7 +581,9 @@ var externalDeckTree = []string{
 // loader error wrapped with the external path as written
 // (`init: external template library <path>: …`); the no-arg hello-seed path is
 // unchanged, including the empty-string path; and a pre-existing deck-root
-// AGENTS.md never blocks and is left byte-for-byte untouched (agent-authoring).
+// author guide never blocks: the full AGENTS_KALIDE.md is written when absent
+// and the AGENTS.md pointer follows the reference-line scheme (agent-authoring,
+// agent-guide-reference).
 func TestInitExternal(t *testing.T) {
 	t.Run("valid external library writes an external deck", testInitExternalWrites)
 	t.Run("absolute external path is written as given", testInitExternalAbsolutePath)
@@ -581,9 +625,11 @@ func testInitExternalWrites(t *testing.T) {
 	if got := listTree(t, dir); !reflect.DeepEqual(got, externalDeckTree) {
 		t.Fatalf("external deck tree = %v, want %v (no local templates/, no starter slide)", got, externalDeckTree)
 	}
-	// Both init forms write the identical deck-root agent guide, verbatim
-	// from the embedded seed (agent-authoring).
-	assertFileEqualsSeed(t, dir, "AGENTS.md")
+	// Both init forms write the identical deck-root author-guide pair, verbatim
+	// from the embedded seed: the full AGENTS_KALIDE.md guide and the AGENTS.md
+	// pointer carrying its reference line (agent-authoring, agent-guide-reference).
+	assertFileEqualsSeed(t, dir, agentGuideFullGuideName)
+	assertFileEqualsSeed(t, dir, agentsGuideName)
 	for _, name := range []string{"slides", "assets"} {
 		entries, err := os.ReadDir(filepath.Join(dir, name))
 		if err != nil {
@@ -1012,15 +1058,35 @@ func testInitExternalTemplatesExempt(t *testing.T) {
 	}
 }
 
-// testInitExternalPreservesExistingAgentsGuide asserts a pre-existing deck-root
-// AGENTS.md never blocks either external form — Init(dir, path) and
-// InitExternal(dir, path) — for BOTH external branches (the relative explicit
-// path and the absolute configured-default path), and is left byte-for-byte
-// untouched while the external deck is still written (agent-authoring).
-// AGENTS.md is not a deck-owned blockPath, so this is not a relaxation of the
-// refusal matrix. The seed branch's counterpart is
-// testInitPreservesExistingAgentsGuide.
+// testInitExternalPreservesExistingAgentsGuide asserts the external form's
+// author-guide pair rules for BOTH external branches (the relative explicit
+// path and the absolute configured-default path) and both external entry
+// points — Init(dir, path) and InitExternal(dir, path). A pre-existing deck-root
+// AGENTS.md that already carries the reference line
+// "Kalide Reference: ./AGENTS_KALIDE.md" is left byte-for-byte untouched, while
+// author content without it gains that line appended with the author's bytes
+// preserved; the full AGENTS_KALIDE.md is written when absent
+// (agent-authoring, agent-guide-reference). Neither guide file is a deck-owned
+// blockPath, so this is not a relaxation of the refusal matrix. The seed
+// branch's counterpart is testInitPreservesExistingAgentsGuide.
 func testInitExternalPreservesExistingAgentsGuide(t *testing.T) {
+	cases := []struct {
+		name    string
+		initial string
+		want    string
+	}{
+		{
+			name:    "author content without the reference line is appended",
+			initial: "# my own deck guide\n\nkeep me exactly as I am.\n",
+			want:    "# my own deck guide\n\nkeep me exactly as I am.\n" + agentGuideReferenceLine + "\n",
+		},
+		{
+			name:    "author content already carrying the reference line is untouched",
+			initial: "# my own deck guide\n\n" + agentGuideReferenceLine + "\nextra notes stay put.\n",
+			want:    "# my own deck guide\n\n" + agentGuideReferenceLine + "\nextra notes stay put.\n",
+		},
+	}
+
 	paths := []struct {
 		name string
 		arg  func(t *testing.T, dir string) string
@@ -1044,32 +1110,35 @@ func testInitExternalPreservesExistingAgentsGuide(t *testing.T) {
 		{"InitExternal(dir, path)", func(dir, pathArg string) error { return InitExternal(dir, pathArg) }},
 	}
 
-	for _, p := range paths {
-		for _, f := range forms {
-			t.Run(p.name+"/"+f.name, func(t *testing.T) {
-				dir := filepath.Join(t.TempDir(), "deck")
-				mkdir(t, dir)
-				pathArg := p.arg(t, dir)
-				const sentinel = "# my own deck guide\n\nkeep me exactly as I am.\n"
-				writeFile(t, filepath.Join(dir, "AGENTS.md"), sentinel)
+	for _, tc := range cases {
+		for _, p := range paths {
+			for _, f := range forms {
+				t.Run(p.name+"/"+f.name+"/"+tc.name, func(t *testing.T) {
+					dir := filepath.Join(t.TempDir(), "deck")
+					mkdir(t, dir)
+					pathArg := p.arg(t, dir)
+					writeFile(t, filepath.Join(dir, agentsGuideName), tc.initial)
 
-				if err := f.init(dir, pathArg); err != nil {
-					t.Fatalf("%s error = %v, want nil (a pre-existing AGENTS.md must not block)", f.name, err)
-				}
-
-				if got := readString(t, filepath.Join(dir, "AGENTS.md")); got != sentinel {
-					t.Errorf("AGENTS.md = %q, want the pre-existing guide byte-for-byte unchanged", got)
-				}
-
-				for _, name := range []string{"kalide.yaml", "slides", "assets"} {
-					if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-						t.Errorf("expected %s after %s: %v", name, f.name, err)
+					if err := f.init(dir, pathArg); err != nil {
+						t.Fatalf("%s error = %v, want nil (a pre-existing AGENTS.md must not block)", f.name, err)
 					}
-				}
-				if _, templates := externalConfigOf(t, dir); templates != pathArg {
-					t.Errorf("kalide.yaml templates = %q, want %q", templates, pathArg)
-				}
-			})
+
+					if got := readString(t, filepath.Join(dir, agentsGuideName)); got != tc.want {
+						t.Errorf("AGENTS.md = %q, want %q", got, tc.want)
+					}
+					// The full guide is written when absent (agent-authoring).
+					assertFileEqualsSeed(t, dir, agentGuideFullGuideName)
+
+					for _, name := range []string{"kalide.yaml", "slides", "assets"} {
+						if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+							t.Errorf("expected %s after %s: %v", name, f.name, err)
+						}
+					}
+					if _, templates := externalConfigOf(t, dir); templates != pathArg {
+						t.Errorf("kalide.yaml templates = %q, want %q", templates, pathArg)
+					}
+				})
+			}
 		}
 	}
 }
