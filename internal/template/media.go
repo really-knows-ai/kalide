@@ -9,10 +9,11 @@ import (
 )
 
 // This file implements the html/template func map every library layout
-// executes with (template-language): the four helpers
-// `media`/`section`/`dict`/`list`, plus the number/date format functions
-// (Format.FuncMap). `media` is the real implementation here; `dict` and
-// `list` are the data constructors; `section` is registered as a
+// executes with (template-language): the six helpers
+// `media`/`section`/`dict`/`list`/`child`/`children`, plus the number/date
+// format functions (Format.FuncMap). `media` is the real implementation here;
+// `dict` and `list` are the data constructors; `child` and `children` are the
+// child-section constructors (child.go); `section` is registered as a
 // parse-resolvable stub that the renderer rebinds to its implementation, so a
 // layout using it parses at load. It never adds a Sprig-style utility library
 // or a Markdown helper: a layout composes already-rendered HTML fragments
@@ -139,15 +140,20 @@ func ListFunc(items ...any) []any {
 }
 
 // LayoutFuncMap returns the complete, documented html/template func map every
-// library layout parses and executes with: the four helpers — `media`
+// library layout parses and executes with: the six helpers — `media`
 // (MediaFunc, bound to mediaFS and base), `dict` (DictFunc), `list`
-// (ListFunc) and `section` (a parse-resolvable stub the renderer rebinds to
-// the render-time implementation) — plus the built-in number/date format
-// functions (Format.FuncMap). This is the single source of truth for "the
-// documented func set": ParseLayout (used by LoadLibrary's step-3 layout
-// parse check) and the renderer both build their func map from here, so a
-// layout that parses during validation also executes the same way at render
-// time.
+// (ListFunc), `child` (ChildFunc), `children` (ChildrenFunc) and `section`
+// (a parse-resolvable stub the renderer rebinds to the render-time
+// implementation) — plus the built-in number/date format functions
+// (Format.FuncMap). This is the single source of truth for "the documented
+// func set": ParseLayout (used by LoadLibrary's step-3 layout parse check)
+// and the renderer both build their func map from here, so a layout that
+// parses during validation also executes the same way at render time.
+//
+// `child` and `children` are the child-section constructors (child.go): a
+// value they return is consumed only as a `section` call's child argument,
+// and, like `dict`/`list`, each reads nothing outside its arguments
+// (child-constructor, children-forwarding).
 //
 // The `section` entry is a stub only so that a layout using
 // `{{ section "name" [fields] [body] }}` parses at load; the renderer
@@ -157,9 +163,11 @@ func ListFunc(items ...any) []any {
 // unbound — i.e. without the renderer's override — is a clear error.
 func LayoutFuncMap(mediaFS fs.FS, base string) htmltemplate.FuncMap {
 	fm := htmltemplate.FuncMap{
-		"media": MediaFunc(mediaFS, base),
-		"dict":  DictFunc,
-		"list":  ListFunc,
+		"media":    MediaFunc(mediaFS, base),
+		"dict":     DictFunc,
+		"list":     ListFunc,
+		"child":    ChildFunc,
+		"children": ChildrenFunc,
 		"section": func(name string, args ...any) (htmltemplate.HTML, error) {
 			return "", fmt.Errorf(
 				"section: the %q helper has no render-time implementation bound: template.LayoutFuncMap registers it only so the layout parses; the renderer must override it before execution",
