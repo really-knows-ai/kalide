@@ -24,7 +24,7 @@
           "versions": ["v0.10.0"]
         },
         {
-          "digest": "c6b5babe17ab46db122e9e11219232c56807f018077b0b3f6f1206f78cfd937a",
+          "digest": "1301891b724e338256f44452cd9d49b3b69ad9aa0133fd0992edec4df92efaa2",
           "versions": ["unreleased"]
         }
       ]
@@ -107,7 +107,7 @@
           "versions": ["v0.10.0"]
         },
         {
-          "digest": "a1d0c96f9621000f7516d91f1f011f31828e4e3bfad5d1997d93bce0fb2772d0",
+          "digest": "d3ec556a5cf4add5e901df6e706e267844ac9cab8b1eb5096e16416804fd3518",
           "versions": ["unreleased"]
         }
       ]
