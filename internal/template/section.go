@@ -594,8 +594,10 @@ type SectionCall struct {
 	// Item is the one-item `.item` descriptor the target executes under
 	// (item-context): index 0, number and count 1, first and last true,
 	// section and template the target name, and parent the caller's fields
-	// (nil from a slide layout). The helper passes no child sections, so the
-	// target is always the sole instance of its own one-item group.
+	// (nil from a slide layout). The helper call is the sole instance of its
+	// own one-item group: the children the call passes are the target's own
+	// child instances (Children) and each carries its own sibling descriptor,
+	// so they never enter this one.
 	Item map[string]any
 }
 
@@ -627,15 +629,26 @@ type SectionCall struct {
 // This matches the registry's build-time helper check (section-helper-load-checks),
 // which likewise requires each required field to be supplied or carry a default.
 //
-// The body is checked against the target's body rule with CheckBody, and because
-// the helper passes no child sections through, a body whose heading names a
-// section the target declares is rejected even when the body rule would allow a
-// subheading.
+// The body is checked against the target's body rule with CheckBody, and a body
+// whose heading names a section the target declares is rejected even when the
+// body rule would allow a subheading: a helper body carries no child sections,
+// so children pass only through child arguments, never through the body.
+//
+// The trailing children are the call's child arguments — the values of its
+// `child`/`children` constructors, in passed order. When non-empty (and also
+// when empty, so a target declaring a mandatory child section the call leaves
+// unfilled is still rejected) they are resolved with ResolveChildren against the
+// target's declared sections and the effective values, with the target as the
+// parent template: each child is checked against the accepted template, its
+// fields/body/defaults are resolved exactly like an authored instance, and the
+// declaration's min/max is enforced over the full passed set. The resolved tree
+// is carried on SectionCall.Children.
 //
 // The returned *SectionCall carries the resolved *Template, the effective
-// values, the body and the one-item .item descriptor. A violation is returned as
-// the first ValueError CheckValues or CheckBody reports, so a caller adapts it
-// through the same positioned path as any other field or body error.
+// values, the body, the resolved children and the one-item .item descriptor. A
+// violation is returned as the first ValueError CheckValues or CheckBody reports
+// or the first ResolveChildren error, so a caller adapts it through the same
+// positioned path as any other field or body error.
 //
 // ResolveSectionCall records no layer provenance: it delegates to
 // ResolveSectionCallLayered with a nil layerOf, so the returned
@@ -644,14 +657,21 @@ type SectionCall struct {
 // *Registry.LayerOf — calls ResolveSectionCallLayered directly so the resolved
 // target's owning layer is carried out on SectionCall.Layer
 // (library-layer-references).
-func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, parent map[string]any) (*SectionCall, error) {
-	return ResolveSectionCallLayered(resolve, nil, name, fields, body, parent)
+func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
+	return ResolveSectionCallLayered(resolve, nil, name, fields, body, parent, children...)
 }
 
 // ResolveSectionCallLayered is ResolveSectionCall plus layer provenance: it
 // applies exactly the same resolution, defaults-first field validation, body
-// checks and error contract (see ResolveSectionCall) and additionally records
-// the owning layer of the resolved target on SectionCall.Layer.
+// checks, child resolution and error contract (see ResolveSectionCall) and
+// additionally records the owning layer of the resolved target on
+// SectionCall.Layer.
+//
+// The trailing children are resolved with the same resolve/layerOf pair, so a
+// child naming a template that lives in the other library layer carries that
+// layer on its own SectionCall.Layer (ResolveChildCall records layerOf of the
+// instantiated name), independently of the target's layer
+// (library-layer-references).
 //
 // resolve is consulted first; only once it has returned a section-usage target
 // is layerOf consulted, so a rejected name or non-section target reports the
@@ -669,7 +689,7 @@ func ResolveSectionCall(resolve func(name string) (*Template, bool), name string
 // whose owning layer is unknown (a single-root library, or a registry built in
 // code). Consumers treat a nil Layer as "resolve against the primary/merged
 // root" (SectionCall.Layer).
-func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, name string, fields map[string]any, body string, parent map[string]any) (*SectionCall, error) {
+func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, name string, fields map[string]any, body string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
 	if resolve == nil {
 		return nil, fmt.Errorf("section helper: no template resolver for %q", name)
 	}
@@ -689,20 +709,35 @@ func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), laye
 	if ve, invalid := CheckBody(target.Body, body); invalid {
 		return nil, ve
 	}
+	// A helper body carries no child sections: children pass only through child
+	// arguments, so a heading naming a declared child section is rejected even
+	// when the call also passes that child explicitly.
 	if child, named := bodyNamesChildSection(target, body); named {
 		return nil, ValueError{
 			Path:  []PathSegment{{Name: bodyField}},
 			Rule:  "subheadings",
 			Value: body,
-			What:  fmt.Sprintf("subheadings: the body heading names child section %q, but the section helper passes no child sections", child),
-			Fix:   "remove the heading; the section helper supplies no child sections",
+			What:  fmt.Sprintf("subheadings: the body heading names child section %q, but a helper body carries no child sections", child),
+			Fix:   "remove the heading; pass the child with a child argument instead",
 		}
+	}
+
+	// Resolve the call's child arguments against the target's declared
+	// sections, with the target's effective values as each child's
+	// `.item.parent`. ResolveChildren is called even for an empty set so a
+	// target declaring a mandatory child section the call leaves unfilled is
+	// rejected here, by the same per-declaration min/max check that enforces the
+	// count over the full passed set (nested-section-validation).
+	resolved, err := ResolveChildren(resolve, layerOf, target, children, effective, true)
+	if err != nil {
+		return nil, err
 	}
 
 	call := &SectionCall{
 		Template: target,
 		Values:   effective,
 		Body:     body,
+		Children: resolved,
 		Item: map[string]any{
 			"index":    0,
 			"number":   1,

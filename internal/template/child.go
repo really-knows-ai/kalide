@@ -235,11 +235,11 @@ func ChildrenFunc(args ...any) (*ChildRequest, error) {
 // ResolvedChild is one resolved child section argument: the child's own resolved
 // instance and its own resolved nested children, in passed order. ResolveChildren
 // returns these rather than bare *SectionCall values because a resolved child is
-// a tree — a child may itself carry child sections — while SectionCall is still
-// a flat leaf that cannot hold them (extending it is a separate step). This is
-// the recursive shape a caller renders depth-first: each child's own children
-// first, since section markup composes bottom-up
-// (requirements.requirement.child-constructor,
+// a tree — a child may itself carry child sections — and the tree is carried on
+// ResolvedChild.Children, mirroring the children a SectionCall records for its
+// own target on SectionCall.Children. This is the recursive shape a caller
+// renders depth-first: each child's own children first, since section markup
+// composes bottom-up (requirements.requirement.child-constructor,
 // requirements.requirement.children-forwarding).
 type ResolvedChild struct {
 	// Call is the child's resolved instance, exactly the shape ResolveChildCall
@@ -307,12 +307,12 @@ type ResolvedChild struct {
 // comes from the other library layer (requirements.requirement.library-layer-references);
 // a nil Layer means the primary/merged root.
 //
-// Nested req.Children are deliberately NOT resolved here: a resolved literal
-// child carries no nested instances yet. The recursive resolution of a child's
-// own children — and of a `children` forwarding's entries — belongs to
-// ResolveChildren (phase-1 task 6) and the call-level child plumbing (task 9).
-// ResolveChildCall resolves exactly one literal child's own fields, body and
-// `.item` descriptor; it adds no data access of its own.
+// Nested req.Children are deliberately NOT resolved here: ResolveChildCall
+// resolves exactly one literal child's own fields, body and `.item` descriptor.
+// The recursive resolution of a child's own children — and of a `children`
+// forwarding's entries — belongs to ResolveChildren, which the `section` helper
+// entry points call for the whole child-argument set. It adds no data access of
+// its own.
 func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, req *ChildRequest, index, count int, parentFields map[string]any) (*SectionCall, error) {
 	if req == nil {
 		return nil, fmt.Errorf("child: request must not be nil")
