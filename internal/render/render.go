@@ -704,7 +704,7 @@ const maxSectionNesting = 64
 // results are published (section-data-context).
 //
 // A nil secCtx is treated as an empty execution context (no deck/slide); a
-// depth counter (maxSectionNesting) bounds the recursion so a re-entrant child
+// depth counter (maxSectionNesting) caps the recursion so a re-entrant child
 // chain fails with a render error naming the bound instead of looping.
 func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *sectionCtx) (map[string][]htmltmpl.HTML, map[string]any, error) {
 	if secCtx == nil {
