@@ -567,6 +567,17 @@ func (s *Section) Variants(tmpl *Template, values map[string]any) []Variant {
 // fields or body expression is NOT an error here: pass-through is intended and
 // is validated when the target renders (section-helper-load-checks).
 //
+// Every argument after the body (position four onward) is a child argument: the
+// value of a `child`/`children` constructor, or any other expression the call
+// passes as a child. HelperCall.Children records each one statically, in source
+// order, as a HelperChild: a `child` all of whose pieces are literal is Literal,
+// a `child` with a non-literal piece is NonLiteral with its literal pieces still
+// captured, a `children` forwarding is Forward, and any other expression is
+// NonLiteral. Like the fields and body marks, a non-literal child is a permitted
+// pass-through checked when the target renders (child-constructor,
+// children-forwarding, section-helper-load-checks). A child argument never sits
+// in the fields or body slot, so it is never read as one.
+//
 // The target name, by contrast, must be a string literal: a load check resolves
 // the target template statically by name, so a call whose name is not a literal
 // (for example `{{ section .name }}`) cannot be checked and is rejected with an
@@ -1012,6 +1023,17 @@ func (s *Section) walkHelperCommand(cmd *parse.CommandNode, tmplName, text strin
 // extractSectionHelperCall recognises a `section` command and builds its
 // HelperCall, or reports found=false for any other command. A missing or
 // non-literal target name is an error: the load-time checks need a static name.
+//
+// The arguments after the target name are positional: the second is the
+// optional fields expression and the third the optional body, matching the
+// `[fields] [body]` grammar. Either may be the `nil` placeholder, which is a
+// present-but-non-literal argument, distinct from an omitted one the length
+// check reports absent. Every further argument (position four onward) is a
+// child argument — the value of a `child`/`children` constructor, or any other
+// expression the call passes as a child — and is recorded on
+// HelperCall.Children, in source order, by extractHelperChild. A child call
+// therefore never occupies the fields or body slot, so the existing field/body
+// reading is unchanged.
 func extractSectionHelperCall(cmd *parse.CommandNode, tmplName, text string) (HelperCall, bool, error) {
 	if cmd == nil || len(cmd.Args) == 0 {
 		return HelperCall{}, false, nil
@@ -1050,7 +1072,115 @@ func extractSectionHelperCall(cmd *parse.CommandNode, tmplName, text string) (He
 			call.Body = body.Text
 		}
 	}
+	if len(args) > 3 {
+		call.Children = make([]HelperChild, 0, len(args)-3)
+		for _, arg := range args[3:] {
+			call.Children = append(call.Children, extractHelperChild(arg))
+		}
+	}
 	return call, true, nil
+}
+
+// extractHelperChild builds the static HelperChild record for one trailing child
+// argument of a `section` call: a `child "<section>" [fields] [body] [child…]`
+// constructor, a `children "<section>" …` forwarding, or any other expression.
+// A `child` all of whose pieces — section, literal `dict` fields, string-literal
+// body — are literal is Literal; a `child` with any non-literal piece is
+// NonLiteral, with each literal piece still captured (so a non-literal fields or
+// body leaves Section populated when the section name itself was literal). A
+// `nil` placeholder in a child's fields or body slot is an omitted argument, not
+// a non-literal one — it is how the grammar skips to the nested child arguments
+// — so it leaves HasFields/HasBody false and keeps the child Literal, exactly as
+// ChildFunc treats a nil argument. A `children` call is Forward, whatever its
+// pieces: its `.data` list is a runtime value the load-time checks never inspect.
+// Any other expression — a variable, a field access such as `.x`, a plain
+// `dict`/`list` or any non-child call — is NonLiteral, with no pieces captured.
+//
+// Nested child arguments are captured recursively on HelperChild.Children and
+// deliberately do not affect this child's Literal flag: each nested child is a
+// child argument in its own right carrying its own markers (HelperChild).
+func extractHelperChild(n parse.Node) HelperChild {
+	cmd, kind, ok := childHelperCommand(n)
+	if !ok {
+		return HelperChild{NonLiteral: true}
+	}
+	args := cmd.Args[1:]
+
+	child := HelperChild{}
+	literal := true
+	if len(args) >= 1 {
+		if section, ok := args[0].(*parse.StringNode); ok {
+			child.Section = section.Text
+		} else {
+			literal = false
+		}
+	} else {
+		literal = false
+	}
+
+	if kind == "children" {
+		// A `children` forwarding of a runtime `.data` list is never inspected
+		// at load: only its literal section name (when the first argument is a
+		// string literal) is recorded, and Forward marks the value.
+		child.Forward = true
+		return child
+	}
+
+	if len(args) >= 2 {
+		if _, omitted := args[1].(*parse.NilNode); !omitted {
+			child.HasFields = true
+			if fields, ok := literalDictMap(args[1]); ok {
+				child.FieldsLiteral = true
+				child.Fields = fields
+			} else {
+				literal = false
+			}
+		}
+	}
+	if len(args) >= 3 {
+		if _, omitted := args[2].(*parse.NilNode); !omitted {
+			child.HasBody = true
+			if body, ok := args[2].(*parse.StringNode); ok {
+				child.BodyLiteral = true
+				child.Body = body.Text
+			} else {
+				literal = false
+			}
+		}
+	}
+	if len(args) > 3 {
+		child.Children = make([]HelperChild, 0, len(args)-3)
+		for _, arg := range args[3:] {
+			child.Children = append(child.Children, extractHelperChild(arg))
+		}
+	}
+
+	child.Literal = literal
+	child.NonLiteral = !literal
+	return child
+}
+
+// childHelperCommand reports the command of a parenthesized `child` or
+// `children` pipeline argument and whether the node is such a call at all. It
+// returns ok=false for any other node, so a plain variable, a field access or a
+// non-child call is never mistaken for a child constructor.
+func childHelperCommand(n parse.Node) (*parse.CommandNode, string, bool) {
+	pipe, ok := n.(*parse.PipeNode)
+	if !ok || pipe == nil || len(pipe.Cmds) != 1 || pipe.Cmds[0] == nil {
+		return nil, "", false
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) == 0 {
+		return nil, "", false
+	}
+	ident, ok := cmd.Args[0].(*parse.IdentifierNode)
+	if !ok {
+		return nil, "", false
+	}
+	if ident.Ident != "child" && ident.Ident != "children" {
+		return nil, "", false
+	}
+	return cmd, ident.Ident, true
 }
 
 // literalDictKeys reports whether n is a parenthesized `(dict …)` pipeline all
@@ -1079,6 +1209,101 @@ func literalDictKeys(n parse.Node) ([]string, bool) {
 		keys = append(keys, key.Text)
 	}
 	return keys, true
+}
+
+// literalDictMap reports whether n is a parenthesized `(dict …)` pipeline whose
+// keys are string literals and all of whose values are literal values the
+// extractor can capture, and returns those keys and values. Unlike
+// literalDictKeys — which reads only the keys of the `section` call's own
+// fields, because those values are passed through opaque — a child's fields
+// argument is captured whole or not at all, so a dict carrying any non-literal
+// piece, a non-string key or an odd argument count is not a literal dict.
+func literalDictMap(n parse.Node) (map[string]any, bool) {
+	pipe, ok := n.(*parse.PipeNode)
+	if !ok || pipe == nil || len(pipe.Cmds) != 1 || pipe.Cmds[0] == nil {
+		return nil, false
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) == 0 {
+		return nil, false
+	}
+	ident, ok := cmd.Args[0].(*parse.IdentifierNode)
+	if !ok || ident.Ident != "dict" {
+		return nil, false
+	}
+	out := make(map[string]any, (len(cmd.Args)-1)/2)
+	for i := 1; i < len(cmd.Args); i += 2 {
+		key, ok := cmd.Args[i].(*parse.StringNode)
+		if !ok || i+1 >= len(cmd.Args) {
+			return nil, false
+		}
+		value, ok := literalNodeValue(cmd.Args[i+1])
+		if !ok {
+			return nil, false
+		}
+		out[key.Text] = value
+	}
+	return out, true
+}
+
+// literalNodeValue returns the Go value a parse node literally denotes — a
+// quoted string, a number, a boolean, null, or a nested literal `dict`/`list` —
+// and reports false for a dynamic expression (a variable, a field access, a
+// function call) the extractor cannot evaluate at load. It is what makes a
+// literal `dict`'s entries capturable; a single non-literal value makes the
+// whole dict non-literal.
+func literalNodeValue(n parse.Node) (any, bool) {
+	switch x := n.(type) {
+	case *parse.StringNode:
+		return x.Text, true
+	case *parse.BoolNode:
+		return x.True, true
+	case *parse.NilNode:
+		return nil, true
+	case *parse.NumberNode:
+		switch {
+		case x.IsInt:
+			return x.Int64, true
+		case x.IsUint:
+			return x.Uint64, true
+		case x.IsFloat:
+			return x.Float64, true
+		}
+		return nil, false
+	case *parse.PipeNode:
+		if m, ok := literalDictMap(x); ok {
+			return m, true
+		}
+		return literalListValue(x)
+	}
+	return nil, false
+}
+
+// literalListValue reports whether n is a parenthesized `(list …)` pipeline all
+// of whose items are literal values, and returns them. A list carrying a
+// non-literal item is not a literal list.
+func literalListValue(n parse.Node) ([]any, bool) {
+	pipe, ok := n.(*parse.PipeNode)
+	if !ok || pipe == nil || len(pipe.Cmds) != 1 || pipe.Cmds[0] == nil {
+		return nil, false
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) == 0 {
+		return nil, false
+	}
+	ident, ok := cmd.Args[0].(*parse.IdentifierNode)
+	if !ok || ident.Ident != "list" {
+		return nil, false
+	}
+	out := make([]any, 0, len(cmd.Args)-1)
+	for _, item := range cmd.Args[1:] {
+		value, ok := literalNodeValue(item)
+		if !ok {
+			return nil, false
+		}
+		out = append(out, value)
+	}
+	return out, true
 }
 
 // layoutLine returns the 1-based line of n within text. parse node positions
