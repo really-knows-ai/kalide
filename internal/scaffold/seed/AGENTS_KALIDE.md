@@ -1,0 +1,602 @@
+# kalide deck authoring guide
+
+This file is a complete reference to the kalide deck and template format as
+implemented by the `kalide` binary you are using. Read it before writing or
+editing a deck. It is inert documentation: `kalide` never reads this file, and
+it does not affect validation, rendering or serving.
+
+## What a deck is
+
+A deck is a directory containing:
+
+```
+kalide.yaml      deck-wide settings
+slides/          one Markdown file per slide
+assets/          images and other files your slides reference
+```
+
+and a **template library** that supplies every slide layout, section layout,
+theme and shared media file. There is no built-in fallback: a deck without a
+resolvable library does not load.
+
+The library is one merged set drawn from up to two **layers**:
+
+- the deck's **local `templates/` directory** — loaded whenever that directory
+  exists (what a no-argument `kalide init` creates); and
+- an **external library** named by the deck's `templates:` key in
+  `kalide.yaml` (an absolute path, or a path relative to the deck root such as
+  `../shared-lib`) — loaded whenever the key is present (what
+  `kalide init <path>` creates).
+
+Both layers are loaded when both are present, with equal standing: there is no
+precedence between them and no overriding. A relative `templates:` path is
+resolved against the deck root; an absolute path is used as given. The format
+is identical in both layers; only where the library lives differs. Two
+consequences of the layered library:
+
+- `kalide init <path>` validates the external library **alone** before writing
+  anything — a missing or invalid library, or one that does not resolve the
+  deck's theme, aborts with an error naming the path and nothing written — then
+  writes an **empty `slides/`** (no starter slide) and no local `templates/`.
+  A pre-existing local `templates/` is left untouched and participates as the
+  deck's local layer.
+- A name carried by both layers — a slide or section name (the two share one
+  template namespace), a theme name, or a shared `media/` path — is a
+  validation error naming the name and both paths, never an override. A local
+  template's `section` helper call resolves against the merged section
+  namespace, so it invokes an external section like a local one; every other
+  reference (`media`, `media:`, `theme:<name>/`) resolves inside the
+  referencing template's or theme's own layer, and the external library is
+  self-contained, so it validates standalone.
+
+## kalide.yaml
+
+`kalide.yaml` holds deck-wide configuration. Only `title` is required.
+
+```yaml
+title: My presentation     # required, string
+author: A. Presenter       # optional, string
+date: 2026-09-25           # optional, YYYY-MM-DD
+theme: default             # optional, a theme directory name from the library
+navigation: default        # optional: default, linear or grid
+properties:                # optional, arbitrary deck-wide values for templates
+  audience: Investors
+  revision: 3
+  confidential: true
+templates: ../shared-lib   # optional, path to an external template library
+```
+
+Every key:
+
+- `title` (required) — the deck title, a string. Missing or blank is an error.
+- `author` — the presenter, a string.
+- `date` — the presentation date written `YYYY-MM-DD`; any other form is an
+  error.
+- `theme` — the theme name; omitted means `default`. The theme must be a
+  directory under the merged library's `themes/` (a theme may live in either
+  layer, but the name must be unique across both).
+- `navigation` — `default`, `linear` or `grid`; omitted means `default`.
+- `properties` — an arbitrary mapping of author keys to typed scalars (string,
+  number, boolean, or a `YYYY-MM-DD` date). A mapping or list value is an
+  error. The map is always available to templates.
+- `templates` — path to the deck's external template library layer. Omitted
+  means there is no external layer; the deck-root `templates/` is still loaded
+  as the local layer whenever it exists. Relative paths resolve against the
+  deck root; absolute paths are used as given.
+
+Every other top-level key is an error, with a closest-match suggestion.
+
+## Slides
+
+Slides live in `slides/`, one Markdown file per slide. A slide file **must
+begin with YAML frontmatter on line 1**, opened and closed by a `---` line:
+
+```markdown
+---
+template: hello
+title: Hello, world
+---
+
+Welcome to your first slide.
+
+# notes
+Speaker notes go here; they are never shown to the audience.
+```
+
+- The frontmatter must start on line 1 (no leading blank lines) and must name a
+  slide-usage `template:`.
+- The frontmatter supplies the template's field values. Discover the declared
+  fields with `kalide templates <name>`.
+- Everything after the closing `---` is the slide **body**, up to the first
+  `# name` heading.
+- A `body:` key inside the frontmatter is not how you write a body — body text
+  comes from the Markdown after the frontmatter — and is an error.
+
+### File naming, ordering and positions
+
+A slide filename is `<number>[letter]-<label>.md`, for example `1-title.md` or
+`2a-detail.md`:
+
+- `number` is a run of digits and sets the horizontal order; ordering is
+  numeric, so `10-x.md` follows `9-x.md`. Gaps are allowed.
+- `letter` (optional, one letter) makes the slide a **vertical slide** nested
+  under the numbered slide of the same number.
+- `label` becomes the slide's anchor id and must be **unique across the whole
+  deck**.
+
+A letter slide with no matching numbered slide is an error; two slides sharing
+a position, or two slides sharing a label, are errors.
+
+### Sections
+
+A `# name` heading starts a **section** inside the slide. Headings nest by
+depth: `#` through `######` is nesting depth, not a Markdown subheading level. A
+`# name` heading opens a top-level section; a heading one level deeper opens a
+child of the most recent shallower heading, naming a section declared by that
+parent instance's resolved template; a heading at the same or a shallower depth
+closes the open sections back to its parent. Section names and their repeat
+limits are declared by the enclosing template — the slide template for a
+top-level section, the parent instance's resolved template for a child — and an
+undeclared name is an error with a closest-match suggestion. Each parent's child
+instances are counted per name against the declared `min`/`max`.
+
+Where the enclosing template declares no child sections, a deeper heading stays
+in the enclosing body as an ordinary Markdown subheading — allowed `##`/`###`
+only where that template's body rule permits subheadings.
+
+A section's frontmatter is an optional plain fence (three backticks, no
+language tag) immediately after its heading, at any depth:
+
+```markdown
+# people
+```
+name: Ada Lovelace
+role: Mathematician
+```
+Ada is the first programmer.
+```
+
+- `template:` is required on a section instance **only when** the section
+  accepts more than one section template; with exactly one accepted template it
+  resolves automatically.
+- A section may repeat up to the declared `max` (and as few as its `min`).
+
+### Speaker notes
+
+A reserved `# notes` section holds speaker notes: it is recognised only as a
+top-level (`#`) heading. At most one is allowed, it must be the **last**
+section, and it does not count toward any section's repeat limits. `notes` is
+reserved and cannot be declared as a section name. Notes are never shown to the
+audience.
+
+## The template library
+
+Each resolved layer is a directory with this fixed layout (shown below as the
+deck's local `templates/`):
+
+```
+templates/
+  library.yaml               # library metadata: name, description, format: 1
+  slides/<name>/             # one slide template
+    template.yaml            # the template's schema manifest
+    layout.html.tmpl         # the Go html/template layout
+    example.md               # a validating example
+  sections/<name>/           # one section template, same three files
+    template.yaml
+    layout.html.tmpl
+    example.md
+  themes/<name>/             # one theme
+    theme.css                # required stylesheet
+    ...                      # optional theme-owned fonts, logos, ...
+  media/                     # shared media layouts reference with media "..."
+```
+
+- `library.yaml` is required at the library root. Keys: `name` (identifier
+  `[a-z0-9][a-z0-9-]*`), optional `description`, and required `format: 1`.
+- A template's **kind** (`slide` or `section`) comes from its directory:
+  `slides/` or `sections/`. `template.yaml` must not carry a `usage:` key.
+- A template's **name** is its directory name, and must be unique across
+  `slides/` and `sections/` together, and across the merged layers: a name
+  carried by two layers is an error naming the name and both paths. Theme names
+  and `media/` paths each form their own namespace, unique across the merged
+  layers the same way.
+- Every template directory holds exactly `template.yaml`, `layout.html.tmpl`
+  and `example.md`.
+- `themes/<name>/` holds `theme.css` plus any fonts, logos or other files the
+  theme owns.
+- `media/` is optional shared media of any type.
+- A root-level `AGENTS.md` (a library and template-author guide) is ignored, as
+  is any other top-level entry that is not part of the library (`library.yaml`,
+  `slides/`, `sections/`, `themes/`, `media/`) — for example a `.git/`
+  directory or a `README.md`. A library that is also a git repo therefore still
+  loads; ignored entries are never parsed, validated, rendered, listed or
+  served.
+
+## template.yaml
+
+`template.yaml` declares the template's schema as data. An empty manifest is
+valid: a template with no description, no fields, no sections and an optional
+body.
+
+```yaml
+description: "Hello slide: a required title and an optional body."
+fields:
+  - name: title
+    type: text
+    required: true
+    max_length: 80
+    description: Slide title.
+sections:
+  - name: people
+    accepted: [person]
+    min: 0
+    max: 4
+body:
+  mode: optional
+  max_words: 120
+```
+
+Accepted top-level keys: `description`, `fields`, `sections`, `body`. (`name`
+is accepted but ignored — the name is the directory name.) Any other key is an
+error with a suggestion.
+
+### Field types
+
+Every field entry has `name` and `type`; a field may also set `required`,
+`default`, `description`, and the limits for its type.
+
+| type | value written in the frontmatter | extra keys |
+|---|---|---|
+| `text` | inline Markdown (bold, italic, inline code, `[]()` links, hard breaks) | `max_length` (characters after Markdown is stripped), `plain` (strip styles silently) |
+| `number` | a plain YAML number, e.g. `1250000` or `0.12`; a quoted value is a type error | `min`, `max`, `formats`, `default_format` |
+| `date` | `YYYY-MM-DD` | `min_date`, `max_date`, `formats`, `default_format` |
+| `boolean` | `true` or `false` | — |
+| `enum` | one of the declared variants | `variants` (required) |
+| `image` | a path under `assets/`, existence checked | — |
+| `link` | a `#label` anchor (must exist) or an `http(s)` URL | — |
+| `list` | a YAML sequence; every element has the single item type | `item` (one nested field descriptor), `min_items`, `max_items` |
+| `section-template` | structured YAML data shaped by another section template | `section_template` (the section template name) |
+
+- A **section template used as a field type** carries `type: section-template`
+  and `section_template: <name>`; it takes YAML data only. There are no
+  separate record types.
+- A `list` has exactly one item type, declared in its `item:` descriptor (the
+  same field keys as a top-level field).
+- Number formats: `compact` (e.g. `1.25M`), `exact` (e.g. `1,250,000`) and
+  `percent` (e.g. `125%`). Date formats: `long` (e.g. `25 September 2026`) and
+  `short` (e.g. `25 Sep 2026`). An author selects a format with the reserved
+  sibling key `<field>_format`; otherwise the field's `default_format` applies.
+- `_format` is a reserved suffix and cannot be used as a field or section name.
+
+### Sections
+
+A `sections:` entry declares a named section:
+
+```yaml
+sections:
+  - name: people
+    accepted: [person]      # one or more section-usage template names
+    min: 0                  # 0 = no minimum
+    max: 4                  # 0 or less = unbounded
+```
+
+`name` and `accepted` are required; a section may accept only section
+templates, never slide templates.
+
+`sections:` is accepted in **any** template's manifest — a slide template and,
+equally, a section template. A section template that declares `sections:` gives
+its own instances nested child sections: a heading one level deeper than the
+section heading resolves against that section template's declarations rather
+than the slide's (see **Sections**).
+
+### Body rules
+
+Every template has an implied `body` field whose content is the Markdown after
+the frontmatter (for a slide) or after the section heading (for a section). A
+`body:` key in the content YAML is an error, not a way to set it.
+
+```yaml
+body:
+  mode: optional        # required | optional | disallowed
+  max_words: 120        # 0 = no limit
+  max_paragraphs: 3
+  max_list_items: 6
+  subheadings: false    # whether ##/### subheadings are allowed
+```
+
+`mode` is required when the `body:` block is present: `required`, `optional` or
+`disallowed`. A section template used as a field type takes data only, so its
+body is `disallowed`.
+
+`subheadings` governs the body only where the enclosing template declares no
+child sections: there a `##` or deeper heading is an ordinary Markdown
+subheading. Where the template declares child sections, every heading at any
+depth is a section marker instead (see **Sections**), so no heading is a body
+subheading. `#` is always reserved for top-level sections and the reserved
+`# notes`.
+
+### example.md
+
+`example.md` is the template's validating example. For a slide template it is a
+slide source (frontmatter at line 1, a body and optional `# name` sections);
+for a section template it is a section fragment. `kalide templates <name>`
+prints it for you to copy.
+
+## layout.html.tmpl
+
+`layout.html.tmpl` is a standard Go `html/template`. It is not Markdown and
+there is no Markdown helper.
+
+Context:
+
+- Each declared field is available by name: `{{ .title }}`.
+- The body is available as `{{ .body }}`.
+- Each section's instances are available by section name.
+
+Values arrive in two forms:
+
+- The **body**, **`text` fields** and **each rendered section** are
+  pre-rendered, trusted HTML — insert them unescaped.
+- Every **other field** is a typed value (number, date, boolean, enum string,
+  list, image/link URL), and `html/template` auto-escapes string values.
+
+Five reserved context names are provided, as **data**, not helpers:
+
+- `.deck` — the deck-wide configuration: `.deck.title` (always present),
+  `.deck.author` and `.deck.date` (empty strings when omitted), and
+  `.deck.properties` (always a non-nil map). Read a property with
+  `{{ index .deck.properties "audience" }}`, or `{{ .deck.properties.audience }}`
+  for a plain key. Property values keep their declared type.
+- `.slide` — this slide's derived position: `.slide.number` (a **string**, for
+  example `"1"` or `"1a"`) and `.slide.total` (an **integer**). Both are
+  available in a slide layout and in every nested section template.
+- `.item` — present only inside a **section** instance's context, never in a
+  slide layout. It describes the instance among its same-name siblings under
+  the same parent: `.item.index` (zero-based), `.item.number` (one-based),
+  `.item.count`, `.item.first` and `.item.last` (booleans), `.item.section`
+  (the declared section name), `.item.template` (the resolved section template
+  name) and `.item.parent` (the enclosing section instance's field values, or
+  nil at the top level). A slide layout and a `section-template`-typed field
+  value carry no `item` entry.
+- `.raw` — the author's **original source** values, before rendering:
+  `.raw.<field>` is a text field's source Markdown exactly as authored (before
+  inline-Markdown rendering), and `.raw.body` is the original body source
+  (before block rendering). A declared default is not a source value, so a
+  field the author did not supply is absent or empty. `.raw` is data, not a
+  helper. A section instance the `section` helper renders sees `.raw` as the
+  values the call supplied.
+- `.data` — the authored section tree as data, parallel to the pre-rendered
+  section lists: `.data.<section>` is a list with one entry per authored
+  instance of that declared section, in source order, and each entry carries
+  its own `.raw`, `.item` and `.data` (its children, keyed the same way). Range
+  over `.sectionName` to splice rendered HTML; read `.data.<section>` to
+  inspect the same instances as source data. A section-helper call is a direct
+  render call, not an authored instance, so it appends no entry to `.data` and
+  no element to the rendered section list. `.data` is data, not a helper.
+
+The layout **helper** set is exactly `media`, `section`, `dict`, `list`, `child`
+and `children`.
+
+`media`'s argument is a path relative to the `media/` directory of the layer
+that owns the layout. It returns the URL the server serves that file under. The
+argument must not be absolute and must not contain `..`; a missing file, an
+absolute path or a `..` segment is an error naming the layout's file and line.
+`media` never resolves into a theme directory.
+
+```
+{{ media "logo.svg" }}
+```
+
+`section` renders a section template directly, exactly as if an instance of it
+had been written in Markdown:
+
+- `{{ section "footer" }}` renders the `footer` section template with its
+  declared defaults and no body;
+- `{{ section "number-heading" (dict "number" .item.number "heading" .raw.title) }}`
+  renders it with those field values, built by `dict` from the call's context;
+- `{{ section "callout" (dict "label" "Proposition") .raw.body }}` renders it
+  with a literal field and the slide's original body passed through as a
+  **non-literal** body expression.
+
+`section` takes the target template name, an optional `fields` map of source
+values validated against the target's field schema, and an optional `body`
+string validated against the target's body rule; omitted fields take the
+target's defaults. The rendered instance is treated as a **one-item group**:
+`.item` reports `index` 0, `number` and `count` 1, `first` and `last` true,
+`section` and `template` the target name, and `parent` the calling instance's
+fields (nil when the call is made from a slide layout). A `section` call may
+also pass the target's child sections, after its fields and body, as `child`
+arguments and `children` forwardings; a body whose heading names one of the
+target's declared child sections is still an error — children pass only through
+child arguments, never as headings inside the call's body.
+
+`child "<section>" [fields] [body] [child…]` names a **declared section of the
+`section` call's target** and renders one instance of it, exactly as if an
+instance of it had been authored. It takes the section name, an optional
+`fields` map of source values validated against that section's accepted
+templates, an optional `body` string validated against the instantiated
+template's body rule, and any number of nested `child` arguments for that
+child's own declared children. The optional `template` key in its `fields`
+selects which accepted template is instantiated; it is required only when the
+section accepts more than one, and it is consumed as a selector — it is never a
+field of the instantiated template. A `child` call reads nothing outside its own
+arguments. For example,
+`{{ section "columns" nil nil (child "column" (dict "template" "half" "title" .raw.title)) }}`
+renders one `column` child of the `columns` section using the `half` accepted
+template, and `{{ child "column" nil nil (child "cell") }}` renders a nested
+grandchild.
+
+The literal `child` arguments are checked at load: the named section must be
+declared by the target and the instantiated `template` must be one of its
+accepted templates; when **every** `child` argument is literal, the parent's
+`min`/`max` is checked over the whole passed set; and each child's literal
+fields and body are validated against the instantiated template — defaults
+applied, the field rules and body rule enforced, and a body heading that names
+one of the child's declared sections rejected. A non-literal or forwarded child
+is validated at render instead.
+
+`children "<section>" .data.<section>` forwards the caller's **authored**
+`.data.<section>` entries as that declared section's children, so a wrapper
+layout hands its own authored children to the section it wraps, for example
+`{{ section "wrapper" nil nil (children "item" .data.item) }}`. Each forwarded
+entry re-instantiates as a real child keeping its own `template` (its
+`.item.template`), its own `.raw` fields and body, and its own nested `.data`,
+with the declaration's `min`/`max` counted over the forwarded set.
+
+Each child — literal or forwarded — gets its own `.item`, `.data` and `.raw`
+context exactly as an authored child does: `.item.section` is the named
+section, `.item.template` the instantiated template, `.item.parent` the
+target's field values, and `.raw` and `.data` that child's own source values and
+nested children. The target's own rendered child-section lists and its
+`.data.<child>` are populated from the passed children. A child names a section
+of the `section` call's target and resolves in the **merged** section namespace,
+so a child template living in either library layer is invoked like a local one;
+the child's own `media` reference resolves in that child template's own owning
+layer. A `child`/`children` call contributes nothing to the caller's own
+`.data` or rendered section lists.
+
+`dict k1 v1 …` builds a `map[string]any` from alternating key/value arguments,
+for passing structured source values to `section`. Keys must be strings; an odd
+argument count, a non-string key or a repeated key is an error.
+
+`list a b …` builds a sequence from its arguments, the layout syntax for a
+literal list-typed value.
+
+The built-in number and date format functions (`compact`, `exact`, `percent`,
+`long`, `short`) are also available to layouts for rendering.
+
+`deck`, `slide`, `item`, `raw` and `data` are reserved top-level names: a
+template may not declare a field or section named `deck`, `slide`, `item`,
+`raw` or `data`. `notes`, `body` and the `_format` suffix are reserved too.
+
+## Themes
+
+- `theme` is deck-wide only, never per slide. Omitted means `default`.
+- Available themes are exactly the directories under the merged library's
+  `themes/` — the `themes/` of every resolved layer. There are **no built-in
+  themes**.
+- A named (or defaulted) theme the library does not define is an error listing
+  the available themes with a closest-match suggestion.
+- A theme is a `theme.css` token stylesheet plus optional files it owns.
+  Theme-owned files (fonts, logos) are referenced from that theme's CSS and are
+  served from the theme directory.
+- A theme's `theme.css` — and every CSS it `@import`s, wherever in that layer
+  that CSS lives (its own theme directory, another theme, or `media/`) — may
+  reference a servable file in that same layer with both `url()` and `@import`,
+  in three forms:
+  - an unprefixed relative path, resolved from the referencing file's own
+    location and confined to that file's own tree: the theme directory for a
+    stylesheet in a theme, or `media/` for a stylesheet reached through
+    `media:`;
+  - the reserved `media:` prefix → that layer's shared `media/` tree,
+    for example `url('media:fonts/Inter-Regular.woff2')` or
+    `@import url('media:theme.css')`;
+  - the reserved `theme:<name>/` prefix → another theme's directory in that
+    layer, for example `url('theme:default/theme.css')` or
+    `@import url('theme:default/theme.css')`, so a theme may build on another.
+- Cross-tree reach happens only through the `media:` and `theme:<name>/`
+  prefixes. An unprefixed relative reference stays inside the stylesheet's own
+  tree: no absolute paths, no `..` leaving that tree, no other scheme, nothing
+  outside that layer, and no references into non-servable entries (`slides/`,
+  `sections/`, `library.yaml`, `AGENTS.md`). The path after `media:` is relative
+  to that layer's `media/` — the same base the layout `{{ media "path" }}`
+  helper uses — and the path after `theme:<name>/` is relative to
+  `themes/<name>/`; an unknown `theme:<name>` is an error. Both prefixes work in
+  both `url()` and `@import`, and an imported stylesheet's own references are
+  checked too. `@import` is followed, bounded and cycle-safe across the whole
+  import graph; a missing file, a bad reference or a cycle is an error naming
+  the theme CSS file and line.
+
+## Media
+
+- Shared media of any type lives under each resolved layer's `media/` and is
+  referenced from layouts with `{{ media "path" }}`.
+- The path is relative to that layer's `media/` only: no absolute paths and no
+  `..`.
+- A theme's CSS — `theme.css` and every CSS it `@import`s — reaches that
+  layer's `media/` tree through the reserved `media:` prefix and another
+  theme's directory in that layer through the reserved `theme:<name>/` prefix;
+  both work in `url()` and `@import`, so a theme may build on another. An
+  unprefixed relative reference stays inside the stylesheet's own tree. See
+  **Themes**.
+- Theme-owned files are not reachable through `media`; reference them from
+  `theme.css`.
+- File types are not restricted; the content type is derived from the file
+  extension.
+
+## Validation and errors
+
+`kalide start` validates the whole deck before serving anything, and
+`kalide templates` loads the same merged library. Validation is **fail-fast**:
+exactly one error is reported — the first one found. An error states the file,
+the line when known, the full path, what is wrong and how to fix it, for
+example:
+
+```
+slides/3-team.md:12 › column[1] › people[0] › name: required — add a name: value
+```
+
+The same text appears in the terminal and on the browser error page. Unknown
+names (templates, sections, themes, keys) get a closest-match "did you
+mean …?" suggestion.
+
+The resolved layers are merged and checked before anything is served: a slide
+or section name (the two share one template namespace), a theme name, or a
+shared `media/` path carried by both layers is an error naming the name and
+both paths — never an override. The external library is self-contained: every
+reference inside an external-layer template or theme must resolve within that
+external library alone, so an external library validates standalone. An error
+is path-qualified with the layer root it comes from.
+
+## Commands
+
+```
+kalide init [path]         Create a deck in the current directory.
+kalide init-library <path> Create a new, empty template library at <path>.
+kalide start [--port N] [--no-open]
+                           Validate and serve the deck with live reload.
+kalide templates [name]    List the merged library's templates, or show one.
+kalide upgrade             Refresh kalide-owned files and apply migrations.
+kalide version             Print the version (also --version, -v).
+kalide help                Show usage.
+```
+
+- `kalide init` with no path writes the deck, a starter slide and a minimal
+  local `templates/` library. `kalide init <path>` validates the external
+  library at `<path>` **alone** (fail-fast) before writing anything, then
+  writes a deck referencing it — an empty `slides/`, and no local `templates/`;
+  a pre-existing local `templates/` is left untouched and becomes the deck's
+  local layer. Both forms write a project-root `AGENTS.md` agent guide **only
+  when none exists**; a pre-existing `AGENTS.md` never blocks and is left
+  untouched. `init` refuses when `slides/`, `assets/` or `kalide.yaml` already
+  exists (a local `templates/` blocks only the no-path form), and there is no
+  `--force`.
+- `kalide init-library <path>` creates a new, deck-ready library
+  (`library.yaml`, empty `slides/`, `sections/` and `media/`, and a minimal
+  default theme), refusing if the target already holds one. It also writes a
+  root-level `AGENTS.md` library guide only when none exists.
+- `kalide start` is the validation gate: run it after every edit. While it
+  runs, edits under either resolved layer live-reload; changing the configured
+  `templates:` value in `kalide.yaml` does not — the deck page shows a
+  restart-required error and keeps serving the startup library until you
+  restart `kalide start`.
+- `kalide templates` lists the templates in the merged library (both layers);
+  `kalide templates <name>` documents one template's fields, sections, body
+  rules and example.
+- `kalide upgrade` brings an existing deck or library in the current directory
+  forward: it refreshes the kalide-owned scaffold files to the running binary's
+  versions and applies kalide's format migrations, entirely offline. It never
+  overwrites author content — a file the author has edited is left untouched and
+  reported — takes no path argument and has no `--force`.
+
+## How to work on a deck
+
+1. If the deck was created by an older `kalide`, run `kalide upgrade` first: it
+   refreshes kalide-owned scaffold files and applies any format migrations,
+   offline, without overwriting your content.
+2. Discover the real templates before writing slides: run `kalide templates`,
+   then `kalide templates <name>` for the fields, sections, body rules and a
+   copyable example. Do not guess template names, field names or themes.
+3. Write or edit slide files under `slides/`.
+4. Validate with `kalide start`. If it reports a problem, fix exactly that
+   first error and run it again.
