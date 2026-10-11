@@ -3,9 +3,7 @@
   "type": "constraint",
   "name": "deck-slide-identity",
   "body": "Slide labels must be unique across the deck; each (number, letter) position must be unique; every letter slide must have its number slide.",
-  "properties": {
-    "attaches-to": "domain.entity.deck"
-  },
+  "properties": {},
   "out": [],
   "in": []
 }
