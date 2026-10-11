@@ -11,10 +11,21 @@
 // rewritten only when it is present AND byte-identical to a catalogued
 // released version of that same identity (catalogLookup); a file the author
 // edited, a file kalide never released, and a file whose bytes merely match a
-// DIFFERENT owned file's digest are all left byte-for-byte alone. The two
-// author guides are the exception: the deck-root guide is written when absent
-// from the embedded seed (mustReadSeed, seedRoot) and the library-root guide
-// from the embedded library guide (mustReadLibraryGuide, libraryGuideRoot).
+// DIFFERENT owned file's digest are all left byte-for-byte alone.
+//
+// The author-guide pair is the exception, and it is never subject to a
+// byte-identical whole-file refresh. The AGENTS_KALIDE.md full guide — the deck
+// form from the embedded seed (mustReadSeed, seedRoot) and the library form
+// from the embedded library guide (mustReadLibraryFullGuide, libraryGuideRoot)
+// — is written only when absent and is otherwise left byte-for-byte alone. The
+// AGENTS.md pointer is brought to the agent-guide-reference scheme: created
+// when absent carrying the reference to the full guide (the deck form from
+// mustReadSeed, the library form from mustReadLibraryGuide), left byte-for-byte
+// untouched when it already carries the reference line, migrated to the short
+// pointer when it is byte-identical to a known released full guide of its own
+// identity (the known-released-guide migration, catalogLookup), and otherwise
+// appended with the reference line while the author's bytes are preserved. A
+// deleted seed starter file is never re-created.
 //
 // Detection and the refresh engine are declared here, in the functions the
 // rest of phase 2 fills in:
@@ -64,10 +75,11 @@ const (
 	identityLibraryPrefix = "library:"
 )
 
-// agentsGuideName is the file name of both author guides: a deck's at the
+// agentsGuideName is the file name of the AGENTS.md pointer — a deck's at the
 // project root (agent-authoring) and a library's at the library root
-// (library-agent-guide). Unlike the other owned members these are written when
-// absent rather than only refreshed when present.
+// (library-agent-guide). Its full-guide counterpart is agentGuideFullGuideName
+// (AGENTS_KALIDE.md). Unlike the other owned members the two guide files are
+// written when absent rather than only refreshed when present.
 const agentsGuideName = "AGENTS.md"
 
 // helloSeedName is the embedded seed's starter template name and
@@ -95,6 +107,7 @@ const (
 // is author-edited deck configuration, not a whole-file refresh member.
 const (
 	deckGuideIdentity         = identityDeckPrefix + agentsGuideName
+	deckFullGuideIdentity     = identityDeckPrefix + agentGuideFullGuideName
 	deckLibraryFileIdentity   = identityDeckPrefix + deckLibraryFilePath
 	deckHelloExampleIdentity  = identityDeckPrefix + helloSlideDirPath + "/" + template.ExampleFile
 	deckHelloLayoutIdentity   = identityDeckPrefix + helloSlideDirPath + "/" + template.LayoutFile
@@ -102,8 +115,9 @@ const (
 	deckThemeIdentity         = identityDeckPrefix + template.TemplatesDir + "/" + themeCSSPath
 	deckStarterSlideIdentity  = identityDeckPrefix + starterSlidePath
 
-	libraryGuideIdentity = identityLibraryPrefix + agentsGuideName
-	libraryThemeIdentity = identityLibraryPrefix + themeCSSPath
+	libraryGuideIdentity     = identityLibraryPrefix + agentsGuideName
+	libraryFullGuideIdentity = identityLibraryPrefix + agentGuideFullGuideName
+	libraryThemeIdentity     = identityLibraryPrefix + themeCSSPath
 )
 
 // ownedMember is one kalide-owned scaffold file: the identity under which its
@@ -117,16 +131,24 @@ type ownedMember struct {
 	path     string
 }
 
-// deckGuideMember is the deck-root AGENTS.md author guide (agent-authoring):
-// the one kalide-owned member every deck form has — a no-arg seed deck and an
-// external-library deck alike
+// deckGuideMember is the deck-root AGENTS.md pointer (agent-authoring,
+// agent-guide-reference): the pointer half of the author-guide pair every deck
+// form has — a no-arg seed deck and an external-library deck alike
 // (requirements.constraint.upgrade-owned-scaffold-scope).
 var deckGuideMember = ownedMember{identity: deckGuideIdentity, path: agentsGuideName}
 
+// deckFullGuideMember is the deck-root AGENTS_KALIDE.md full guide
+// (agent-authoring): the absent-write full-guide half of the deck author-guide
+// pair, alongside the AGENTS.md pointer. Every deck form carries it, written
+// only when absent and never refreshed over an existing file.
+var deckFullGuideMember = ownedMember{identity: deckFullGuideIdentity, path: agentGuideFullGuideName}
+
 // deckOwnedMembers is the kalide-owned set of a no-arg seed deck. It covers the
-// whole embedded seed except kalide.yaml, and it includes the starter slide.
+// whole embedded seed except kalide.yaml — its two author-guide files included
+// — and it includes the starter slide.
 var deckOwnedMembers = []ownedMember{
 	deckGuideMember,
+	deckFullGuideMember,
 	{identity: deckLibraryFileIdentity, path: deckLibraryFilePath},
 	{identity: deckHelloExampleIdentity, path: helloSlideDirPath + "/" + template.ExampleFile},
 	{identity: deckHelloLayoutIdentity, path: helloSlideDirPath + "/" + template.LayoutFile},
@@ -135,11 +157,13 @@ var deckOwnedMembers = []ownedMember{
 	{identity: deckStarterSlideIdentity, path: starterSlidePath},
 }
 
-// libraryOwnedMembers is the kalide-owned set of a template library: the
-// library-root guide and the seeded default theme. A library's slides/,
-// sections/ and media/ hold author content and are never members.
+// libraryOwnedMembers is the kalide-owned set of a template library: its
+// AGENTS_KALIDE.md + AGENTS.md author-guide pair and the seeded default theme.
+// A library's slides/, sections/ and media/ hold author content and are never
+// members.
 var libraryOwnedMembers = []ownedMember{
 	{identity: libraryGuideIdentity, path: agentsGuideName},
+	{identity: libraryFullGuideIdentity, path: agentGuideFullGuideName},
 	{identity: libraryThemeIdentity, path: themeCSSPath},
 }
 
@@ -259,22 +283,24 @@ func detectSeedDeck(deckRoot string, cfg *deck.Config) bool {
 // refreshScaffold is the never-clobber refresh engine. For the detected project
 // form it rewrites each kalide-owned member only when the file is present AND
 // byte-identical to a catalogued released version of that same identity
-// (catalogLookup), writes the two AGENTS.md author guides when absent, and
-// never re-creates a deleted seed starter file. Author content, a file whose
-// bytes match no catalogued version, and a file already byte-identical to the
-// running binary's version of that same file are left byte-for-byte untouched —
-// already-current files are a no-op, never re-written. It returns a
-// refreshReport naming every refreshed path and every path it left alone
-// (requirements.requirement.upgrade-refresh-owned-scaffold,
+// (catalogLookup), writes the AGENTS_KALIDE.md full guide and the AGENTS.md
+// pointer when absent, migrates an AGENTS.md that is a known released full
+// guide to the short pointer, and never re-creates a deleted seed starter file.
+// Author content, a file whose bytes match no catalogued version, and a file
+// already byte-identical to the running binary's version of that same file are
+// left byte-for-byte untouched — already-current files are a no-op, never
+// re-written. It returns a refreshReport naming every refreshed path and every
+// path it left alone (requirements.requirement.upgrade-refresh-owned-scaffold,
 // global.constraint.upgrade-never-clobbers).
 //
 // The owned set is scoped to the detected form and, for a deck, to its scaffold
 // form: a no-arg seed deck owns the whole embedded seed (deckOwnedMembers), an
 // external-library deck — one whose kalide.yaml configures a `templates:`
-// library — owns only its deck-root guide, and a template library owns its
-// library-root guide and its seeded default theme (libraryOwnedMembers). A
-// configured external library is never opened, so nothing under it is read or
-// written (requirements.constraint.upgrade-owned-scaffold-scope).
+// library — owns only its deck-root author-guide pair, and a template library
+// owns its library-root author-guide pair and its seeded default theme
+// (libraryOwnedMembers). A configured external library is never opened, so
+// nothing under it is read or written
+// (requirements.constraint.upgrade-owned-scaffold-scope).
 //
 // deckRoot is the project root: the directory holding kalide.yaml for a deck,
 // or library.yaml for a library. cfg is the deck's already-loaded configuration
@@ -300,12 +326,13 @@ func refreshScaffold(deckRoot string, kind projectKind, cfg *deck.Config) (*refr
 		}
 		members := deckOwnedMembers
 		if !detectSeedDeck(deckRoot, deckCfg) {
-			// An external-library deck owns only its deck-root guide: its
-			// configured library, and any leftover local templates/, are
-			// out of scope and left byte-for-byte untouched, and no
-			// starter slide is written
+			// An external-library deck owns only its deck-root author-guide
+			// pair — the AGENTS.md pointer and the AGENTS_KALIDE.md full
+			// guide: its configured library, and any leftover local
+			// templates/, are out of scope and left byte-for-byte untouched,
+			// and no starter slide is written
 			// (requirements.constraint.upgrade-owned-scaffold-scope).
-			members = []ownedMember{deckGuideMember}
+			members = []ownedMember{deckGuideMember, deckFullGuideMember}
 		}
 		for _, member := range members {
 			if err := report.refreshMember(deckRoot, member); err != nil {
@@ -346,10 +373,14 @@ func refreshDeckConfig(deckRoot string, cfg *deck.Config) (*deck.Config, error) 
 
 // refreshMember applies the never-clobber rule to one owned member:
 //
-//   - absent: a missing AGENTS.md author guide is written from the embedded
-//     guide — the one absent-write exception; any other absent member (a
-//     deleted seed starter file, or a library's deleted seeded theme) is never
-//     re-created and is reported skipped;
+//   - absent: a missing AGENTS_KALIDE.md full guide or AGENTS.md pointer is
+//     written from the embedded bytes — the absent-write exception; any other
+//     absent member (a deleted seed starter file, or a library's deleted
+//     seeded theme) is never re-created and is reported skipped;
+//   - present and an author guide (isAuthorGuide): handed to refreshAuthorGuide
+//     — the AGENTS_KALIDE.md full guide is left byte-for-byte alone and the
+//     AGENTS.md pointer follows the agent-guide-reference scheme; neither is
+//     ever subject to a byte-identical whole-file refresh;
 //   - present and already the running binary's current bytes: a no-op, left
 //     as-is and never re-written, reported skipped;
 //   - present and byte-identical to a catalogued released version of its own
@@ -358,6 +389,9 @@ func refreshDeckConfig(deckRoot string, cfg *deck.Config) (*deck.Config, error) 
 //   - present and matching no catalogued version of its identity (author
 //     content, including bytes that match only a DIFFERENT owned file's
 //     digest): left byte-for-byte untouched and reported skipped.
+//
+// Every outcome is recorded in the report: a write is refreshed, a deliberate
+// no-op is skipped.
 func (r *refreshReport) refreshMember(root string, member ownedMember) error {
 	target := filepath.Join(root, filepath.FromSlash(member.path))
 
@@ -385,6 +419,13 @@ func (r *refreshReport) refreshMember(root string, member ownedMember) error {
 		return fmt.Errorf("upgrade: read %s: %w", member.path, err)
 	}
 
+	// A present author guide is never subject to a byte-identical whole-file
+	// refresh: the AGENTS.md pointer follows the agent-guide-reference scheme
+	// and the AGENTS_KALIDE.md full guide is written only when absent.
+	if isAuthorGuide(member.identity) {
+		return r.refreshAuthorGuide(target, member, data)
+	}
+
 	desired := desiredMemberBytes(member)
 	if bytes.Equal(data, desired) {
 		// Already the running binary's version of this same file: a no-op,
@@ -406,6 +447,60 @@ func (r *refreshReport) refreshMember(root string, member ownedMember) error {
 	return nil
 }
 
+// refreshAuthorGuide applies the author-guide rules to a PRESENT guide member
+// (one whose identity isAuthorGuide reports). The AGENTS_KALIDE.md full guide
+// is the absent-write exception only — a present one is author content unless
+// it is migrated — so it is always left byte-for-byte alone and reported
+// skipped. The AGENTS.md pointer follows the agent-guide-reference four-case
+// scheme:
+//
+//   - it already contains the reference line "Kalide Reference:
+//     ./AGENTS_KALIDE.md": left byte-for-byte untouched, reported skipped;
+//   - it is byte-identical to a known released full guide of its own identity
+//     (catalogLookup against the AGENTS.md identity's released digests — the
+//     known-released-guide migration): replaced by the short pointer, reported
+//     refreshed. The pair's AGENTS_KALIDE.md member, visited by the same
+//     refresh run, writes the current full guide when it is absent;
+//   - otherwise it is an author AGENTS.md without the reference line: the
+//     reference line is appended with the author's bytes preserved, reported
+//     refreshed.
+//
+// The reference check precedes the migration check so the current pointer bytes
+// (catalogued under the AGENTS.md identity as unreleased) are never mistaken for
+// a released full guide. This is why the pointer is never subject to a
+// byte-identical whole-file refresh.
+func (r *refreshReport) refreshAuthorGuide(target string, member ownedMember, data []byte) error {
+	if !isAuthorGuidePointer(member.identity) {
+		// The AGENTS_KALIDE.md full guide: written only when absent, never
+		// refreshed over an existing file.
+		r.markSkipped(member.path)
+		return nil
+	}
+
+	if bytes.Contains(data, []byte(agentGuideReferenceLine)) {
+		// Already references the full guide: left byte-for-byte untouched.
+		r.markSkipped(member.path)
+		return nil
+	}
+	if catalogLookup(member.identity, data) {
+		// Known released full guide: migrate to the short pointer, recorded
+		// before the write so a mid-write failure is still undone
+		// (global.constraint.upgrade-never-breaks-project).
+		r.markRefreshed(member.path)
+		if err := writeMember(target, desiredMemberBytes(member)); err != nil {
+			return err
+		}
+		return nil
+	}
+	// An author AGENTS.md without the reference line: append it, preserving the
+	// author's bytes, recorded before the write for the same undo reason.
+	r.markRefreshed(member.path)
+	if err := writeMember(target, appendAgentGuideReference(data)); err != nil {
+		return err
+	}
+	return nil
+}
+
 // writeMember writes the running binary's bytes for an owned member, creating
 // the parent directory only when it is missing (the absent-guide case, whose
 // parent is the project root).
@@ -419,21 +514,45 @@ func writeMember(target string, data []byte) error {
 	return nil
 }
 
-// isAuthorGuide reports whether identity is one of the two AGENTS.md author
-// guides — the only owned members written when absent.
+// isAuthorGuide reports whether identity is one of the kalide-owned author
+// guides — the AGENTS.md pointers and the AGENTS_KALIDE.md full guides for the
+// deck and the library. They are the only owned members written when absent
+// (the absent-write exception). The AGENTS.md identities are also the ones the
+// known-released-guide migration resolves against: their catalogue entries carry
+// the released full-guide digests, so catalogLookup against the very identity
+// this predicate names is the migration's known-released-full-guide detection.
+// This is the single author-guide predicate; no parallel known-released-guide
+// predicate exists.
 func isAuthorGuide(identity string) bool {
+	switch identity {
+	case deckGuideIdentity, libraryGuideIdentity,
+		deckFullGuideIdentity, libraryFullGuideIdentity:
+		return true
+	default:
+		return false
+	}
+}
+
+// isAuthorGuidePointer reports whether identity is one of the two AGENTS.md
+// pointer guides — the members that follow the agent-guide-reference scheme and
+// the known-released-guide migration. The AGENTS_KALIDE.md full guides are the
+// absent-write exception only.
+func isAuthorGuidePointer(identity string) bool {
 	return identity == deckGuideIdentity || identity == libraryGuideIdentity
 }
 
 // desiredMemberBytes returns the running binary's current bytes for an owned
-// member: the embedded library guide, the library's seeded default theme
-// (DefaultThemeCSS, the bytes InitLibrary writes), or — for every deck seed
-// member, whose on-disk path is also its seed path — the embedded seed file at
-// the member's own path.
+// member: the library's pointer or full guide, the library's seeded default
+// theme (DefaultThemeCSS, the bytes InitLibrary writes), or — for every deck
+// seed member, whose on-disk path is also its seed path — the embedded seed
+// file at the member's own path (the deck's AGENTS.md pointer and its
+// AGENTS_KALIDE.md full guide included).
 func desiredMemberBytes(member ownedMember) []byte {
 	switch member.identity {
 	case libraryGuideIdentity:
 		return mustReadLibraryGuide()
+	case libraryFullGuideIdentity:
+		return mustReadLibraryFullGuide()
 	case libraryThemeIdentity:
 		return []byte(DefaultThemeCSS())
 	default:

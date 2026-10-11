@@ -24,9 +24,12 @@
 //   - refreshScaffold (refresh.go) is the never-clobber refresh half
 //     (requirements.requirement.upgrade-refresh-owned-scaffold): it rewrites a
 //     kalide-owned member only when it is present and byte-identical to a
-//     catalogued released version of that same file, writes the two AGENTS.md
-//     author guides when absent, never re-creates a deleted seed starter file,
-//     and reports every refreshed and every skipped path.
+//     catalogued released version of that same file, writes the
+//     AGENTS_KALIDE.md full guide and the AGENTS.md pointer when absent,
+//     migrates an AGENTS.md that is a known released full guide to the short
+//     pointer, never re-creates a deleted seed starter file, and reports every
+//     refreshed path — a migration or a reference-line append included — and
+//     every skipped path.
 //   - migrateLibrary (migrate.go) is the ordered, versioned format-migration
 //     half (requirements.requirement.upgrade-migrate-format): a library's
 //     library.yaml `format:` is carried forward through kalide's registered
@@ -76,7 +79,11 @@ import (
 // (a deck or a template library) together with every project-root path Upgrade
 // refreshed and every path it left alone (skipped). Both lists are reported so
 // an author-edited file that was deliberately not overwritten is visible rather
-// than silent (global.constraint.upgrade-never-clobbers).
+// than silent (global.constraint.upgrade-never-clobbers). A write — including a
+// written AGENTS_KALIDE.md, an AGENTS.md migrated from a known released full
+// guide to the short pointer, and an AGENTS.md that gained the appended
+// reference line — is named under Refreshed; every other visited path is named
+// under Skipped.
 //
 // The path lists are the refresh half's outcome — refreshReport.refreshed and
 // refreshReport.skipped, copied here in visit order (newUpgradeReport). The
@@ -187,9 +194,10 @@ func (k projectKind) String() string {
 //     alone is sufficient and no tree snapshot is taken.
 //  4. The refresh half's original bytes are recorded (newRefreshUndo) before it
 //     runs, so every file it rewrites or writes — including a newly written
-//     AGENTS.md — can be put back exactly as it was. A member's path is
-//     recorded before its write is attempted, so a member truncated by a
-//     mid-write failure is restored too.
+//     AGENTS_KALIDE.md or AGENTS.md, a migrated AGENTS.md, and an AGENTS.md
+//     that gained the appended reference line — can be put back exactly as it
+//     was. A member's path is recorded before its write is attempted, so a
+//     member truncated by a mid-write failure is restored too.
 //  5. refreshScaffold then migrateLibrary run, refresh first.
 //  6. The result is validated end-to-end AFTER both halves through the loaders
 //     `kalide start` uses: a library through the template library loader, a deck
@@ -342,11 +350,12 @@ type undoOriginal struct {
 }
 
 // newRefreshUndo records the pre-refresh state of every member path the refresh
-// engine may write, for both project forms (a deck owns the seed set plus the
-// deck guide, a library the guide and its seeded theme). Recording the union is
-// cheap and harmless: a candidate the refresh half does not write is simply
-// never asked to be restored (revert walks the refreshed paths). It reads only
-// the local filesystem.
+// engine may write, for both project forms (a deck owns the seed set plus its
+// AGENTS_KALIDE.md + AGENTS.md author-guide pair, a library its author-guide
+// pair and its seeded theme). Recording the union is cheap and harmless: a
+// candidate the refresh half does not write is simply never asked to be
+// restored (revert walks the refreshed paths). It reads only the local
+// filesystem.
 func newRefreshUndo(root string) (*refreshUndo, error) {
 	undo := &refreshUndo{root: root, originals: make(map[string]undoOriginal)}
 	for _, member := range append(append([]ownedMember{}, deckOwnedMembers...), libraryOwnedMembers...) {
