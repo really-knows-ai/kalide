@@ -14,12 +14,12 @@ import (
 // alternating string-keyed arguments and rejects a malformed call (an odd
 // argument count, a non-string key such as `dict 1 "v"`, a repeated key)
 // rather than returning a partial map; `list` returns a fresh, non-nil []any of
-// its arguments; and LayoutFuncMap registers exactly the four helpers
-// media/section/dict/list alongside the built-in number/date format functions,
-// with the `section` entry a parse-resolvable stub whose unbound execution
-// errors. A layout using `{{ section "x" }}` parsing at load — but failing to
-// execute until the renderer rebinds the stub — is the load-time contract the
-// section-helper feature depends on.
+// its arguments; and LayoutFuncMap registers exactly the six helpers
+// media/section/dict/list/child/children alongside the built-in number/date
+// format functions, with the `section` entry a parse-resolvable stub whose
+// unbound execution errors. A layout using `{{ section "x" }}` parsing at load
+// — but failing to execute until the renderer rebinds the stub — is the
+// load-time contract the section-helper feature depends on.
 //
 // Everything is in-process with a nil mediaFS: LayoutFuncMap's media helper is
 // never called here, so no filesystem is touched and the tests run under
@@ -141,15 +141,15 @@ func TestListFunc(t *testing.T) {
 	})
 }
 
-// TestLayoutFuncMapHelpers proves LayoutFuncMap registers exactly the four
-// documented helpers — media/section/dict/list — and nothing beyond them and
-// the built-in number/date format functions. It reads the format function names
-// from BuiltinFormats.FuncMap() rather than hardcoding them, so the allowed set
-// can never drift from format.go.
+// TestLayoutFuncMapHelpers proves LayoutFuncMap registers exactly the six
+// documented helpers — media/section/dict/list/child/children — and nothing
+// beyond them and the built-in number/date format functions. It reads the
+// format function names from BuiltinFormats.FuncMap() rather than hardcoding
+// them, so the allowed set can never drift from format.go.
 func TestLayoutFuncMapHelpers(t *testing.T) {
 	fm := LayoutFuncMap(nil, "")
 
-	for _, name := range []string{"media", "section", "dict", "list"} {
+	for _, name := range []string{"media", "section", "dict", "list", "child", "children"} {
 		fn, ok := fm[name]
 		if !ok {
 			t.Errorf("LayoutFuncMap() missing helper %q", name)
@@ -160,13 +160,13 @@ func TestLayoutFuncMapHelpers(t *testing.T) {
 		}
 	}
 
-	allowed := map[string]bool{"media": true, "section": true, "dict": true, "list": true}
+	allowed := map[string]bool{"media": true, "section": true, "dict": true, "list": true, "child": true, "children": true}
 	for name := range BuiltinFormats.FuncMap() {
 		allowed[name] = true
 	}
 	for name := range fm {
 		if !allowed[name] {
-			t.Errorf("LayoutFuncMap() has unexpected func %q, want only the four helpers plus the format functions", name)
+			t.Errorf("LayoutFuncMap() has unexpected func %q, want only the six helpers plus the format functions", name)
 		}
 	}
 }
