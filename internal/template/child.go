@@ -1,5 +1,7 @@
 package template
 
+import "fmt"
+
 // This file is the home of the `child` and `children` layout constructors: the
 // two constructors a `section` helper call uses to pass child sections to its
 // target (requirements.requirement.child-constructor,
@@ -83,4 +85,81 @@ type ChildRequest struct {
 	// of the target keeping its own template, its `.raw` fields and body and
 	// its own `.data` (children-forwarding). It is nil for a literal `child`.
 	Entries []any
+}
+
+// ChildFunc is the `child` layout constructor:
+// `{{ child "<section>" [fields] [body] [child…] }}`. It names one declared
+// section of a `section` helper call's target and builds the ChildRequest that
+// call passes as a child argument; the value is consumed only there, and the
+// constructor reads nothing outside its arguments and adds no data access of
+// its own (child-constructor, template-language).
+//
+// Argument handling mirrors the `section` helper's and `dict`'s arg checks
+// (render's sectionHelper, DictFunc): the first argument names the declared
+// section and must be a string; the optional second is the fields map and must
+// be a map[string]any — nil is accepted and leaves Fields nil; the optional
+// third is the body and must be a string; any remaining arguments are the
+// child's own nested `child` arguments and must each be a *ChildRequest. A
+// wrong type is an error, so a malformed call fails the whole template
+// execution rather than building a partial request, exactly as a malformed
+// `dict` does.
+//
+// HasBody records whether the body slot was actually supplied: an omitted body
+// (no argument, or the nil placeholder) is distinguished from a provided empty
+// one. Section, Fields, Body and Children are filled for later resolution;
+// Forward and Entries are left zero, since only the `children` forwarding
+// constructor builds those.
+func ChildFunc(args ...any) (*ChildRequest, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("child: section must be a string, got no arguments")
+	}
+	section, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("child: section must be a string, got %s", describeValue(args[0]))
+	}
+
+	var fields map[string]any
+	if len(args) >= 2 && args[1] != nil {
+		m, ok := args[1].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("child %q: fields must be a map, got %T", section, args[1])
+		}
+		fields = m
+	}
+
+	var body string
+	hasBody := false
+	if len(args) >= 3 && args[2] != nil {
+		s, ok := args[2].(string)
+		if !ok {
+			return nil, fmt.Errorf("child %q: body must be a string, got %T", section, args[2])
+		}
+		body = s
+		hasBody = true
+	}
+
+	var children []*ChildRequest
+	if len(args) > 3 {
+		children = make([]*ChildRequest, 0, len(args)-3)
+		for i, v := range args[3:] {
+			c, ok := v.(*ChildRequest)
+			if !ok {
+				return nil, fmt.Errorf(
+					"child %q: child argument %d must be a child value, got %T",
+					section, i+1, v)
+			}
+			if c == nil {
+				return nil, fmt.Errorf("child %q: child argument %d must not be nil", section, i+1)
+			}
+			children = append(children, c)
+		}
+	}
+
+	return &ChildRequest{
+		Section:  section,
+		Fields:   fields,
+		Body:     body,
+		HasBody:  hasBody,
+		Children: children,
+	}, nil
 }
