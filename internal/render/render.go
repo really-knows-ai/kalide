@@ -356,6 +356,16 @@ type renderer struct {
 	// already-parsed set by cloning, so a layer's namespace must re-Parse the
 	// texts (namespaceForLayer).
 	layerNamespaces map[*template.LibraryLayer]*htmltmpl.Template
+
+	// sectionDepth counts the section-instance nesting renderChildren is
+	// currently inside, so a re-entrant or malformed resolved child tree fails
+	// as a render error instead of recursing without bound
+	// (maxSectionNesting). It is incremented on entry to renderChildren and
+	// restored on exit, so the renderer's depth is zero between slides. A
+	// reference cycle is already rejected at load time (Section.Walk), so this
+	// is a defensive bound on the resolved tree, mirroring internal/template's
+	// checkvalues maxDepth.
+	sectionDepth int
 }
 
 // slideData builds the LAYOUT execution context for one slide: its converted
@@ -492,21 +502,29 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 // The resolved instance is carried by:
 //
 //   - sec, whose Frontmatter and Body are its EFFECTIVE field values and body
-//     source and whose Children are the child instances it composes;
+//     source and whose Children are the child instances it composes (an
+//     authored instance); a helper instance carries its children as a resolved
+//     tree on secCtx.resolvedChildren instead, and sec then supplies only its
+//     field source and body;
 //   - tmpl, its resolved section template;
 //   - layer, its owning layer (a helper child's resolved layer, or
 //     r.reg.LayerOf(tmpl.Name) for an authored instance);
 //   - secCtx, its execution context: the reserved `.item` descriptor and the
 //     `.raw`/`.data` contexts its caller built for it, plus the deck/slide
-//     `cfg`/`meta`/`total`.
+//     `cfg`/`meta`/`total`, and — for a helper instance — its resolved child
+//     tree (resolvedChildren).
 //
 // It first renders every child section instance (each through its own reserved
 // context, recursively) and attaches them to its execution context as lists of
 // trusted HTML — one element per child instance, in source order — so a parent
 // layout splices each child's rendered markup with
 // `{{ range .blocks }}{{ . }}{{ end }}` rather than ranging over data maps
-// (template-language). The returned HTML is what the parent receives, so
-// section markup composes bottom-up at every depth and at the top level.
+// (template-language). An authored instance's children render through
+// renderSection, rebuilding each `.item` from the parsed tree; a helper
+// instance's rendered tree renders through renderChildren, reusing each child's
+// resolved `.item` (secCtx.resolvedChildren). The returned HTML is what the
+// parent receives, so section markup composes bottom-up at every depth and at
+// the top level.
 //
 // The instance's effective field values are converted with values, which merges
 // the reserved `deck`/`slide`/`item`/`raw`/`data` entries into the instance map
@@ -543,35 +561,59 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 		data["body"] = body
 	}
 
-	// Sibling counts are per declared section name, matching slide.Section's
-	// Index, so the descriptor's index/number/count/first/last describe the
-	// instance's place among its same-name siblings under this parent.
-	counts := make(map[string]int, len(sec.Children))
-	for i := range sec.Children {
-		counts[sec.Children[i].Name]++
-	}
-	for i := range sec.Children {
-		child := &sec.Children[i]
-		if child.Template == "" {
-			continue
-		}
-		childTmpl, ok := r.reg.Lookup(child.Template)
-		if !ok || childTmpl == nil {
-			continue
-		}
-		childCtx := &sectionCtx{
-			cfg:    secCtx.cfg,
-			meta:   secCtx.meta,
-			total:  secCtx.total,
-			item:   itemContext(child.Index, counts[child.Name], child.Name, child.Template, data),
-			parent: data,
-		}
-		rendered, err := r.renderSection(child, childTmpl, childCtx)
+	// Render this instance's child instances and attach them to its map as
+	// trusted-HTML lists keyed by declared section name — one element per child
+	// instance, in passed order — so the instance's own layout splices each
+	// child's rendered markup with `{{ range .blocks }}{{ . }}{{ end }}` rather
+	// than ranging over data maps (template-language). An instance parsed from
+	// the deck (an authored instance) carries slide.Section children and renders
+	// each through renderSection, rebuilding its `.item` descriptor from the
+	// parsed tree; an instance instantiated from a `child`/`children` argument
+	// (a helper instance) carries a resolved template.ResolvedChild tree instead
+	// (secCtx.resolvedChildren) and renders it through renderChildren, reusing
+	// each child's resolved descriptor. The two are mutually exclusive, so an
+	// authored instance and its equivalent helper instance each render through
+	// the same instance path with the child lists assembled the same way.
+	if secCtx != nil && len(secCtx.resolvedChildren) > 0 {
+		lists, _, err := r.renderChildren(secCtx.resolvedChildren, secCtx)
 		if err != nil {
 			return "", err
 		}
-		list, _ := data[child.Name].([]htmltmpl.HTML)
-		data[child.Name] = append(list, rendered)
+		for name, list := range lists {
+			existing, _ := data[name].([]htmltmpl.HTML)
+			data[name] = append(existing, list...)
+		}
+	} else {
+		// Sibling counts are per declared section name, matching slide.Section's
+		// Index, so the descriptor's index/number/count/first/last describe the
+		// instance's place among its same-name siblings under this parent.
+		counts := make(map[string]int, len(sec.Children))
+		for i := range sec.Children {
+			counts[sec.Children[i].Name]++
+		}
+		for i := range sec.Children {
+			child := &sec.Children[i]
+			if child.Template == "" {
+				continue
+			}
+			childTmpl, ok := r.reg.Lookup(child.Template)
+			if !ok || childTmpl == nil {
+				continue
+			}
+			childCtx := &sectionCtx{
+				cfg:    secCtx.cfg,
+				meta:   secCtx.meta,
+				total:  secCtx.total,
+				item:   itemContext(child.Index, counts[child.Name], child.Name, child.Template, data),
+				parent: data,
+			}
+			rendered, err := r.renderSection(child, childTmpl, childCtx)
+			if err != nil {
+				return "", err
+			}
+			list, _ := data[child.Name].([]htmltmpl.HTML)
+			data[child.Name] = append(list, rendered)
+		}
 	}
 
 	// Publish this instance as the caller context for the duration of its
@@ -593,6 +635,212 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 		return "", fmt.Errorf("execute layout: %w", err)
 	}
 	return htmltmpl.HTML(buf.String()), nil
+}
+
+// maxSectionNesting bounds renderChildren's recursion so a re-entrant or
+// malformed resolved child tree fails as a render error instead of recursing
+// without bound. A real reference cycle is rejected at load time
+// (Section.Walk), so this is a defensive bound on the already-resolved tree,
+// mirroring internal/template's checkvalues maxDepth. It is deliberately far
+// larger than the six heading levels a declared-section chain may nest (a
+// helper/child edge adds no heading depth, so a legitimate helper child tree
+// may be deeper than six), so it never rejects a tree the loader accepted.
+const maxSectionNesting = 64
+
+// renderChildren instantiates a `section` helper call's resolved children as
+// real section instances through the single shared instance path
+// (renderInstance) and returns the rendered child HTML grouped by declared
+// section name together with the target's reserved `.data` context.
+// (requirements.requirement.item-context,
+// requirements.requirement.section-data-context,
+// requirements.requirement.raw-source-context,
+// requirements.requirement.section-template-context)
+//
+// children is SectionCall.Children — the tree ResolveChildren built: each child
+// carries its own resolved Call (its instantiated Template, effective Values,
+// validated Body, one-item Item descriptor and owning Layer) and its own
+// resolved nested children on ResolvedChild.Children. Every child is rendered
+// deepest first through renderInstance, so section markup composes bottom-up
+// exactly as an authored instance's does.
+//
+// Each child instance is rendered with:
+//
+//   - its own sibling `.item` descriptor, used exactly as ResolveChildCall built
+//     it (Call.Item) rather than rebuilt from a parsed tree, so its
+//     index/number/count/first/last/section/template/parent are the resolved
+//     child's (item-context);
+//   - its own reserved `.raw` source view, built with the shared
+//     template.RawContext from the child's AUTHORED source (ResolvedChild.Source,
+//     the supplied fields before the instantiated template's defaults) and its
+//     body, so a materialised default never leaks into `.raw`
+//     (raw-source-context);
+//   - its own reserved `.data` view, built with the shared
+//     template.DataContext over the child's own nested children (childNodes),
+//     parented on the child's own `.raw`, so a child template sees its
+//     grandchildren as data and splices their rendered markup
+//     (section-data-context);
+//   - the `media` helper of its OWN owning layer (Call.Layer), so a media
+//     reference inside an external-layer child resolves in that layer rather
+//     than the merged library's primary media (library-layer-references).
+//
+// Nested children recurse through the same path: the child instance's
+// sectionCtx carries ResolvedChild.Children as resolvedChildren, which
+// renderInstance renders by calling back into renderChildren, so a helper
+// child's own grandchildren keep their resolved descriptors at every depth
+// (child-constructor, children-forwarding).
+//
+// The returned rendered lists are keyed by each child's declared section name
+// (its resolved `.item.section`), one element per child in passed order — the
+// target's rendered child-section lists, which its layout ranges over to splice
+// child markup (template-language). The returned `data` is the target's own
+// reserved `.data.<child>` view: the passed children mapped onto the neutral
+// template.ContextNode tree (childNodes) and walked by the shared
+// template.DataContext, parented on the target's own `.raw` (secCtx.raw),
+// mirroring renderSection's contextNodes walk and the load-time exampleChildNodes
+// adapter, so the load-time and render-time data views agree
+// (section-data-context). A call whose children pass through adds nothing to the
+// CALLER's `.data` or its rendered section list: it contributes only to the
+// target's context, and only the caller of this function decides where the
+// results are published (section-data-context).
+//
+// A nil secCtx is treated as an empty execution context (no deck/slide); a
+// depth counter (maxSectionNesting) bounds the recursion so a re-entrant child
+// chain fails with a render error naming the bound instead of looping.
+func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *sectionCtx) (map[string][]htmltmpl.HTML, map[string]any, error) {
+	if secCtx == nil {
+		secCtx = &sectionCtx{}
+	}
+	if r.sectionDepth >= maxSectionNesting {
+		return nil, nil, fmt.Errorf("section children nested too deeply: depth exceeds %d", maxSectionNesting)
+	}
+	r.sectionDepth++
+	defer func() { r.sectionDepth-- }()
+
+	// The target's own `.data` view is built by the same shared builder the
+	// load-time example runner uses, over the neutral child-node tree, so the
+	// two views cannot drift (section-data-context).
+	data := template.DataContext(childNodes(children), secCtx.raw)
+
+	lists := make(map[string][]htmltmpl.HTML, len(children))
+	for _, child := range children {
+		if child == nil || child.Call == nil {
+			continue
+		}
+		rendered, err := r.renderChild(child, secCtx)
+		if err != nil {
+			return nil, nil, err
+		}
+		name := childSectionName(child.Call)
+		lists[name] = append(lists[name], rendered)
+	}
+	return lists, data, nil
+}
+
+// renderChild renders one resolved child instance through the single shared
+// instance path (renderInstance), carrying its resolved `.item` (Call.Item), its
+// own `.raw`/`.data` context and its own nested children (ResolvedChild.Children)
+// so its grandchildren render through renderChildren rather than the authored
+// renderSection path (child-constructor, item-context, raw-source-context,
+// section-data-context). parent supplies the deck/slide execution context
+// (cfg/meta/total) the child inherits.
+//
+// renderInstance consumes only the adapted section's effective field source
+// (Frontmatter) and body; every other input — the resolved template, layer,
+// `.item` and the resolved child tree — is carried directly, so the adapter
+// need not reconstruct them from a parsed slide.Section. Its Children are
+// carried as resolvedChildren on the child's sectionCtx, so the adapted
+// slide.Section carries no parsed children.
+func (r *renderer) renderChild(child *template.ResolvedChild, parent *sectionCtx) (htmltmpl.HTML, error) {
+	call := child.Call
+	raw := template.RawContext(child.Source, call.Template, call.Body)
+	childCtx := &sectionCtx{
+		cfg:              parent.cfg,
+		meta:             parent.meta,
+		total:            parent.total,
+		item:             call.Item,
+		raw:              raw,
+		data:             template.DataContext(childNodes(child.Children), raw),
+		resolvedChildren: child.Children,
+	}
+	sec := &slide.Section{
+		Frontmatter: child.Source,
+		Body:        call.Body,
+	}
+	rendered, err := r.renderInstance(sec, call.Template, call.Layer, childCtx)
+	if err != nil {
+		return "", fmt.Errorf("child %q: %w", childSectionName(call), err)
+	}
+	return rendered, nil
+}
+
+// childNodes maps a section-helper call's resolved child tree onto the neutral
+// []template.ContextNode the shared template.DataContext walks, so a helper
+// call's target exposes its passed children as data exactly as an authored
+// parent exposes its child instances (section-data-context,
+// children-forwarding). It is the helper-children counterpart of contextNodes —
+// the authored slide.Section adapter — and the render-side mirror of
+// internal/template's exampleChildNodes, so the load-time and render-time `.data`
+// views cannot drift.
+//
+// Each node's declared name and sibling index come from the child's resolved
+// `.item` descriptor (childSectionName/childIndex), its Template is the child's
+// resolved template, its Source the child's AUTHORED supplied fields
+// (ResolvedChild.Source, before the instantiated template's defaults, so a
+// default never appears in the child's `.raw`) and its Body the child's body;
+// nested resolved children recurse in passed order, so sibling index/count match
+// the descriptors ResolveChildren assigned. A nil child is skipped.
+func childNodes(children []*template.ResolvedChild) []template.ContextNode {
+	if len(children) == 0 {
+		return nil
+	}
+	nodes := make([]template.ContextNode, 0, len(children))
+	for _, child := range children {
+		if child == nil || child.Call == nil {
+			continue
+		}
+		call := child.Call
+		nodes = append(nodes, template.ContextNode{
+			Name:     childSectionName(call),
+			Index:    childIndex(call),
+			Template: call.Template,
+			Source:   child.Source,
+			Body:     call.Body,
+			Children: childNodes(child.Children),
+		})
+	}
+	return nodes
+}
+
+// childSectionName returns the declared section name a resolved child fills: its
+// `.item.section`, falling back to the instantiated template's name when the
+// descriptor is absent, so the child's `.data` key and rendered-list key match
+// its declared section. It mirrors internal/template's exampleChildName.
+func childSectionName(call *template.SectionCall) string {
+	if call == nil {
+		return ""
+	}
+	if call.Item != nil {
+		if s, ok := call.Item["section"].(string); ok && s != "" {
+			return s
+		}
+	}
+	if call.Template != nil {
+		return call.Template.Name
+	}
+	return ""
+}
+
+// childIndex returns the zero-based sibling index a resolved child fills from
+// its `.item.index`, or 0 when the descriptor is absent. It mirrors
+// internal/template's exampleChildIndex.
+func childIndex(call *template.SectionCall) int {
+	if call == nil || call.Item == nil {
+		return 0
+	}
+	if i, ok := call.Item["index"].(int); ok {
+		return i
+	}
+	return 0
 }
 
 // sectionHelper is the render-time `section` layout helper (section-helper):
@@ -917,6 +1165,19 @@ type sectionCtx struct {
 	// children carries a non-nil but empty map, so a section template always
 	// sees `.data` at every depth.
 	data map[string]any
+
+	// resolvedChildren, when non-empty, are the instance's own child instances
+	// as a resolved tree rather than authored slide.Section values: an instance
+	// instantiated from a `child`/`children` argument carries its nested
+	// children this way (SectionCall.Children). renderInstance renders them
+	// through renderChildren — reusing each child's resolved `.item`, `.raw`,
+	// `.data` and owning layer — instead of through renderSection, so a helper
+	// child's own grandchildren keep their resolved descriptors and cannot
+	// drift from the resolved tree (child-constructor, section-data-context).
+	// It is nil for an authored instance, whose children render by the
+	// renderSection path. The two paths are mutually exclusive: an instance is
+	// either parsed (slide.Section children) or helper-resolved.
+	resolvedChildren []*template.ResolvedChild
 }
 
 // values converts one map of validated field data against t's field schema,
