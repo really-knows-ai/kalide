@@ -270,7 +270,8 @@ Reserved context names, provided as **data**, not helpers:
   render call, not an authored instance, so it appends no entry to `.data` and
   no element to the rendered section list. `.data` is data, not a helper.
 
-The v1 layout **helper** set is exactly `media`, `section`, `dict` and `list`.
+The layout **helper** set is exactly `media`, `section`, `dict`, `list`, `child`
+and `children`.
 
 `media`'s argument is a path relative to the library's `media/` directory; it
 returns the URL the server serves the file under. The argument must not be
@@ -299,9 +300,58 @@ string validated against the target's body rule; omitted fields take the
 target's defaults. The rendered instance is treated as a **one-item group**:
 `.item` reports `index` 0, `number` and `count` 1, `first` and `last` true,
 `section` and `template` the target name, and `parent` the calling instance's
-fields (nil when the call is made from a slide layout). **No child sections
-pass through the helper in v1**: a target declaring a mandatory child section,
-or a body whose heading names one of the target's child sections, is an error.
+fields (nil when the call is made from a slide layout). A `section` call may
+also pass the target's child sections, after its fields and body, as `child`
+arguments and `children` forwardings; a body whose heading names one of the
+target's declared child sections is still an error — children pass only through
+child arguments, never as headings inside the call's body.
+
+`child "<section>" [fields] [body] [child…]` names a **declared section of the
+`section` call's target** and renders one instance of it, exactly as if an
+instance of it had been authored. It takes the section name, an optional
+`fields` map of source values validated against that section's accepted
+templates, an optional `body` string validated against the instantiated
+template's body rule, and any number of nested `child` arguments for that
+child's own declared children. The optional `template` key in its `fields`
+selects which accepted template is instantiated; it is required only when the
+section accepts more than one, and it is consumed as a selector — it is never a
+field of the instantiated template. A `child` call reads nothing outside its own
+arguments. For example,
+`{{ section "columns" nil nil (child "column" (dict "template" "half" "title" .raw.title)) }}`
+renders one `column` child of the `columns` section using the `half` accepted
+template, and `{{ child "column" nil nil (child "cell") }}` renders a nested
+grandchild.
+
+The literal `child` arguments are checked at load: the named section must be
+declared by the target and the instantiated `template` must be one of its
+accepted templates; when **every** `child` argument is literal, the parent's
+`min`/`max` is checked over the whole passed set; and each child's literal
+fields and body are validated against the instantiated template — defaults
+applied, the field rules and body rule enforced, and a body heading that names
+one of the child's declared sections rejected. A forwarded or otherwise
+non-literal child list is validated at render instead.
+
+`children "<section>" .data.<section>` forwards the caller's **authored**
+`.data.<section>` entries as that declared section's children, so a wrapper
+layout hands its own authored children to the section it wraps, for example
+`{{ section "wrapper" nil nil (children "item" .data.item) }}`. Each forwarded
+entry re-instantiates as a real child keeping its own `template` (its
+`.item.template`), its own `.raw` fields and body, and its own nested `.data`,
+with the declaration's `min`/`max` counted over the forwarded set.
+
+Each child — literal or forwarded — gets its own `.item`, `.data` and `.raw`
+context exactly as an authored child does: `.item.section` is the named
+section, `.item.template` the instantiated template, `.item.parent` the
+target's field values, and `.raw` and `.data` that child's own source values and
+nested children. The target's own rendered child-section lists and its
+`.data.<child>` are populated from the passed children. A child names a section
+of the `section` call's target and resolves in the **merged** section namespace,
+so a child template living in either layer is invoked like a local one — but an
+external library validates standalone, so a child naming a section this library
+does not define is a validation error even when the deck's local layer declares
+it, exactly as for a `section` call. The child's own `media` reference resolves
+in that child template's own owning layer. A `child`/`children` call contributes
+nothing to the caller's own `.data` or rendered section lists.
 
 `dict k1 v1 …` builds a `map[string]any` from alternating key/value arguments,
 for passing structured source values to `section`. Keys must be strings; an odd
