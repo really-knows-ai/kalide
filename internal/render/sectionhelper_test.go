@@ -899,3 +899,364 @@ func TestRenderSlideLayeredTemplateCompositionCrossLayer(t *testing.T) {
 		t.Errorf("cross-layer invoked layout media used the external prefix, want the executing local layer's base:\n%s", got)
 	}
 }
+
+// The child-argument probes below are the unit-test deliverable for
+// plan.phase-02.task-4: the render-time children path
+// (renderer.sectionHelper → template.ResolveSectionCallLayered →
+// renderer.renderChildren) is driven end-to-end through RenderSlide with an
+// in-code registry — no filesystem, so they run under -short — whose wrapper
+// section declares the child sections its call fills. Each test pins one clause
+// of renderChildren's contract:
+//
+//   - a literal `child` and a forwarded `children` list each render as its own
+//     sibling instance with its own `.item` (0-based index, 1-based number,
+//     count, first/last over the FULL passed set, the named section and the
+//     instantiated template, and `parent` the target's field values), its own
+//     `.raw` source view and its own `.data` view of its own nested children;
+//   - the target declaration's min/max is enforced at render, below/above the
+//     bound failing as a render error naming the declaration and the parent
+//     template;
+//   - a re-entrant/over-deep child chain stops at renderChildren's
+//     maxSectionNesting bound with the pinned depth error.
+//
+// The registry is built in code the way mustSectionHelperRegistry is: it never
+// runs Registry.Validate, because the render-time helper's field/body and
+// min/max checks (ResolveSectionCallLayered) are exactly what these tests pin,
+// so the invalid calls must stay reachable at render.
+const (
+	// childrenSlideLayout is the caller: it makes one `section` call whose child
+	// arguments are a literal `child "column"` (with a body and a nested
+	// `child "tag"`) followed by a `children "column" .data.column` forwarding
+	// of the slide's own two authored `column` entries. It also reports its own
+	// `.data` keys, so the test can pin that the call adds nothing to the
+	// CALLER's data.
+	childrenSlideLayout = `<section class="children-slide"><h1>{{.title}}</h1>` +
+		`<span class="slide-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`{{section "childrenwrapper" (dict "heading" "Wrapper H") nil (child "column" (dict "label" "Literal") "Literal body" (child "tag" (dict "name" "LT"))) (children "column" .data.column)}}` +
+		`</section>`
+
+	// childrenWrapperLayout is the `section` call's target: it splices its
+	// rendered `column` list (the passed children, in passed order) and reports
+	// the length of its own `.data.column` view plus each entry's template, so
+	// the test pins the target-side data view the call builds.
+	childrenWrapperLayout = `<div class="wrapper" data-count="{{len .data.column}}" data-child-count="{{len .column}}">` +
+		`{{range .column}}{{.}}{{end}}` +
+		`<span class="wrapper-data-templates">{{range .data.column}}{{.item.template}};{{end}}</span>` +
+		`</div>`
+
+	// childrenItemLayout is the instantiated child template: it prints its own
+	// `.item` descriptor (including `.item.parent.heading`, the target's field
+	// values), its own `.raw` source view (field and body) and its own `.data`
+	// keys, then splices its own rendered `tag` children.
+	childrenItemLayout = `<span class="child-item" data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}" data-parent-heading="{{if .item.parent}}{{.item.parent.heading}}{{end}}">` +
+		`<span class="child-label">{{.label}}</span>` +
+		`<span class="child-raw-label">{{if .raw.label}}{{.raw.label}}{{else}}absent{{end}}</span>` +
+		`<span class="child-raw-body">{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}</span>` +
+		`<span class="child-body">{{if .body}}{{.body}}{{else}}absent{{end}}</span>` +
+		`<span class="child-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`{{range .tag}}{{.}}{{end}}` +
+		`</span>`
+
+	childTagLayout = `<b class="child-tag">{{.name}}</b>`
+
+	// childrenRangeLayout is the target of the min/max probes; it is never
+	// executed because resolution rejects the set first.
+	childrenRangeLayout = `<div class="range-wrapper">{{range .column}}{{.}}{{end}}</div>`
+
+	childrenUnderLayout = `<section>{{section "childrenrangewrapper" nil nil (child "column" (dict "label" "Only"))}}</section>`
+	childrenOverLayout  = `<section>{{section "childrenrangewrapper" nil nil (child "column" (dict "label" "A")) (child "column" (dict "label" "B")) (child "column" (dict "label" "C"))}}</section>`
+)
+
+// mustSectionChildrenRegistry builds the in-code render-time child-argument
+// probe library: a slide whose layout passes a literal `child` and a forwarded
+// `children` to a wrapper section, the wrapper declaring `column` children, the
+// `childrenitem` child template declaring its own `tag` child, a `childtag`
+// leaf, and a min/max wrapper with its under/over slides. It registers templates
+// directly (no content filesystem), so it needs no disk and runs under -short.
+func mustSectionChildrenRegistry(t *testing.T) (*template.Registry, htmltmpl.FuncMap) {
+	t.Helper()
+	reg := template.NewRegistry(nil)
+	for _, tmpl := range []*template.Template{
+		{
+			Name:     "childrenslide",
+			Usage:    template.UsageSlide,
+			Fields:   []template.Field{{Name: "title", Type: template.FieldText}},
+			Sections: []template.SectionDecl{{Name: "column", Accepted: []string{"childrenitem"}, Max: 5}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: childrenSlideLayout},
+		},
+		{
+			Name:     "childrenwrapper",
+			Usage:    template.UsageSection,
+			Fields:   []template.Field{{Name: "heading", Type: template.FieldText}},
+			Sections: []template.SectionDecl{{Name: "column", Accepted: []string{"childrenitem"}, Max: 5}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: childrenWrapperLayout},
+		},
+		{
+			Name:     "childrenitem",
+			Usage:    template.UsageSection,
+			Fields:   []template.Field{{Name: "label", Type: template.FieldText}},
+			Sections: []template.SectionDecl{{Name: "tag", Accepted: []string{"childtag"}}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: childrenItemLayout},
+		},
+		{
+			Name:   "childtag",
+			Usage:  template.UsageSection,
+			Fields: []template.Field{{Name: "name", Type: template.FieldText}},
+			Body:   template.BodyRule{Mode: template.BodyDisallowed},
+			Layout: template.Layout{Text: childTagLayout},
+		},
+		{
+			Name:   "childrenunderslide",
+			Usage:  template.UsageSlide,
+			Body:   template.BodyRule{Mode: template.BodyOptional},
+			Layout: template.Layout{Text: childrenUnderLayout},
+		},
+		{
+			Name:   "childrenoverslide",
+			Usage:  template.UsageSlide,
+			Body:   template.BodyRule{Mode: template.BodyOptional},
+			Layout: template.Layout{Text: childrenOverLayout},
+		},
+		{
+			Name:     "childrenrangewrapper",
+			Usage:    template.UsageSection,
+			Sections: []template.SectionDecl{{Name: "column", Accepted: []string{"childrenitem"}, Min: 2, Max: 2}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: childrenRangeLayout},
+		},
+	} {
+		if err := reg.Register(tmpl); err != nil {
+			t.Fatalf("register template %q: %v", tmpl.Name, err)
+		}
+	}
+	return reg, template.LayoutFuncMap(nil, "")
+}
+
+// TestRenderSlideSectionHelperChildren pins the render-time instantiation of a
+// `section` call's child arguments through renderChildren: a literal `child`
+// and the entries of a `children` forwarding render as one sibling group, each
+// with its own `.item` descriptor over the full passed set (index/number/count/
+// first/last/section/template and a `parent` that is the target's field
+// values), its own `.raw` source view and its own `.data` view (recursively for
+// the literal child's nested `tag`), while the call adds nothing to the
+// caller's `.data`
+// (item-context, raw-source-context, section-data-context, section-template-context).
+func TestRenderSlideSectionHelperChildren(t *testing.T) {
+	reg, funcMap := mustSectionChildrenRegistry(t)
+	cfg := &deck.Config{Title: "Children Deck"}
+
+	parsed := &slide.Slide{
+		File:        "slides/1-children.md",
+		Template:    "childrenslide",
+		Frontmatter: map[string]any{"title": "Children"},
+		Sections: []slide.Section{
+			// Two authored `column` entries are forwarded through `children`;
+			// the first carries a nested `tag`, so the forwarded child's OWN
+			// `.data`/rendered list is exercised, not only its `.raw`.
+			{
+				Name: "column", Level: 1, Index: 0, Template: "childrenitem",
+				Frontmatter: map[string]any{"label": "Fwd A"}, Body: "Fwd A body",
+				Children: []slide.Section{
+					{Name: "tag", Level: 2, Index: 0, Template: "childtag", Frontmatter: map[string]any{"name": "FA"}},
+				},
+			},
+			{
+				Name: "column", Level: 1, Index: 1, Template: "childrenitem",
+				Frontmatter: map[string]any{"label": "Fwd B"},
+			},
+		},
+	}
+	got := renderSlideString(t, parsed, "children", cfg, deck.Slide{Number: 1, Label: "children"}, 1, reg, funcMap)
+
+	for _, want := range []string{
+		// The target's rendered child list holds all three passed children (the
+		// literal `child` first, then the two forwarded entries), and its own
+		// `.data.column` view holds the same three, each with its instantiated
+		// template.
+		`<div class="wrapper" data-count="3" data-child-count="3">`,
+		`<span class="wrapper-data-templates">childrenitem;childrenitem;childrenitem;</span>`,
+
+		// The literal child: its own sibling descriptor (index 0, number/count
+		// 1/3, first not last, section "column", template "childrenitem"), its
+		// `.item.parent` the target's field values (heading "Wrapper H"), its
+		// own `.raw` (the authored field and body), its own `.data` (the nested
+		// tag) and its own rendered nested tag.
+		`<span class="child-item" data-index="0" data-number="1" data-count="3" data-first="true" data-last="false" data-section="column" data-template="childrenitem" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="child-label">Literal</span>` +
+			`<span class="child-raw-label">Literal</span>` +
+			`<span class="child-raw-body">Literal body</span>` +
+			"<span class=\"child-body\"><p>Literal body</p>\n</span>" +
+			`<span class="child-data-keys">tag;</span>` +
+			`<b class="child-tag">LT</b>`,
+
+		// The first forwarded entry keeps its own raw fields/body and its own
+		// nested tag, and is the second of the same sibling group (index 1,
+		// count 3).
+		`<span class="child-item" data-index="1" data-number="2" data-count="3" data-first="false" data-last="false" data-section="column" data-template="childrenitem" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="child-label">Fwd A</span>` +
+			`<span class="child-raw-label">Fwd A</span>` +
+			`<span class="child-raw-body">Fwd A body</span>` +
+			"<span class=\"child-body\"><p>Fwd A body</p>\n</span>" +
+			`<span class="child-data-keys">tag;</span>` +
+			`<b class="child-tag">FA</b>`,
+
+		// The second forwarded entry is last of the group (index 2, count 3),
+		// with no body and no nested children: its own `.raw` body and `.data`
+		// are empty but present.
+		`<span class="child-item" data-index="2" data-number="3" data-count="3" data-first="false" data-last="true" data-section="column" data-template="childrenitem" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="child-label">Fwd B</span>` +
+			`<span class="child-raw-label">Fwd B</span>` +
+			`<span class="child-raw-body">absent</span>` +
+			`<span class="child-body">absent</span>` +
+			`<span class="child-data-keys"></span>`,
+
+		// The call contributes to the TARGET only: the caller's `.data` still
+		// carries only its authored `column` section, never the helper target.
+		`<span class="slide-data-keys">column;</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered slide does not contain %q:\n%s", want, got)
+		}
+	}
+
+	if strings.Contains(got, "childrenwrapper;") {
+		t.Errorf("the helper call leaked its target into the caller's .data:\n%s", got)
+	}
+}
+
+// TestRenderSlideSectionHelperChildrenRange pins the render-time min/max
+// enforcement over a helper call's passed child set: a set below the target
+// declaration's minimum or above its maximum fails as a render error naming the
+// declaration and the parent template. The declaration is on the call's TARGET
+// (`childrenrangewrapper`), so the counts are checked by ResolveChildren during
+// ResolveSectionCallLayered, before any layout executes
+// (nested-section-validation, section-helper, item-context).
+func TestRenderSlideSectionHelperChildrenRange(t *testing.T) {
+	reg, funcMap := mustSectionChildrenRegistry(t)
+	cfg := &deck.Config{}
+	meta := deck.Slide{Number: 1, Label: "range"}
+
+	cases := []struct {
+		name         string
+		templateName string
+		want         []string
+	}{
+		{
+			name:         "a set below the declared minimum",
+			templateName: "childrenunderslide",
+			want: []string{
+				`section "column"`,
+				`parent template "childrenrangewrapper"`,
+				"has 1 child(ren)",
+				"minimum is 2",
+			},
+		},
+		{
+			name:         "a set above the declared maximum",
+			templateName: "childrenoverslide",
+			want: []string{
+				`section "column"`,
+				`parent template "childrenrangewrapper"`,
+				"has 3 child(ren)",
+				"maximum is 2",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed := &slide.Slide{File: "slides/1-range.md", Template: tc.templateName}
+			_, err := RenderSlide(parsed, "range", cfg, meta, 1, reg, funcMap)
+			if err == nil {
+				t.Fatalf("RenderSlide(%s) succeeded; want a render-time child-count error", tc.templateName)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not contain %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+// buildDeepChildArg builds the nested `child "nest"` argument chain of the given
+// depth: a chain of depth nodes, each a `child "nest" nil nil <next>` with the
+// innermost a leaf `(child "nest" nil nil)`. The rendered recursion follows it
+// one level per node, so a depth of maxSectionNesting+1 trips the guard.
+func buildDeepChildArg(depth int) string {
+	arg := `(child "nest" nil nil)`
+	for i := 1; i < depth; i++ {
+		arg = `(child "nest" nil nil ` + arg + `)`
+	}
+	return arg
+}
+
+// mustSectionChildrenDepthRegistry builds an in-code registry for the depth
+// probe: a slide whose layout makes one `section "deepchildrenwrapper"` call
+// with a depth-deep nested `child "nest"` chain, and the wrapper section that
+// declares `nest` (accepting itself) and splices each level's rendered child.
+func mustSectionChildrenDepthRegistry(t *testing.T, depth int) (*template.Registry, htmltmpl.FuncMap) {
+	t.Helper()
+	reg := template.NewRegistry(nil)
+	for _, tmpl := range []*template.Template{
+		{
+			Name:   "deepchildrenslide",
+			Usage:  template.UsageSlide,
+			Body:   template.BodyRule{Mode: template.BodyOptional},
+			Layout: template.Layout{Text: `<section>{{section "deepchildrenwrapper" nil nil ` + buildDeepChildArg(depth) + `}}</section>`},
+		},
+		{
+			Name:     "deepchildrenwrapper",
+			Usage:    template.UsageSection,
+			Sections: []template.SectionDecl{{Name: "nest", Accepted: []string{"deepchildrenwrapper"}}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: `<div class="deep-wrapper">{{range .nest}}{{.}}{{end}}</div>`},
+		},
+	} {
+		if err := reg.Register(tmpl); err != nil {
+			t.Fatalf("register template %q: %v", tmpl.Name, err)
+		}
+	}
+	return reg, template.LayoutFuncMap(nil, "")
+}
+
+// TestRenderSlideSectionHelperChildrenDepthBound pins renderChildren's depth
+// guard on the real render path: a child chain deeper than maxSectionNesting
+// stops at the bound with the pinned error rather than recursing without bound.
+// The chain is a layout-level fixture — a depth-(maxSectionNesting+1) nested
+// `child` argument — so sectionHelper's resolution succeeds and the guard fires
+// while renderChildren walks the resolved tree (child-constructor,
+// children-forwarding).
+func TestRenderSlideSectionHelperChildrenDepthBound(t *testing.T) {
+	reg, funcMap := mustSectionChildrenDepthRegistry(t, maxSectionNesting+1)
+
+	parsed := &slide.Slide{File: "slides/1-deep.md", Template: "deepchildrenslide"}
+	_, err := RenderSlide(parsed, "deep", &deck.Config{}, deck.Slide{Number: 1, Label: "deep"}, 1, reg, funcMap)
+	if err == nil {
+		t.Fatal("RenderSlide(deepchildrenslide) succeeded; want the child-nesting depth bound to trip")
+	}
+	if want := "section children nested too deeply: depth exceeds 64"; !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q does not contain the depth-bound message %q", err, want)
+	}
+}
+
+// TestRenderChildrenDepthGuard asserts renderChildren's bound directly: at the
+// maxSectionNesting depth the guard fails before any child is rendered, with the
+// pinned error. This covers the guard even if a resolved tree is ever handed to
+// renderChildren without going through sectionHelper.
+func TestRenderChildrenDepthGuard(t *testing.T) {
+	r := &renderer{sectionDepth: maxSectionNesting}
+	children := []*template.ResolvedChild{{Call: &template.SectionCall{Template: &template.Template{Name: "leaf", Usage: template.UsageSection}}}}
+
+	_, _, err := r.renderChildren(children, nil)
+	want := "section children nested too deeply: depth exceeds 64"
+	if err == nil {
+		t.Fatalf("renderChildren at depth %d error = nil, want %q", maxSectionNesting, want)
+	}
+	if err.Error() != want {
+		t.Errorf("renderChildren at depth %d error = %q, want %q", maxSectionNesting, err.Error(), want)
+	}
+}
