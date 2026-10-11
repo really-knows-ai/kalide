@@ -104,8 +104,8 @@ func ResolveLibraryRoot(deckRoot, configured string) (string, error) {
 // local layer never silently falls back in place of a configured one. When
 // neither layer resolves — configured is empty and the local templates/ is
 // absent — ResolveLibraryLayers returns the same missingTemplatesDirError for
-// the expected local path that ResolveLibraryRoot uses, carrying the `kalide
-// init` hint.
+// the expected local path that ResolveLibraryRoot uses in turn, carrying the
+// `kalide init` hint.
 func ResolveLibraryLayers(deckRoot, configured string) ([]string, error) {
 	var layers []string
 

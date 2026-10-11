@@ -193,7 +193,7 @@ const (
 // read from that layer and an error raised while loading it names that layer's
 // root (error-reporting), alongside what was loaded from it: its metadata, its
 // slide and section templates, its themes and its media sub-filesystem. It is
-// the per-layer counterpart of the merged Library.
+// the per-layer counterpart type of the merged Library.
 //
 // The deck-root local templates/ layer (LayerRoleLocal) is the merged
 // Library's primary layer: its metadata, root and media become the merged

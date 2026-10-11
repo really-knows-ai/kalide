@@ -49,7 +49,7 @@ import (
 // to compare across layers. layers is the ordered layer set
 // ResolveLibraryLayers returns and loadLibrary fills: the external
 // `templates:` layer first when the deck configures one, then the deck-root
-// local templates/ layer. A nil entry is ignored.
+// local templates/ layer. A nil layer entry is ignored.
 func checkLayerUniqueness(layers []*LibraryLayer) error {
 	if err := checkLayerTemplateNameUniqueness(layers); err != nil {
 		return err

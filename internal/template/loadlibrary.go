@@ -383,7 +383,7 @@ func libraryFromLayer(layer *LibraryLayer) *Library {
 // error there rather than being silently resolved here.
 //
 // A single layer merges to exactly the Library libraryFromLayer builds from
-// it (the one-layer case); zero layers yields an empty, media-less Library.
+// it (the one-layer case); zero layers yield an empty, media-less Library.
 func mergeLibraryLayers(layers []*LibraryLayer) *Library {
 	switch len(layers) {
 	case 0:
