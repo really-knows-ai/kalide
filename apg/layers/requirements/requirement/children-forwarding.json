@@ -2,19 +2,14 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "children-forwarding",
-  "body": "`children` is a layout constructor that forwards a caller's authored `.data.<section>` entries as child sections of a `section` helper call: `(children \"<name>\" .data.<section>)`. Its first argument names the section template to instantiate, and its second is the caller's `.data` list for a declared section; each entry in that list is re-instantiated as a child of the helper target with that template — its fields are the entry's source field values, its body the entry's source body, and its own children the entry's own `.data` — so a layout passes on the authored section instances it received without re-listing them. The forwarded children resolve exactly as literal `child` arguments do: the target's declared `sections:` accept the template, the declaration's min/max are counted over the forwarded set, the child template's fields and body validate, each child's own sub-children come from the entry's `.data`, and each child gets its own `.item` descriptor (child-constructor, section-data-context). A `children` value is consumed only as a child argument of a `section` call; because a `.data` list is a runtime value, a `children` call is not inspected at load and is checked against the target's declared sections when the target renders (section-helper-load-checks). `children` reads only the `.data` list passed to it and adds no data access of its own.\n\nAC: `{{ section \"columns\" nil nil (children \"column\" .data.columns) }}` re-instantiates the caller's authored `column` entries as the target's children, each keeping its source fields and body; an entry with its own children forwards them; a forwarded set that leaves a declared section below its min is a render-time error naming the declaration; `children` used outside a `section` call's child-argument position is a layout value, not a rendered section.",
+  "body": "`children` is a layout constructor that forwards a caller's authored `.data.<section>` entries as child sections of a `section` helper call: `(children \"<section>\" .data.<section>)`. Its first argument is the declared section name — the name of a slot in the helper target's declared `sections:` — exactly as an authored `# <section>` heading names a section (child-constructor); its second is the caller's `.data` list for a declared section. Each entry in that list is re-instantiated as a child of the helper target under the named section: its template is the entry's authored `template:` (the same selection the entry carried as an authored instance, section-frontmatter), its fields are the entry's source field values, its body the entry's source body, and its own children the entry's own `.data`, so a layout passes on the authored section instances it received without re-listing them. The forwarded children resolve exactly as literal `child` arguments do: the target's declared `sections:` declare the named section and accept each entry's template, the declaration's min/max are counted over the forwarded set, the child template's fields and body validate, each child's own sub-children come from the entry's `.data`, and each child gets its own `.item` descriptor with `section` the named declared section and `template` the entry's authored template (child-constructor, section-data-context). A `children` value is consumed only as a child argument of a `section` call; because a `.data` list is a runtime value, a `children` call is not inspected at load and is checked against the target's declared sections when the target renders (section-helper-load-checks). `children` reads only the `.data` list passed to it and adds no data access of its own.\n\nAC: `{{ section \"columns\" nil nil (children \"column\" .data.columns) }}` re-instantiates the caller's authored `columns` entries as children of the target's declared `column` section, each keeping its source template selection, fields and body; an entry with its own children forwards them; a forwarded set that leaves a declared section below its min is a render-time error naming the declaration; `children` used outside a `section` call's child-argument position is a layout value, not a rendered section.",
   "properties": {
     "feature": "project-templates"
   },
   "out": [
     {
       "kind": "drives",
-      "target": "domain.service.template-registry",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "target": "domain.service.render-sections",
+      "target": "domain.entity.section",
       "properties": {}
     },
     {
@@ -24,7 +19,12 @@
     },
     {
       "kind": "drives",
-      "target": "domain.entity.section",
+      "target": "domain.service.render-sections",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
       "properties": {}
     }
   ],
