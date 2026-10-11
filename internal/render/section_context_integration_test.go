@@ -290,3 +290,308 @@ func renderSectionProbeDeck(t *testing.T, dir string) string {
 	}
 	return string(pageHTML)
 }
+
+// ---------------------------------------------------------------------------
+// plan.phase-02.task-6: the reserved context of helper-instantiated children
+// over a REAL on-disk LAYERED library.
+//
+// The unit tier (sectionhelper_test.go, render_test.go) drives the helper
+// children path with in-code registries and with fake layered libraries; the
+// real layered loader is exercised end to end here, through the same
+// library→deck→parse→render pipeline the whole-deck tests use. A two-layer deck
+// (the deck-root `templates/` local layer plus a configured external `templates:`
+// root) is loaded by template.LoadDeckLibrary, which records each layer's role
+// (external first, local second) and validates the merged set, then rendered by
+// RenderDeck.
+//
+// The slide layout makes ONE `{{ section … }}` call whose child arguments are a
+// literal `child "external"` (whose template lives in the OTHER, external layer)
+// and a literal `child "local"` (a local template) carrying a nested
+// `child "grand"` grandchild (local). It pins the reserved context at every
+// depth the helper instantiates:
+//
+//   - each helper child reads its own `.item.*` descriptor (index/number/count/
+//     first/last/section/template and, for the target's fields, parent), its own
+//     `.raw.*` source view and its own `.data.*` view — the local child's `.data`
+//     holds its grandchild, so the grandchild renders through the child's OWN
+//     template (section-data-context);
+//   - the reserved `.deck`/`.slide` entries reach every helper child and
+//     grandchild (template-context, section-template-context);
+//   - the target reads its own `.data.<child>` view (len over the passed set),
+//     while the call adds no key to the CALLER's `.data` (section-data-context);
+//   - a child whose template lives in the OTHER library layer resolves its
+//     `media` helper in ITS OWN layer: the external-layer child emits the
+//     per-layer external URL `/assets/templates/external/media/…` from the
+//     external media filesystem, while the local children keep the primary
+//     `/assets/templates/media/…` URL from the local media filesystem
+//     (library-layer-references).
+//
+// It reads a real deck and two real library directories from disk, so it is
+// skipped under -short like its neighbours. It reuses writeLayerFile /
+// writeLayerManifest / writeLayerMedia / writeLayerTheme (sectionhelper_test.go,
+// deck_integration_test.go) and renderLayeredDeckPipeline (deck_integration_test.go).
+func TestSectionInstanceContextHelperChildrenLayered(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test reads real deck and layered library directories from disk")
+	}
+
+	deckRoot, extRoot := writeHelperChildLayeredDeck(t)
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+
+	lib, page := renderLayeredDeckPipeline(t, deckRoot, extRoot, localRoot)
+
+	// The deck is genuinely two-layered: the configured external root first,
+	// the deck-root templates/ second. The external child template is owned by
+	// the external layer only, so the per-layer media binding below is anchored
+	// to a real layer boundary rather than a merged namespace.
+	if len(lib.Layers) != 2 {
+		t.Fatalf("len(Layers) = %d, want 2 (external + local)", len(lib.Layers))
+	}
+	if lib.Layers[0].Role != template.LayerRoleExternal {
+		t.Errorf("Layers[0].Role = %v, want LayerRoleExternal", lib.Layers[0].Role)
+	}
+	if lib.Layers[1].Role != template.LayerRoleLocal {
+		t.Errorf("Layers[1].Role = %v, want LayerRoleLocal", lib.Layers[1].Role)
+	}
+	if _, ok := lib.Layers[0].Sections["externalchild"]; !ok {
+		t.Errorf("the external layer does not carry externalchild")
+	}
+	if _, ok := lib.Layers[1].Sections["externalchild"]; ok {
+		t.Errorf("the local layer unexpectedly carries externalchild; it must be external-only so the layer binding is observable")
+	}
+	if _, err := lib.Layers[0].Media.Open("ext-logo.svg"); err != nil {
+		t.Errorf("the external layer media does not hold ext-logo.svg: %v", err)
+	}
+	if _, err := lib.Layers[1].Media.Open("ext-logo.svg"); err == nil {
+		t.Error("the local layer media holds ext-logo.svg, want it external-only so the fixture proves the layer binding")
+	}
+
+	// The literal CHILD whose template lives in the OTHER (external) layer: it
+	// reads its own `.item`/`.raw`/`.data`/`.deck`/`.slide` and its `media`
+	// helper resolves in the external layer — URL and external media filesystem.
+	for _, want := range []string{
+		// The target's own `.data.<child>` view holds the passed set (one
+		// external child and one local child), and its rendered child lists
+		// splice them.
+		`<div class="child-wrapper" data-external="1" data-local="1" data-external-data="1" data-local-data="1"><span class="wrapper-heading">Wrapper H</span>`,
+		// The external-layer child: its own one-item descriptor, its `.raw`
+		// source fields/body, its own (empty) `.data`, the reserved
+		// `.deck`/`.slide` entries, and the external per-layer media URL.
+		`<span class="external-child" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="external" data-template="externalchild" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="external-child-label">Ext child</span>` +
+			`<span class="external-child-raw-label">Ext child</span>` +
+			`<span class="external-child-raw-body">Ext child body</span>` +
+			`<span class="external-child-deck">Helper Child Deck</span>` +
+			`<span class="external-child-slide">1</span>` +
+			`<span class="external-child-data-keys"></span>` +
+			`<img class="external-child-media" src="/assets/templates/external/media/ext-logo.svg"></span>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page does not contain %q:\n%s", want, page)
+		}
+	}
+
+	// The LOCAL child and its GRANDCHILD: each reads its own reserved context at
+	// its own depth; the local child's `.data` holds the grandchild and its
+	// rendered `grand` list splices it, so the grandchild is instantiated by the
+	// child's OWN template. Both resolve their `media` helper in the primary
+	// (local) layer.
+	for _, want := range []string{
+		// The local child: descriptor, `.raw`, its own `.data.grand` view, the
+		// deck/slide entries, and the primary media URL.
+		`<span class="local-child" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="local" data-template="localchild" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="local-child-label">Local child</span>` +
+			`<span class="local-child-raw-label">Local child</span>` +
+			`<span class="local-child-raw-body">Local child body</span>` +
+			`<span class="local-child-deck">Helper Child Deck</span>` +
+			`<span class="local-child-slide">1</span>` +
+			`<span class="local-child-data-keys">grand;</span>` +
+			`<span class="local-child-grand-count">1</span>` +
+			`<img class="local-child-media" src="/assets/templates/media/local-logo.svg">`,
+		// The grandchild nested under the local child: its own descriptor (its
+		// `.item.parent` is the enclosing local child's fields), its own `.raw`,
+		// its own empty `.data`, the deck/slide entries, and the primary media
+		// URL — one level deeper.
+		`<span class="local-grand" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="grand" data-template="localgrand" data-parent="yes" data-parent-label="Local child">` +
+			`<span class="local-grand-name">Grandchild</span>` +
+			`<span class="local-grand-raw-name">Grandchild</span>` +
+			`<span class="local-grand-deck">Helper Child Deck</span>` +
+			`<span class="local-grand-slide">1</span>` +
+			`<span class="local-grand-data-keys"></span>` +
+			`<img class="local-grand-media" src="/assets/templates/media/local-grand.svg"></span>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page does not contain %q:\n%s", want, page)
+		}
+	}
+
+	// The helper call contributes to its TARGET only: the caller's `.data` stays
+	// empty (it authored no top-level sections), so neither the target name nor
+	// any child leaked into it.
+	if !strings.Contains(page, `<span class="slide-data-keys"></span>`) {
+		t.Errorf("helper call leaked into the caller's .data, want an empty slide-data-keys:\n%s", page)
+	}
+	if strings.Contains(page, "childwrapper;") || strings.Contains(page, "externalchild;") || strings.Contains(page, "localchild;") {
+		t.Errorf("a helper target or child leaked into the caller's .data:\n%s", page)
+	}
+}
+
+// helperChild slide/section manifests, layouts and examples. Every layout is a
+// single line so the rendered page carries no incidental whitespace between the
+// spans the assertions match, and every optional context read is guarded so the
+// same layout executes at load-time step 7 (where a schema-free or empty example
+// supplies no children) as at render time.
+const (
+	helperChildSlideLayout = `<section class="helper-child-slide">` +
+		`<h1 class="slide-title">{{.deck.title}}</h1>` +
+		`<span class="slide-number">{{.slide.number}}</span>` +
+		`<span class="slide-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`{{ section "childwrapper" (dict "heading" "Wrapper H") nil ` +
+		`(child "external" (dict "label" "Ext child") "Ext child body") ` +
+		`(child "local" (dict "label" "Local child") "Local child body" (child "grand" (dict "name" "Grandchild"))) }}` +
+		`</section>`
+
+	helperChildWrapperManifest = "name: childwrapper\n" +
+		"fields:\n" +
+		"  - name: heading\n" +
+		"    type: text\n" +
+		"sections:\n" +
+		"  - name: external\n" +
+		"    accepted:\n" +
+		"      - externalchild\n" +
+		"    max: 4\n" +
+		"  - name: local\n" +
+		"    accepted:\n" +
+		"      - localchild\n" +
+		"    max: 4\n" +
+		"body:\n" +
+		"  mode: optional\n"
+
+	helperChildWrapperLayout = `<div class="child-wrapper" ` +
+		`data-external="{{if .external}}{{len .external}}{{else}}0{{end}}" ` +
+		`data-local="{{if .local}}{{len .local}}{{else}}0{{end}}" ` +
+		`data-external-data="{{if .data.external}}{{len .data.external}}{{else}}0{{end}}" ` +
+		`data-local-data="{{if .data.local}}{{len .data.local}}{{else}}0{{end}}">` +
+		`<span class="wrapper-heading">{{.heading}}</span>` +
+		`{{range .external}}{{.}}{{end}}{{range .local}}{{.}}{{end}}</div>`
+
+	helperChildLocalManifest = "name: localchild\n" +
+		"fields:\n" +
+		"  - name: label\n" +
+		"    type: text\n" +
+		"    required: true\n" +
+		"sections:\n" +
+		"  - name: grand\n" +
+		"    accepted:\n" +
+		"      - localgrand\n" +
+		"    max: 4\n" +
+		"body:\n" +
+		"  mode: optional\n"
+
+	helperChildLocalLayout = `<span class="local-child" ` +
+		`data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" ` +
+		`data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" ` +
+		`data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}" ` +
+		`data-parent-heading="{{if .item.parent}}{{.item.parent.heading}}{{end}}">` +
+		`<span class="local-child-label">{{.label}}</span>` +
+		`<span class="local-child-raw-label">{{if .raw.label}}{{.raw.label}}{{else}}absent{{end}}</span>` +
+		`<span class="local-child-raw-body">{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}</span>` +
+		`<span class="local-child-deck">{{.deck.title}}</span>` +
+		`<span class="local-child-slide">{{.slide.number}}</span>` +
+		`<span class="local-child-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`<span class="local-child-grand-count">{{if .data.grand}}{{len .data.grand}}{{else}}0{{end}}</span>` +
+		`<img class="local-child-media" src="{{ media "local-logo.svg" }}">` +
+		`{{range .grand}}{{.}}{{end}}</span>`
+
+	helperChildLocalGrandManifest = "name: localgrand\n" +
+		"fields:\n" +
+		"  - name: name\n" +
+		"    type: text\n" +
+		"    required: true\n" +
+		"body:\n" +
+		"  mode: disallowed\n"
+
+	helperChildLocalGrandLayout = `<span class="local-grand" ` +
+		`data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" ` +
+		`data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" ` +
+		`data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}" ` +
+		`data-parent-label="{{if .item.parent}}{{.item.parent.label}}{{end}}">` +
+		`<span class="local-grand-name">{{.name}}</span>` +
+		`<span class="local-grand-raw-name">{{if .raw.name}}{{.raw.name}}{{else}}absent{{end}}</span>` +
+		`<span class="local-grand-deck">{{.deck.title}}</span>` +
+		`<span class="local-grand-slide">{{.slide.number}}</span>` +
+		`<span class="local-grand-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`<img class="local-grand-media" src="{{ media "local-grand.svg" }}"></span>`
+
+	helperChildExternalManifest = "name: externalchild\n" +
+		"fields:\n" +
+		"  - name: label\n" +
+		"    type: text\n" +
+		"    required: true\n" +
+		"body:\n" +
+		"  mode: optional\n"
+
+	helperChildExternalLayout = `<span class="external-child" ` +
+		`data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" ` +
+		`data-first="{{.item.first}}" data-last="{{.item.last}}" data-section="{{.item.section}}" ` +
+		`data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}" ` +
+		`data-parent-heading="{{if .item.parent}}{{.item.parent.heading}}{{end}}">` +
+		`<span class="external-child-label">{{.label}}</span>` +
+		`<span class="external-child-raw-label">{{if .raw.label}}{{.raw.label}}{{else}}absent{{end}}</span>` +
+		`<span class="external-child-raw-body">{{if .raw.body}}{{.raw.body}}{{else}}absent{{end}}</span>` +
+		`<span class="external-child-deck">{{.deck.title}}</span>` +
+		`<span class="external-child-slide">{{.slide.number}}</span>` +
+		`<span class="external-child-data-keys">{{range $k, $v := .data}}{{$k}};{{end}}</span>` +
+		`<img class="external-child-media" src="{{ media "ext-logo.svg" }}"></span>`
+)
+
+// writeHelperChildLayeredDeck writes a real two-layer deck: the deck-root local
+// layer carries the calling slide and the local target/child/grandchild
+// templates plus their media and the deck theme, and a fresh external root
+// carries the external child template and its external-only media. Every media
+// file lives in exactly one layer, so a media URL reveals which layer's
+// filesystem resolved it. It returns (deckRoot, extRoot) — the arguments
+// LoadDeckLibrary takes — for renderLayeredDeckPipeline.
+func writeHelperChildLayeredDeck(t *testing.T) (deckRoot, extRoot string) {
+	t.Helper()
+
+	deckRoot = t.TempDir()
+	extRoot = t.TempDir()
+	localRoot := filepath.Join(deckRoot, template.TemplatesDir)
+
+	writeLayerManifest(t, localRoot, "local-child-lib")
+	writeLayerTheme(t, localRoot, "plain", "body { margin: 0; }\n")
+	writeLayerMedia(t, localRoot, "local-logo.svg", "<svg/>")
+	writeLayerMedia(t, localRoot, "local-grand.svg", "<svg/>")
+	writeHelperChildTemplate(t, localRoot, template.SlidesDir, "sectioncontextchildprobe",
+		"name: sectioncontextchildprobe\n", helperChildSlideLayout, "# probe\n")
+	writeHelperChildTemplate(t, localRoot, template.SectionsDir, "childwrapper",
+		helperChildWrapperManifest, helperChildWrapperLayout, "")
+	writeHelperChildTemplate(t, localRoot, template.SectionsDir, "localchild",
+		helperChildLocalManifest, helperChildLocalLayout, "```\nlabel: Example\n```\n")
+	writeHelperChildTemplate(t, localRoot, template.SectionsDir, "localgrand",
+		helperChildLocalGrandManifest, helperChildLocalGrandLayout, "```\nname: N\n```\n")
+
+	writeLayerManifest(t, extRoot, "ext-child-lib")
+	writeLayerMedia(t, extRoot, "ext-logo.svg", "<svg/>")
+	writeHelperChildTemplate(t, extRoot, template.SectionsDir, "externalchild",
+		helperChildExternalManifest, helperChildExternalLayout, "```\nlabel: E\n```\n")
+
+	writeLayerFile(t, filepath.Join(deckRoot, deck.ConfigFile),
+		"title: Helper Child Deck\ntheme: plain\ntemplates: \""+extRoot+"\"\n")
+	writeLayerFile(t, filepath.Join(deckRoot, deck.SlidesDir, "1-child.md"),
+		"---\ntemplate: sectioncontextchildprobe\n---\n")
+	return deckRoot, extRoot
+}
+
+// writeHelperChildTemplate writes one template's manifest, layout and example
+// under root/<kindDir>/<name>/, for the layered helper-child fixture. The
+// example may be empty: a template declaring sections but no instances leaves
+// every declaration at its min of zero, which the loader accepts.
+func writeHelperChildTemplate(t *testing.T, root, kindDir, name, manifest, layout, example string) {
+	t.Helper()
+	base := filepath.Join(root, kindDir, name)
+	writeLayerFile(t, filepath.Join(base, template.ManifestFile), manifest)
+	writeLayerFile(t, filepath.Join(base, template.LayoutFile), layout)
+	writeLayerFile(t, filepath.Join(base, template.ExampleFile), example)
+}
