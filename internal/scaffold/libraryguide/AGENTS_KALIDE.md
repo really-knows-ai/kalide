@@ -436,15 +436,14 @@ library must supply its media.
   prefixes. An unprefixed relative reference stays inside the stylesheet's own
   tree: no absolute paths, no `..` leaving that tree, no other scheme, nothing
   outside the library, and no references into non-servable entries (`slides/`,
-  `sections/`, `library.yaml`, `AGENTS.md`, `AGENTS_KALIDE.md`). The path after
-  `media:` is relative
-  to the library's `media/` — the same base the layout `{{ media "path" }}`
-  helper uses — and the path after `theme:<name>/` is relative to
-  `themes/<name>/`; an unknown `theme:<name>` is an error. Both prefixes work in
-  both `url()` and `@import`, and an imported stylesheet's own references are
-  checked too. `@import` is followed, bounded and cycle-safe across the whole
-  import graph; a missing file, a bad reference or a cycle is an error naming
-  the theme CSS file and line.
+  `sections/`, `library.yaml`, `AGENTS.md`, `AGENTS_KALIDE.md`). The path
+  after `media:` is relative to the library's `media/` — the same base the
+  layout `{{ media "path" }}` helper uses — and the path after `theme:<name>/`
+  is relative to `themes/<name>/`; an unknown `theme:<name>` is an error. Both
+  prefixes work in both `url()` and `@import`, and an imported stylesheet's own
+  references are checked too. `@import` is followed, bounded and cycle-safe
+  across the whole import graph; a missing file, a bad reference or a cycle is
+  an error naming the theme CSS file and line.
 
 ## Media
 
