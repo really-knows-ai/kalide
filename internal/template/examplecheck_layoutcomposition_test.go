@@ -253,3 +253,58 @@ func TestCheckLibraryExampleSectionKindLayoutInclude(t *testing.T) {
 		t.Errorf("card rendered = %q, want card's own section `.item` to render `card`", got)
 	}
 }
+
+// TestCheckLibraryExampleUnknownLayoutNameError (task 6) is the negative
+// counterpart to TestCheckLibraryExampleComposesLibraryLayout: LoadLibrary's
+// step-7 example check must still fail, as a positioned *LibraryError, when a
+// layout's standard `{{ template "<name>" . }}` composition call names no
+// library layout. Merging the layout set into one namespace lets a composition
+// call resolve to any library layout; it does not make an unknown name
+// resolve, and the failure must remain a templates error naming the offending
+// layout file.
+//
+// "hello" is a slide whose layout calls `{{ template "hello" . }}`. The merged
+// namespace (exampleLayoutNamespace) registers every library layout under the
+// root-qualified name loadlibrary.go builds — path.Join(root,
+// slides/hello/layout.html.tmpl) with root == TemplatesDir — never under the
+// bare directory name, so "hello" names no template and the include cannot
+// resolve. The library is single-layer and in-memory; executing hello's layout
+// must fail step 7, and LoadLibrary must return that failure as a *LibraryError
+// positioned at hello's own layout path (templates/slides/hello/
+// layout.html.tmpl), with the underlying html/template error — which names the
+// missing "hello" — in the Message.
+func TestCheckLibraryExampleUnknownLayoutNameError(t *testing.T) {
+	// The bare template name. It names no library layout: every layout is
+	// registered under its root-qualified path
+	// (TemplatesDir/slides/hello/layout.html.tmpl), not its directory name.
+	const missingLayoutName = "hello"
+
+	fsys := baseLibraryFS()
+	// hello's layout is the fixture's only layout, so it is the layout step 7
+	// executes and, unambiguously, the layout the failure is attributed to.
+	fsys["slides/hello/layout.html.tmpl"] = &fstest.MapFile{
+		Data: []byte(`<section>{{ template "` + missingLayoutName + `" . }}</section>`),
+	}
+
+	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+	if err == nil {
+		t.Fatalf("LoadLibrary() = %+v, nil; want step 7 to reject the layout whose `{{ template %q . }}` names no library layout", lib, missingLayoutName)
+	}
+	if lib != nil {
+		t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+	}
+
+	libErr := asLibraryError(t, err)
+	// The failure is positioned at the layout that made the bad call, not at
+	// the (absent) include target — the same layout path loadlibrary.go builds:
+	// path.Join(root, slides/hello/layout.html.tmpl), root == TemplatesDir.
+	if want := TemplatesDir + "/" + SlidesDir + "/hello/" + LayoutFile; libErr.Path != want {
+		t.Errorf("Path = %q, want the offending layout %q", libErr.Path, want)
+	}
+	if !strings.Contains(libErr.Message, "execute") {
+		t.Errorf("Message = %q, want a step-7 execute failure", libErr.Message)
+	}
+	if !strings.Contains(libErr.Message, missingLayoutName) {
+		t.Errorf("Message = %q, want it to name the missing template %q", libErr.Message, missingLayoutName)
+	}
+}
