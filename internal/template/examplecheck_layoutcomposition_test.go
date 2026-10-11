@@ -32,9 +32,8 @@ import (
 // pre-fix step-7 behaviour) failed "no such template" because no other layout
 // was registered for it to invoke.
 func TestCheckLibraryExampleComposesLibraryLayout(t *testing.T) {
-	// hello's layout carries a marker the composed output can be checked for,
-	// so the test proves more than a bare successful load: the include
-	// actually renders.
+	// hello's layout carries a marker so the test proves the include renders,
+	// not merely that the load succeeds.
 	const helloBody = "hello-composed-body"
 	fsys := baseLibraryFS()
 	fsys["slides/hello/layout.html.tmpl"] = &fstest.MapFile{
