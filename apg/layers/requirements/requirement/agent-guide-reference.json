@@ -2,21 +2,11 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "agent-guide-reference",
-  "body": "Agent-guide reference file: each kalide author guide is delivered to a project as a kalide-owned full guide file plus a short pointer file that names it. The full guide is `AGENTS_KALIDE.md` at the project root (the deck guide, agent-authoring, for a deck) or the library root (the library guide, library-agent-guide, for a template library). The pointer is the project's own `AGENTS.md`, whose content is the single line `Kalide Reference: ./AGENTS_KALIDE.md` (under a short header when the file is created).\n\nThe pointer rule is idempotent and author-preserving:\n- `AGENTS.md` absent: it is created carrying the reference (with a short header);\n- `AGENTS.md` present and already containing the exact string `Kalide Reference: ./AGENTS_KALIDE.md`: it is left byte-for-byte untouched;\n- `AGENTS.md` present without that string: the reference line is appended and the author's existing content is byte-preserved.\n\nAppending the reference line to a present author `AGENTS.md` is the one permitted modification of that file; `AGENTS.md` content is never otherwise rewritten by scaffolding. The full guide is written only when `AGENTS_KALIDE.md` is absent (an existing `AGENTS_KALIDE.md` is kalide-owned and brought forward by `kalide upgrade`, upgrade-refresh-owned-scaffold). Both files are text-only, offline, inert to load/validate/render/serve/list, and not template assets (global.constraint.no-embedded-template-assets, solution.constraint.agent-guide-unbranded-inert).\n\nAC:\n- immediately after any scaffolding command, `<root>/AGENTS_KALIDE.md` holds the full guide and `<root>/AGENTS.md` contains the string `Kalide Reference: ./AGENTS_KALIDE.md`;\n- a project whose `AGENTS.md` already contains the string is left byte-for-byte unchanged by a further scaffolding or upgrade run;\n- a project whose `AGENTS.md` is author content without the string gains the appended reference line, with all its other bytes unchanged;\n- neither file is read by `kalide start` or `kalide templates`: a project holding both loads, validates, renders, serves and lists unchanged.",
+  "body": "Agent-guide reference file: each kalide author guide is delivered to a project as a kalide-owned full guide file plus a short pointer file that names it. The full guide is `AGENTS_KALIDE.md` at the project root (the deck guide, agent-authoring, for a deck) or the library root (the library guide, library-agent-guide, for a template library). The pointer is the project's own `AGENTS.md`.\n\nThe reference line is the exact string `Kalide Reference: ./AGENTS_KALIDE.md`. The embedded pointer scaffold content is a fixed short header line followed by that reference line, and the header line is `# kalide authoring guide`; a created `AGENTS.md` carries exactly that embedded pointer content.\n\nThe pointer rule is idempotent and author-preserving:\n- `AGENTS.md` absent: it is created carrying the embedded pointer content above;\n- `AGENTS.md` present and already containing the exact string `Kalide Reference: ./AGENTS_KALIDE.md`: it is left byte-for-byte untouched;\n- `AGENTS.md` present without that string and byte-identical to a known released full guide of either author guide: `kalide upgrade` replaces it with the short pointer file and writes the current `AGENTS_KALIDE.md` (upgrade-refresh-owned-scaffold, global.constraint.upgrade-known-version-catalog);\n- `AGENTS.md` present without that string and not a known released full guide (author content): the reference line is appended and the author's existing content is byte-preserved.\n\nThe exact set of permitted modifications of `AGENTS.md` is: creation when it is absent; appending the reference line to an author file without the string; and the `kalide upgrade` replacement of a known released full guide. A scaffolding command performs only creation and append; the replacement belongs to upgrade alone. No other write to `AGENTS.md` occurs, and the embedded pointer content's header line and reference line are fixed.\n\nThe full guide is written only when `AGENTS_KALIDE.md` is absent (an existing `AGENTS_KALIDE.md` is kalide-owned and brought forward by `kalide upgrade`, upgrade-refresh-owned-scaffold). Both files are text-only, offline, inert to load/validate/render/serve/list, and not template assets (global.constraint.no-embedded-template-assets, solution.constraint.agent-guide-unbranded-inert).\n\nAC:\n- immediately after any scaffolding command, `<root>/AGENTS_KALIDE.md` holds the full guide and `<root>/AGENTS.md` contains the string `Kalide Reference: ./AGENTS_KALIDE.md`;\n- an `AGENTS.md` created by a scaffolding command carries the fixed header line `# kalide authoring guide` followed by the reference line;\n- a project whose `AGENTS.md` already contains the string is left byte-for-byte unchanged by a further scaffolding or upgrade run;\n- a project whose `AGENTS.md` is author content without the string gains the appended reference line, with all its other bytes unchanged;\n- a project whose `AGENTS.md` is byte-identical to a known released full guide has it replaced by the short pointer file by `kalide upgrade`, and the current `AGENTS_KALIDE.md` is written;\n- neither file is read by `kalide start` or `kalide templates`: a project holding both loads, validates, renders, serves and lists unchanged.",
   "properties": {
     "feature": "project-templates"
   },
   "out": [
-    {
-      "kind": "drives",
-      "target": "domain.value.agent-guide",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "target": "domain.value.library-agent-guide",
-      "properties": {}
-    },
     {
       "kind": "drives",
       "target": "domain.group.authoring",
@@ -25,6 +15,16 @@
     {
       "kind": "drives",
       "target": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.agent-guide",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-agent-guide",
       "properties": {}
     }
   ],
@@ -41,17 +41,17 @@
     },
     {
       "kind": "depends-on",
+      "source": "requirements.requirement.deck-library-upgrade",
+      "properties": {}
+    },
+    {
+      "kind": "depends-on",
       "source": "requirements.requirement.library-agent-guide",
       "properties": {}
     },
     {
       "kind": "depends-on",
       "source": "requirements.requirement.upgrade-refresh-owned-scaffold",
-      "properties": {}
-    },
-    {
-      "kind": "depends-on",
-      "source": "requirements.requirement.deck-library-upgrade",
       "properties": {}
     }
   ]
