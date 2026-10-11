@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -231,6 +232,29 @@ func ChildrenFunc(args ...any) (*ChildRequest, error) {
 	}, nil
 }
 
+// ResolvedChild is one resolved child section argument: the child's own resolved
+// instance and its own resolved nested children, in passed order. ResolveChildren
+// returns these rather than bare *SectionCall values because a resolved child is
+// a tree — a child may itself carry child sections — while SectionCall is still
+// a flat leaf that cannot hold them (extending it is a separate step). This is
+// the recursive shape a caller renders depth-first: each child's own children
+// first, since section markup composes bottom-up
+// (requirements.requirement.child-constructor,
+// requirements.requirement.children-forwarding).
+type ResolvedChild struct {
+	// Call is the child's resolved instance, exactly the shape ResolveChildCall
+	// returns for a literal child: its instantiated Template, effective Values,
+	// validated Body, one-item Item descriptor and owning Layer.
+	Call *SectionCall
+
+	// Children are the resolved instances of the child's own child arguments,
+	// recursively, each in turn a *ResolvedChild, in the order the child's own
+	// children were passed. It is nil/empty when the child declares no child
+	// sections. When checkCounts is false an empty nested set is not walked, so
+	// a child with no children carries a nil Children in that case.
+	Children []*ResolvedChild
+}
+
 // ResolveChildCall resolves one literal `child` argument against the declared
 // section it fills on its parent template, building the resolved instance the
 // parent renders it as (requirements.requirement.child-constructor,
@@ -381,4 +405,298 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 		call.Layer = layerOf(tmplName)
 	}
 	return call, nil
+}
+
+// ResolveChildren resolves a whole set of child arguments — every `child` and
+// `children` argument a `section` helper call passes to its target — against the
+// parent template's declared sections, returning one *ResolvedChild per resolved
+// instance in passed order, each carrying its own resolved nested children
+// (requirements.requirement.child-constructor,
+// requirements.requirement.children-forwarding).
+//
+// lookup, layerOf, parent and parentFields are exactly ResolveChildCall's:
+// lookup resolves a section-template name in the merged namespace, layerOf
+// reports the owning library layer of a resolved name (or nil when the caller
+// has no provenance), parent is the template the children are children OF — the
+// `section` helper call's target, whose declared sections the children fill —
+// and parentFields is the parent instance's field values, carried out as each
+// child's `.item.parent` (nil from a slide layout). layerOf and parentFields may
+// be nil and lookup must be non-nil whenever there are children to resolve,
+// exactly as ResolveChildCall allows. parent must be the template whose
+// declared sections name the children; a nil parent with an empty set returns no
+// children.
+//
+// reqs is the ordered child-argument set the call passed. Each element is one of
+// two kinds:
+//
+//   - a literal `child` request (Forward false), resolved directly by
+//     ResolveChildCall: its Section must be a declared section of parent, its
+//     `template` selector picks among the declaration's accepted templates, its
+//     fields and body are validated against the instantiated template, and it
+//     gets its own `.item` descriptor (child-constructor);
+//   - a `children` forwarding (Forward true): its Entries are the caller's
+//     authored `.data.<section>` entries, and each entry is expanded into a
+//     literal-equivalent request for Section and resolved the same way, so the
+//     entries of one forwarded list may name different templates with no single
+//     template imposed on the list (children-forwarding).
+//
+// A forwarded entry is the shape the shared .data builder (DataContext) produces
+// for an authored instance: a map carrying `item` (the sibling descriptor),
+// `raw` (the original source field values and body) and `data` (the instance's
+// own children as data). Its template is injected from `item.template` as the
+// `template` selector; its fields are `raw` without the `body` key; its body is
+// `raw.body`; and its own children are rebuilt from `data`, so a layout passes on
+// the authored section instances it received without re-listing them
+// (raw-source-context, section-data-context).
+//
+// Sibling index/count are computed over the FULL passed set, grouped by declared
+// section name: a literal child and every forwarded entry for the same section
+// are counted together, so each resolved child's `.item`
+// index/number/count/first/last describe its place among all the children of
+// that section the call passed, exactly as an authored instance's descriptor
+// does (item-context, child-constructor).
+//
+// Nested children — a literal request's Children and a forwarded entry's `.data`
+// — are resolved recursively with the child's OWN instantiated template as the
+// parent, so grandchildren name that template's declared sections; the recursion
+// carries checkCounts through unchanged (nested-section-validation).
+//
+// When checkCounts is true, every section parent declares has its min/max
+// enforced over the passed set — the count of literal children and expanded
+// forwarded entries for that name — and a violation is an error naming the
+// declaration and the parent template. checkCounts is false for a load-time
+// partial set: a `children` forwarding of a runtime `.data` list is not
+// statically known and a mixed literal/forwarded call defers the parent min/max
+// to render (section-helper-load-checks). A render-time call resolving a
+// complete set passes true; a load-time check of literal children that cannot
+// see the whole set passes false.
+func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, reqs []*ChildRequest, parentFields map[string]any, checkCounts bool) ([]*ResolvedChild, error) {
+	if parent == nil {
+		if len(reqs) == 0 {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("children: no parent template to resolve declared sections against")
+	}
+	if len(reqs) > 0 && lookup == nil {
+		return nil, fmt.Errorf("children: no template resolver")
+	}
+
+	// Expand every request into the literal-equivalent set resolution consumes,
+	// keeping the passed order: a literal request is itself, a forwarding
+	// contributes one request per entry. The expansion is what makes sibling
+	// index/count and the min/max counts "over the full passed set" rather than
+	// per argument.
+	type expandedChild struct {
+		section string
+		req     *ChildRequest
+	}
+	expanded := make([]expandedChild, 0, len(reqs))
+	for _, req := range reqs {
+		if req == nil {
+			return nil, fmt.Errorf("children: child request must not be nil")
+		}
+		if !req.Forward {
+			expanded = append(expanded, expandedChild{section: req.Section, req: req})
+			continue
+		}
+		for _, entry := range req.Entries {
+			er, err := childEntryRequest(req.Section, entry)
+			if err != nil {
+				return nil, err
+			}
+			expanded = append(expanded, expandedChild{section: req.Section, req: er})
+		}
+	}
+
+	counts := make(map[string]int, len(expanded))
+	for i := range expanded {
+		counts[expanded[i].section]++
+	}
+
+	out := make([]*ResolvedChild, 0, len(expanded))
+	seen := make(map[string]int, len(counts))
+	for i := range expanded {
+		ec := &expanded[i]
+		index := seen[ec.section]
+		seen[ec.section] = index + 1
+
+		call, err := ResolveChildCall(lookup, layerOf, parent, ec.req, index, counts[ec.section], parentFields)
+		if err != nil {
+			return nil, err
+		}
+
+		rc := &ResolvedChild{Call: call}
+		// Recurse into the child's own children. An empty nested set is still
+		// walked when min/max are being checked, so a literal child that omits
+		// a mandatory child section of its own instantiated template is
+		// reported rather than silently accepted; when counts are skipped an
+		// empty set has nothing to resolve.
+		if len(ec.req.Children) > 0 || checkCounts {
+			nested, err := ResolveChildren(lookup, layerOf, call.Template, ec.req.Children, call.Values, checkCounts)
+			if err != nil {
+				return nil, err
+			}
+			rc.Children = nested
+		}
+		out = append(out, rc)
+	}
+
+	if checkCounts {
+		for i := range parent.Sections {
+			d := &parent.Sections[i]
+			if err := childSetRangeError(parent, *d, counts[d.Name]); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return out, nil
+}
+
+// childEntryRequest converts one forwarded `.data` entry into the
+// literal-equivalent ChildRequest ResolveChildren resolves. section is the
+// declared section name the entry's list was keyed under (the name the entry
+// re-instantiates as a child of parent). The entry must be the map
+// template.DataContext builds for an authored instance:
+//
+//   - `item.template` (when non-empty) is injected as the `template` selector,
+//     so the entry keeps its own authored template and a forwarded list may mix
+//     templates;
+//   - `raw` supplies the source field values — copied without the `body` key —
+//     and `raw.body` (when present) the body;
+//   - `data` supplies the entry's own children, rebuilt as forwarding requests
+//     per section name, so the nested tree recurses.
+//
+// A non-map entry, or a `raw`/`data` value of the wrong shape, is an error
+// naming the section, so a malformed `.data` set fails resolution rather than
+// silently dropping an instance (children-forwarding).
+func childEntryRequest(section string, entry any) (*ChildRequest, error) {
+	m, ok := entry.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("children %q: forwarded entry must be a .data entry map, got %s", section, describeValue(entry))
+	}
+
+	selector := ""
+	if item, ok := m["item"].(map[string]any); ok {
+		if s, ok := item["template"].(string); ok {
+			selector = strings.TrimSpace(s)
+		}
+	}
+
+	var fields map[string]any
+	body := ""
+	hasBody := false
+	if raw, ok := m["raw"].(map[string]any); ok && len(raw) > 0 {
+		fields = make(map[string]any, len(raw))
+		for k, v := range raw {
+			if k == bodyField {
+				continue
+			}
+			fields[k] = v
+		}
+		if b, ok := raw[bodyField].(string); ok {
+			body = b
+			hasBody = true
+		}
+	}
+	if selector != "" {
+		if fields == nil {
+			fields = make(map[string]any, 1)
+		}
+		fields["template"] = selector
+	}
+
+	children, err := childEntryChildren(section, m["data"])
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChildRequest{
+		Section:  section,
+		Fields:   fields,
+		Body:     body,
+		HasBody:  hasBody,
+		Children: children,
+	}, nil
+}
+
+// childEntryChildren rebuilds a forwarded entry's `.data` map — its own child
+// sections as data, keyed by declared section name — as the nested forwarding
+// requests ResolveChildren recurses into. section names the ENTRY's declared
+// section (the parent of these children) only for error messages. Each key
+// becomes a Forward request for that section carrying the key's entry list, so
+// the entry's own `.item`/`.raw`/`.data` are re-read one level down; a nil or
+// empty map yields nil. Keys are visited in sorted order so resolution is
+// deterministic.
+func childEntryChildren(section string, data any) ([]*ChildRequest, error) {
+	if data == nil {
+		return nil, nil
+	}
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("children %q: forwarded entry .data must be a map, got %s", section, describeValue(data))
+	}
+	if len(m) == 0 {
+		return nil, nil
+	}
+
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	children := make([]*ChildRequest, 0, len(names))
+	for _, name := range names {
+		entries, err := childEntryList(name, m[name])
+		if err != nil {
+			return nil, err
+		}
+		children = append(children, &ChildRequest{
+			Section: name,
+			Forward: true,
+			Entries: entries,
+		})
+	}
+	return children, nil
+}
+
+// childEntryList normalises one `.data.<section>` value to the forwarding
+// Entries slice. template.DataContext produces a []map[string]any for an
+// authored list and a layout may also build a []any; a nil list is an empty
+// forwarded set, not a malformed one, matching ChildrenFunc. Any other type is
+// an error naming the section.
+func childEntryList(section string, list any) ([]any, error) {
+	switch v := list.(type) {
+	case nil:
+		return nil, nil
+	case []any:
+		return v, nil
+	case []map[string]any:
+		out := make([]any, len(v))
+		for i := range v {
+			out[i] = v[i]
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("children %q: entries must be a list, got %s", section, describeValue(list))
+	}
+}
+
+// childSetRangeError reports a parent declaration whose child count over the
+// passed set breaks its repeat limit, naming the declaration and the parent
+// template so the error is actionable at any nesting depth, or returns nil when
+// the count is within range. max <= 0 means unbounded and min 0 means no
+// minimum, matching SectionDecl
+// (requirements.requirement.nested-section-validation).
+func childSetRangeError(parent *Template, d SectionDecl, count int) error {
+	if d.Max > 0 && count > d.Max {
+		return fmt.Errorf("children: section %q on parent template %q has %d child(ren), maximum is %d",
+			d.Name, parent.Name, count, d.Max)
+	}
+	if d.Min > 0 && count < d.Min {
+		return fmt.Errorf("children: section %q on parent template %q has %d child(ren), minimum is %d",
+			d.Name, parent.Name, count, d.Min)
+	}
+	return nil
 }
