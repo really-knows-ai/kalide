@@ -274,31 +274,43 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // internal/template cannot import internal/render; the render-time renderer
 // binds its own equivalent.
 //
-// The returned func resolves the call with ResolveSectionCallLayered — the same
+// The returned func parses the call's positional arguments — the optional
+// fields map, the optional body and the optional child arguments (each the
+// *ChildRequest a `child`/`children` constructor built, exampleSectionCallArgs)
+// — and resolves the call with ResolveSectionCallLayered: the same
 // resolution/validation the render-time helper reuses, so the target must be a
 // section-usage template, the call's fields are defaults-first validated with
-// CheckValues, the body is validated with CheckBody, and a body heading naming
-// one of the target's child sections is rejected — and executes the target's
-// layout against that resolution's result. layerOf is the library-based
-// provenance lookup (resolveMergedSectionTarget over lib), so the returned
-// SectionCall carries the target's owning layer.
+// CheckValues, the body is validated with CheckBody, a body heading naming one
+// of the target's child sections is rejected, and the passed children are
+// resolved against the target's declared sections — accepted-template, defaults,
+// field/body rules and per-declaration min/max, recursively
+// (child-constructor, children-forwarding, nested-section-validation). layerOf
+// is the library-based provenance lookup (resolveMergedSectionTarget over lib),
+// so the returned SectionCall carries the target's owning layer.
 //
-// The target's execution context mirrors checkLibraryExample's slide/section
-// context so the target sees a consistent shape: the effective field values as
-// top-level entries, the reserved `deck`/`slide` entries (the empty example
-// stand-ins), the one-item `.item` descriptor (index 0, number/count 1,
-// first/last true, section/template the target name, parent callerFields), the
-// reserved `.raw` source view of what the call supplied plus the supplied body
-// (RawContext, the shared source-view builder both halves use), and the reserved
-// `.data` entry as an EMPTY map — the helper passes no child sections, so the
-// target has no authored children and contributes no entry to the caller's
-// `.data`, exactly as at render time (section-data-context). The body is set
-// only when the call supplies one.
+// The target's execution context is built by exampleSectionRunner.render, which
+// mirrors checkLibraryExample's slide/section context so the target sees a
+// consistent shape: the effective field values as top-level entries, the
+// reserved `deck`/`slide` entries (the empty example stand-ins), the resolved
+// `.item` descriptor (index 0, number/count 1, first/last true, section/template
+// the target name, parent callerFields), the reserved `.raw` source view of what
+// the call supplied plus the supplied body (RawContext, the shared source-view
+// builder both halves use), and the reserved `.data` entry built by the shared
+// DataContext over the call's resolved children, so an unguarded
+// `{{ .data.<child> }}` and a nested `children "<section>" .data.<section>`
+// forwarding execute at load exactly as at render time (section-data-context,
+// children-forwarding). Each resolved child is rendered through that same runner
+// and its HTML appended to the target's rendered child-section list keyed by the
+// child's declared section, the list a target layout ranges over to splice child
+// markup (template-language). A child-less call passes no children, so its
+// `.data` is the shared builders' empty map and its rendered child lists are
+// empty — the previous behaviour. The body is set only when the call supplies
+// one.
 //
 // The target's layout is re-parsed under LayoutFuncMap with the `section` entry
-// overridden by this same factory bound to the target's own field values, so a
-// target layout that itself calls `{{ section … }}` both parses and executes —
-// the nested call's `.item.parent` is this target's fields — and with the
+// overridden by this same factory bound to the target's own effective values, so
+// a target layout that itself calls `{{ section … }}` both parses and executes —
+// the nested call's `.item.parent` is this target's values — and with the
 // `media` helper bound to the target's OWN owning layer (call.Layer.Media), so
 // an external-layer section's `{{ media … }}` reference resolves in the external
 // layer's media rather than the merged Library's primary media
@@ -325,80 +337,246 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 		return layer
 	}
 
+	runner := &exampleSectionRunner{lib: lib, resolve: resolve, layerOf: layerOf}
+
 	return func(name string, args ...any) (htmltemplate.HTML, error) {
-		var fields map[string]any
-		if len(args) >= 1 && args[0] != nil {
-			m, ok := args[0].(map[string]any)
-			if !ok {
-				return "", fmt.Errorf("section helper %q: fields must be a map, got %T", name, args[0])
-			}
-			fields = m
-		}
-		var body string
-		if len(args) >= 2 && args[1] != nil {
-			s, ok := args[1].(string)
-			if !ok {
-				return "", fmt.Errorf("section helper %q: body must be a string, got %T", name, args[1])
-			}
-			body = s
+		fields, body, children, err := exampleSectionCallArgs(name, args)
+		if err != nil {
+			return "", err
 		}
 
-		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, callerFields)
+		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, callerFields, children...)
 		if err != nil {
 			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
 
-		// The target executes with its effective field values addressable at the
-		// top level, the reserved deck/slide context and its one-item .item
-		// descriptor — the same shape checkLibraryExample gives a section
-		// template's own layout. .raw is the source view of what the call
-		// supplied — the declared fields plus the body when present, built by
-		// the shared RawContext — and .data
-		// is an empty map, because the helper passes no child sections: the
-		// target has no authored children, exactly as at render time, and the
-		// call appends nothing to the caller's .data.
-		ctx := make(map[string]any, len(call.Values)+6)
-		for k, v := range call.Values {
-			ctx[k] = v
-		}
-		ctx["deck"] = emptyExampleDeckContext()
-		ctx["slide"] = emptyExampleSlideContext()
-		ctx["item"] = call.Item
-		ctx["raw"] = RawContext(fields, call.Template, call.Body)
-		ctx["data"] = map[string]any{}
-		if strings.TrimSpace(body) != "" {
-			ctx["body"] = body
-		}
-
-		// A target layout that itself calls {{ section … }} must both parse and
-		// execute: bind this same factory, closing over the target's own field
-		// values as the nested call's caller fields (.item.parent). The target's
-		// `media` helper resolves in the target's own owning layer when one is
-		// known (call.Layer.Media), so an external-layer section's own
-		// `{{ media … }}` reference resolves in the external layer rather than
-		// the merged Library's primary media (library-layer-references); a nil
-		// layer falls back to lib.Media, the pre-layer behaviour.
-		mediaFS := lib.Media
-		if call.Layer != nil {
-			mediaFS = call.Layer.Media
-		}
-		funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
-		funcMap["section"] = exampleSectionHelper(lib, call.Values)
-
-		layoutName := call.Template.Layout.Name
-		if layoutName == "" {
-			layoutName = call.Template.Name
-		}
-		parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(call.Template.Layout.Text)
+		rendered, err := runner.render(call, fields)
 		if err != nil {
-			return "", fmt.Errorf("section helper %q: parse target layout: %w", name, err)
+			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
-		var buf strings.Builder
-		if err := parsed.Execute(&buf, ctx); err != nil {
-			return "", fmt.Errorf("section helper %q: execute target layout: %w", name, err)
-		}
-		return htmltemplate.HTML(buf.String()), nil
+		return rendered, nil
 	}
+}
+
+// exampleSectionCallArgs parses a `{{ section "<name>" [fields] [body] [child…] }}`
+// call's execution arguments, the same positional grammar the render-time
+// sectionHelper accepts and the loader's static extractor reads (section-helper,
+// child-constructor, children-forwarding). args is the call's argument list
+// after the target name:
+//
+//   - args[0] is the optional fields map (a map[string]any, or nil when the
+//     placeholder is omitted);
+//   - args[1] is the optional body string (a string, or nil);
+//   - args[2:] are the optional child arguments, each the *ChildRequest a
+//     `child`/`children` constructor built;
+//
+// a fields argument of the wrong type or a body argument of the wrong type is a
+// programming error naming the call, matching the previous behaviour, and so is
+// a child argument that is neither nil nor a *ChildRequest. A nil child slot is
+// skipped so an all-placeholder call still parses; the returned children slice
+// is nil when the call passes none, so a child-less call is byte-identical to
+// before.
+func exampleSectionCallArgs(name string, args []any) (map[string]any, string, []*ChildRequest, error) {
+	var fields map[string]any
+	if len(args) >= 1 && args[0] != nil {
+		m, ok := args[0].(map[string]any)
+		if !ok {
+			return nil, "", nil, fmt.Errorf("section helper %q: fields must be a map, got %T", name, args[0])
+		}
+		fields = m
+	}
+	var body string
+	if len(args) >= 2 && args[1] != nil {
+		s, ok := args[1].(string)
+		if !ok {
+			return nil, "", nil, fmt.Errorf("section helper %q: body must be a string, got %T", name, args[1])
+		}
+		body = s
+	}
+	var children []*ChildRequest
+	for i := 2; i < len(args); i++ {
+		if args[i] == nil {
+			continue
+		}
+		c, ok := args[i].(*ChildRequest)
+		if !ok {
+			return nil, "", nil, fmt.Errorf("section helper %q: child argument %d must be a child value, got %T", name, i-1, args[i])
+		}
+		children = append(children, c)
+	}
+	return fields, body, children, nil
+}
+
+// exampleSectionRunner executes a resolved *SectionCall's target layout and its
+// child instances at load time, mirroring the render-time renderer's
+// renderSection/values context (section-helper, section-data-context,
+// item-context, raw-source-context, template-context, library-layer-references).
+// Its resolve/layerOf pair is exampleSectionHelper's library lookup, reused so a
+// child's own template and owning layer are already resolved on each
+// *ResolvedChild.
+type exampleSectionRunner struct {
+	lib     *Library
+	resolve func(name string) (*Template, bool)
+	layerOf func(name string) *LibraryLayer
+}
+
+// render executes call's target layout with the context the render-time helper
+// gives the same resolved call and returns its trusted HTML. rawSource is the
+// call's authored source map: the helper's parsed fields for the outer call,
+// and — for a child the runner renders — the child's own resolved values
+// (ResolvedChild carries no separate authored source map), copied by RawContext
+// through the child template's declared fields exactly as an authored
+// instance's frontmatter is.
+//
+// The context mirrors checkLibraryExample's slide/section context so the target
+// sees a consistent shape: its effective field values as top-level entries, the
+// reserved `deck`/`slide` entries (the empty example stand-ins), the resolved
+// `.item` descriptor (parent callerFields, or the parent target's values for a
+// child), the reserved `.raw` source view built by the shared RawContext, and
+// the reserved `.data` entry built by the shared DataContext over the call's
+// resolved children — so an unguarded `{{ .data.<child> }}` (and a nested
+// `children "<section>" .data.<section>` forwarding its entries) executes at
+// load exactly as at render time (section-data-context, children-forwarding).
+// Each resolved child is rendered through this same method and its HTML
+// appended to the target's rendered child-section list keyed by its declared
+// section name, the list a target layout ranges over to splice child markup
+// (template-language). The body is set only when the call supplies one.
+//
+// The target's layout is re-parsed under LayoutFuncMap with the `section` entry
+// overridden by exampleSectionHelper bound to the target's own effective values,
+// so a target layout that itself calls `{{ section … }}` both parses and
+// executes, the nested call's `.item.parent` being this target's values, and
+// with the `media` helper bound to the target's OWN owning layer
+// (call.Layer.Media) when one is known (library-layer-references); a nil layer
+// falls back to lib.Media, the pre-layer behaviour.
+func (ex *exampleSectionRunner) render(call *SectionCall, rawSource map[string]any) (htmltemplate.HTML, error) {
+	ctx := make(map[string]any, len(call.Values)+6)
+	for k, v := range call.Values {
+		ctx[k] = v
+	}
+	ctx["deck"] = emptyExampleDeckContext()
+	ctx["slide"] = emptyExampleSlideContext()
+	ctx["item"] = call.Item
+	// `.raw` is the instance's authored source view and, exactly as
+	// renderSection passes secCtx.raw, it is also the parent each child's
+	// `.data` entry carries as `.item.parent`, so the load-time and render-time
+	// data views agree (raw-source-context, section-data-context).
+	raw := RawContext(rawSource, call.Template, call.Body)
+	ctx["raw"] = raw
+	ctx["data"] = DataContext(exampleChildNodes(call.Children), raw)
+	if strings.TrimSpace(call.Body) != "" {
+		ctx["body"] = call.Body
+	}
+	if err := ex.renderChildLists(ctx, call.Children); err != nil {
+		return "", err
+	}
+
+	mediaFS := ex.lib.Media
+	if call.Layer != nil {
+		mediaFS = call.Layer.Media
+	}
+	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
+	funcMap["section"] = exampleSectionHelper(ex.lib, call.Values)
+
+	layoutName := call.Template.Layout.Name
+	if layoutName == "" {
+		layoutName = call.Template.Name
+	}
+	parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(call.Template.Layout.Text)
+	if err != nil {
+		return "", fmt.Errorf("parse target layout: %w", err)
+	}
+	var buf strings.Builder
+	if err := parsed.Execute(&buf, ctx); err != nil {
+		return "", fmt.Errorf("execute target layout: %w", err)
+	}
+	return htmltemplate.HTML(buf.String()), nil
+}
+
+// renderChildLists renders every resolved child of call, deepest first, and
+// appends each child's trusted HTML to ctx under the child's declared section
+// name — the rendered child-section list a target layout splices with
+// `{{ range .<section> }}{{ . }}{{ end }}`, mirroring the render-side
+// renderChildren list (template-language, section-data-context). A child whose
+// layout fails to execute is reported with the child's section name so the error
+// stays path-qualified.
+func (ex *exampleSectionRunner) renderChildLists(ctx map[string]any, children []*ResolvedChild) error {
+	for _, child := range children {
+		if child == nil || child.Call == nil {
+			continue
+		}
+		name := exampleChildName(child.Call)
+		rendered, err := ex.render(child.Call, child.Call.Values)
+		if err != nil {
+			return fmt.Errorf("child %q: %w", name, err)
+		}
+		list, _ := ctx[name].([]htmltemplate.HTML)
+		ctx[name] = append(list, rendered)
+	}
+	return nil
+}
+
+// exampleChildNodes maps the resolved child tree of a section-helper call onto
+// the neutral []ContextNode the shared DataContext walks, so the call's target
+// exposes its passed children as data exactly as an authored parent exposes its
+// child instances (section-data-context, children-forwarding). Each node's
+// Template is the child's resolved template, its Name/Index the child's declared
+// section and sibling position from its resolved `.item`, its Source the child's
+// resolved values (ResolvedChild carries no separate authored source map) and
+// its Body the child's body; nested resolved children recurse. The order is the
+// resolved passed order, so sibling index/count match the `.item` descriptors
+// ResolveChildren assigned.
+func exampleChildNodes(children []*ResolvedChild) []ContextNode {
+	if len(children) == 0 {
+		return nil
+	}
+	nodes := make([]ContextNode, 0, len(children))
+	for _, child := range children {
+		if child == nil || child.Call == nil {
+			continue
+		}
+		call := child.Call
+		nodes = append(nodes, ContextNode{
+			Name:     exampleChildName(call),
+			Index:    exampleChildIndex(call),
+			Template: call.Template,
+			Source:   call.Values,
+			Body:     call.Body,
+			Children: exampleChildNodes(child.Children),
+		})
+	}
+	return nodes
+}
+
+// exampleChildName returns the declared section name a resolved child fills:
+// its `.item.section`, falling back to the instantiated template's name when the
+// descriptor is absent, so the child's `.data` key and rendered-list key match
+// its declared section.
+func exampleChildName(call *SectionCall) string {
+	if call == nil {
+		return ""
+	}
+	if call.Item != nil {
+		if s, ok := call.Item["section"].(string); ok && s != "" {
+			return s
+		}
+	}
+	if call.Template != nil {
+		return call.Template.Name
+	}
+	return ""
+}
+
+// exampleChildIndex returns the zero-based sibling index a resolved child fills
+// from its `.item.index`, or 0 when the descriptor is absent.
+func exampleChildIndex(call *SectionCall) int {
+	if call == nil || call.Item == nil {
+		return 0
+	}
+	if i, ok := call.Item["index"].(int); ok {
+		return i
+	}
+	return 0
 }
 
 // exampleBlock is one parsed `---`/fence-delimited frontmatter plus body plus
