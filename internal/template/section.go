@@ -98,6 +98,16 @@ type HelperCall struct {
 	// the layout. It is empty when BodyLiteral is false.
 	Body string
 
+	// Children are the child-section arguments the call passes to its target
+	// after fields and body, in source order: the values of its
+	// `child`/`children` constructors as the extractor could surface them. It
+	// is nil when the call passes no child arguments, or when the extractor
+	// could not represent them. The registry's build-time checks inspect the
+	// literal children at load and defer the rest, like a non-literal fields
+	// or body expression, to render (requirements.requirement.
+	// section-helper-load-checks).
+	Children []HelperChild
+
 	// Template is the name of the template whose layout declares this call.
 	// It is carried so a build-time helper failure can be path-qualified to
 	// that template's template.yaml.
@@ -106,6 +116,104 @@ type HelperCall struct {
 	// Line is the 1-based line of the call within the declaring layout's
 	// source, or 0 when no position was resolved.
 	Line int
+}
+
+// HelperChild is one child-section argument of a `section` helper call as it
+// appears statically in the declaring layout: a `child "<section>" [fields]
+// [body] [child…]` constructor or a `children "<section>" .data.<section>`
+// forwarding, captured well enough for the load-time checks
+// (requirements.requirement.section-helper-load-checks,
+// requirements.requirement.child-constructor,
+// requirements.requirement.children-forwarding).
+//
+// Only a literal child argument can be inspected at load. A literal string
+// section name exposes the declared section the child fills, a literal `dict`
+// fields argument exposes the entries the child supplies, and a string-literal
+// body exposes the body Markdown to parse. A non-literal piece — a variable, a
+// `.raw`/`.item.parent` pass-through or a range value — is a permitted
+// pass-through: it loads here and its fields and body are checked against the
+// target's declared sections when the target renders (field-rules, body-rules).
+// A `children` forwarding of a runtime `.data` list is never inspected at load
+// either.
+//
+// The struct mirrors HelperCall's representation of a call's fields and body:
+// the literal markers (FieldsLiteral, BodyLiteral) record whether each argument
+// was a literal the extractor could capture, while the presence markers
+// (HasFields, HasBody) distinguish an omitted argument from a literal empty one.
+// For a well-formed extracted child exactly one of Literal, NonLiteral and
+// Forward is true.
+type HelperChild struct {
+	// Section is the declared section name the child fills — the literal
+	// first argument, the `"<section>"` in `child "<section>" …`, naming a
+	// slot in the helper target's declared `sections:`. It is empty when the
+	// section argument is not a string literal, which NonLiteral records.
+	Section string
+
+	// HasFields reports whether the child supplies a fields argument. It
+	// distinguishes an omitted fields argument from a literal one that
+	// supplies no keys.
+	HasFields bool
+
+	// FieldsLiteral reports whether the fields argument is a literal `dict`
+	// call all of whose entries the extractor could capture. When it is true
+	// Fields holds that call's literal keys and values; when it is false the
+	// argument is either absent or a non-literal expression whose entries
+	// cannot be known until render.
+	FieldsLiteral bool
+
+	// Fields holds the literal keys and values of a literal `dict` fields
+	// argument, exactly as the extractor sees them. It may carry the reserved
+	// `template` selector key, which chooses the instantiated template; the
+	// load-time check removes that key before it checks the rest, so it is
+	// never counted as a field, exactly as for a resolved ChildRequest
+	// (field-rules). It is nil when FieldsLiteral is false.
+	Fields map[string]any
+
+	// HasBody reports whether the child supplies a body argument. It
+	// distinguishes an omitted body argument from a literal empty one, which
+	// the target's body rule may treat differently.
+	HasBody bool
+
+	// BodyLiteral reports whether the body argument is a string literal. When
+	// it is true Body holds that literal Markdown; when it is false the
+	// argument is either absent or a non-literal expression that is checked
+	// against the target's body rule when the target renders.
+	BodyLiteral bool
+
+	// Body is the literal body argument's Markdown, exactly as written in the
+	// layout. It is empty when BodyLiteral is false.
+	Body string
+
+	// Children are the child's own nested `child` arguments, recursively, in
+	// source order. It is nil when the child declares none. Each nested child
+	// is a child argument in its own right and carries its own literal
+	// markers, so a nested child that could not be captured statically does
+	// not itself clear this child's Literal: the checks recurse.
+	Children []HelperChild
+
+	// Literal reports whether every piece THIS child argument carries is a
+	// literal the load-time checks can inspect: a literal string section
+	// name, and a literal (or omitted) fields `dict` and body. A literal
+	// child is the shape the registry's build-time checks consume statically.
+	// Nested children are not part of this flag — they are separate child
+	// arguments, each with its own Literal (see Children) — so it is false
+	// only for a `children` forwarding and for a child carrying a non-literal
+	// section, fields or body piece.
+	Literal bool
+
+	// NonLiteral reports whether this is a `child` argument with at least one
+	// non-literal piece, so it cannot be fully inspected at load and is a
+	// permitted pass-through checked when the target renders. It is false for
+	// a literal child and for a `children` forwarding, which Forward marks
+	// instead.
+	NonLiteral bool
+
+	// Forward reports whether this child is a `children "<section>"
+	// .data.<section>` forwarding of a runtime `.data` list rather than a
+	// literal `child`. Such a child is never inspected at load: its entries
+	// carry their own templates, fields, bodies and nested data and are
+	// re-instantiated when the target renders (children-forwarding).
+	Forward bool
 }
 
 // Declarations returns tmpl's declared sections keyed by section name, each
