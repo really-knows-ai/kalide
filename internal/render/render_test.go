@@ -355,3 +355,241 @@ func TestRenderSlideNestedSections(t *testing.T) {
 		t.Errorf("child leaf markup is not nested inside the block wrapper in source order (a=%d b=%d):\n%s", a, b, firstBlock)
 	}
 }
+
+// The parity probe is the unit deliverable for plan.phase-02.task-5: it renders
+// the SAME wrapper section and the SAME child templates twice — once with the
+// children authored directly under a slide's `wrapper` instance (the parsed-tree
+// path, renderSection/renderInstance) and once with the children passed as
+// `section` helper `child` arguments (the helper path,
+// sectionHelper/renderChildren) — and compares the rendered CHILD fragments byte
+// for byte. Both paths hand each child to the single shared instance renderer
+// (renderInstance), so a helper child renders exactly as the equivalent authored
+// instance does: same rendered HTML, same `.item` (index/number/count/first/
+// last/section/template and parent-derived parent), same `.raw` source view and
+// same `.data` view (item-context, raw-source-context, section-data-context,
+// template-context, section-template-context).
+//
+// Only the CHILD fragments are compared, because the helper call's TARGET
+// wrapper legitimately differs in its own `.item.section`: an authored wrapper
+// is the declared section `wrapper`, while a helper invocation is named by the
+// template it executes (`paritywrapper`). That one field is on the wrapper, not
+// the children, and is deliberately excluded. The child's `.item.parent` is
+// parent-derived: an authored child's parent is the wrapper's CONVERTED field
+// values (a map carrying the wrapper's field values plus its reserved entries),
+// a helper child's is the wrapper's RESOLVED EFFECTIVE values (the fields the
+// call supplied, before conversion), and both render the same parent field (the
+// wrapper's `heading`), so the fragments agree.
+const (
+	// parityChildArgs is the child-argument list BOTH parity paths pass to the
+	// parity wrapper: two `column` children, each with a body and a nested `tag`
+	// grandchild, so the child `.item`/`.raw`/`.data` and the recursion are all
+	// exercised.
+	parityChildArgs = `(child "column" (dict "label" "Alpha") "Alpha body" (child "tag" (dict "name" "AT"))) ` +
+		`(child "column" (dict "label" "Beta") "Beta body" (child "tag" (dict "name" "BT")))`
+
+	// parityWrapperLayout prints its own `.item` descriptor — including whether it
+	// has a `.item.parent` and, when it does, the parent's `heading` field — then
+	// splices its rendered `column` children between two marker spans and reports
+	// the templates of its `.data.column` view. The marker pair lets the test
+	// extract exactly the child fragments from each render.
+	parityWrapperLayout = `<div class="parity-wrapper" data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-parent="{{if .item.parent}}yes{{else}}no{{end}}" data-parent-heading="{{if .item.parent}}{{.item.parent.heading}}{{end}}">` +
+		`<span class="parity-heading">{{.heading}}</span>` +
+		`<span class="parity-children">{{range .column}}{{.}}{{end}}</span>` +
+		`<span class="parity-data-templates">{{range .data.column}}{{.item.template}};{{end}}</span>` +
+		`</div>`
+
+	// parityAuthoredSlideLayout is the AUTHORED variant: the slide carries one
+	// authored `wrapper` instance whose two `column` children are declared in the
+	// parsed tree, and the layout splices the rendered wrapper.
+	parityAuthoredSlideLayout = `<section class="parity-slide">{{range .wrapper}}{{.}}{{end}}</section>`
+
+	// parityHelperSlideLayout is the HELPER variant: the layout makes one
+	// `{{ section "paritywrapper" (dict "heading" "Wrapper H") nil (child …) … }}`
+	// call carrying the same two children as child arguments, so the wrapper and
+	// its children come from the helper path.
+	parityHelperSlideLayout = `<section class="parity-slide">{{section "paritywrapper" (dict "heading" "Wrapper H") nil ` + parityChildArgs + `}}</section>`
+
+	// parityCallerLayout is a SECTION layout that makes the same helper call, so
+	// the called wrapper's `.item.parent` is this calling instance's fields.
+	parityCallerLayout = `<div class="parity-caller" data-heading="{{.heading}}">{{section "paritywrapper" (dict "heading" "Wrapper H") nil ` + parityChildArgs + `}}</div>`
+
+	// parityCallerSlideLayout splices its authored `blocks` caller instance.
+	parityCallerSlideLayout = `<section class="parity-callerslide">{{range .blocks}}{{.}}{{end}}</section>`
+)
+
+// mustSectionChildParityRegistry builds the in-code parity probe: the child
+// templates from mustSectionChildrenRegistry (childrenitem/childtag) plus the
+// parity wrapper and the authored, helper and section-caller slides. It
+// registers templates directly (no content filesystem), so it runs under -short.
+func mustSectionChildParityRegistry(t *testing.T) (*template.Registry, htmltmpl.FuncMap) {
+	t.Helper()
+	reg, funcMap := mustSectionChildrenRegistry(t)
+	for _, tmpl := range []*template.Template{
+		{
+			Name:     "paritywrapper",
+			Usage:    template.UsageSection,
+			Fields:   []template.Field{{Name: "heading", Type: template.FieldText}},
+			Sections: []template.SectionDecl{{Name: "column", Accepted: []string{"childrenitem"}, Max: 5}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: parityWrapperLayout},
+		},
+		{
+			Name:     "parityauthoredslide",
+			Usage:    template.UsageSlide,
+			Sections: []template.SectionDecl{{Name: "wrapper", Accepted: []string{"paritywrapper"}, Max: 4}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: parityAuthoredSlideLayout},
+		},
+		{
+			Name:   "parityhelperslide",
+			Usage:  template.UsageSlide,
+			Body:   template.BodyRule{Mode: template.BodyOptional},
+			Layout: template.Layout{Text: parityHelperSlideLayout},
+		},
+		{
+			Name:   "paritycaller",
+			Usage:  template.UsageSection,
+			Fields: []template.Field{{Name: "heading", Type: template.FieldText}},
+			Body:   template.BodyRule{Mode: template.BodyOptional},
+			Layout: template.Layout{Text: parityCallerLayout},
+		},
+		{
+			Name:     "paritycallerslide",
+			Usage:    template.UsageSlide,
+			Sections: []template.SectionDecl{{Name: "blocks", Accepted: []string{"paritycaller"}, Max: 4}},
+			Body:     template.BodyRule{Mode: template.BodyOptional},
+			Layout:   template.Layout{Text: parityCallerSlideLayout},
+		},
+	} {
+		if err := reg.Register(tmpl); err != nil {
+			t.Fatalf("register template %q: %v", tmpl.Name, err)
+		}
+	}
+	return reg, funcMap
+}
+
+// parityChildren extracts the contiguous rendered `column` child fragments a
+// parity wrapper splices between its `<span class="parity-children">` marker and
+// the `<span class="parity-data-templates">` marker that follows, so an authored
+// wrapper's and a helper wrapper's CHILD fragments — their `.item`/`.raw`/`.data`
+// and parent-derived `.item.parent`, but not the wrapper's own descriptor — can
+// be compared byte for byte.
+func parityChildren(t *testing.T, rendered string) string {
+	t.Helper()
+	const open = `<span class="parity-children">`
+	const close = `<span class="parity-data-templates">`
+	i := strings.Index(rendered, open)
+	j := strings.Index(rendered, close)
+	if i < 0 || j < 0 || j < i {
+		t.Fatalf("parity wrapper markers not found (open=%d close=%d):\n%s", i, j, rendered)
+	}
+	return rendered[i+len(open) : j]
+}
+
+// TestRenderSlideSectionHelperChildParity pins that a section-helper child
+// renders byte-identically to the equivalent authored instance: the same wrapper
+// and child templates are rendered once with the children authored under a
+// slide's wrapper instance and once with the same children passed as `section`
+// helper `child` arguments, and the rendered child fragments are compared
+// exactly. It also pins that a `section` helper invocation made from a SLIDE
+// layout has a nil `.item.parent`, while one made from a SECTION layout carries
+// the caller's fields as `.item.parent`
+// (item-context, section-template-context, template-context, raw-source-context,
+// section-data-context).
+func TestRenderSlideSectionHelperChildParity(t *testing.T) {
+	reg, funcMap := mustSectionChildParityRegistry(t)
+	cfg := &deck.Config{Title: "Parity Deck"}
+	meta := deck.Slide{Number: 1, Label: "parity"}
+
+	// The authored variant: one authored `wrapper` instance carrying the SAME two
+	// `column` children the helper call passes as `child` arguments.
+	authored := &slide.Slide{
+		File:     "slides/1-authored.md",
+		Template: "parityauthoredslide",
+		Sections: []slide.Section{
+			{
+				Name: "wrapper", Level: 1, Index: 0, Template: "paritywrapper",
+				Frontmatter: map[string]any{"heading": "Wrapper H"},
+				Children: []slide.Section{
+					{
+						Name: "column", Level: 2, Index: 0, Template: "childrenitem",
+						Frontmatter: map[string]any{"label": "Alpha"}, Body: "Alpha body",
+						Children: []slide.Section{
+							{Name: "tag", Level: 3, Index: 0, Template: "childtag", Frontmatter: map[string]any{"name": "AT"}},
+						},
+					},
+					{
+						Name: "column", Level: 2, Index: 1, Template: "childrenitem",
+						Frontmatter: map[string]any{"label": "Beta"}, Body: "Beta body",
+						Children: []slide.Section{
+							{Name: "tag", Level: 3, Index: 0, Template: "childtag", Frontmatter: map[string]any{"name": "BT"}},
+						},
+					},
+				},
+			},
+		},
+	}
+	authoredHTML := renderSlideString(t, authored, "parity", cfg, meta, 1, reg, funcMap)
+
+	// The helper variant: the same wrapper reached through one `section` call
+	// made from the slide layout.
+	helper := &slide.Slide{File: "slides/2-helper.md", Template: "parityhelperslide"}
+	helperHTML := renderSlideString(t, helper, "parity", cfg, meta, 1, reg, funcMap)
+
+	authoredChildren := parityChildren(t, authoredHTML)
+	helperChildren := parityChildren(t, helperHTML)
+	if authoredChildren == "" {
+		t.Fatal("the parity probe rendered no child fragments; the comparison would be vacuous")
+	}
+	if authoredChildren != helperChildren {
+		t.Errorf("authored and section-helper child fragments differ:\nauthored: %s\nhelper:   %s", authoredChildren, helperChildren)
+	}
+
+	// Pin the shared child contract the parity rests on: each child is one of the
+	// two same-name `column` siblings, with its own sibling descriptor over the
+	// full passed set (index/number/count/first/last, section `column`, template
+	// `childrenitem`), its `.item.parent` the wrapper's heading, its own `.raw`
+	// source values and its own nested `tag`.
+	for _, want := range []string{
+		`<span class="child-item" data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="column" data-template="childrenitem" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="child-label">Alpha</span>` +
+			`<span class="child-raw-label">Alpha</span>` +
+			`<span class="child-raw-body">Alpha body</span>` +
+			"<span class=\"child-body\"><p>Alpha body</p>\n</span>" +
+			`<span class="child-data-keys">tag;</span>` +
+			`<b class="child-tag">AT</b>`,
+		`<span class="child-item" data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="column" data-template="childrenitem" data-parent="yes" data-parent-heading="Wrapper H">` +
+			`<span class="child-label">Beta</span>` +
+			`<span class="child-raw-label">Beta</span>` +
+			`<span class="child-raw-body">Beta body</span>` +
+			"<span class=\"child-body\"><p>Beta body</p>\n</span>" +
+			`<span class="child-data-keys">tag;</span>` +
+			`<b class="child-tag">BT</b>`,
+	} {
+		if !strings.Contains(helperChildren, want) {
+			t.Errorf("helper child fragment does not contain %q:\n%s", want, helperChildren)
+		}
+	}
+
+	// A `section` invocation made from a SLIDE layout has a nil `.item.parent`:
+	// the parent of a call made from a slide is the slide, not a section
+	// instance, so the wrapper's own descriptor carries no parent and no parent
+	// heading.
+	if want := `<div class="parity-wrapper" data-index="0" data-number="1" data-count="1" data-section="paritywrapper" data-template="paritywrapper" data-parent="no" data-parent-heading="">`; !strings.Contains(helperHTML, want) {
+		t.Errorf("section helper target invoked from a slide does not carry a nil .item.parent:\nwant %q\ngot  %s", want, helperHTML)
+	}
+
+	// The same invocation made from a SECTION layout has the caller's fields as
+	// its `.item.parent`.
+	caller := &slide.Slide{
+		File:     "slides/3-caller.md",
+		Template: "paritycallerslide",
+		Sections: []slide.Section{
+			{Name: "blocks", Level: 1, Index: 0, Template: "paritycaller", Frontmatter: map[string]any{"heading": "Caller H"}},
+		},
+	}
+	callerHTML := renderSlideString(t, caller, "parity", cfg, meta, 1, reg, funcMap)
+	if want := `<div class="parity-wrapper" data-index="0" data-number="1" data-count="1" data-section="paritywrapper" data-template="paritywrapper" data-parent="yes" data-parent-heading="Caller H">`; !strings.Contains(callerHTML, want) {
+		t.Errorf("section helper target invoked from a section does not carry the caller's fields as .item.parent:\nwant %q\ngot  %s", want, callerHTML)
+	}
+}
