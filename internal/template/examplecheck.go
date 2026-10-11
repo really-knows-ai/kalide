@@ -236,8 +236,8 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 // at parse time and cannot rebind `media`/`section` on a parsed set.
 //
 // The returned namespace's root template is "layouts"; a caller executes a
-// specific layout with ExecuteTemplate under that layout's name. A library
-// template with no layout text is an error, mirroring render.namespaceForLayer.
+// layout with ExecuteTemplate under that layout's name. A library template with
+// no layout text is an error, mirroring render.namespaceForLayer.
 func exampleLayoutNamespace(lib *Library, layer *LibraryLayer, callerFields map[string]any) (*htmltemplate.Template, error) {
 	if lib == nil {
 		return nil, fmt.Errorf("example layout namespace: no library")
