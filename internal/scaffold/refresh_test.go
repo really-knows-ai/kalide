@@ -404,29 +404,36 @@ func TestDetectSeedDeck(t *testing.T) {
 }
 
 // TestRefreshScaffoldDeckDecisions covers refreshScaffold's never-clobber
-// decisions for the no-arg seed deck: an absent AGENTS.md guide is written, an
-// absent seed starter file is never re-created, a present byte-identical
-// catalogued released member is refreshed, an author-edited member is skipped,
-// and the report lists every owned member path
+// decisions for the no-arg seed deck: an absent author-guide pair — the
+// AGENTS_KALIDE.md full guide and the AGENTS.md pointer — is written (the
+// absent-write exception), an absent seed starter file is never re-created, a
+// present byte-identical catalogued released member is refreshed, an
+// author-edited member is skipped, and the report lists every owned member path
 // (global.constraint.upgrade-never-clobbers,
 // requirements.constraint.upgrade-owned-scaffold-scope).
 func TestRefreshScaffoldDeckDecisions(t *testing.T) {
-	t.Run("an absent deck-root AGENTS.md guide is written", func(t *testing.T) {
+	t.Run("absent deck-root author guides are written", func(t *testing.T) {
 		root := refreshSeedDeck(t)
-		guide := refreshAbs(root, agentsGuideName)
-		if err := os.Remove(guide); err != nil {
-			t.Fatalf("remove %s: %v", guide, err)
+		for _, rel := range []string{agentGuideFullGuideName, agentsGuideName} {
+			if err := os.Remove(refreshAbs(root, rel)); err != nil {
+				t.Fatalf("remove %s: %v", rel, err)
+			}
 		}
 
 		report, err := refreshScaffold(root, projectKindDeck, nil)
 		if err != nil {
 			t.Fatalf("refreshScaffold error = %v", err)
 		}
-		if got, want := refreshRead(t, guide), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
-			t.Errorf("written %s does not equal the embedded deck guide", agentsGuideName)
+		if got, want := refreshRead(t, refreshAbs(root, agentGuideFullGuideName)), mustReadSeed(agentGuideFullGuideName); !bytes.Equal(got, want) {
+			t.Errorf("written %s does not equal the embedded deck full guide", agentGuideFullGuideName)
 		}
-		if !refreshIn(report.refreshed, agentsGuideName) {
-			t.Errorf("report.refreshed = %v, want it to name the written %s", report.refreshed, agentsGuideName)
+		if got, want := refreshRead(t, refreshAbs(root, agentsGuideName)), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
+			t.Errorf("written %s does not equal the embedded deck pointer", agentsGuideName)
+		}
+		for _, rel := range []string{agentGuideFullGuideName, agentsGuideName} {
+			if !refreshIn(report.refreshed, rel) {
+				t.Errorf("report.refreshed = %v, want it to name the written %s", report.refreshed, rel)
+			}
 		}
 	})
 
@@ -507,28 +514,34 @@ func TestRefreshScaffoldDeckDecisions(t *testing.T) {
 }
 
 // TestRefreshScaffoldLibrary covers the library form
-// (requirements.constraint.upgrade-owned-scaffold-scope): an absent
-// library-root AGENTS.md guide is written, a catalogued library
-// themes/default/theme.css is refreshed to the seeded default, an author-edited
-// library theme is skipped and reported, and a library's own slides/ and
-// sections/ (its template content) are never written.
+// (requirements.constraint.upgrade-owned-scaffold-scope): an absent library-root
+// AGENTS_KALIDE.md full guide and AGENTS.md pointer are written, a catalogued
+// library themes/default/theme.css is refreshed to the seeded default, an
+// author-edited library theme is skipped and reported, and a library's own
+// slides/ and sections/ (its template content) are never written.
 func TestRefreshScaffoldLibrary(t *testing.T) {
-	t.Run("an absent library-root AGENTS.md guide is written", func(t *testing.T) {
+	t.Run("absent library-root author guides are written", func(t *testing.T) {
 		root := refreshLibrary(t)
-		guide := refreshAbs(root, agentsGuideName)
-		if err := os.Remove(guide); err != nil {
-			t.Fatalf("remove %s: %v", guide, err)
+		for _, rel := range []string{agentGuideFullGuideName, agentsGuideName} {
+			if err := os.Remove(refreshAbs(root, rel)); err != nil {
+				t.Fatalf("remove %s: %v", rel, err)
+			}
 		}
 
 		report, err := refreshScaffold(root, projectKindLibrary, nil)
 		if err != nil {
 			t.Fatalf("refreshScaffold error = %v", err)
 		}
-		if got, want := refreshRead(t, guide), mustReadLibraryGuide(); !bytes.Equal(got, want) {
-			t.Errorf("written %s does not equal the embedded library guide", agentsGuideName)
+		if got, want := refreshRead(t, refreshAbs(root, agentGuideFullGuideName)), mustReadLibraryFullGuide(); !bytes.Equal(got, want) {
+			t.Errorf("written %s does not equal the embedded library full guide", agentGuideFullGuideName)
 		}
-		if !refreshIn(report.refreshed, agentsGuideName) {
-			t.Errorf("report.refreshed = %v, want it to name the written %s", report.refreshed, agentsGuideName)
+		if got, want := refreshRead(t, refreshAbs(root, agentsGuideName)), mustReadLibraryGuide(); !bytes.Equal(got, want) {
+			t.Errorf("written %s does not equal the embedded library pointer", agentsGuideName)
+		}
+		for _, rel := range []string{agentGuideFullGuideName, agentsGuideName} {
+			if !refreshIn(report.refreshed, rel) {
+				t.Errorf("report.refreshed = %v, want it to name the written %s", report.refreshed, rel)
+			}
 		}
 	})
 
@@ -682,18 +695,22 @@ func TestRefreshScaffoldExternalDeck(t *testing.T) {
 
 		refreshAssertAbsent(t, filepath.Join(root, template.TemplatesDir))
 		refreshAssertAbsent(t, refreshAbs(root, starterSlidePath))
-		// The refreshed deck is exactly kalide.yaml plus the guide it wrote:
-		// refreshScaffold created no local templates/ and no starter slide.
-		if got, want := listTree(t, root), []string{agentsGuideName, deck.ConfigFile}; !slices.Equal(got, want) {
+		// The refreshed deck is exactly kalide.yaml plus the author-guide pair
+		// it wrote: refreshScaffold created no local templates/ and no starter
+		// slide.
+		if got, want := listTree(t, root), []string{agentsGuideName, agentGuideFullGuideName, deck.ConfigFile}; !slices.Equal(got, want) {
 			t.Errorf("deck tree after refresh = %v, want %v (no local templates/, no starter slide)", got, want)
 		}
 
-		// The external-library deck owns only its deck-root guide, which was
-		// absent and so was written.
+		// The external-library deck owns its deck-root author-guide pair both
+		// halves of which were absent and so were written.
 		if got := refreshRead(t, refreshAbs(root, agentsGuideName)); !bytes.Equal(got, mustReadSeed(agentsGuideName)) {
-			t.Errorf("written %s does not equal the embedded deck guide", agentsGuideName)
+			t.Errorf("written %s does not equal the embedded deck pointer", agentsGuideName)
 		}
-		refreshAssertReport(t, report, []string{agentsGuideName})
+		if got := refreshRead(t, refreshAbs(root, agentGuideFullGuideName)); !bytes.Equal(got, mustReadSeed(agentGuideFullGuideName)) {
+			t.Errorf("written %s does not equal the embedded deck full guide", agentGuideFullGuideName)
+		}
+		refreshAssertReport(t, report, []string{agentsGuideName, agentGuideFullGuideName})
 	})
 
 	t.Run("a local templates layer with seed names is author content and never refreshed", func(t *testing.T) {
@@ -773,7 +790,7 @@ func TestRefreshScaffoldExternalDeck(t *testing.T) {
 		if refreshIn(report.refreshed, authorRel) || refreshIn(report.skipped, authorRel) {
 			t.Errorf("report names %s; an external-library deck's local templates/ layer is author content", authorRel)
 		}
-		refreshAssertReport(t, report, []string{agentsGuideName})
+		refreshAssertReport(t, report, []string{agentsGuideName, agentGuideFullGuideName})
 	})
 }
 
@@ -782,16 +799,17 @@ func TestRefreshScaffoldExternalDeck(t *testing.T) {
 // (global.constraint.upgrade-known-version-catalog): a file whose bytes match a
 // DIFFERENT owned file's catalogued digest is skipped, not refreshed. The seed
 // and library default theme.css legitimately share identical bytes, so that
-// shared digest is catalogued under BOTH theme identities; the deck guide and
-// library guide digests are each catalogued under their own identity only and
-// are the true cross-identity cases.
+// shared digest is catalogued under BOTH theme identities; the split author
+// guides — the deck/library AGENTS_KALIDE.md full guides (distinct digests) and
+// the shared AGENTS.md pointer bytes — are catalogued under their own guide
+// identities only, and are the true cross-identity cases.
 func TestRefreshScaffoldCrossIdentity(t *testing.T) {
-	t.Run("the deck guide bytes do not refresh the library theme", func(t *testing.T) {
+	t.Run("the deck full-guide bytes do not refresh the library theme", func(t *testing.T) {
 		root := refreshLibrary(t)
 		theme := refreshAbs(root, themeCSSPath)
-		foreign := mustReadSeed(agentsGuideName)
+		foreign := mustReadSeed(agentGuideFullGuideName)
 		if bytes.Equal(foreign, []byte(DefaultThemeCSS())) {
-			t.Fatal("fixture degenerate: the deck guide bytes equal the seeded default theme")
+			t.Fatal("fixture degenerate: the deck full-guide bytes equal the seeded default theme")
 		}
 		refreshWrite(t, theme, foreign)
 		refreshPin(t, theme)
@@ -803,14 +821,14 @@ func TestRefreshScaffoldCrossIdentity(t *testing.T) {
 		refreshAssertUnchanged(t, theme, foreign)
 		if refreshIn(report.refreshed, themeCSSPath) {
 			t.Errorf("report.refreshed = %v; bytes catalogued for deck:%s must not refresh library:%s",
-				report.refreshed, agentsGuideName, themeCSSPath)
+				report.refreshed, agentGuideFullGuideName, themeCSSPath)
 		}
 	})
 
-	t.Run("the library guide bytes do not refresh the deck theme", func(t *testing.T) {
+	t.Run("the library full-guide bytes do not refresh the deck theme", func(t *testing.T) {
 		root := refreshSeedDeck(t)
 		theme := refreshAbs(root, refreshDeckThemePath)
-		foreign := mustReadLibraryGuide()
+		foreign := mustReadLibraryFullGuide()
 		refreshWrite(t, theme, foreign)
 		refreshPin(t, theme)
 
@@ -820,8 +838,33 @@ func TestRefreshScaffoldCrossIdentity(t *testing.T) {
 		}
 		refreshAssertUnchanged(t, theme, foreign)
 		if refreshIn(report.refreshed, refreshDeckThemePath) {
-			t.Errorf("report.refreshed = %v; bytes catalogued for library:AGENTS.md must not refresh deck:%s",
-				report.refreshed, refreshDeckThemePath)
+			t.Errorf("report.refreshed = %v; bytes catalogued for library:%s must not refresh deck:%s",
+				report.refreshed, agentGuideFullGuideName, refreshDeckThemePath)
+		}
+	})
+
+	t.Run("the AGENTS.md pointer bytes do not refresh a theme", func(t *testing.T) {
+		// The deck and library pointer bytes are identical (the same fixed
+		// reference file) and so share one digest, but that digest is
+		// catalogued under the AGENTS.md identities, never a theme identity: a
+		// theme holding the pointer bytes is skipped, not refreshed.
+		root := refreshLibrary(t)
+		theme := refreshAbs(root, themeCSSPath)
+		foreign := mustReadSeed(agentsGuideName)
+		if bytes.Equal(foreign, []byte(DefaultThemeCSS())) {
+			t.Fatal("fixture degenerate: the AGENTS.md pointer bytes equal the seeded default theme")
+		}
+		refreshWrite(t, theme, foreign)
+		refreshPin(t, theme)
+
+		report, err := refreshScaffold(root, projectKindLibrary, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		refreshAssertUnchanged(t, theme, foreign)
+		if refreshIn(report.refreshed, themeCSSPath) {
+			t.Errorf("report.refreshed = %v; bytes catalogued for %s must not refresh library:%s",
+				report.refreshed, agentsGuideName, themeCSSPath)
 		}
 	})
 
@@ -883,8 +926,9 @@ func TestRefreshScaffoldAlreadyCurrent(t *testing.T) {
 	t.Run("every library member already current is not rewritten", func(t *testing.T) {
 		root := refreshLibrary(t)
 		want := map[string][]byte{
-			agentsGuideName: mustReadLibraryGuide(),
-			themeCSSPath:    []byte(DefaultThemeCSS()),
+			agentsGuideName:         mustReadLibraryGuide(),
+			agentGuideFullGuideName: mustReadLibraryFullGuide(),
+			themeCSSPath:            []byte(DefaultThemeCSS()),
 		}
 		for _, member := range libraryOwnedMembers {
 			refreshPin(t, refreshAbs(root, member.path))
@@ -1076,10 +1120,11 @@ func refreshLoadLibrary(t *testing.T, libraryRoot string) {
 // content is byte-for-byte identical, a deleted starter file is not re-created,
 // an external-library deck gets no local templates/ or starter slide and leaves
 // its configured library byte- and mtime-untouched, an old catalogued AGENTS.md
-// (deck and library) is replaced by the current guide, a second run is a no-op,
-// and the project still loads cleanly. It uses the real filesystem under a
-// t.TempDir only: no server, no network and no git, so it is int tier and
-// guarded with testing.Short.
+// (deck and library) is migrated to the current pointer while the current
+// AGENTS_KALIDE.md full guide is written, a second run is a no-op, and the
+// project still loads cleanly. It uses the real filesystem under a t.TempDir
+// only: no server, no network and no git, so it is int tier and guarded with
+// testing.Short.
 func TestRefreshScaffold(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: builds real projects on disk and re-validates them through the loaders")
@@ -1206,8 +1251,9 @@ func TestRefreshScaffold(t *testing.T) {
 		refreshAssertAbsent(t, filepath.Join(deckRoot, template.TemplatesDir))
 		refreshAssertAbsent(t, refreshAbs(deckRoot, starterSlidePath))
 
-		// The deck-root guide is the only owned member and was already current.
-		refreshAssertReport(t, report, []string{agentsGuideName})
+		// The two halves of the deck-root author-guide pair are the only owned
+		// members and were already current.
+		refreshAssertReport(t, report, []string{agentsGuideName, agentGuideFullGuideName})
 		if len(report.refreshed) != 0 {
 			t.Errorf("report.refreshed = %v, want no write for an already-current external-library deck", report.refreshed)
 		}
@@ -1216,9 +1262,16 @@ func TestRefreshScaffold(t *testing.T) {
 		refreshLoadDeck(t, deckRoot, libraryRoot, "../shared-lib")
 	})
 
-	t.Run("an old catalogued deck guide is replaced by the current guide", func(t *testing.T) {
+	t.Run("an old catalogued deck guide is migrated to the pointer and the full guide written", func(t *testing.T) {
 		root := refreshSeedDeck(t)
 		guide := refreshAbs(root, agentsGuideName)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		// The migration scenario: the AGENTS.md holds a released full guide AND
+		// no AGENTS_KALIDE.md exists, so the refresh run both migrates AGENTS.md
+		// to the short pointer and writes the current full guide.
+		if err := os.Remove(full); err != nil {
+			t.Fatalf("remove %s: %v", agentGuideFullGuideName, err)
+		}
 		old := []byte("# an older released kalide deck guide\n\nOld guidance.\n")
 		refreshWrite(t, guide, old)
 		// The embedded catalogue holds digests only, so the seam presents the
@@ -1235,16 +1288,25 @@ func TestRefreshScaffold(t *testing.T) {
 		}
 
 		if got, want := refreshRead(t, guide), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
-			t.Errorf("old catalogued deck guide was not replaced by the current guide")
+			t.Errorf("old catalogued deck guide was not migrated to the current pointer")
 		}
-		if !refreshIn(report.refreshed, agentsGuideName) {
-			t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, agentsGuideName)
+		if got, want := refreshRead(t, full), mustReadSeed(agentGuideFullGuideName); !bytes.Equal(got, want) {
+			t.Errorf("the current %s full guide was not written", agentGuideFullGuideName)
+		}
+		for _, rel := range []string{agentsGuideName, agentGuideFullGuideName} {
+			if !refreshIn(report.refreshed, rel) {
+				t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, rel)
+			}
 		}
 	})
 
-	t.Run("an old catalogued library guide is replaced by the current guide", func(t *testing.T) {
+	t.Run("an old catalogued library guide is migrated to the pointer and the full guide written", func(t *testing.T) {
 		root := refreshLibrary(t)
 		guide := refreshAbs(root, agentsGuideName)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		if err := os.Remove(full); err != nil {
+			t.Fatalf("remove %s: %v", agentGuideFullGuideName, err)
+		}
 		old := []byte("# an older released kalide library guide\n\nOld guidance.\n")
 		refreshWrite(t, guide, old)
 		refreshSetCatalog(t, refreshCatalogFixture{libraryGuideIdentity: {old}})
@@ -1259,10 +1321,15 @@ func TestRefreshScaffold(t *testing.T) {
 		}
 
 		if got, want := refreshRead(t, guide), mustReadLibraryGuide(); !bytes.Equal(got, want) {
-			t.Errorf("old catalogued library guide was not replaced by the current guide")
+			t.Errorf("old catalogued library guide was not migrated to the current pointer")
 		}
-		if !refreshIn(report.refreshed, agentsGuideName) {
-			t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, agentsGuideName)
+		if got, want := refreshRead(t, full), mustReadLibraryFullGuide(); !bytes.Equal(got, want) {
+			t.Errorf("the current %s full guide was not written", agentGuideFullGuideName)
+		}
+		for _, rel := range []string{agentsGuideName, agentGuideFullGuideName} {
+			if !refreshIn(report.refreshed, rel) {
+				t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, rel)
+			}
 		}
 	})
 
@@ -1329,5 +1396,171 @@ func TestRefreshScaffold(t *testing.T) {
 			refreshAssertUnchanged(t, refreshAbs(root, agentsGuideName), mustReadLibraryGuide())
 			refreshAssertUnchanged(t, refreshAbs(root, themeCSSPath), []byte(DefaultThemeCSS()))
 		})
+	})
+}
+
+// TestRefreshScaffoldAgentGuidePointer covers the refresh half's
+// agent-guide-reference scheme through refreshScaffold
+// (requirements.requirement.agent-guide-reference,
+// requirements.requirement.agent-authoring,
+// global.constraint.upgrade-never-clobbers): the AGENTS.md pointer four-case
+// scheme (absent -> created; already carrying the reference line -> untouched;
+// an author file without it -> the reference line appended with the author's
+// bytes preserved; byte-identical to a known released full guide -> migrated to
+// the short pointer) and the AGENTS_KALIDE.md full guide's absent-write
+// exception (written only when absent, never refreshed over a present file —
+// even one byte-identical to a catalogued released full guide). The cases run
+// the real refreshScaffold over a seed deck (deck form) and a template library
+// (library form); the released full guide is presented through the
+// refreshSetCatalog seam, because the embedded catalogue holds digests only.
+func TestRefreshScaffoldAgentGuidePointer(t *testing.T) {
+	t.Run("an absent deck pointer is created", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		if err := os.Remove(pointer); err != nil {
+			t.Fatalf("remove %s: %v", agentsGuideName, err)
+		}
+
+		report, err := refreshScaffold(root, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		if got, want := refreshRead(t, pointer), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
+			t.Errorf("created %s does not equal the embedded pointer", agentsGuideName)
+		}
+		if !refreshIn(report.refreshed, agentsGuideName) {
+			t.Errorf("report.refreshed = %v, want the created %s", report.refreshed, agentsGuideName)
+		}
+	})
+
+	t.Run("a deck pointer already carrying the reference line is untouched", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		author := []byte("# My own guide\n\n" + agentGuideReferenceLine + "\n\nMore of my notes.\n")
+		refreshWrite(t, pointer, author)
+		refreshPin(t, pointer)
+
+		report, err := refreshScaffold(root, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		refreshAssertUnchanged(t, pointer, author)
+		if !refreshIn(report.skipped, agentsGuideName) {
+			t.Errorf("report.skipped = %v, want the already-referencing %s", report.skipped, agentsGuideName)
+		}
+		if refreshIn(report.refreshed, agentsGuideName) {
+			t.Errorf("report.refreshed = %v, want the already-referencing %s untouched", report.refreshed, agentsGuideName)
+		}
+	})
+
+	t.Run("an author deck pointer without the reference line is appended", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		// No trailing newline: the appended line is separated by a newline.
+		author := []byte("# My own guide\n\nMy notes and no trailing newline.")
+		refreshWrite(t, pointer, author)
+		refreshPin(t, pointer)
+
+		report, err := refreshScaffold(root, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		want := []byte("# My own guide\n\nMy notes and no trailing newline.\n" + agentGuideReferenceLine + "\n")
+		if got := refreshRead(t, pointer); !bytes.Equal(got, want) {
+			t.Errorf("%s = %q, want the author bytes preserved and the reference line appended, %q", agentsGuideName, got, want)
+		}
+		if !refreshIn(report.refreshed, agentsGuideName) {
+			t.Errorf("report.refreshed = %v, want the appended %s", report.refreshed, agentsGuideName)
+		}
+	})
+
+	t.Run("a deck pointer that is a known released full guide is migrated", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		old := []byte("# an older released kalide deck full guide\n\nOld guidance.\n")
+		refreshWrite(t, pointer, old)
+		refreshSetCatalog(t, refreshCatalogFixture{deckGuideIdentity: {old}})
+
+		report, err := refreshScaffold(root, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		if got, want := refreshRead(t, pointer), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
+			t.Errorf("released full guide was not migrated to the short pointer")
+		}
+		if !refreshIn(report.refreshed, agentsGuideName) {
+			t.Errorf("report.refreshed = %v, want the migrated %s", report.refreshed, agentsGuideName)
+		}
+	})
+
+	t.Run("an absent deck full guide is written", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		if err := os.Remove(full); err != nil {
+			t.Fatalf("remove %s: %v", agentGuideFullGuideName, err)
+		}
+
+		report, err := refreshScaffold(root, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		if got, want := refreshRead(t, full), mustReadSeed(agentGuideFullGuideName); !bytes.Equal(got, want) {
+			t.Errorf("written %s does not equal the embedded deck full guide", agentGuideFullGuideName)
+		}
+		if !refreshIn(report.refreshed, agentGuideFullGuideName) {
+			t.Errorf("report.refreshed = %v, want the written %s", report.refreshed, agentGuideFullGuideName)
+		}
+	})
+
+	t.Run("a present deck full guide is never refreshed, even when catalogued released", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		author := []byte("# my own kalide guide, hand-edited\n\nDo not touch.\n")
+		refreshWrite(t, full, author)
+		refreshPin(t, full)
+		// Even a byte sequence catalogued as a released version of the full
+		// guide identity is left alone: the full guide is the absent-write
+		// exception only, never a whole-file refresh member.
+		refreshSetCatalog(t, refreshCatalogFixture{deckFullGuideIdentity: {author}})
+
+		report, err := refreshScaffold(root, projectKindDeck, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		refreshAssertUnchanged(t, full, author)
+		if !refreshIn(report.skipped, agentGuideFullGuideName) {
+			t.Errorf("report.skipped = %v, want the present %s", report.skipped, agentGuideFullGuideName)
+		}
+		if refreshIn(report.refreshed, agentGuideFullGuideName) {
+			t.Errorf("report.refreshed = %v, want the present %s never refreshed", report.refreshed, agentGuideFullGuideName)
+		}
+	})
+
+	t.Run("a library pointer that is a known released full guide is migrated and the full guide written", func(t *testing.T) {
+		root := refreshLibrary(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		if err := os.Remove(full); err != nil {
+			t.Fatalf("remove %s: %v", agentGuideFullGuideName, err)
+		}
+		old := []byte("# an older released kalide library full guide\n\nOld guidance.\n")
+		refreshWrite(t, pointer, old)
+		refreshSetCatalog(t, refreshCatalogFixture{libraryGuideIdentity: {old}})
+
+		report, err := refreshScaffold(root, projectKindLibrary, nil)
+		if err != nil {
+			t.Fatalf("refreshScaffold error = %v", err)
+		}
+		if got, want := refreshRead(t, pointer), mustReadLibraryGuide(); !bytes.Equal(got, want) {
+			t.Errorf("released library full guide was not migrated to the short pointer")
+		}
+		if got, want := refreshRead(t, full), mustReadLibraryFullGuide(); !bytes.Equal(got, want) {
+			t.Errorf("the current %s full guide was not written", agentGuideFullGuideName)
+		}
+		for _, rel := range []string{agentsGuideName, agentGuideFullGuideName} {
+			if !refreshIn(report.refreshed, rel) {
+				t.Errorf("report.refreshed = %v, want it to name the refreshed %s", report.refreshed, rel)
+			}
+		}
 	})
 }

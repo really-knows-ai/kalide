@@ -38,10 +38,12 @@ import (
 
 // upgradeDeckMemberPaths is the kalide-owned deck member set refreshScaffold
 // visits, in visit order (internal/scaffold/refresh.go deckOwnedMembers): the
-// deck-root guide, the local library.yaml, the hello template's three files, the
-// default theme and the starter slide. It is the deck form's report path set.
+// deck-root AGENTS.md pointer and its AGENTS_KALIDE.md full guide, the local
+// library.yaml, the hello template's three files, the default theme and the
+// starter slide. It is the deck form's report path set.
 var upgradeDeckMemberPaths = []string{
 	"AGENTS.md",
+	"AGENTS_KALIDE.md",
 	template.TemplatesDir + "/" + template.LibraryFile,
 	template.TemplatesDir + "/" + template.SlidesDir + "/" + "hello/" + template.ExampleFile,
 	template.TemplatesDir + "/" + template.SlidesDir + "/" + "hello/" + template.LayoutFile,
@@ -52,9 +54,11 @@ var upgradeDeckMemberPaths = []string{
 
 // upgradeLibraryMemberPaths is the library-owned deck member set refreshScaffold
 // visits, in visit order (internal/scaffold/refresh.go libraryOwnedMembers): the
-// library-root guide and the seeded default theme.
+// library-root AGENTS.md pointer and its AGENTS_KALIDE.md full guide, and the
+// seeded default theme.
 var upgradeLibraryMemberPaths = []string{
 	"AGENTS.md",
+	"AGENTS_KALIDE.md",
 	template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
 }
 
@@ -94,9 +98,10 @@ func upgradeReportNamesPath(stdout, rel string) bool {
 // constructed from package cli — the in-package catalogue seam (refreshSetCatalog)
 // lives in internal/scaffold's refresh_test.go and is unexported here. The
 // reachable refresh-half write at this surface is the absent-author-guide
-// exception (an absent AGENTS.md is written), which the clean-run, library-run,
-// idempotence and unknown-format cases below use; an already-current owned file
-// is skipped, and an author-edited one is skipped and named.
+// exception (an absent AGENTS.md pointer or AGENTS_KALIDE.md full guide is
+// written), which the clean-run, library-run, idempotence and unknown-format
+// cases below use; an already-current owned file is skipped, and an
+// author-edited one is skipped and named.
 func TestRunUpgrade(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: `kalide upgrade` writes real project trees to disk")
@@ -284,11 +289,14 @@ func TestRunUpgrade(t *testing.T) {
 		if !strings.Contains(stdout, "kalide upgrade: deck") {
 			t.Errorf("runUpgrade(external-library deck) stdout = %q, want the deck report header", stdout)
 		}
-		// An already-current external-library deck refreshes nothing; its only
-		// owned member is the deck-root guide, reported skipped.
-		assertUpgradeReportCounts(t, stdout, 0, 1)
+		// An already-current external-library deck refreshes nothing; its owned
+		// members are the deck-root author-guide pair, reported skipped.
+		assertUpgradeReportCounts(t, stdout, 0, 2)
 		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
-			t.Errorf("runUpgrade(external-library deck) stdout = %q, want the skipped deck guide named", stdout)
+			t.Errorf("runUpgrade(external-library deck) stdout = %q, want the skipped deck pointer named", stdout)
+		}
+		if !upgradeReportNamesPath(stdout, "AGENTS_KALIDE.md") {
+			t.Errorf("runUpgrade(external-library deck) stdout = %q, want the skipped deck full guide named", stdout)
 		}
 
 		// The configured `templates:` library is byte-for-byte and mtime-untouched.
@@ -310,9 +318,9 @@ func TestRunUpgrade(t *testing.T) {
 		// external library's names, so the merged load does not collide.
 		localRoot := filepath.Join(deckDir, template.TemplatesDir)
 		writeTestLibrary(t, localRoot, "local-library", []string{"local-slide"}, nil, "")
-		// Remove the deck guide so the refresh half DOES write its one
-		// kalide-owned member for this deck form: the refresh must touch only
-		// the deck-root guide and nothing under the local templates/ layer.
+		// Remove the deck-root pointer so the refresh half DOES write it for
+		// this deck form: the refresh must touch only the deck-root
+		// author-guide pair and nothing under the local templates/ layer.
 		if err := os.Remove(filepath.Join(deckDir, "AGENTS.md")); err != nil {
 			t.Fatalf("remove deck AGENTS.md: %v", err)
 		}
@@ -326,12 +334,16 @@ func TestRunUpgrade(t *testing.T) {
 		if !strings.Contains(stdout, "kalide upgrade: deck") {
 			t.Errorf("runUpgrade(layered deck) stdout = %q, want the deck report header", stdout)
 		}
-		// Only the deck-root guide is refreshed; nothing in the local templates/
-		// layer is named (refreshed or skipped), so the report itself proves the
-		// layered deck's local layer is out of the refresh scope.
-		assertUpgradeReportCounts(t, stdout, 1, 0)
+		// Only the deck-root pointer is refreshed and the deck-root full guide
+		// skipped; nothing in the local templates/ layer is named (refreshed or
+		// skipped), so the report itself proves the layered deck's local layer
+		// is out of the refresh scope.
+		assertUpgradeReportCounts(t, stdout, 1, 1)
 		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
-			t.Errorf("runUpgrade(layered deck) stdout = %q, want the refreshed deck guide named", stdout)
+			t.Errorf("runUpgrade(layered deck) stdout = %q, want the refreshed deck pointer named", stdout)
+		}
+		if !upgradeReportNamesPath(stdout, "AGENTS_KALIDE.md") {
+			t.Errorf("runUpgrade(layered deck) stdout = %q, want the skipped deck full guide named", stdout)
 		}
 		if upgradeReportNamesPath(stdout, template.TemplatesDir+"/"+template.LibraryFile) {
 			t.Errorf("runUpgrade(layered deck) stdout = %q, want the local templates/ layer never named", stdout)
@@ -400,10 +412,14 @@ func TestRunUpgrade(t *testing.T) {
 		}
 		assertUpgradeReportCounts(t, stdout, 1, len(upgradeLibraryMemberPaths)-1)
 		if !upgradeReportNamesPath(stdout, "AGENTS.md") {
-			t.Errorf("runUpgrade(library) stdout = %q, want the refreshed library guide named", stdout)
+			t.Errorf("runUpgrade(library) stdout = %q, want the refreshed library pointer named", stdout)
 		}
-		if !upgradeReportNamesPath(stdout, upgradeLibraryMemberPaths[1]) {
-			t.Errorf("runUpgrade(library) stdout = %q, want the skipped library theme named", stdout)
+		if !upgradeReportNamesPath(stdout, "AGENTS_KALIDE.md") {
+			t.Errorf("runUpgrade(library) stdout = %q, want the skipped library full guide named", stdout)
+		}
+		themeRel := template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet
+		if !upgradeReportNamesPath(stdout, themeRel) {
+			t.Errorf("runUpgrade(library) stdout = %q, want the skipped library theme %q named", stdout, themeRel)
 		}
 		if got := readUpgradeFile(t, libDir, "AGENTS.md"); !bytes.Equal(got, guide) {
 			t.Errorf("written library AGENTS.md does not equal the scaffolded library guide")

@@ -25,6 +25,7 @@ package scaffold
 // guards that; migrateLibraryWith is the only test entry for a synthetic step).
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -100,4 +101,81 @@ func TestUpgradeRestoresMigratedThenInvalidLibrary(t *testing.T) {
 		t.Errorf("Lstat(%s) err = %v, want fs.ErrNotExist: Upgrade must remove the migration's file", migrated, statErr)
 	}
 	migrateAssertSameTree(t, dir, before)
+}
+
+// TestUpgradeMigratesAgentGuide proves the known-released-guide migration runs
+// through the full scaffold.Upgrade orchestration, not only refreshScaffold
+// (requirements.requirement.agent-guide-reference,
+// requirements.requirement.deck-library-upgrade): a project whose AGENTS.md is
+// byte-identical to a catalogued released full guide is migrated to the short
+// pointer and the current AGENTS_KALIDE.md full guide is written, with the
+// report naming the migrated path; the upgraded project still validates
+// end-to-end. The released full guide is presented through the refreshSetCatalog
+// seam, because the embedded catalogue holds digests only (never historical
+// contents).
+func TestUpgradeMigratesAgentGuide(t *testing.T) {
+	t.Run("deck", func(t *testing.T) {
+		root := refreshSeedDeck(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		// The migration scenario: a released full guide at AGENTS.md and no
+		// AGENTS_KALIDE.md, so Upgrade both migrates the pointer and writes the
+		// current full guide.
+		if err := os.Remove(full); err != nil {
+			t.Fatalf("remove %s: %v", agentGuideFullGuideName, err)
+		}
+		old := []byte("# an older released kalide deck full guide\n\nOld guidance.\n")
+		refreshWrite(t, pointer, old)
+		refreshSetCatalog(t, refreshCatalogFixture{deckGuideIdentity: {old}})
+
+		report, err := Upgrade(root)
+		if err != nil {
+			t.Fatalf("Upgrade(%s) error = %v, want the deck upgraded", root, err)
+		}
+		if report.Kind != "deck" {
+			t.Errorf("Upgrade(%s) report.Kind = %q, want %q", root, report.Kind, "deck")
+		}
+		if got, want := refreshRead(t, pointer), mustReadSeed(agentsGuideName); !bytes.Equal(got, want) {
+			t.Errorf("released full guide at %s was not migrated to the short pointer", agentsGuideName)
+		}
+		if got, want := refreshRead(t, full), mustReadSeed(agentGuideFullGuideName); !bytes.Equal(got, want) {
+			t.Errorf("the current %s full guide was not written", agentGuideFullGuideName)
+		}
+		for _, rel := range []string{agentsGuideName, agentGuideFullGuideName} {
+			if !refreshIn(report.Refreshed, rel) {
+				t.Errorf("report.Refreshed = %v, want it to name the migrated/written %s", report.Refreshed, rel)
+			}
+		}
+	})
+
+	t.Run("library", func(t *testing.T) {
+		root := refreshLibrary(t)
+		pointer := refreshAbs(root, agentsGuideName)
+		full := refreshAbs(root, agentGuideFullGuideName)
+		if err := os.Remove(full); err != nil {
+			t.Fatalf("remove %s: %v", agentGuideFullGuideName, err)
+		}
+		old := []byte("# an older released kalide library full guide\n\nOld guidance.\n")
+		refreshWrite(t, pointer, old)
+		refreshSetCatalog(t, refreshCatalogFixture{libraryGuideIdentity: {old}})
+
+		report, err := Upgrade(root)
+		if err != nil {
+			t.Fatalf("Upgrade(%s) error = %v, want the library upgraded", root, err)
+		}
+		if report.Kind != "library" {
+			t.Errorf("Upgrade(%s) report.Kind = %q, want %q", root, report.Kind, "library")
+		}
+		if got, want := refreshRead(t, pointer), mustReadLibraryGuide(); !bytes.Equal(got, want) {
+			t.Errorf("released full guide at %s was not migrated to the short pointer", agentsGuideName)
+		}
+		if got, want := refreshRead(t, full), mustReadLibraryFullGuide(); !bytes.Equal(got, want) {
+			t.Errorf("the current %s full guide was not written", agentGuideFullGuideName)
+		}
+		for _, rel := range []string{agentsGuideName, agentGuideFullGuideName} {
+			if !refreshIn(report.Refreshed, rel) {
+				t.Errorf("report.Refreshed = %v, want it to name the migrated/written %s", report.Refreshed, rel)
+			}
+		}
+	})
 }
