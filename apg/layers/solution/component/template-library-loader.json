@@ -119,6 +119,16 @@
       "kind": "implemented-by",
       "target": "internal/template/resolve.go",
       "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.checkLibraryExamples",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.exampleLayoutNamespace",
+      "properties": {}
     }
   ],
   "in": [
