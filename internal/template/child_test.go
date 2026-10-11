@@ -932,7 +932,11 @@ func TestResolveChildrenEmptyAndMalformed(t *testing.T) {
 // whose layout calls `{{ section "…" nil nil (child …) }}` with a child that
 // itself passes nested `child` arguments renders each grandchild through its own
 // template, spliced into the parent's declared child-section list bottom-up. It
-// also proves a resolution violation in a helper child propagates as an error.
+// proves a nested helper child publishes its grandchildren to its OWN context,
+// not only the parent's `.data` view: the card child reads its own rendered
+// grandchild list `.labels` and its own `.data.labels` raw view, both carried on
+// its own SectionCall.Children. It also proves a resolution violation in a
+// helper child propagates as an error.
 func TestExampleSectionHelperChildRecursion(t *testing.T) {
 	label := &Template{
 		Name:   "label",
@@ -941,19 +945,29 @@ func TestExampleSectionHelperChildRecursion(t *testing.T) {
 		Body:   BodyRule{Mode: BodyDisallowed},
 		Layout: Layout{Name: "label", Text: `<i class="label">{{ .text }}</i>`},
 	}
+	// card is the child the group helper call passes through `child`: it must be
+	// able to read its OWN nested children, not only the group's `.data` view of
+	// them. Its own rendered grandchild list `.labels` (the `<i class="label">`
+	// markup the labels render) and its own `.data.labels` raw view (the labels'
+	// authored `.raw.text` values) both live on the card child's own
+	// SectionCall.Children, so this is the level that proves a nested helper
+	// child publishes its grandchildren to its own `.data` and rendered lists.
 	card := &Template{
 		Name:     "card",
 		Usage:    UsageSection,
 		Fields:   []Field{{Name: "title", Type: FieldText, Required: true}},
 		Body:     BodyRule{Mode: BodyOptional},
 		Sections: []SectionDecl{{Name: "labels", Accepted: []string{"label"}, Min: 1}},
-		Layout:   Layout{Name: "card", Text: `<b class="card">{{ .title }}{{ range .labels }}{{ . }}{{ end }}</b>`},
+		Layout: Layout{Name: "card", Text: `<b class="card">{{ .title }}{{ range .labels }}{{ . }}{{ end }}</b>` +
+			`<ul class="card-data">{{ range .data.labels }}<li>{{ .raw.text }}</li>{{ end }}</ul>`},
 	}
 	// group is the helper call's target: it ranges over its rendered child list
 	// `.cards` and, in parallel, over the reserved `.data.cards` view, whose
-	// entries recurse into the child's own `.data.labels`. That is the level at
-	// which the load-time runner publishes the resolved child tree, so reading
-	// it proves the nested grandchildren were resolved recursively.
+	// entries recurse into the child's own `.data.labels`. That is the
+	// parent-side view of the resolved child tree, so reading it proves the
+	// nested grandchildren were resolved recursively and are visible from the
+	// target's own `.data`; the card child above proves the same tree is
+	// visible from the child's OWN context.
 	group := &Template{
 		Name:     "group",
 		Usage:    UsageSection,
@@ -982,12 +996,30 @@ func TestExampleSectionHelperChildRecursion(t *testing.T) {
 		}
 		want := `<div class="container">` +
 			`<div class="group">` +
-			`<b class="card">T1</b>` +
+			`<b class="card">T1<i class="label">L1</i><i class="label">L2</i></b>` +
+			`<ul class="card-data"><li>L1</li><li>L2</li></ul>` +
 			`<ul><li>cardL1L2</li></ul>` +
 			`</div>` +
 			`</div>`
 		if string(got) != want {
 			t.Errorf("helper(container) = %q, want %q", string(got), want)
+		}
+
+		// The card child reads its OWN context, not only the group's `.data.cards`
+		// view: its own resolved nested children live on its own SectionCall, so
+		// both its rendered grandchild list (`.labels`, the `<i class="label">`
+		// markup) and its own `.data.labels` raw values must appear in the page.
+		own := []struct {
+			what string
+			frag string
+		}{
+			{"rendered grandchild list", `<b class="card">T1<i class="label">L1</i><i class="label">L2</i></b>`},
+			{"own .data.labels raw view", `<ul class="card-data"><li>L1</li><li>L2</li></ul>`},
+		}
+		for _, a := range own {
+			if !strings.Contains(string(got), a.frag) {
+				t.Errorf("helper(container) = %q, want it to contain the card child's %s %q", string(got), a.what, a.frag)
+			}
 		}
 	})
 
