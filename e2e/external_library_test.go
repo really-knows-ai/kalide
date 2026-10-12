@@ -74,7 +74,14 @@ func TestExternalLibrary(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("kalide init-library stderr = %q, want empty", stderr)
 	}
-	for _, want := range []string{"../shared-lib", "library.yaml", "slides/", "sections/", "media/", "themes/default/theme.css"} {
+	for _, want := range []string{
+		"../shared-lib",
+		"library.yaml",
+		filepath.FromSlash("slides/"),
+		filepath.FromSlash("sections/"),
+		filepath.FromSlash("media/"),
+		filepath.FromSlash("themes/default/theme.css"),
+	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("kalide init-library output does not name %q:\n%s", want, stdout)
 		}
