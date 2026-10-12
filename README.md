@@ -199,6 +199,11 @@ templates/themes/default/theme.css
 assets/
 ```
 
+The created-files report `kalide init` prints uses your operating system's
+native separators — for example `slides\1-hello.md` and
+`templates\library.yaml` on Windows, and `slides/1-hello.md` and
+`templates/library.yaml` on macOS and Linux.
+
 `AGENTS_KALIDE.md` is a plain-text guide for coding agents that documents the
 deck and template format, so an agent can help author slides without guessing.
 `AGENTS.md` beside it is a short pointer to that guide. Both are written only
@@ -253,6 +258,10 @@ Created a template library at <path>:
   media/
   themes/default/theme.css
 ```
+
+`kalide init-library` prints these paths with your operating system's native
+separators — for example `themes\default\theme.css` on Windows, and
+`themes/default/theme.css` on macOS and Linux.
 
 The library is valid and ready to host a deck, but holds nothing beyond a
 minimal `default` theme and the library-root author-guide pair (see
@@ -703,8 +712,9 @@ that other slides and sections compose. The included layout is named by its
 - `slides/<name>/layout.html.tmpl` for a slide layout, and
 - `sections/<name>/layout.html.tmpl` for a section layout.
 
-That name is identical on every OS and wherever the layer sits on disk: it has
-no layer root, no `templates/` prefix, no backslashes and no absolute path. It is
+That name is identical on every OS and wherever the layer sits on disk: it
+stays forward-slash on every OS, with no layer root, no `templates/` prefix, no
+backslashes and no absolute path. It is
 exactly the name the loader registers each layout under, so the action names the
 path literally, never the bare template name. For the deck's local `hello` slide
 layout the call is

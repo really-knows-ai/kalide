@@ -85,6 +85,13 @@ Each path is qualified with its own layer root, so the error always says where
 the two copies live. `kalide start` validates the merged library before serving
 anything, so a collision is caught before the deck is served.
 
+Every on-disk path kalide shows in an error or report — the layer roots in these
+messages included — uses your operating system's native separators, with folder
+names in full. Layout names are the exception: a layout named in a
+`{{ template }}` action, such as `slides/<name>/layout.html.tmpl`, stays
+forward-slash on every OS (see
+[Composing layouts across layers](#composing-layouts-across-layers)).
+
 ## References resolve in the layer that owns them
 
 - A layout's `{{ media "path" }}` resolves in the **owning layer's** `media/`

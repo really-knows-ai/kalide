@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On Windows, every file path kalide shows uses backslashes and full folder
+  names (no mixed separators, no 8.3 short names like `RUNNER~1`), and
+  symlinked folders are shown by their real path. This covers errors, the
+  browser error page and init/upgrade reports.
+
 ## [0.12.2] - 2026-10-12
 
 0.12.0 and 0.12.1 were tagged but never released; 0.12.2 is the first 0.12
