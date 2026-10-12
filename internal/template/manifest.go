@@ -201,8 +201,9 @@ func parseManifestFields(manifestPath string, val *yaml.Node) ([]Field, error) {
 // parseManifestField decodes one field entry (or, recursively, a list
 // field's `item:`). isItem marks an item descriptor: only there may a `type:`
 // be the inline `record` form (`item: {type: record, fields: [...]}`), whose
-// `fields:` recurse through parseManifestFields (record-item-type). A `record`
-// anywhere else is rejected (record-list-item-only).
+// `fields:` recurse through parseManifestFields (record-item-type). A record
+// item descriptor needs no `name`; a `record` anywhere else is rejected
+// (record-list-item-only).
 func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Field, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a field")
@@ -357,7 +358,12 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 		}
 	}
 
-	if !haveName || f.Name == "" {
+	// A record item descriptor needs no `name`: it is described by its
+	// `fields:` (record-item-type) — `item: {type: record, fields: [...]}`.
+	// Every other descriptor (including a non-record item descriptor) still
+	// requires one.
+	recordItem := isItem && haveType && typeStr == string(FieldRecord)
+	if (!haveName || f.Name == "") && !recordItem {
 		return nil, libraryErrorf(manifestPath, line, "field: missing required key %q", "name")
 	}
 	if !haveType {
