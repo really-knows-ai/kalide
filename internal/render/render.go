@@ -38,7 +38,6 @@ import (
 	"html"
 	htmltmpl "html/template"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -247,6 +246,10 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 	r := &renderer{
 		reg:     reg,
 		formats: template.BuiltinFormats,
+		// layoutPaths resolves an error's attributed layout name to that
+		// layout's on-disk file, so an error inside an included layout is
+		// positioned at the included layout's own file (portable-layout-names).
+		layoutPaths: layoutPathResolver(reg.Templates()),
 		// The slide layout executes at the top of the composition tree, so a
 		// `{{ section … }}` call it makes has the slide, not a section, as its
 		// parent: callerFields stays nil (zero value) while callerCtx carries
@@ -309,6 +312,17 @@ type renderer struct {
 	reg     *template.Registry
 	formats *template.Format
 	root    *htmltmpl.Template
+
+	// layoutPaths maps a layout's namespace key (layoutName(t)) to its on-disk
+	// display path (Layout.Path) for every registered template. It is the
+	// template.LayoutPathResolver parseLayouts, namespaceForLayer and
+	// executeLayeredLayout hand to template.LayoutTemplateError, so a Go
+	// html/template error raised inside a composed or included layout is
+	// positioned at THAT layout's own file rather than at the layout that
+	// invoked it (portable-layout-names). It is built once from the registry
+	// (RenderSlide) and is nil when no registered template has an on-disk path,
+	// in which case LayoutTemplateError falls back to the invoking layout.
+	layoutPaths template.LayoutPathResolver
 
 	// callerFields is the field values of the section instance whose layout is
 	// currently executing — the value a `{{ section … }}` call made there
@@ -1048,11 +1062,15 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 // layout's own layer (library-layer-references). In both branches the layout is
 // looked up and executed under layoutName(tmpl) — its layer-relative layout
 // name (`slides|sections/<name>/layout.html.tmpl`), never an OS path or a layer
-// root — and a Go template error from either execution is positioned at the
-// owning layout's on-disk display path and line (tmpl.Layout.Path, falling back
-// to its name when Path is empty) by layoutTemplateError, so a render error
-// never prints a layer-relative name as a file location while a quoted
-// `{{ template }}` target name stays verbatim. Parsing the single target
+// root — and a Go template error from either execution is positioned by
+// template.LayoutTemplateError at the on-disk display path and line of the
+// layout the error is attributed to: the renderer's layoutPaths resolver maps
+// the layout name in the Go error's location prefix to that layout's own file,
+// so an error raised inside a composed or included layout is positioned at the
+// INCLUDED layout's file, falling back to the invoking tmpl's Layout.Path (or,
+// when that is empty, its name) when the name is unknown. A render error
+// therefore never prints a layer-relative name as a file location while a
+// quoted `{{ template }}` target name stays verbatim. Parsing the single target
 // layout text alone would lose the shared namespace and fail such a call with
 // "no such template". Otherwise — a nil layer, or a renderer whose layer→base
 // hook is unset — the layout executes through the shared namespace exactly as
@@ -1064,7 +1082,7 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Template, layer *template.LibraryLayer, data map[string]any) error {
 	if layer == nil || r.layerMediaBase == nil {
 		if err := r.root.ExecuteTemplate(buf, layoutName(tmpl), data); err != nil {
-			return layoutTemplateError(tmpl.Layout, "", err)
+			return template.LayoutTemplateError(tmpl.Layout, r.layoutPaths, "", err)
 		}
 		return nil
 	}
@@ -1073,7 +1091,7 @@ func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Templa
 		return fmt.Errorf("parse target layout: %w", err)
 	}
 	if err := namespace.ExecuteTemplate(buf, layoutName(tmpl), data); err != nil {
-		return layoutTemplateError(tmpl.Layout, "", err)
+		return template.LayoutTemplateError(tmpl.Layout, r.layoutPaths, "", err)
 	}
 	return nil
 }
@@ -1087,8 +1105,9 @@ func (r *renderer) executeLayeredLayout(buf *bytes.Buffer, tmpl *template.Templa
 // `slides|sections/<name>/layout.html.tmpl`) exactly as parseLayouts keys the
 // shared namespace. A layer-relative name is never an OS path or a layer root,
 // so no namespace key is constructed by joining a root; a layout text that
-// fails to parse is reported at the owning layout's on-disk display path and
-// line (Layout.Path, falling back to its name) by layoutTemplateError.
+// fails to parse is reported by template.LayoutTemplateError, which resolves the
+// failing layout's name through the renderer's layoutPaths resolver, at that
+// layout's on-disk display path and line (Layout.Path, falling back to its name).
 // Re-parsing the whole set rather than the one target layout keeps that shared
 // namespace — and, because the set is the registry's full layout set, a
 // superset of parseLayouts' reachable walk, it also covers a target reachable
@@ -1112,7 +1131,7 @@ func (r *renderer) namespaceForLayer(layer *template.LibraryLayer) (*htmltmpl.Te
 			return nil, fmt.Errorf("template %q has no layout text", t.Name)
 		}
 		if _, err := namespace.New(layoutName(t)).Parse(t.Layout.Text); err != nil {
-			return nil, layoutTemplateError(t.Layout, fmt.Sprintf("template %q: parse layout", t.Name), err)
+			return nil, template.LayoutTemplateError(t.Layout, r.layoutPaths, fmt.Sprintf("template %q: parse layout", t.Name), err)
 		}
 	}
 	if r.layerNamespaces == nil {
@@ -1520,9 +1539,11 @@ func dateString(raw any) string {
 // layer-relative layout name (layoutName(t), e.g.
 // `slides|sections/<name>/layout.html.tmpl`), the name a composed layout uses to
 // invoke another with `{{ template "<name>" . }}`; a layer root or an OS path is
-// never a key. A layout text that fails to parse is reported at the owning
-// layout's on-disk display path and line (Layout.Path, falling back to its name
-// when Path is empty) by layoutTemplateError. It returns that shared namespace:
+// never a key. A layout text that fails to parse is reported by
+// template.LayoutTemplateError, which resolves the failing layout's name through
+// the renderer's layoutPaths resolver, at that layout's on-disk display path
+// and line (Layout.Path, falling back to its name when Path is empty). It
+// returns that shared namespace:
 // RenderSlide executes the slide layout through it and hands
 // it to the renderer so every section instance, at any depth, executes its own
 // layout.html.tmpl against the same namespace (template-language). funcMap is
@@ -1578,7 +1599,7 @@ func parseLayouts(r *renderer, slideTmpl *template.Template, reg *template.Regis
 			return nil, fmt.Errorf("template %q has no layout text", t.Name)
 		}
 		if _, err := namespace.New(layoutName(t)).Parse(t.Layout.Text); err != nil {
-			return nil, layoutTemplateError(t.Layout, fmt.Sprintf("template %q: parse layout", t.Name), err)
+			return nil, template.LayoutTemplateError(t.Layout, r.layoutPaths, fmt.Sprintf("template %q: parse layout", t.Name), err)
 		}
 	}
 	return namespace, nil
@@ -1675,46 +1696,30 @@ func layoutName(t *template.Template) string {
 	return t.Name
 }
 
-// templateErrorLocation mirrors internal/template's unexported
-// templateErrorLocation (libraryerror.go): the location prefix Go's
-// html/template gives its errors, "template: <name>:<line>: " for a
-// text/template parse/execute error and "html/template:<name>:<line>:<col>: "
-// for an html/template error. The <name> is the layout's namespace key — a
-// layer-relative layout name, never a file path — so it must be replaced by the
-// layout's on-disk display path rather than shown. render cannot call
-// internal/template's helper (it is unexported), so the pattern is mirrored
-// here; keep the two in step.
-var templateErrorLocation = regexp.MustCompile(`(?:html/)?template:\s*[^:\n]*:(\d+)(?::\d+)?: `)
-
-// layoutTemplateError mirrors internal/template's unexported helper of the same
-// name: it positions a Go html/template error at layout's on-disk display path,
-// Layout.Path, and the line the Go error reports, rewriting the error's
-// `template: <name>:<line>:` location prefix — whose name is the layout's
-// layer-relative namespace key — to `<Layout.Path>:<line>`. When Layout.Path is
-// empty — a synthetic layout with no on-disk file, such as the gallery wrapper
-// (internal/server) — the position falls back to Layout.Name. Only that leading
-// location prefix is rewritten, so a layer-relative layout name is never
-// rendered as a file location while any quoted `{{ template }}` target name
-// inside err stays exactly as written. context, when non-empty, is kept as the
-// message's leading qualifier (for example "parse layout"), preserving the
-// caller's own description of what failed. An error that carries no location
-// prefix keeps its text and reports no line (0).
-func layoutTemplateError(layout template.Layout, context string, err error) *template.LibraryError {
-	path := layout.Path
-	if path == "" {
-		path = layout.Name
-	}
-	line, message := 0, err.Error()
-	if m := templateErrorLocation.FindStringSubmatchIndex(message); m != nil {
-		if n, convErr := strconv.Atoi(message[m[2]:m[3]]); convErr == nil {
-			line = n
+// layoutPathResolver builds the template.LayoutPathResolver the render-time
+// layout-error positions use: every template's namespace key (layoutName(t))
+// mapped to its on-disk display path (Layout.Path). It is the resolver
+// parseLayouts, namespaceForLayer and executeLayeredLayout (via renderer.layoutPaths)
+// pass to template.LayoutTemplateError, so an error Go's html/template
+// attributes to a composed or included layout — the name in the
+// `template: <name>:<line>:` location prefix — is positioned at THAT layout's
+// own file rather than at the layout that invoked it (portable-layout-names). A
+// template with no on-disk path (Layout.Path == "") is omitted, so
+// LayoutTemplateError falls back to the invoking layout's Path and, when that
+// too is empty, its Name. It returns nil when no template has a path, in which
+// case LayoutTemplateError always falls back to the invoking layout.
+func layoutPathResolver(templates []*template.Template) template.LayoutPathResolver {
+	paths := make(map[string]string, len(templates))
+	for _, t := range templates {
+		if t == nil || t.Layout.Path == "" {
+			continue
 		}
-		message = message[:m[0]] + message[m[1]:]
+		paths[layoutName(t)] = t.Layout.Path
 	}
-	if context != "" {
-		message = context + ": " + message
+	if len(paths) == 0 {
+		return nil
 	}
-	return &template.LibraryError{Path: path, Line: line, Message: message}
+	return func(name string) string { return paths[name] }
 }
 
 // inlineParagraphTags are the paragraph open/close tags goldmark emits around
