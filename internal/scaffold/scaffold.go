@@ -95,7 +95,7 @@ func Init(dir string, externalPath ...string) error {
 	}
 
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
-		return fmt.Errorf("init: create assets/: %w", err)
+		return fmt.Errorf("init: create %s: %w", displaypath.Display("", "assets/"), err)
 	}
 	return nil
 }
