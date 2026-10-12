@@ -55,27 +55,32 @@ import (
 // deck-root author-guide pair (the AGENTS.md pointer then the AGENTS_KALIDE.md
 // full guide), the local library.yaml, the hello template's three files, the
 // default theme and the starter slide. It is the deck form's report path set the
-// e2e test asserts `kalide upgrade` names.
+// e2e test asserts `kalide upgrade` names. Each entry is built with
+// filepath.FromSlash (native-display-paths), so it is the host operating
+// system's native spelling the report prints, not the forward-slash identity
+// path.
 var upgradeDeckMemberPaths = []string{
 	"AGENTS.md",
 	agentGuideFullGuideName,
-	template.TemplatesDir + "/" + template.LibraryFile,
-	template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ExampleFile,
-	template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.LayoutFile,
-	template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ManifestFile,
-	template.TemplatesDir + "/" + template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
-	template.SlidesDir + "/1-hello.md",
+	filepath.FromSlash(template.TemplatesDir + "/" + template.LibraryFile),
+	filepath.FromSlash(template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ExampleFile),
+	filepath.FromSlash(template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.LayoutFile),
+	filepath.FromSlash(template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ManifestFile),
+	filepath.FromSlash(template.TemplatesDir + "/" + template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet),
+	filepath.FromSlash(template.SlidesDir + "/1-hello.md"),
 }
 
 // upgradeLibraryMemberPaths is the library-owned member set refreshScaffold
 // visits, in visit order (internal/scaffold/refresh.go libraryOwnedMembers): the
 // library-root author-guide pair (the AGENTS.md pointer then the
 // AGENTS_KALIDE.md full guide) and the seeded default theme. It is the library
-// form's report path set.
+// form's report path set; like the deck set, each entry is built with
+// filepath.FromSlash (native-display-paths) to match the report's native
+// spelling.
 var upgradeLibraryMemberPaths = []string{
 	"AGENTS.md",
 	agentGuideFullGuideName,
-	template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet,
+	filepath.FromSlash(template.ThemesDir + "/" + theme.DefaultName + "/" + template.ThemeStylesheet),
 }
 
 // upgradeExternalDeckMemberPaths is the kalide-owned member set of a deck
@@ -104,10 +109,14 @@ func assertUpgradeReportCounts(t *testing.T, stdout string, refreshed, skipped i
 }
 
 // upgradeReportNamesPath reports whether the printed report names rel as a path
-// line ("  <rel>"), so a case can assert a refreshed or skipped path instead of
-// a bare substring.
+// line, so a case can assert a refreshed or skipped path instead of a bare
+// substring. The report renders each refreshed/skipped entry through
+// displaypath.Display — filepath.FromSlash on the forward-slash identity path —
+// so the expected line is rendered the same way here. rel may therefore be
+// either a native display path or a forward-slash identity path (as the deleted
+// seed-starter list is, since it is also used as an os.* filesystem key).
 func upgradeReportNamesPath(stdout, rel string) bool {
-	return strings.Contains(stdout, "  "+rel+"\n")
+	return strings.Contains(stdout, "  "+filepath.FromSlash(rel)+"\n")
 }
 
 // initUpgradeSeedDeck runs `kalide init` in the harness's clean working
@@ -619,7 +628,10 @@ func TestUpgrade(t *testing.T) {
 		// templates/themes/default would itself fail the library loader (a
 		// template directory without its three files, and a theme directory
 		// without theme.css). The refresh engine still visits the members'
-		// file paths, so the report names the deleted files.
+		// file paths, so the report names the deleted files. The list keeps
+		// the forward-slash identity spelling: it is also the os.* filesystem
+		// key (through h.Path/filepath.Join), and upgradeReportNamesPath
+		// renders it natively for the report comparison.
 		deleted := []string{
 			template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.ExampleFile,
 			template.TemplatesDir + "/" + template.SlidesDir + "/hello/" + template.LayoutFile,

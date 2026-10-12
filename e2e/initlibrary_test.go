@@ -49,7 +49,18 @@ func TestInitLibrary(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("kalide init-library my-lib stderr = %q, want empty", stderr)
 	}
-	for _, want := range []string{"my-lib", "library.yaml", "slides/", "sections/", "media/", "themes/default/theme.css"} {
+	// `kalide init-library` renders each created entry through
+	// displaypath.Display (filepath.FromSlash), so the layout entries are
+	// expected in the host operating system's native spelling — slides/ on
+	// Unix, slides\ on Windows.
+	for _, want := range []string{
+		"my-lib",
+		"library.yaml",
+		filepath.FromSlash("slides/"),
+		filepath.FromSlash("sections/"),
+		filepath.FromSlash("media/"),
+		filepath.FromSlash("themes/default/theme.css"),
+	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("kalide init-library output does not name %q:\n%s", want, stdout)
 		}
