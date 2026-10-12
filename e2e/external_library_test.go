@@ -74,8 +74,12 @@ func TestExternalLibrary(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("kalide init-library stderr = %q, want empty", stderr)
 	}
+	// The message header names the library target through
+	// displaypath.CanonicalRoot, so it uses the host OS's native separator
+	// (../shared-lib on Unix, ..\shared-lib on Windows); the entries below are
+	// rendered through displaypath.Display (filepath.FromSlash) the same way.
 	for _, want := range []string{
-		"../shared-lib",
+		filepath.FromSlash("../shared-lib"),
 		"library.yaml",
 		filepath.FromSlash("slides/"),
 		filepath.FromSlash("sections/"),
