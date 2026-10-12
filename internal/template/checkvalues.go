@@ -447,8 +447,18 @@ func coerceText(value any) (string, bool) {
 
 // validateText checks a text field: the inline Markdown rules (unless Plain),
 // the collected links, and MaxLength after Markdown is stripped.
+//
+// A coerce text field (text-coercion) accepts a YAML number or boolean in
+// place of a string: coerceText converts it to its string form before the
+// Markdown and MaxLength checks run, so `42` and `true` are checked as "42"
+// and "true". Any other non-string value — a mapping, a list, a date or a null
+// — is still the usual text type error, and a non-coerce text field rejects
+// every non-string value unchanged.
 func (c *checker) validateText(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
+	if !ok && f.Coerce {
+		s, ok = coerceText(value)
+	}
 	if !ok {
 		c.add(path, "type", value,
 			fmt.Sprintf("type: expected a text field, got %s", describeValue(value)),
