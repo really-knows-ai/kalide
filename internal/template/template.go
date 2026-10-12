@@ -187,6 +187,16 @@ type Field struct {
 	MinItems int
 	MaxItems int
 
+	// MaxItemsFrom and MinItemsFrom, for a list field, name another list
+	// field whose item count bounds this list: MaxItemsFrom bounds this list
+	// to at most the named list's count, MinItemsFrom to at least it
+	// (cross-field-list-constraints). A leading `/name` names a top-level
+	// field of the template; a bare name names a sibling field within the
+	// same inline record (record-item-type). An empty string means no
+	// cross-field bound.
+	MaxItemsFrom string
+	MinItemsFrom string
+
 	// Min and Max, for a number field, are inclusive NUMBER bounds. A nil
 	// bound is absent, so a legitimate 0 is distinct from "unset". They do
 	// not apply to a date field; use MinDate and MaxDate for that.
