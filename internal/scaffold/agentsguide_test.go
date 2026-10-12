@@ -54,7 +54,7 @@ package scaffold
 // format tokens, so a group marked `literal` matches each statement as a
 // whitespace-normalised literal phrase (agentGuideProseContains), tolerating
 // the guides' hard line wrapping. Every format token — the `{{ template }}`
-// action and root-qualified path form included — keeps the context-aware
+// action and layer-relative layout-name form included — keeps the context-aware
 // matching above.
 //
 // A reserved URL prefix (`media:`, `theme:`, feedback-8) is special-cased: the
@@ -365,19 +365,18 @@ func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 
 // agentGuideCompositionTokens returns the `{{ template }}` layout-composition
 // tokens both guides must carry (guide-layout-composition, example-layout-
-// composition): the root-qualified layout path form for a slide and for a
-// section layout, and the `{{ template "<layout name>" . }}` action. The path
-// form is built from the layout-directory constants so a renamed directory
-// carries through; the action is authored here — the composition syntax has no
+// composition): the layer-relative layout name for a slide and for a section
+// layout, and the `{{ template "<layout name>" . }}` action. The name form is
+// built from the layout-directory constants so a renamed directory carries
+// through; the action is authored here — the composition syntax has no
 // canonical accessor.
 func agentGuideCompositionTokens(t *testing.T) []string {
 	t.Helper()
 
-	rootQualified := "<layer root>/"
 	return []string{
 		`{{ template "<layout name>" . }}`,
-		rootQualified + template.SlidesDir + "/<name>/" + template.LayoutFile,
-		rootQualified + template.SectionsDir + "/<name>/" + template.LayoutFile,
+		template.SlidesDir + "/<name>/" + template.LayoutFile,
+		template.SectionsDir + "/<name>/" + template.LayoutFile,
 	}
 }
 
