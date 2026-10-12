@@ -51,6 +51,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/server"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
@@ -123,6 +124,12 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
 	}
+	// Canonicalise the deck root once, before it reaches any loader, watcher or
+	// server: a symlinked or short-named working directory is reported in its
+	// native, resolved spelling, and every path derived from root — the
+	// resolved template layers, the watch root and the served deck — shares
+	// that one spelling so nothing compares a canonical path against a raw one.
+	root = displaypath.CanonicalRoot(root)
 
 	// Resolve the deck's template library — every layer it draws from: the
 	// external `templates:` library and the deck-root templates/ — through the

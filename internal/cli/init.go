@@ -48,6 +48,7 @@ import (
 	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/config"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/scaffold"
 )
 
@@ -170,6 +171,12 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kalide init: %v\n", err)
 		return 1
 	}
+	// Canonicalise the deck root (the current directory) once, before scaffold
+	// sees it, so any absolute path scaffold reports on refusal or failure is
+	// the native, resolved spelling. The external-library path is deliberately
+	// left as given: a relative `templates:` value the author typed stays
+	// relative, exactly as it is written into kalide.yaml.
+	cwd = displaypath.CanonicalRoot(cwd)
 
 	// scaffold.Init writes nothing on refusal or invalid input and returns a
 	// message that already names the command and the blocking path(s) or the

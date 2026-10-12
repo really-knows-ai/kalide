@@ -70,6 +70,7 @@ import (
 	"time"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 	"github.com/really-knows-ai/kalide/internal/validate"
@@ -138,13 +139,17 @@ func (r *UpgradeReport) String() string {
 }
 
 // appendPathLines appends one two-space-indented line per path, or a "(none)"
-// placeholder when the list is empty, so a heading is never left bare.
+// placeholder when the list is empty, so a heading is never left bare. The
+// paths are the refresh half's project-root-relative identity spelling
+// (forward-slash); they are rendered in the host's native separator here, at
+// render time, so the identity spelling stays stable while the author sees the
+// OS spelling.
 func appendPathLines(lines, paths []string) []string {
 	if len(paths) == 0 {
 		return append(lines, "  (none)")
 	}
 	for _, path := range paths {
-		lines = append(lines, "  "+path)
+		lines = append(lines, "  "+displaypath.Display("", path))
 	}
 	return lines
 }
@@ -395,35 +400,36 @@ func newRefreshUndo(root string) (*refreshUndo, error) {
 func (u *refreshUndo) revert(refreshed []string, cause error) error {
 	var failures []string
 	for _, path := range refreshed {
+		display := displaypath.Display("", path)
 		original, ok := u.originals[path]
 		if !ok {
 			// The refresh wrote a path outside the owned set it may touch.
 			// Nothing was recorded for it; report rather than silently leave
 			// the write behind.
-			failures = append(failures, fmt.Sprintf("%s (not recorded before the refresh)", path))
+			failures = append(failures, fmt.Sprintf("%s (not recorded before the refresh)", display))
 			continue
 		}
 		target := filepath.Join(u.root, filepath.FromSlash(path))
 		if !original.existed {
 			if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				failures = append(failures, fmt.Sprintf("remove %s: %v", path, err))
+				failures = append(failures, fmt.Sprintf("remove %s: %v", display, err))
 			}
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			failures = append(failures, fmt.Sprintf("create %s: %v", filepath.ToSlash(filepath.Dir(target)), err))
+			failures = append(failures, fmt.Sprintf("create %s: %v", filepath.Dir(target), err))
 			continue
 		}
 		if err := os.WriteFile(target, original.data, original.mode.Perm()); err != nil {
-			failures = append(failures, fmt.Sprintf("write %s: %v", path, err))
+			failures = append(failures, fmt.Sprintf("write %s: %v", display, err))
 			continue
 		}
 		if err := os.Chmod(target, original.mode.Perm()); err != nil {
-			failures = append(failures, fmt.Sprintf("chmod %s: %v", path, err))
+			failures = append(failures, fmt.Sprintf("chmod %s: %v", display, err))
 			continue
 		}
 		if err := os.Chtimes(target, original.modTime, original.modTime); err != nil {
-			failures = append(failures, fmt.Sprintf("restore mtime of %s: %v", path, err))
+			failures = append(failures, fmt.Sprintf("restore mtime of %s: %v", display, err))
 		}
 	}
 	if len(failures) > 0 {

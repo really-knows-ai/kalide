@@ -503,13 +503,15 @@ func (r *refreshReport) refreshAuthorGuide(target string, member ownedMember, da
 
 // writeMember writes the running binary's bytes for an owned member, creating
 // the parent directory only when it is missing (the absent-guide case, whose
-// parent is the project root).
+// parent is the project root). Its errors name the path in the host's native
+// separator: the target is an operating-system path the author can open, so it
+// is never slash-normalised.
 func writeMember(target string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return fmt.Errorf("upgrade: create %s: %w", filepath.ToSlash(filepath.Dir(target)), err)
+		return fmt.Errorf("upgrade: create %s: %w", filepath.Dir(target), err)
 	}
 	if err := os.WriteFile(target, data, 0o644); err != nil {
-		return fmt.Errorf("upgrade: write %s: %w", filepath.ToSlash(target), err)
+		return fmt.Errorf("upgrade: write %s: %w", target, err)
 	}
 	return nil
 }

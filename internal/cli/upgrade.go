@@ -29,6 +29,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/scaffold"
 )
 
@@ -66,6 +67,10 @@ func runUpgrade(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kalide upgrade: %v\n", err)
 		return 1
 	}
+	// Canonicalise the project root once, before scaffold sees it, so every
+	// absolute path an upgrade error or the refreshed/skipped report shows is
+	// the native, resolved spelling of the directory the author is in.
+	cwd = displaypath.CanonicalRoot(cwd)
 
 	// scaffold.Upgrade is the single owner of project detection, the refresh
 	// and migration halves, and the end-to-end validation; it writes nothing

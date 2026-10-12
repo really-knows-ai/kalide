@@ -23,6 +23,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/scaffold"
 )
 
@@ -61,15 +62,22 @@ func runInitLibrary(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
+	// Canonicalise the library root once: the path the author gave is resolved
+	// (symlinks, and on Windows 8.3 short names) before scaffold creates it and
+	// before the success message names it, so the path shown is the native
+	// spelling of the directory that was written. A path that does not resolve
+	// falls back to its cleaned spelling as given.
+	libraryPath := displaypath.CanonicalRoot(args[0])
+
 	// scaffold.InitLibrary writes nothing on refusal or invalid input and
 	// returns a message that already names the command and the offending
 	// path or blocking path(s), so it is printed verbatim rather than
 	// re-prefixed.
-	if err := scaffold.InitLibrary(args[0]); err != nil {
+	if err := scaffold.InitLibrary(libraryPath); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 
-	fmt.Fprintf(stdout, initLibraryCreatedMessage, args[0])
+	fmt.Fprintf(stdout, initLibraryCreatedMessage, libraryPath)
 	return 0
 }

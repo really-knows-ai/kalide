@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
 
@@ -68,20 +69,20 @@ func writeHelloSeed(dir string) error {
 		target := filepath.Join(dir, filepath.FromSlash(path))
 		if entry.IsDir() {
 			if err := os.MkdirAll(target, 0o755); err != nil {
-				return fmt.Errorf("init: create %s: %w", filepath.ToSlash(path), err)
+				return fmt.Errorf("init: create %s: %w", displaypath.Display("", path), err)
 			}
 			return nil
 		}
 
 		data, err := fs.ReadFile(seedRoot, path)
 		if err != nil {
-			return fmt.Errorf("init: read embedded %s: %w", filepath.ToSlash(path), err)
+			return fmt.Errorf("init: read embedded %s: %w", displaypath.Display("", path), err)
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return fmt.Errorf("init: create %s: %w", filepath.ToSlash(filepath.Dir(path)), err)
+			return fmt.Errorf("init: create %s: %w", displaypath.Display("", filepath.Dir(path)), err)
 		}
 		if err := os.WriteFile(target, data, 0o644); err != nil {
-			return fmt.Errorf("init: write %s: %w", filepath.ToSlash(path), err)
+			return fmt.Errorf("init: write %s: %w", displaypath.Display("", path), err)
 		}
 		return nil
 	})

@@ -42,6 +42,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/suggest"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -62,6 +63,10 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kalide templates: %v\n", err)
 		return 1
 	}
+	// Canonicalise the deck root once, before the loader sees it, so an error
+	// naming a resolved layer or manifest is shown in the native spelling of
+	// the root it was resolved against.
+	root = displaypath.CanonicalRoot(root)
 
 	// Resolve the deck's template library — every layer it draws from: the
 	// external `templates:` library and the deck-root templates/ — through the
