@@ -7,29 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.12.2] - 2026-10-12
 
-- A `{{ template }}` layout name is now **layer-relative** —
-  `slides/<name>/layout.html.tmpl` or `sections/<name>/layout.html.tmpl`,
-  identical on every OS and wherever the layer sits on disk. A name carrying a
-  `templates/` prefix or an absolute path no longer resolves.
-
-### Fixed
-
-- Layout composition now works on Windows and when a deck moves to another
-  folder or machine: an included layout is named the same layer-relative way in
-  every layer and location, with no layer root baked into the name.
-
-## [0.12.1] - 2026-10-12
-
-### Fixed
-
-- v0.12.0 was tagged, but its release builds failed in the Windows end-to-end
-  tests because of a test-fixture quoting bug, so no v0.12.0 release was
-  published. kalide's behaviour has not changed: v0.12.1 carries the same
-  changes as 0.12.0 and is the first published release since 0.11.0.
-
-## [0.12.0] - 2026-10-12
+0.12.0 and 0.12.1 were tagged but never released; 0.12.2 is the first 0.12
+release and carries all of their changes.
 
 ### Added
 
@@ -80,9 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Layout composition is now documented in the README and both embedded author
   guides: a layout may include another layout with the standard
   `{{ template "<layout name>" . }}` action, naming the included layout by its
-  root-qualified path inside its own layer
-  (`<layer root>/slides/<name>/layout.html.tmpl`); the included layout executes
-  in the invoking layer's namespace.
+  **layer-relative** path inside its own layer —
+  `slides/<name>/layout.html.tmpl` or `sections/<name>/layout.html.tmpl`. The
+  name is identical on every OS and wherever the layer sits on disk, so layout
+  composition works on Windows and when a deck moves to another folder or
+  machine. The included layout executes in the invoking layout's namespace.
 - `INSTALL.md` and the README separate upgrading the kalide **program** (your
   install channel) from running `kalide upgrade` in a **project**.
 
@@ -334,9 +317,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.1...HEAD
-[0.12.1]: https://github.com/really-knows-ai/kalide/compare/v0.12.0...v0.12.1
-[0.12.0]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.0
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.2
 [0.11.0]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...v0.10.0
