@@ -39,24 +39,29 @@ import (
 //   - builds the load-time-EQUIVALENT context for the identical authored content
 //     with the SAME shared builders checkLibraryExample uses
 //     (template.RawContext and template.DataContext over a neutral
-//     template.ContextNode tree adapted from the example bytes), executes the
-//     same layout with it, and requires the result to appear VERBATIM in the
-//     render-time page.
+//     template.ContextNode tree adapted from the example bytes) — plus the
+//     typed-schema fields validateExampleBlockAt converts value-only, supplied
+//     as that conversion's documented output because it is an unexported local
+//     closure — executes the same layout with it, and requires the result to
+//     appear VERBATIM in the render-time page.
 //
-// The equality is on OBSERVABLE OUTPUT of `.raw`/`.data`/`.item` source values,
-// not the discarded load-time bytes: if the render half had derived either view
-// from anything other than the shared builders, the fragment would differ. The
-// limitation is exactly that checkLibraryExample's own executed bytes are not
-// captured; the load-time half is proved to run the identical layout against
-// the shared builders, and the render-time half is proved to reproduce their
-// output byte for byte.
+// The equality is on OBSERVABLE OUTPUT of `.raw`/`.data`/`.item` source values
+// and of the value-only-converted typed-schema fields, not the discarded
+// load-time bytes: if the render half had derived any of them from anything
+// other than the shared builders / the same conversion rules, the fragment
+// would differ. The limitation is exactly that checkLibraryExample's own
+// executed bytes are not captured; the load-time half is proved to run the
+// identical layout against the shared builders and the same conversion rules,
+// and the render-time half is proved to reproduce their output byte for byte.
 //
 // Only `.raw` (the author's original source values) and `.data` (the authored
 // section tree as data, each entry carrying its own `.raw`/`.item`/`.data`) are
-// compared: the CONVERTED field values legitimately differ — the render half
-// runs text fields through inline Markdown while the load-time example context
-// carries the raw string — so the agreement under test is the source view, as
-// the CR specifies.
+// compared for TEXT: a converted text field legitimately differs — the render
+// half runs it through inline Markdown while the load-time example context
+// carries the raw string. The typed-schema fields the two halves convert
+// value-only — a nullable null, a coerce text field's string form and a
+// list-of-record's per-item maps — do NOT differ, so they are compared directly
+// as converted values (nullable-fields, record-item-type, text-coercion).
 
 const (
 	// agreementSource is the authored slide: it is written BOTH as the deck
@@ -68,6 +73,17 @@ const (
 	agreementSource = "---\n" +
 		"template: agreehost\n" +
 		"title: '**Host** title'\n" +
+		// The typed-schema probe fields: an explicit null on a nullable field, a
+		// YAML number on a coerce text field, and a list whose item is an inline
+		// record (its `id` coerced, its `note` omitted). Both halves convert
+		// these value-only, so the converted values must agree byte for byte.
+		"nickname: null\n" +
+		"code: 7\n" +
+		"people:\n" +
+		"  - name: Ada\n" +
+		"    id: 7\n" +
+		"  - name: Grace\n" +
+		"    id: 42\n" +
 		"---\n" +
 		"Host *body* source.\n" +
 		"# blocks\n" +
@@ -92,7 +108,7 @@ const (
 		"text: Second block\n" +
 		"```\n"
 
-	agreementHostTemplateYAML = `description: agreement host slide reading the reserved raw/data context unguarded
+	agreementHostTemplateYAML = `description: agreement host slide reading the reserved raw/data context and the nullable/record/coerce field values unguarded
 fields:
   - name: title
     type: text
@@ -100,6 +116,24 @@ fields:
   - name: subtitle
     type: text
     default: Defaulted
+  - name: nickname
+    type: text
+    nullable: true
+  - name: code
+    type: text
+    coerce: true
+  - name: people
+    type: list
+    item:
+      type: record
+      fields:
+        - name: name
+          type: text
+        - name: id
+          type: text
+          coerce: true
+        - name: note
+          type: text
 sections:
   - name: blocks
     accepted:
@@ -110,12 +144,25 @@ body:
 `
 
 	// agreementHostLayout prints ONLY the reserved source views — its own `.raw`
-	// and its authored children as `.data` — never a converted field or the
-	// rendered section list, so the load-time-equivalent execution (which has no
-	// converted values) and the render-time execution produce identical bytes.
+	// and its authored children as `.data` — plus the typed-schema field values
+	// BOTH halves convert identically (a nullable null, a coerced string and a
+	// per-item record map). It never prints a converted text field value through
+	// any other name: the render half pre-renders text through inline Markdown
+	// while the load half keeps the authored string, so only `.raw` carries text.
+	// The `len` reads make the coercion observable: a coerce text field that was
+	// left a YAML number would fail `len` on both halves, and a record item that
+	// was left an unconverted map would fail `len .id` likewise — so neither
+	// half can silently skip the conversion and still execute.
 	agreementHostLayout = `<div class="agree-host">` +
 		`<span class="host-raw-title">{{ .raw.title }}</span>` +
 		`<span class="host-raw-body">{{ .raw.body }}</span>` +
+		`<span class="host-field-nickname">{{ if .nickname }}present{{ else }}nil{{ end }}</span>` +
+		`<span class="host-field-code">{{ .code }}</span>` +
+		`<span class="host-field-code-len">{{ len .code }}</span>` +
+		`<span class="host-field-people-count">{{ len .people }}</span>` +
+		`{{ range .people }}` +
+		`<span class="host-field-person" data-name="{{ .name }}" data-id="{{ .id }}" data-id-len="{{ len .id }}" data-note="{{ if .note }}present{{ else }}nil{{ end }}"></span>` +
+		`{{ end }}` +
 		`{{ range .data.blocks }}` +
 		`<span class="host-block" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}">` +
 		`<span class="host-block-raw-text">{{ .raw.text }}</span>` +
@@ -175,18 +222,25 @@ body:
 
 // TestLoadAndRenderRawDataContextAgree asserts that load-time and render-time
 // `.raw`/`.data` AGREE for the same authored content, because the shared
-// template.RawContext/template.DataContext builders feed both halves. It is an
+// template.RawContext/template.DataContext builders feed both halves, and that
+// the CONVERTED typed-schema field values agree too — a nullable null, a
+// list-of-record's per-item maps and a coerce text field's string form — since
+// validateExampleBlockAt and renderer.values/fieldValue convert them
+// value-only (nullable-fields, record-item-type, text-coercion). It is an
 // integration test: a real on-disk library and deck are loaded by the real
 // loader (LoadLibrary, which runs checkLibraryExample's unguarded example
 // execution) and rendered by the real pipeline (RenderDeck). It reads the real
 // filesystem, so it is skipped under -short.
 //
 // It pins (raw-source-context, section-data-context, item-context,
-// template-context): the slide's `.raw.title`/`.raw.body` are the author's
-// source, not the converted values; `.data.blocks` carries one entry per
-// authored instance, each with its own `.raw`/`.item`, and a nested instance's
-// children are reached through its entry's `.data` with `.item.parent` the
-// enclosing source values; and the render-time page reproduces the
+// template-context, nullable-fields, record-item-type, text-coercion): the
+// slide's `.raw.title`/`.raw.body` are the author's source, not the converted
+// text values; `.data.blocks` carries one entry per authored instance, each
+// with its own `.raw`/`.item`, and a nested instance's children are reached
+// through its entry's `.data` with `.item.parent` the enclosing source values;
+// the nullable `nickname` reads nil, the coerce `code` reads "7" and the
+// `people` list reads as one map per item with its coerce `id` a string and its
+// omitted optional `note` nil; and the render-time page reproduces the
 // load-time-equivalent fragment byte for byte.
 func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	if testing.Short() {
@@ -239,11 +293,35 @@ func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	loadRaw := template.RawContext(exampleSlide.Frontmatter, hostDef, exampleSlide.Body)
 	loadData := template.DataContext(agreementNodes(reg, exampleSlide.Sections), nil)
 
+	// The CONVERTED field values the load-time example context carries, built
+	// here as the load-time EQUIVALENT: validateExampleBlockAt is unexported and
+	// its value-only nullable/record/coerce conversion (mirroring
+	// renderer.values/fieldValue) produces, for the probe fields above, an
+	// explicit null on a nullable field as a nil entry, a list-of-record as one
+	// map per item with every declared field present (its coerce `id` as its
+	// string form and its omitted optional `note` as nil), and the top-level
+	// coerce `code` as its string form. Text fields are NOT reproduced here: the
+	// render half pre-renders text through inline Markdown while the load-time
+	// half keeps the authored string, so text is only ever compared through the
+	// reserved `.raw` view.
+	loadFields := map[string]any{
+		"nickname": nil,
+		"code":     "7",
+		"people": []any{
+			map[string]any{"name": "Ada", "id": "7", "note": nil},
+			map[string]any{"name": "Grace", "id": "42", "note": nil},
+		},
+	}
+
 	funcMap := template.LayoutFuncMap(lib.Media, "/assets/templates/media")
-	loadHostHTML := executeStandalone(t, "agreehost", host.LayoutText, funcMap, map[string]any{
+	loadCtx := map[string]any{
 		"raw":  loadRaw,
 		"data": loadData,
-	})
+	}
+	for k, v := range loadFields {
+		loadCtx[k] = v
+	}
+	loadHostHTML := executeStandalone(t, "agreehost", host.LayoutText, funcMap, loadCtx)
 
 	// The concrete load-time values the comparison pins: the source view of the
 	// slide and of both authored `blocks` instances (with the first block's two
@@ -252,6 +330,17 @@ func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	for _, want := range []string{
 		`<span class="host-raw-title">**Host** title</span>`,
 		`<span class="host-raw-body">Host *body* source.`,
+		// The converted typed-schema values, identical on both halves: the
+		// nullable null reads as nil, the coerce number as its string form (whose
+		// `len` would fail if it were still a YAML number), and the list-of-record
+		// as one per-item map (its coerce `id` a string, its omitted optional
+		// `note` nil).
+		`<span class="host-field-nickname">nil</span>`,
+		`<span class="host-field-code">7</span>`,
+		`<span class="host-field-code-len">1</span>`,
+		`<span class="host-field-people-count">2</span>`,
+		`<span class="host-field-person" data-name="Ada" data-id="7" data-id-len="1" data-note="nil"></span>`,
+		`<span class="host-field-person" data-name="Grace" data-id="42" data-id-len="2" data-note="nil"></span>`,
 		`data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="blocks" data-template="agreeblock" data-parent="absent"`,
 		`data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="blocks" data-template="agreeblock" data-parent="absent"`,
 		`<span class="host-block-raw-text">**First** block</span>`,
