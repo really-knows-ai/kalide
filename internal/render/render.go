@@ -1289,9 +1289,12 @@ type sectionCtx struct {
 // values converts one map of validated field data against t's field schema,
 // returning the layout-ready map. It is used for a slide's frontmatter, a
 // section instance's frontmatter, and a nested section-template-as-type value,
-// so the same rules apply at every depth. The reserved `template:` selector and
-// any unknown key are simply absent from the field schema and are ignored here;
-// validation already rejected an unknown key.
+// so the same rules apply at every depth. Every declared field is present in
+// the returned map: an explicit null and an absent optional field (no default)
+// both reach the context as a nil entry (nullable-fields), so an absent
+// optional and an explicit null are indistinguishable to a layout. The reserved
+// `template:` selector and any unknown key are simply absent from the field
+// schema and are ignored here; validation already rejected an unknown key.
 //
 // secCtx is non-nil exactly when out is a SECTION INSTANCE map (top-level or
 // nested): the reserved `deck`/`slide` entries are merged into it and, when
@@ -1313,7 +1316,14 @@ func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sec
 		f := &t.Fields[i]
 		raw, present := data[f.Name]
 		if !present {
+			// An absent field with no default still reaches the context, as a
+			// nil entry: an explicit null and an absent optional field both
+			// read as nil (nullable-fields), mirroring the inline-record
+			// conversion below. A field with a default takes it instead, and a
+			// missing required field never reaches here (validation rejects it
+			// first).
 			if f.Default == nil {
+				out[f.Name] = nil
 				continue
 			}
 			raw = f.Default
