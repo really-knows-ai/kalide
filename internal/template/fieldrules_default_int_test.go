@@ -225,8 +225,8 @@ func TestFieldRulesDefaultAppliedExampleInt(t *testing.T) {
 		if err == nil {
 			t.Fatal("step-7 execution without the materialised top-level default succeeded; want the required-target type error")
 		}
-		if !strings.Contains(err.Error(), "expected a text field") {
-			t.Errorf("error = %v, want the nil-argument text-field type error", err)
+		if !strings.Contains(err.Error(), "got null — this field isn't nullable") {
+			t.Errorf("error = %v, want the non-nullable null rejection", err)
 		}
 	})
 
