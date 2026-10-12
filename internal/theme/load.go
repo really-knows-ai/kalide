@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // This file implements LoadDir, which builds a *Registry from a project's
@@ -36,26 +38,32 @@ func dirError(p, format string, args ...any) error {
 // an error naming the offending theme subdirectory when it does not contain
 // theme.css.
 //
+// root is the forward-slash fs-relative identity used for every io/fs call;
+// the paths in the returned errors are the native display spelling of that
+// identity (displaypath.Display), so the same theme directory reads
+// `templates/themes/default` on macOS and Linux and `templates\themes\default`
+// on Windows (native-display-paths).
+//
 // A themes directory with no subdirectories at all loads to an empty,
 // non-nil registry: LoadDir does not require at least one theme to exist,
 // leaving that check (if any) to its caller.
 func LoadDir(fsys fs.FS, root string) (*Registry, error) {
 	info, err := fs.Stat(fsys, root)
 	if err != nil {
-		return nil, dirError(root, "themes directory not found")
+		return nil, dirError(displaypath.Display("", root), "themes directory not found")
 	}
 	if !info.IsDir() {
-		return nil, dirError(root, "exists but is not a directory")
+		return nil, dirError(displaypath.Display("", root), "exists but is not a directory")
 	}
 
 	sub, err := fs.Sub(fsys, root)
 	if err != nil {
-		return nil, dirError(root, "not usable as a directory: %v", err)
+		return nil, dirError(displaypath.Display("", root), "not usable as a directory: %v", err)
 	}
 
 	entries, err := fs.ReadDir(sub, ".")
 	if err != nil {
-		return nil, dirError(root, "read directory: %v", err)
+		return nil, dirError(displaypath.Display("", root), "read directory: %v", err)
 	}
 
 	reg := NewRegistry()
@@ -67,17 +75,17 @@ func LoadDir(fsys fs.FS, root string) (*Registry, error) {
 		dir := path.Join(root, name)
 
 		if _, statErr := fs.Stat(sub, path.Join(name, Stylesheet)); statErr != nil {
-			return nil, dirError(dir, "%s not found", Stylesheet)
+			return nil, dirError(displaypath.Display("", dir), "%s not found", Stylesheet)
 		}
 
 		themeFS, subErr := fs.Sub(sub, name)
 		if subErr != nil {
-			return nil, dirError(dir, "not usable as a directory: %v", subErr)
+			return nil, dirError(displaypath.Display("", dir), "not usable as a directory: %v", subErr)
 		}
 
 		t := Theme{Name: name, Stylesheet: Stylesheet, Assets: themeFS}
 		if err := reg.Register(t); err != nil {
-			return nil, dirError(dir, "%v", err)
+			return nil, dirError(displaypath.Display("", dir), "%v", err)
 		}
 	}
 	return reg, nil

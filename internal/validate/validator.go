@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -379,6 +380,14 @@ var fileErrorRE = regexp.MustCompile(`^([^:\n]+): ([\s\S]*)$`)
 // message` (or `file: message`) rather than a structured type, so the position
 // is recovered from the message. An unrecognised error keeps its whole message
 // as What, with no file.
+//
+// The recovered file is the display spelling those packages render (for
+// example `slides\3-team.md` on Windows), so it is converted back to the
+// forward-slash deck-relative identity with filepath.ToSlash before it is
+// stored as ValidationError.File. ValidationError.File is always the identity;
+// the native spelling is reapplied only when Format renders the location
+// (native-display-paths), so a display path is never used as a name or lookup
+// key.
 func adaptDeckError(err error) ValidationError {
 	if err == nil {
 		return ValidationError{}
@@ -386,10 +395,10 @@ func adaptDeckError(err error) ValidationError {
 	msg := err.Error()
 	if m := positionedErrorRE.FindStringSubmatch(msg); m != nil {
 		line, _ := strconv.Atoi(m[2])
-		return New(m[1], line, nil, m[3], "")
+		return New(filepath.ToSlash(m[1]), line, nil, m[3], "")
 	}
 	if m := fileErrorRE.FindStringSubmatch(msg); m != nil {
-		return New(m[1], 0, nil, m[2], "")
+		return New(filepath.ToSlash(m[1]), 0, nil, m[2], "")
 	}
 	return New("", 0, nil, msg, "")
 }
