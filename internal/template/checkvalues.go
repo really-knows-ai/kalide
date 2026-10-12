@@ -372,7 +372,17 @@ func checkRecordValue(c *checker, path []PathSegment, f *Field, value any, depth
 }
 
 // validateValue checks one value against one field's type and rules.
+//
+// A YAML null is handled first, whatever the field's type (nullable-fields):
+// checkNullable accepts it for a nullable field — or a nullable record item
+// descriptor — and rejects it for a non-nullable one, and either way no type,
+// bound, format or membership check runs. This covers a template's top-level
+// fields and a list's item descriptor alike, because validateList routes every
+// element through here.
 func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth int) {
+	if checkNullable(c, path, f, value) {
+		return
+	}
 	switch f.Type {
 	case FieldText:
 		c.validateText(path, f, value)
@@ -390,6 +400,11 @@ func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth i
 		c.validateLink(path, value)
 	case FieldList:
 		c.validateList(path, f, value, depth)
+	case FieldRecord:
+		// A record appears only as a list's item descriptor, but it is
+		// dispatched here so every validateValue caller — the mapping pass
+		// and validateList alike — routes it through the same record check.
+		checkRecordValue(c, path, f, value, depth)
 	case FieldSectionTemplate:
 		c.validateSection(path, f, value, depth)
 	default:
