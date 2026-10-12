@@ -22,23 +22,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // blockPaths are the four entries a scaffolded deck owns. If any of them is
 // already present, Init refuses: the command has no --force and never overwrites
 // deck content. The display form matches how the requirement names them
-// (`slides/`, `templates/`, `assets/`, `kalide.yaml`).
+// (`slides/`, `templates/`, `assets/`, `kalide.yaml`), rendered through
+// displaypath.Display so the empty directories' trailing marker uses the host
+// operating system's native separator (a trailing backslash on Windows, a
+// trailing slash elsewhere).
 //
 // Other entries in the target directory — a .git directory, a README, an editor
 // lock file — are irrelevant to the deck and do NOT block init.
 var blockPaths = []struct {
 	path    string // name tested against the filesystem
-	display string // name used in the refusal message
+	display string // name used in the refusal message, with the native separator
 }{
-	{path: "slides", display: "slides/"},
-	{path: "templates", display: "templates/"},
-	{path: "assets", display: "assets/"},
-	{path: "kalide.yaml", display: "kalide.yaml"},
+	{path: "slides", display: displaypath.Display("", "slides/")},
+	{path: "templates", display: displaypath.Display("", "templates/")},
+	{path: "assets", display: displaypath.Display("", "assets/")},
+	{path: "kalide.yaml", display: displaypath.Display("", "kalide.yaml")},
 }
 
 // Init writes a deck into dir.

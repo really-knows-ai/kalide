@@ -57,40 +57,74 @@ import (
 // of internal/config's RecognisedKeys set.
 const initDefaultTemplateDirKey = "default-template-dir"
 
-// initCreatedMessage is the success text for `kalide init`. It lists the
-// top-level entries scaffold.Init creates from the embedded hello seed,
-// spelled as deck-relative, slash-separated paths: the deck-root author-guide
-// pair (the full AGENTS_KALIDE.md guide and its AGENTS.md pointer), the deck
-// config, the starter slide, the hello slide template and default theme, and
-// the empty assets/ directory for the author's images.
-const initCreatedMessage = `Created a starter deck:
-  AGENTS_KALIDE.md
-  AGENTS.md
-  kalide.yaml
-  slides/1-hello.md
-  templates/library.yaml
-  templates/slides/hello/template.yaml
-  templates/slides/hello/layout.html.tmpl
-  templates/slides/hello/example.md
-  templates/themes/default/theme.css
-  assets/
-`
+// createdReport renders a created-paths report shared by `kalide init` and
+// `kalide init-library`: the header line, then each entry on its own line,
+// indented two spaces. Every entry is spelled with forward slashes and rendered
+// through displaypath.Display, so the report shows the host operating system's
+// native separator — including a trailing directory marker, which becomes
+// "slides/" on Unix and "slides\" on Windows. header may carry a single %s
+// verb, which the caller fills with the path being reported.
+func createdReport(header string, entries []string) string {
+	var b strings.Builder
+	b.WriteString(header)
+	b.WriteByte('\n')
+	for _, entry := range entries {
+		b.WriteString("  ")
+		b.WriteString(displaypath.Display("", entry))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// initCreatedEntries are the top-level entries scaffold.Init creates from the
+// embedded hello seed, spelled as forward-slash, deck-relative paths (the
+// canonical identity spelling): the deck-root author-guide pair (the full
+// AGENTS_KALIDE.md guide and its AGENTS.md pointer), the deck config, the
+// starter slide, the hello slide template and default theme, and the empty
+// assets/ directory for the author's images. initCreatedMessage renders them
+// through createdReport so the report uses native separators.
+var initCreatedEntries = []string{
+	"AGENTS_KALIDE.md",
+	"AGENTS.md",
+	"kalide.yaml",
+	"slides/1-hello.md",
+	"templates/library.yaml",
+	"templates/slides/hello/template.yaml",
+	"templates/slides/hello/layout.html.tmpl",
+	"templates/slides/hello/example.md",
+	"templates/themes/default/theme.css",
+	"assets/",
+}
+
+// initCreatedMessage is the success text for `kalide init`. It lists
+// initCreatedEntries, one per line, with the host operating system's native
+// separators (see createdReport); on Unix the paths read identically to the
+// forward-slash identity spelling.
+var initCreatedMessage = createdReport("Created a starter deck:", initCreatedEntries)
+
+// initExternalCreatedEntries are the top-level entries the external-library
+// branches of `kalide init` create, spelled as forward-slash, deck-relative
+// paths: the deck-root author-guide pair, the deck config and the empty
+// slides/ and assets/ directories (an empty directory is a path, so it is
+// listed with a trailing slash, rendered natively). There is deliberately no
+// local templates/ entry.
+var initExternalCreatedEntries = []string{
+	"AGENTS_KALIDE.md",
+	"AGENTS.md",
+	"kalide.yaml",
+	"slides/",
+	"assets/",
+}
 
 // initExternalCreatedMessage is the success text for the external-library
 // branches of `kalide init`: an explicit path argument, or the configured
-// default-template-dir. It names the external library the deck references and
-// lists the top-level entries InitExternal creates: the deck-root author-guide
-// pair (the full AGENTS_KALIDE.md guide and its AGENTS.md pointer), the deck
-// config and the empty slides/ and assets/ directories (an empty directory is
-// not a file, so it is listed with its trailing slash). There is deliberately
-// no local templates/ entry.
-const initExternalCreatedMessage = `Created a deck referencing the external template library %s:
-  AGENTS_KALIDE.md
-  AGENTS.md
-  kalide.yaml
-  slides/
-  assets/
-`
+// default-template-dir. Its header names the external library the deck
+// references (the %s verb, filled with the stored path as given) and its body
+// lists initExternalCreatedEntries with native separators.
+var initExternalCreatedMessage = createdReport(
+	"Created a deck referencing the external template library %s:",
+	initExternalCreatedEntries,
+)
 
 // parseInitArgs parses the arguments after `kalide init`: an optional
 // external-library path plus the optional --local flag, in any order, and

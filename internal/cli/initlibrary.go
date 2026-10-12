@@ -27,20 +27,31 @@ import (
 	"github.com/really-knows-ai/kalide/internal/scaffold"
 )
 
-// initLibraryCreatedMessage is the success text for `kalide init-library`. It
-// names the library's target path and lists the root entries InitLibrary
-// creates; the empty directories are spelled with a trailing slash. The
-// library-root author-guide pair is the full AGENTS_KALIDE.md guide and its
-// AGENTS.md pointer.
-const initLibraryCreatedMessage = `Created a template library at %s:
-  library.yaml
-  AGENTS_KALIDE.md
-  AGENTS.md
-  slides/
-  sections/
-  media/
-  themes/default/theme.css
-`
+// initLibraryCreatedEntries are the root entries InitLibrary creates, spelled
+// as forward-slash paths: the metadata file, the library-root author-guide pair
+// (the full AGENTS_KALIDE.md guide and its AGENTS.md pointer) and the empty
+// standard layout directories (listed with a trailing slash, rendered
+// natively). The library root itself is the target, named by the message
+// header. initLibraryCreatedMessage renders them through createdReport so the
+// report uses native separators.
+var initLibraryCreatedEntries = []string{
+	"library.yaml",
+	"AGENTS_KALIDE.md",
+	"AGENTS.md",
+	"slides/",
+	"sections/",
+	"media/",
+	"themes/default/theme.css",
+}
+
+// initLibraryCreatedMessage is the success text for `kalide init-library`. Its
+// header names the library's target path (the %s verb, filled with the native
+// canonical root) and its body lists initLibraryCreatedEntries with the host
+// operating system's native separators (see createdReport).
+var initLibraryCreatedMessage = createdReport(
+	"Created a template library at %s:",
+	initLibraryCreatedEntries,
+)
 
 // runInitLibrary implements `kalide init-library <path>`. It returns the
 // process status code: 0 when the library is written; 1 when scaffold refuses

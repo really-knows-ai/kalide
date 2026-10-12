@@ -40,6 +40,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
@@ -54,19 +55,22 @@ var libraryNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 // libraryBlockPaths are the library-owned top-level entries whose presence makes
 // InitLibrary refuse: the metadata file and the four standard layout
 // directories. A library has no `templates/` entry of its own — its root IS the
-// templates directory — so unlike a deck there is no fifth name.
+// templates directory — so unlike a deck there is no fifth name. The display
+// forms are rendered through displaypath.Display, so the layout directories'
+// trailing marker uses the host operating system's native separator (a trailing
+// backslash on Windows, a trailing slash elsewhere).
 //
 // Other entries in the target directory — a .git directory, a README, an editor
 // lock file — are unrelated to the library and do NOT block init.
 var libraryBlockPaths = []struct {
 	path    string // name tested against the filesystem
-	display string // name used in the refusal message
+	display string // name used in the refusal message, with the native separator
 }{
-	{path: template.LibraryFile, display: template.LibraryFile},
-	{path: template.SlidesDir, display: template.SlidesDir + "/"},
-	{path: template.SectionsDir, display: template.SectionsDir + "/"},
-	{path: template.ThemesDir, display: template.ThemesDir + "/"},
-	{path: template.MediaDir, display: template.MediaDir + "/"},
+	{path: template.LibraryFile, display: displaypath.Display("", template.LibraryFile)},
+	{path: template.SlidesDir, display: displaypath.Display("", template.SlidesDir+"/")},
+	{path: template.SectionsDir, display: displaypath.Display("", template.SectionsDir+"/")},
+	{path: template.ThemesDir, display: displaypath.Display("", template.ThemesDir+"/")},
+	{path: template.MediaDir, display: displaypath.Display("", template.MediaDir+"/")},
 }
 
 // DefaultThemeCSS returns the content InitLibrary writes to
