@@ -132,7 +132,7 @@ func TestValidateWalkHelperRefsPathIsRejectedBeforeWalk(t *testing.T) {
 		if step2 == nil {
 			t.Fatal("checkSections(broken) = nil, want the HelperCalls re-parse rejection")
 		}
-		const wantStep2 = `template "broken": parse layout: template: broken:1: unclosed action`
+		const wantStep2 = `broken:1: template "broken": parse layout: unclosed action`
 		if got := step2.Error(); got != wantStep2 {
 			t.Errorf("checkSections(broken) error = %q, want %q", got, wantStep2)
 		}

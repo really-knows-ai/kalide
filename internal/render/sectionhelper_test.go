@@ -1,10 +1,13 @@
 package render
 
 import (
+	"errors"
 	htmltmpl "html/template"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -897,6 +900,77 @@ func TestRenderSlideLayeredTemplateCompositionCrossLayer(t *testing.T) {
 	}
 	if strings.Contains(got, "/assets/templates/external/media/local-invoked.svg") {
 		t.Errorf("cross-layer invoked layout media used the external prefix, want the executing local layer's base:\n%s", got)
+	}
+}
+
+// TestLayeredLayoutExecuteErrorReportsOnDiskPath (plan.phase-01.task-19) pins
+// the render-time execute-error position contract for a layered deck: when a
+// slide layout fails to execute through executeLayeredLayout (the render.go
+// execute path), the *template.LibraryError names the OWNING layout's on-disk
+// path:line — tmpl.Layout.Path, the display-only field — never the layout's
+// layer-relative name as a file location, and a quoted `{{ template }}` target
+// name inside the Go error stays exactly as written (portable-layout-names,
+// library-layer-references).
+//
+// The fixture is a real two-layer deck (layeredCompositionFixture) loaded
+// through the public LoadDeckLibrary; the local slide `localslide` carries an
+// unguarded `{{ template "<unregistered layer-relative name>" . }}`, installed
+// after the load exactly as the composition probes above do (the loader's
+// step-7 example run cannot accept such a call on disk). Rendering the slide
+// reaches the include at execute time; the failure must be positioned at
+// localslide's own on-disk layout file.
+func TestLayeredLayoutExecuteErrorReportsOnDiskPath(t *testing.T) {
+	deckRoot, extRoot := layeredCompositionFixture(t)
+
+	// A layer-relative name that is not registered: the include cannot resolve.
+	const missingTarget = template.SectionsDir + "/nope/" + template.LayoutFile
+
+	_, reg, funcMap := mustLayeredRegistryInstalled(t, deckRoot, extRoot, func(lib *template.Library) {
+		installLayoutText(t, lib, "localslide",
+			`<section class="local-slide">{{ template "`+missingTarget+`" . }}</section>`)
+	})
+
+	parsed := &slide.Slide{File: "slides/1-local.md", Template: "localslide"}
+	_, err := RenderSlide(parsed, "local", &deck.Config{Title: "Layered"},
+		deck.Slide{Number: 1, Label: "local"}, 1, reg, funcMap)
+	if err == nil {
+		t.Fatal("RenderSlide() = nil, want the unresolved layout include to fail at execute time")
+	}
+	var libErr *template.LibraryError
+	if !errors.As(err, &libErr) {
+		t.Fatalf("RenderSlide() error = %T (%v), want *template.LibraryError", err, err)
+	}
+
+	// The layout's on-disk path is the local layer root joined to its
+	// layer-relative name.
+	wantPath := path.Join(deckRoot, template.TemplatesDir, template.SlidesDir, "localslide", template.LayoutFile)
+	if libErr.Path != wantPath {
+		t.Errorf("Path = %q, want the owning layout's on-disk path %q", libErr.Path, wantPath)
+	}
+	if libErr.Line != 1 {
+		t.Errorf("Line = %d, want 1 (the include's line in localslide's own layout)", libErr.Line)
+	}
+	if prefix := wantPath + ":1: "; !strings.HasPrefix(libErr.Error(), prefix) {
+		t.Errorf("Error() = %q, want it to begin with the on-disk position %q", libErr.Error(), prefix)
+	}
+
+	// The missing target is quoted exactly as written.
+	if quoted := strconv.Quote(missingTarget); !strings.Contains(libErr.Message, quoted) {
+		t.Errorf("Message = %q, want the target name quoted exactly as written %s", libErr.Message, quoted)
+	}
+
+	// The on-disk path legitimately ends with the layer-relative name, so drop
+	// it before asserting the name is never itself printed as a location; the
+	// missing target has no on-disk file at all, so it must not be a location
+	// anywhere.
+	rest := strings.ReplaceAll(libErr.Error(), wantPath, "")
+	for _, name := range []string{
+		template.SlidesDir + "/localslide/" + template.LayoutFile,
+		missingTarget,
+	} {
+		if strings.Contains(rest, name+":") {
+			t.Errorf("Error() = %q contains %q as a file location, want the on-disk path only", libErr.Error(), name+":")
+		}
 	}
 }
 

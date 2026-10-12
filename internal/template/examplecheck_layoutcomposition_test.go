@@ -1,6 +1,7 @@
 package template
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -24,13 +25,13 @@ import (
 //
 // "outer" is a slide whose layout calls the standard html/template composition
 // form `{{ template "<layout name>" . }}`, naming slide "hello"'s layout by the
-// exact name loadlibrary.go builds for it — path.Join(root,
-// slides/hello/layout.html.tmpl) with root == TemplatesDir (loadlibrary.go:709)
-// — which is the name exampleLayoutNamespace registers every library layout
-// under. The library is single-layer and in-memory; LoadLibrary must succeed,
-// whereas executing outer's layout text alone in a fresh namespace (the
-// pre-fix step-7 behaviour) failed "no such template" because no other layout
-// was registered for it to invoke.
+// exact name loadlibrary.go builds for it — its layer-relative forward-slash
+// path slides/hello/layout.html.tmpl (loadlibrary.go:714) — which is the name
+// exampleLayoutNamespace registers every library layout under, identical on
+// every OS and wherever the layer sits on disk. The library is single-layer and
+// in-memory; LoadLibrary must succeed, whereas executing outer's layout text
+// alone in a fresh namespace (the pre-fix step-7 behaviour) failed "no such
+// template" because no other layout was registered for it to invoke.
 func TestCheckLibraryExampleComposesLibraryLayout(t *testing.T) {
 	// hello's layout carries a marker so the test proves the include renders,
 	// not merely that the load succeeds.
@@ -42,9 +43,9 @@ func TestCheckLibraryExampleComposesLibraryLayout(t *testing.T) {
 	fsys["slides/outer/template.yaml"] = &fstest.MapFile{
 		Data: []byte("name: outer\ndescription: composes hello\n"),
 	}
-	// The exact layout name loadlibrary.go builds and registers:
-	// path.Join(root, slides/<name>/layout.html.tmpl), root == TemplatesDir.
-	helloLayoutName := TemplatesDir + "/slides/hello/" + LayoutFile
+	// The exact layer-relative layout name loadlibrary.go builds and
+	// registers: slides/<name>/layout.html.tmpl.
+	helloLayoutName := SlidesDir + "/hello/" + LayoutFile
 	fsys["slides/outer/layout.html.tmpl"] = &fstest.MapFile{
 		Data: []byte(`<div>{{ template "` + helloLayoutName + `" . }}</div>`),
 	}
@@ -62,10 +63,10 @@ func TestCheckLibraryExampleComposesLibraryLayout(t *testing.T) {
 	if !ok || outer == nil {
 		t.Fatal(`TemplateByName("outer") not found in loaded library`)
 	}
-	// Confirm the exact layout name loadlibrary.go builds:
-	// path.Join(root, layoutRel) == root/slides/outer/layout.html.tmpl.
-	if got, want := outer.Layout.Name(), TemplatesDir+"/slides/outer/"+LayoutFile; got != want {
-		t.Errorf("outer.Layout.Name() = %q, want %q (the layout name loadlibrary.go builds)", got, want)
+	// Confirm the exact layer-relative layout name loadlibrary.go builds
+	// for outer: slides/outer/layout.html.tmpl.
+	if got, want := outer.Layout.Name(), SlidesDir+"/outer/"+LayoutFile; got != want {
+		t.Errorf("outer.Layout.Name() = %q, want %q (the layer-relative layout name loadlibrary.go builds)", got, want)
 	}
 
 	// Re-run step 7's execution for outer to observe the composed output
@@ -98,9 +99,9 @@ func TestCheckLibraryExampleComposesLibraryLayout(t *testing.T) {
 // two things the pre-fix fresh single-layout namespace could not survive:
 //
 //   - `{{ template "<card layout name>" . }}` includes sections/card's layout by
-//     the exact root-qualified name loadlibrary.go builds for it — path.Join(root,
-//     sections/card/layout.html.tmpl) with root == TemplatesDir (loadlibrary.go:709),
-//     the name exampleLayoutNamespace registers every library layout under. Pre-fix,
+//     the exact layer-relative name loadlibrary.go builds for it —
+//     sections/card/layout.html.tmpl (loadlibrary.go:714), the name
+//     exampleLayoutNamespace registers every library layout under. Pre-fix,
 //     panel's own text was the only template in the namespace, so the include
 //     failed "no such template";
 //   - `{{ section "badge" }}` calls a section through the load-time
@@ -120,9 +121,9 @@ func TestCheckLibraryExampleComposesLibraryLayout(t *testing.T) {
 // to observe the composed HTML.
 func TestCheckLibraryExampleSectionKindLayoutInclude(t *testing.T) {
 	const (
-		// The exact layout name loadlibrary.go builds and registers for card:
-		// path.Join(root, sections/card/layout.html.tmpl), root == TemplatesDir.
-		cardLayoutName = TemplatesDir + "/" + SectionsDir + "/card/" + LayoutFile
+		// The exact layer-relative layout name loadlibrary.go builds and
+		// registers for card: sections/card/layout.html.tmpl.
+		cardLayoutName = SectionsDir + "/card/" + LayoutFile
 		cardBody       = `<i class="card">{{ .item.section }}</i>`
 		badgeBody      = `<b class="badge">badge-body</b>`
 	)
@@ -147,7 +148,7 @@ func TestCheckLibraryExampleSectionKindLayoutInclude(t *testing.T) {
 
 	// panel: the section-kind template under test. It declares a field so its
 	// step-7 execution binds `.item` and parses its example; its layout both
-	// includes card's layout by its root-qualified name and calls the section
+	// includes card's layout by its layer-relative name and calls the section
 	// helper, both unguarded.
 	panelBody := `<div class="panel">{{ template "` + cardLayoutName + `" . }}{{ section "badge" }}</div>`
 	fsys["sections/panel/template.yaml"] = &fstest.MapFile{
@@ -168,10 +169,10 @@ func TestCheckLibraryExampleSectionKindLayoutInclude(t *testing.T) {
 	if !ok || panel == nil || panel.Definition == nil {
 		t.Fatal(`resolveMergedSectionTarget("panel") not found with a Definition`)
 	}
-	// Confirm the exact layout name loadlibrary.go builds:
-	// path.Join(root, sections/panel/layout.html.tmpl) == root/sections/panel/layout.html.tmpl.
-	if got, want := panel.Layout.Name(), TemplatesDir+"/"+SectionsDir+"/panel/"+LayoutFile; got != want {
-		t.Errorf("panel.Layout.Name() = %q, want %q (the layout name loadlibrary.go builds)", got, want)
+	// Confirm the exact layer-relative layout name loadlibrary.go builds
+	// for panel: sections/panel/layout.html.tmpl.
+	if got, want := panel.Layout.Name(), SectionsDir+"/panel/"+LayoutFile; got != want {
+		t.Errorf("panel.Layout.Name() = %q, want %q (the layer-relative layout name loadlibrary.go builds)", got, want)
 	}
 
 	// Re-run step 7's exact binding for panel to observe the composed output:
@@ -264,18 +265,18 @@ func TestCheckLibraryExampleSectionKindLayoutInclude(t *testing.T) {
 //
 // "hello" is a slide whose layout calls `{{ template "hello" . }}`. The merged
 // namespace (exampleLayoutNamespace) registers every library layout under the
-// root-qualified name loadlibrary.go builds — path.Join(root,
-// slides/hello/layout.html.tmpl) with root == TemplatesDir — never under the
-// bare directory name, so "hello" names no template and the include cannot
-// resolve. The library is single-layer and in-memory; executing hello's layout
-// must fail step 7, and LoadLibrary must return that failure as a *LibraryError
-// positioned at hello's own layout path (templates/slides/hello/
-// layout.html.tmpl), with the underlying html/template error — which names the
-// missing "hello" — in the Message.
+// layer-relative name loadlibrary.go builds — slides/hello/layout.html.tmpl —
+// never under the bare directory name, so "hello" names no template and the
+// include cannot resolve. The library is single-layer and in-memory; executing
+// hello's layout must fail step 7, and LoadLibrary must return that failure as
+// a *LibraryError positioned at hello's own on-disk layout path
+// (templates/slides/hello/layout.html.tmpl, the display-only Layout.Path), with
+// the underlying html/template error — which names the missing "hello" — in the
+// Message.
 func TestCheckLibraryExampleUnknownLayoutNameError(t *testing.T) {
 	// The bare template name. It names no library layout: every layout is
-	// registered under its root-qualified path
-	// (TemplatesDir/slides/hello/layout.html.tmpl), not its directory name.
+	// registered under its layer-relative path
+	// (slides/hello/layout.html.tmpl), not its directory name.
 	const missingLayoutName = "hello"
 
 	fsys := baseLibraryFS()
@@ -305,5 +306,94 @@ func TestCheckLibraryExampleUnknownLayoutNameError(t *testing.T) {
 	}
 	if !strings.Contains(libErr.Message, missingLayoutName) {
 		t.Errorf("Message = %q, want it to name the missing template %q", libErr.Message, missingLayoutName)
+	}
+}
+
+// TestLayoutErrorReportsOnDiskPath (task 18) pins the load-time error-position
+// contract for layout failures: a Go html/template error is reported at the
+// invoking layout's ON-DISK path:line — the display-only Layout.Path — never at
+// the layout's layer-relative name, which is a namespace key, not a file, and a
+// quoted `{{ template }}` target name stays verbatim.
+//
+// Two failures are covered: an unresolved `{{ template "<name>" . }}` include
+// reached at the step-7 example execution, and a layout that fails to parse at
+// step 3. Each failure is a *LibraryError whose Path is the layout's on-disk
+// path and whose Line is the line the Go error reports; the rendered Error()
+// starts with that on-disk position, and no layer-relative name is ever printed
+// as a file location. The unresolved case additionally quotes the missing
+// target exactly as written.
+func TestLayoutErrorReportsOnDiskPath(t *testing.T) {
+	// A layer-relative name that is not registered (no such template).
+	const missingTarget = SectionsDir + "/nope/" + LayoutFile
+
+	t.Run("an unresolved template include reports at the on-disk path", func(t *testing.T) {
+		fsys := baseLibraryFS()
+		fsys["slides/outer/template.yaml"] = &fstest.MapFile{Data: []byte("name: outer\n")}
+		fsys["slides/outer/layout.html.tmpl"] = &fstest.MapFile{
+			Data: []byte(`<div>{{ template "` + missingTarget + `" . }}</div>`),
+		}
+		fsys["slides/outer/example.md"] = &fstest.MapFile{Data: []byte("# outer\n")}
+
+		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err == nil {
+			t.Fatalf("LoadLibrary() = %+v, nil; want the unresolved include to fail step 7", lib)
+		}
+		libErr := asLibraryError(t, err)
+
+		wantPath := TemplatesDir + "/" + SlidesDir + "/outer/" + LayoutFile
+		assertOnDiskLayoutError(t, libErr, wantPath, 1)
+		// The missing target is quoted exactly as written.
+		if quoted := strconv.Quote(missingTarget); !strings.Contains(libErr.Message, quoted) {
+			t.Errorf("Message = %q, want the target name quoted exactly as written %s", libErr.Message, quoted)
+		}
+		assertNoLayerRelativeLocation(t, libErr.Error(), wantPath, SlidesDir+"/outer/"+LayoutFile, missingTarget)
+	})
+
+	t.Run("a layout parse failure reports at the on-disk path", func(t *testing.T) {
+		fsys := baseLibraryFS()
+		fsys["slides/broken/template.yaml"] = &fstest.MapFile{Data: []byte("name: broken\n")}
+		// An unclosed action: the layout fails to parse at step 3.
+		fsys["slides/broken/layout.html.tmpl"] = &fstest.MapFile{Data: []byte(`{{ section "footer"`)}
+		fsys["slides/broken/example.md"] = &fstest.MapFile{Data: []byte("# broken\n")}
+
+		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err == nil {
+			t.Fatalf("LoadLibrary() = %+v, nil; want the unparseable layout to fail step 3", lib)
+		}
+		libErr := asLibraryError(t, err)
+
+		wantPath := TemplatesDir + "/" + SlidesDir + "/broken/" + LayoutFile
+		assertOnDiskLayoutError(t, libErr, wantPath, 1)
+		assertNoLayerRelativeLocation(t, libErr.Error(), wantPath, SlidesDir+"/broken/"+LayoutFile)
+	})
+}
+
+// assertOnDiskLayoutError asserts libErr reports the on-disk layout path:line
+// position: Path is wantPath, Line is wantLine, and Error() begins with
+// "<wantPath>:<wantLine>: ".
+func assertOnDiskLayoutError(t *testing.T, libErr *LibraryError, wantPath string, wantLine int) {
+	t.Helper()
+	if libErr.Path != wantPath {
+		t.Errorf("Path = %q, want the on-disk layout path %q", libErr.Path, wantPath)
+	}
+	if libErr.Line != wantLine {
+		t.Errorf("Line = %d, want %d", libErr.Line, wantLine)
+	}
+	if prefix := wantPath + ":" + strconv.Itoa(wantLine) + ": "; !strings.HasPrefix(libErr.Error(), prefix) {
+		t.Errorf("Error() = %q, want it to begin with the on-disk position %q", libErr.Error(), prefix)
+	}
+}
+
+// assertNoLayerRelativeLocation asserts no layer-relative name in names is
+// printed as a file location. The on-disk path in onDiskPath legitimately ends
+// with the layout's layer-relative name, so that occurrence is removed first;
+// what remains must not carry "<name>:<line>" as a location.
+func assertNoLayerRelativeLocation(t *testing.T, errStr, onDiskPath string, names ...string) {
+	t.Helper()
+	rest := strings.ReplaceAll(errStr, onDiskPath, "")
+	for _, name := range names {
+		if strings.Contains(rest, name+":") {
+			t.Errorf("Error() = %q contains %q as a file location, want the on-disk path only", errStr, name+":")
+		}
 	}
 }
