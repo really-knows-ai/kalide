@@ -399,6 +399,37 @@ func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth i
 	}
 }
 
+// coerceText returns the string form of a coerce text field's YAML number or
+// boolean (text-coercion): the number 42 becomes "42" and the boolean true
+// becomes "true". It reports false for any other value — a mapping, a list, a
+// date or a null — so the caller keeps its usual text type error; a value that
+// is neither a string nor, under Coerce, a number or boolean is always a type
+// error.
+//
+// A string is already text and never reaches this helper for coercion: its
+// callers type-assert a string first and offer only a non-string value here,
+// so a string is not one of the forms this converts. The schema checker and
+// the render conversion both need the same number/boolean-to-string form.
+func coerceText(value any) (string, bool) {
+	switch v := value.(type) {
+	case bool:
+		return strconv.FormatBool(v), true
+	}
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() {
+		return "", false
+	}
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(rv.Int(), 10), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(rv.Uint(), 10), true
+	case reflect.Float32, reflect.Float64:
+		return formatNumber(rv.Float()), true
+	}
+	return "", false
+}
+
 // validateText checks a text field: the inline Markdown rules (unless Plain),
 // the collected links, and MaxLength after Markdown is stripped.
 func (c *checker) validateText(path []PathSegment, f *Field, value any) {
