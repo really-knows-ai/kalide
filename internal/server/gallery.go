@@ -412,12 +412,21 @@ func galleryWrapperTemplate(name, accepted string) (*template.Template, *templat
 			"body:\n"+
 			"  mode: optional\n",
 		description, gallerySectionName, accepted)
+	// The wrapper is synthetic: it has no on-disk layout file, so neither form
+	// may carry a display Path that would be read as a real file location.
+	// template.Layout.Path is display-only (never a namespace or lookup key),
+	// and registerLibraryTemplate copies a LibraryTemplate's LayoutPath straight
+	// into it, so the mirror deliberately leaves LayoutPath empty — a
+	// pseudo-path such as name + "/layout.html.tmpl" would install a location
+	// that does not exist on disk. The registered wrapper's Layout.Path stays
+	// empty and a template error for it falls back to its layout name (the
+	// wrapper's own synthetic name). The in-code wrapper's Layout.Path is empty
+	// for the same reason.
 	lt := &template.LibraryTemplate{
 		Name:          name,
 		Kind:          template.KindSlide,
 		ManifestPath:  name + "/template.yaml",
 		ManifestBytes: []byte(manifest),
-		LayoutPath:    name + "/layout.html.tmpl",
 		LayoutText:    layoutText,
 	}
 	return wrapper, lt
