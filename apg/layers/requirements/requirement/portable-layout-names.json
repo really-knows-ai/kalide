@@ -2,19 +2,19 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "portable-layout-names",
-  "body": "Portable layout names: a layout's name — the string an author writes in `{{ template \"<name>\" . }}` — is the layout's layer-relative forward-slash path within its library layer: `slides/<template-name>/layout.html.tmpl` for a slide layout and `sections/<template-name>/layout.html.tmpl` for a section layout. The same string names the layout on Windows, macOS and Linux and wherever the deck or library sits on disk, so a deck checked into git composes identically on any machine. The name never contains a layer root, a `templates/` prefix, a drive letter, a backslash, or an absolute path. Because template names are unique across the local and external layers (library-layer-uniqueness), a layer-relative name is unambiguous in the merged set. A local-layer layout may include an external-layer layout by that layout's own layer-relative name; an external-layer layout naming a local-only layout is a templates error, because the external layer validates standalone (library-layer-references, templates-dir-validation). An included layout executes in the invoking layout's namespace, so its `media` helper binds to the invoking layer, and a `section` call rebinds to the target's own layer (guide-layout-composition, example-layout-composition). An error names the layout's full on-disk file path so an author can find the file; that path is for display only and is never the name.\n\nAC:\n- the name an author writes for a slide layout is `slides/<template-name>/layout.html.tmpl` and for a section layout is `sections/<template-name>/layout.html.tmpl`;\n- the same name resolves on Windows, macOS and Linux and wherever the deck or library sits on disk, with no layer root, `templates/` prefix, drive letter, backslash or absolute path in it;\n- a local-layer layout resolves an external-layer layout by that layout's own layer-relative name, and an external-layer layout naming a local-only layout is a templates error;\n- an included layout's `media` helper resolves in the invoking layout's layer, and a `section` call resolves in the target's own layer;\n- a templates error about a layout names its full on-disk file path, never its layer-relative name.",
+  "body": "Portable layout names: a layout's name — the string an author writes in `{{ template \"<name>\" . }}` — is the layout's layer-relative forward-slash path within its library layer: `slides/<template-name>/layout.html.tmpl` for a slide layout and `sections/<template-name>/layout.html.tmpl` for a section layout. The same string names the layout on Windows, macOS and Linux and wherever the deck or library sits on disk, so a deck checked into git composes identically on any machine. The name never contains a layer root, a `templates/` prefix, a drive letter, a backslash, or an absolute path. Because template names are unique across the local and external layers (library-layer-uniqueness), a layer-relative name is unambiguous in the merged set. A local-layer layout may include an external-layer layout by that layout's own layer-relative name; an external-layer layout naming a local-only layout is a templates error, because the external layer validates standalone (library-layer-references, templates-dir-validation). An included layout executes in the invoking layout's namespace, so its `media` helper binds to the invoking layer, and a `section` call rebinds to the target's own layer (guide-layout-composition, example-layout-composition). A templates error reports the invoking layout's full on-disk file path and line; when the error concerns an unresolved `{{ template }}` target it also quotes the layout name exactly as the author wrote it — the on-disk path is display-only and is never accepted as a layout name.\n\nAC:\n- the name an author writes for a slide layout is `slides/<template-name>/layout.html.tmpl` and for a section layout is `sections/<template-name>/layout.html.tmpl`;\n- a fixture library that composes an external-layer layout by its layer-relative name loads and renders identically when the library is loaded from two different absolute roots in one test run;\n- that composition end-to-end test runs on the native CI matrix (Windows, macOS and Linux);\n- a layout name that carries a backslash (`sections\\x\\layout.html.tmpl`), a `templates/` prefix or an absolute/root-qualified path fails to resolve with a templates error (no such template);\n- a local-layer layout resolves an external-layer layout by that layout's own layer-relative name, and an external-layer layout naming a local-only layout is a templates error;\n- an included layout's `media` helper resolves in the invoking layout's layer, and a `section` call resolves in the target's own layer;\n- a failed `{{ template }}` call reports the invoking layout's on-disk file path and line and quotes the target name exactly as the author wrote it, and no layer-relative name appears in the error as a file location.",
   "properties": {
     "feature": "layered-template-libraries"
   },
   "out": [
     {
       "kind": "drives",
-      "target": "domain.value.library-layer",
+      "target": "domain.entity.template",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.entity.template",
+      "target": "domain.service.load-template-library",
       "properties": {}
     },
     {
@@ -24,7 +24,7 @@
     },
     {
       "kind": "drives",
-      "target": "domain.service.load-template-library",
+      "target": "domain.value.library-layer",
       "properties": {}
     }
   ],
