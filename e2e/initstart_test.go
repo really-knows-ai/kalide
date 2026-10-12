@@ -54,16 +54,19 @@ import (
 // initCreatedPaths are the deck-relative paths `kalide init` reports creating;
 // they mirror internal/cli's initCreatedMessage and the embedded hello seed
 // in internal/scaffold/seed. They are asserted against both the command
-// output and the filesystem.
+// output and the filesystem. `kalide init` renders each entry through
+// filepath.FromSlash (native-display-paths), so each expected entry is built
+// the same way: the host operating system's native spelling (templates\
+// library.yaml on Windows, templates/library.yaml elsewhere).
 var initCreatedPaths = []string{
 	"AGENTS.md",
 	"kalide.yaml",
-	"slides/1-hello.md",
-	"templates/library.yaml",
-	"templates/slides/hello/template.yaml",
-	"templates/slides/hello/layout.html.tmpl",
-	"templates/slides/hello/example.md",
-	"templates/themes/default/theme.css",
+	filepath.FromSlash("slides/1-hello.md"),
+	filepath.FromSlash("templates/library.yaml"),
+	filepath.FromSlash("templates/slides/hello/template.yaml"),
+	filepath.FromSlash("templates/slides/hello/layout.html.tmpl"),
+	filepath.FromSlash("templates/slides/hello/example.md"),
+	filepath.FromSlash("templates/themes/default/theme.css"),
 }
 
 // TestInitStart is the end-to-end init test described above.
@@ -92,7 +95,7 @@ func TestInitStart(t *testing.T) {
 			t.Errorf("kalide init output does not name %q:\n%s", rel, stdout)
 		}
 	}
-	if !strings.Contains(stdout, "assets/") {
+	if !strings.Contains(stdout, filepath.FromSlash("assets/")) {
 		t.Errorf("kalide init output does not name the assets/ directory:\n%s", stdout)
 	}
 
@@ -205,7 +208,13 @@ func TestInitStart(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("second kalide init stdout = %q, want empty", stdout)
 	}
-	for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml", "never overwrites"} {
+	for _, want := range []string{
+		filepath.FromSlash("slides/"),
+		filepath.FromSlash("templates/"),
+		filepath.FromSlash("assets/"),
+		"kalide.yaml",
+		"never overwrites",
+	} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("second kalide init refusal does not mention %q:\n%s", want, stderr)
 		}
@@ -369,7 +378,7 @@ func TestInitConfiguredDefaultServes(t *testing.T) {
 	if !strings.Contains(stdout, libDir) {
 		t.Errorf("kalide init output does not name the configured library %q:\n%s", libDir, stdout)
 	}
-	if strings.Contains(stdout, "templates/library.yaml") || strings.Contains(stdout, "slides/1-hello.md") {
+	if strings.Contains(stdout, filepath.FromSlash("templates/library.yaml")) || strings.Contains(stdout, filepath.FromSlash("slides/1-hello.md")) {
 		t.Errorf("kalide init output names a local templates/ or starter slide, want neither:\n%s", stdout)
 	}
 
@@ -498,7 +507,11 @@ func TestInitExplicitAndLocalOverrides(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("kalide init --local stderr = %q, want empty", stderr)
 		}
-		for _, want := range []string{"templates/library.yaml", "slides/1-hello.md", "templates/themes/default/theme.css"} {
+		for _, want := range []string{
+			filepath.FromSlash("templates/library.yaml"),
+			filepath.FromSlash("slides/1-hello.md"),
+			filepath.FromSlash("templates/themes/default/theme.css"),
+		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("kalide init --local output does not name %q:\n%s", want, stdout)
 			}
@@ -663,7 +676,7 @@ func TestInitRefusalExemptions(t *testing.T) {
 		if stdout != "" {
 			t.Errorf("kalide init stdout = %q, want empty on refusal", stdout)
 		}
-		for _, want := range []string{"templates/", "never overwrites"} {
+		for _, want := range []string{filepath.FromSlash("templates/"), "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("kalide init refusal does not mention %q:\n%s", want, stderr)
 			}
@@ -756,7 +769,7 @@ func TestInitRefusalExemptions(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("kalide init stderr = %q, want empty", stderr)
 		}
-		if !strings.Contains(stdout, "slides/1-hello.md") {
+		if !strings.Contains(stdout, filepath.FromSlash("slides/1-hello.md")) {
 			t.Errorf("kalide init output does not name the seed slide:\n%s", stdout)
 		}
 		assertAgentGuideAppended(t, h.Path("AGENTS.md"), agentsAuthor)

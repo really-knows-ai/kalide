@@ -150,7 +150,7 @@ func TestNativeRelease(t *testing.T) {
 			t.Errorf("kalide init output does not name %q:\n%s", rel, stdout)
 		}
 	}
-	if !strings.Contains(stdout, "assets/") {
+	if !strings.Contains(stdout, filepath.FromSlash("assets/")) {
 		t.Errorf("kalide init output does not name the assets/ directory:\n%s", stdout)
 	}
 
@@ -272,7 +272,13 @@ func TestNativeRelease(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("second kalide init stdout = %q, want empty", stdout)
 	}
-	for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml", "never overwrites"} {
+	for _, want := range []string{
+		filepath.FromSlash("slides/"),
+		filepath.FromSlash("templates/"),
+		filepath.FromSlash("assets/"),
+		"kalide.yaml",
+		"never overwrites",
+	} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("second kalide init refusal does not mention %q:\n%s", want, stderr)
 		}
