@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "field-types",
-  "body": "Field types: `text` (inline Markdown following the same inline rules as bodies — bold, italic, inline code, `[]()` links, hard breaks; `[]()` links inside text are validated exactly like body links, so a `#label` must exist; `plain` flag strips styles silently), `number` (written as a plain YAML number, e.g. `1250000`, `0.12`; a quoted/string value = type error), `date` (written as `YYYY-MM-DD`; any other form = error), `boolean`, `enum`, `image` (path under assets/, existence checked), `link` (#label checked or http(s) URL), `list` (exactly one item type), `record` (an inline nested record declaring its own `fields:`, see record-item-type), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, item: {type: person}}`). Every type accepts the `nullable` rule (nullable-fields). Structured data comes either from a section template used as a field type or from an inline record; a `record` is not a separate top-level type but an inline descriptor.",
+  "body": "Field types: `text` (inline Markdown following the same inline rules as bodies — bold, italic, inline code, `[]()` links, hard breaks; `[]()` links inside text are validated exactly like body links, so a `#label` must exist; `plain` flag strips styles silently), `number` (written as a plain YAML number, e.g. `1250000`, `0.12`; a quoted/string value = type error), `date` (written as `YYYY-MM-DD`; any other form = error), `boolean`, `enum`, `image` (path under assets/, existence checked), `link` (#label checked or http(s) URL), `list` (exactly one item descriptor), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, item: {type: person}}`). Every type accepts the `nullable` rule (nullable-fields). A field's `type:` names one of these types; a `record` appears as a list's `item:` descriptor — `item: {type: record, fields: [...]}` (record-item-type) — so structured data comes either from a section template used as a field type or from such an inline record.",
   "properties": {
     "feature": "templates"
   },
@@ -18,6 +18,11 @@
       "properties": {}
     },
     {
+      "kind": "contains",
+      "target": "requirements.requirement.record-item-type",
+      "properties": {}
+    },
+    {
       "kind": "drives",
       "target": "domain.service.template-registry",
       "properties": {}
@@ -25,11 +30,6 @@
     {
       "kind": "drives",
       "target": "domain.value.field-type",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.record-item-type",
       "properties": {}
     }
   ],

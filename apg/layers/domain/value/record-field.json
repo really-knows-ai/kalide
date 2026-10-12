@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "record-field",
-  "body": "An inline nested record field type declared as a list item (`item: {type: record, fields: [...]}`) or as a field: a record's `fields:` uses the same descriptors as a template's top-level fields, so it nests records and lists and may carry `nullable` fields. Its value is a YAML mapping validated recursively against its `fields:`, with a violation reported by full path (e.g. `items › [2] › value: …`). In layouts a record's `text` fields are pre-rendered and its other fields arrive typed, exactly like top-level fields.",
+  "body": "A list's item descriptor declares an inline nested record: `item: {type: record, fields: [...]}`. A record's `fields:` uses the same descriptors as a template's top-level fields (name, type, rules and description), so a record's field may be a list whose item is a record — records nest through a list's item descriptor — and any field may carry `nullable` (nullable-fields). Its value is a YAML mapping validated recursively against its `fields:`, with a violation reported by full path (e.g. `items › [2] › value: …`). In layouts a record's `text` fields are pre-rendered and its other fields arrive typed, exactly like top-level fields.",
   "properties": {},
   "out": [],
   "in": [

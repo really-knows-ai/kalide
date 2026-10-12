@@ -2,16 +2,11 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "record-item-type",
-  "body": "A list field's single item descriptor may declare an inline record: `item: {type: record, fields: [...]}`. A record's `fields:` uses exactly the same descriptors as a template's top-level fields — name, type, rules and description — so a record nests further records and lists, and every field and item descriptor may be `nullable` (nullable-fields). A record value is a YAML mapping validated recursively against its `fields:`; a type, required, unknown-key or rule violation is reported with its full path, for example `items › [2] › value: required — add a value: value`. `kalide templates <name>` prints a record field's shape, including its nested fields (cli-templates-show). In layouts a record's fields reach the execution context exactly like a template's top-level fields: its `text` fields arrive pre-rendered as safe HTML and its other fields as typed values (template-language, template-context).",
+  "body": "A list field's single item descriptor may declare an inline record: `item: {type: record, fields: [...]}`. A record's `fields:` uses exactly the same descriptors as a template's top-level fields — name, type, rules and description — so a record's field may be a list whose item is a record (records nest through a list's item descriptor), and every field and item descriptor may be `nullable` (nullable-fields). A record value is a YAML mapping validated recursively against its `fields:`; a type, required, unknown-key or rule violation is reported with its full path, for example `items › [2] › value: required — add a value: value`. `kalide templates <name>` prints a record field's shape, including its nested fields (cli-templates-show). In layouts a record's fields reach the execution context exactly like a template's top-level fields: its `text` fields arrive pre-rendered as safe HTML and its other fields as typed values (template-language, template-context).",
   "properties": {
     "feature": "project-templates"
   },
   "out": [
-    {
-      "kind": "drives",
-      "target": "domain.value.record-field",
-      "properties": {}
-    },
     {
       "kind": "drives",
       "target": "domain.service.render-sections",
@@ -20,6 +15,11 @@
     {
       "kind": "drives",
       "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.record-field",
       "properties": {}
     }
   ],

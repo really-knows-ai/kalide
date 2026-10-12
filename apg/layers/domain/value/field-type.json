@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "field-type",
-  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum | image | link | list(of one item type) | record (an inline nested record with its own `fields:`, record-item-type) | <section-template>. Every type may be `nullable` (nullable-fields).",
+  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum | image | link | list (one item descriptor) | <section-template>. Every type may be `nullable` (nullable-fields). A list's `item:` descriptor may declare an inline `record` with its own `fields:` — `item: {type: record, fields: [...]}` (record-item-type).",
   "properties": {},
   "out": [],
   "in": [
