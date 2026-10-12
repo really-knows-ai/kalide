@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "template",
-  "body": "A project template: name (directory name, unique across slide and section templates within and across the library layers — library-layer-uniqueness), kind (slide|section — determined solely by its directory, its layer's `slides/` or `sections/`), description, fields, sections (accepted section templates + min/max), body rule — declared in `template.yaml` — plus a standard Go html/template layout (receives pre-rendered safe HTML and typed values; only the centrally defined helper set — exactly six helpers: `media`, `section`, `dict`, `list`, `child`, `children`) and example slide. A layout may invoke a section template directly with the `section` helper, as if the instance were authored in Markdown (section-helper), passing child sections as `child`/`children` arguments (child-constructor, children-forwarding), and a local template's `section` helper call may name an external-layer section (library-layer-references). A layout also invokes another library layout by its layout name with the standard `{{ template \"<name>\" . }}` action, resolved against the merged layout namespace at render time and at the load-time example check (example-layout-composition). A section template may declare child sections with the same `sections:` schema, so composition nests; composition depth is bounded at six heading levels (requirements.constraint.section-depth-limit). Aggregate root of templating; belongs to the template library.",
+  "body": "A project template: name (directory name, unique across slide and section templates within and across the library layers — library-layer-uniqueness), kind (slide|section — determined solely by its directory, its layer's `slides/` or `sections/`), description, fields, sections (accepted section templates + min/max), body rule — declared in `template.yaml` — plus a standard Go html/template layout (receives pre-rendered safe HTML and typed values; only the centrally defined helper set — exactly six helpers: `media`, `section`, `dict`, `list`, `child`, `children`) and example slide. A layout may invoke a section template directly with the `section` helper, as if the instance were authored in Markdown (section-helper), passing child sections as `child`/`children` arguments (child-constructor, children-forwarding), and a local template's `section` helper call may name an external-layer section (library-layer-references). A layout also invokes another library layout by its layer-relative layout name with the standard `{{ template \"<name>\" . }}` action, resolved against the merged layout namespace at render time and at the load-time example check (example-layout-composition). A section template may declare child sections with the same `sections:` schema, so composition nests; composition depth is bounded at six heading levels (requirements.constraint.section-depth-limit). Aggregate root of templating; belongs to the template library.",
   "properties": {
     "kind": "entity"
   },
@@ -21,7 +21,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.docs-templates",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.example-layout-composition",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.guide-layout-composition",
       "properties": {}
     },
     {
@@ -61,12 +71,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.guide-layout-composition",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.docs-templates",
+      "source": "requirements.requirement.portable-layout-names",
       "properties": {}
     }
   ]

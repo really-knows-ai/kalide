@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "guide-layout-composition",
-  "body": "Agent-guide layout composition: both author guides — the deck guide (agent-authoring) and the library guide (library-agent-guide) — document `{{ template }}` layout composition, so an agent authoring a library can compose layouts without reading Go source. The guide states:\n- a library layout's name is its root-qualified layout file path — `<layer root>/slides/<template-name>/layout.html.tmpl` for a slide layout and `<layer root>/sections/<template-name>/layout.html.tmpl` for a section layout — not the template name;\n- a layout composes another library layout with the standard `{{ template \"<layout name>\" . }}` action;\n- a layout may include layouts of its own layer;\n- in a two-layer library a local-layer layout may include an external-layer layout by that layer's own root-qualified path;\n- an external-layer layout naming a local-layer layout is a templates error, because the external layer validates standalone;\n- an included layout executes in the invoking layout's namespace, so its `{{ media }}` helper binds to the invoking template's own layer, while a `section` helper call rebinds the namespace to the target's own layer.\n\nThe guide rules are the readable counterpart of the implemented load-time behaviour (example-layout-composition, library-layer-references, templates-dir-validation step 6a). A build/test-time self-test carries the composition tokens for both guides (agent-guide-drift-check).\n\nAC:\n- both guides name the root-qualified layout path form and document the `{{ template }}` action;\n- both guides state the own-layer, local-to-external (allowed) and external-to-local (templates error) rules;\n- both guides state that an included layout executes in the invoking layout's namespace and that a `section` call rebinds to the target's layer;\n- the drift self-test (agent-guide-drift-check) requires the composition tokens in each guide that owns them.",
+  "body": "Agent-guide layout composition: both author guides — the deck guide (agent-authoring) and the library guide (library-agent-guide) — document `{{ template }}` layout composition, so an agent authoring a library can compose layouts without reading Go source. The guide states:\n- a library layout's name is its layer-relative forward-slash path — `slides/<template-name>/layout.html.tmpl` for a slide layout and `sections/<template-name>/layout.html.tmpl` for a section layout — the same string on Windows, macOS and Linux and wherever the layer sits on disk, never a layer root, a `templates/` prefix, a drive letter, a backslash or an absolute path, and not the template name;\n- a layout composes another library layout with the standard `{{ template \"<layout name>\" . }}` action;\n- a layout may include layouts of its own layer;\n- in a two-layer library a local-layer layout may include an external-layer layout by that layout's own layer-relative name;\n- an external-layer layout naming a local-layer layout is a templates error, because the external layer validates standalone;\n- an included layout executes in the invoking layout's namespace, so its `{{ media }}` helper binds to the invoking template's own layer, while a `section` helper call rebinds the namespace to the target's own layer.\n\nThe guide rules are the readable counterpart of the implemented load-time behaviour (example-layout-composition, library-layer-references, templates-dir-validation step 6a). A build/test-time self-test carries the composition tokens for both guides (agent-guide-drift-check).\n\nAC:\n- both guides name the layer-relative layout path form and document the `{{ template }}` action;\n- both guides state the own-layer, local-to-external (allowed) and external-to-local (templates error) rules;\n- both guides state that an included layout executes in the invoking layout's namespace and that a `section` call rebinds to the target's layer;\n- the drift self-test (agent-guide-drift-check) requires the composition tokens in each guide that owns them.",
   "properties": {
     "feature": "project-templates"
   },
@@ -41,12 +41,12 @@
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.library-agent-guide",
+      "source": "requirements.requirement.agent-guide-drift-check",
       "properties": {}
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.agent-guide-drift-check",
+      "source": "requirements.requirement.library-agent-guide",
       "properties": {}
     }
   ]

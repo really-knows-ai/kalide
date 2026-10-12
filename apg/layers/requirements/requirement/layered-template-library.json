@@ -9,6 +9,11 @@
   "out": [
     {
       "kind": "contains",
+      "target": "requirements.requirement.example-layout-composition",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.library-layer-references",
       "properties": {}
     },
@@ -34,7 +39,7 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.example-layout-composition",
+      "target": "requirements.requirement.portable-layout-names",
       "properties": {}
     }
   ],

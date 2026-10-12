@@ -29,12 +29,22 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.docs-layered-libraries",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.example-layout-composition",
       "properties": {}
     },
     {
       "kind": "drives",
       "source": "requirements.requirement.external-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.guide-layout-composition",
       "properties": {}
     },
     {
@@ -55,6 +65,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.raw-source-context",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.readme-layered-libraries",
       "properties": {}
     },
     {
@@ -89,17 +104,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.guide-layout-composition",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.readme-layered-libraries",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.docs-layered-libraries",
+      "source": "requirements.requirement.portable-layout-names",
       "properties": {}
     }
   ]

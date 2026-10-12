@@ -2,11 +2,16 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "docs-layered-libraries",
-  "body": "Layered-libraries how-to (docs/layered-libraries.md): a repo `docs/layered-libraries.md` is the how-to for a two-layer library. It works through a two-layer example — a deck whose `kalide.yaml` sets `templates: ../shared-lib` and which also holds a deck-root `templates/` directory — and states the cross-layer rules: the layers merge with no precedence; a name (slide or section, theme, or shared `media/` path) carried by both is an error naming the name and both paths; a reference in a template or theme resolves in its own layer while a local template's `section` helper call resolves across the merged namespace; the external layer is self-contained and validates standalone; a `{{ template }}` layout-composition call names a layout by its root-qualified layout path and a local layer may include an external-layer layout while an external-layer layout naming a local-layer layout is a templates error (guide-layout-composition, example-layout-composition); and changing the configured `templates:` value while serving requires a restart (template-retarget-requires-restart). README.md links to it.\n\nAC: docs/layered-libraries.md exists and is linked from README.md; it carries a two-layer example and states the merge and uniqueness rules, own-layer references, the cross-layer `section` call, external standalone validation, layout composition across layers, and retarget-needs-restart.",
+  "body": "Layered-libraries how-to (docs/layered-libraries.md): a repo `docs/layered-libraries.md` is the how-to for a two-layer library. It works through a two-layer example — a deck whose `kalide.yaml` sets `templates: ../shared-lib` and which also holds a deck-root `templates/` directory — and states the cross-layer rules: the layers merge with no precedence; a name (slide or section, theme, or shared `media/` path) carried by both is an error naming the name and both paths; a reference in a template or theme resolves in its own layer while a local template's `section` helper call resolves across the merged namespace; the external layer is self-contained and validates standalone; a `{{ template }}` layout-composition call names a layout by its layer-relative layout path and a local layer may include an external-layer layout while an external-layer layout naming a local-layer layout is a templates error (guide-layout-composition, example-layout-composition); and changing the configured `templates:` value while serving requires a restart (template-retarget-requires-restart). README.md links to it.\n\nAC: docs/layered-libraries.md exists and is linked from README.md; it carries a two-layer example and states the merge and uniqueness rules, own-layer references, the cross-layer `section` call, external standalone validation, layout composition across layers, and retarget-needs-restart.",
   "properties": {
     "feature": "docs"
   },
   "out": [
+    {
+      "kind": "drives",
+      "target": "domain.group.templating",
+      "properties": {}
+    },
     {
       "kind": "drives",
       "target": "domain.service.load-template-library",
@@ -15,11 +20,6 @@
     {
       "kind": "drives",
       "target": "domain.value.library-layer",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "target": "domain.group.templating",
       "properties": {}
     }
   ],
