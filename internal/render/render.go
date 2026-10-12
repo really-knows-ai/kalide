@@ -47,6 +47,7 @@ import (
 	"github.com/yuin/goldmark/text"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -69,7 +70,7 @@ func (e *RenderError) Error() string {
 	if e.File == "" {
 		return "render: " + e.Err.Error()
 	}
-	return e.File + ": " + e.Err.Error()
+	return displaypath.Display("", e.File) + ": " + e.Err.Error()
 }
 
 // Unwrap returns the underlying cause.
