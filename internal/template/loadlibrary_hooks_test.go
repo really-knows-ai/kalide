@@ -1,7 +1,7 @@
 package template
 
 import (
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -92,7 +92,7 @@ func TestLoadLibraryExamplesFirstError(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		wantPath := TemplatesDir + "/slides/hello/" + ExampleFile
+		wantPath := filepath.Join(TemplatesDir, SlidesDir, "hello", ExampleFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 		}
@@ -115,7 +115,7 @@ func TestLoadLibraryExamplesFirstError(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		wantPath := TemplatesDir + "/slides/hello/" + LayoutFile
+		wantPath := filepath.Join(TemplatesDir, SlidesDir, "hello", LayoutFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 		}
@@ -161,7 +161,7 @@ func TestLoadLibraryExamplesFirstError(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		wantPath := TemplatesDir + "/sections/group/" + ExampleFile
+		wantPath := filepath.Join(TemplatesDir, SectionsDir, "group", ExampleFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 		}
@@ -297,7 +297,7 @@ func TestLoadLibraryExternalLayerSelfContained(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		if want := path.Join(TemplatesDir, SlidesDir, "hello", ManifestFile); libErr.Path != want {
+		if want := filepath.Join(TemplatesDir, SlidesDir, "hello", ManifestFile); libErr.Path != want {
 			t.Errorf("Path = %q, want the external template's manifest %q", libErr.Path, want)
 		}
 		if !strings.Contains(libErr.Message, `"`+localOnlySection+`"`) {
@@ -319,7 +319,7 @@ func TestLoadLibraryExternalLayerSelfContained(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		if want := path.Join(TemplatesDir, SlidesDir, "hello", LayoutFile); libErr.Path != want {
+		if want := filepath.Join(TemplatesDir, SlidesDir, "hello", LayoutFile); libErr.Path != want {
 			t.Errorf("Path = %q, want the external template's layout %q", libErr.Path, want)
 		}
 		if !strings.Contains(libErr.Message, localOnlyMedia) {
@@ -339,7 +339,7 @@ func TestLoadLibraryExternalLayerSelfContained(t *testing.T) {
 
 		_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 		libErr := asLibraryError(t, err)
-		if want := path.Join(TemplatesDir, ThemesDir, "ext-theme", ThemeStylesheet); libErr.Path != want {
+		if want := filepath.Join(TemplatesDir, ThemesDir, "ext-theme", ThemeStylesheet); libErr.Path != want {
 			t.Errorf("Path = %q, want the external theme's stylesheet %q", libErr.Path, want)
 		}
 		if !strings.Contains(libErr.Message, localOnlyTheme) {

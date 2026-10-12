@@ -6,9 +6,12 @@ import (
 	htmltemplate "html/template"
 	"io/fs"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // This file is the unit-test deliverable for plan.phase-01.task-5: LoadLibrary's
@@ -153,7 +156,7 @@ func TestLoadLibraryStep3UsageKey(t *testing.T) {
 	}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/slides/hello/template.yaml"
+	wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+ManifestFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -175,8 +178,8 @@ func TestLoadLibraryStep2CrossKindDuplicateNaming(t *testing.T) {
 	fsys["sections/hello/example.md"] = &fstest.MapFile{Data: []byte(validExample)}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	if !strings.Contains(libErr.Message, TemplatesDir+"/slides/hello") ||
-		!strings.Contains(libErr.Message, TemplatesDir+"/sections/hello") {
+	if !strings.Contains(libErr.Message, displaypath.Display(TemplatesDir, "slides/hello")) ||
+		!strings.Contains(libErr.Message, displaypath.Display(TemplatesDir, "sections/hello")) {
 		t.Errorf("Message = %q, want it to name both slides/hello and sections/hello paths", libErr.Message)
 	}
 }
@@ -188,7 +191,7 @@ func TestLoadLibraryStep3MissingTemplateFile(t *testing.T) {
 	delete(fsys, "slides/hello/example.md")
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/slides/hello/example.md"
+	wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+ExampleFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -204,7 +207,7 @@ func TestLoadLibraryStep1BadName(t *testing.T) {
 	fsys["library.yaml"] = &fstest.MapFile{Data: []byte("name: Not_Valid\nformat: 1\n")}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/" + LibraryFile
+	wantPath := displaypath.Display(TemplatesDir, LibraryFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -223,7 +226,7 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 	fsys["library.yaml"] = &fstest.MapFile{Data: []byte("name: demo\nformat: 2\n")}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/" + LibraryFile
+	wantPath := displaypath.Display(TemplatesDir, LibraryFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -239,7 +242,7 @@ func TestLoadLibraryStep5MissingThemeCSS(t *testing.T) {
 	fsys["themes/plain/other.txt"] = &fstest.MapFile{Data: []byte("x")}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/themes/plain/" + ThemeStylesheet
+	wantPath := displaypath.Display(TemplatesDir, "themes/plain/"+ThemeStylesheet)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -257,7 +260,7 @@ func TestLoadLibraryStep6ThemeURLEscapesDir(t *testing.T) {
 	}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/themes/plain/" + ThemeStylesheet
+	wantPath := displaypath.Display(TemplatesDir, "themes/plain/"+ThemeStylesheet)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -276,7 +279,7 @@ func TestLoadLibraryStep6MediaMissing(t *testing.T) {
 	}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/slides/hello/" + LayoutFile
+	wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+LayoutFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -294,7 +297,7 @@ func TestLoadLibraryStep6MediaDotDot(t *testing.T) {
 	}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/slides/hello/" + LayoutFile
+	wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+LayoutFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -312,7 +315,7 @@ func TestLoadLibraryStep6MediaAbsolute(t *testing.T) {
 	}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/slides/hello/" + LayoutFile
+	wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+LayoutFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -347,7 +350,7 @@ func TestLoadLibraryUndocumentedFuncFailsParse(t *testing.T) {
 	}
 	_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	libErr := asLibraryError(t, err)
-	wantPath := TemplatesDir + "/slides/hello/" + LayoutFile
+	wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+LayoutFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 	}
@@ -462,7 +465,7 @@ func addTestSlide(layer *LibraryLayer, name string) *LibraryTemplate {
 		Name:         name,
 		Kind:         KindSlide,
 		Dir:          path.Join(SlidesDir, name),
-		ManifestPath: path.Join(layer.RootPath, SlidesDir, name, ManifestFile),
+		ManifestPath: displaypath.Display(layer.RootPath, path.Join(SlidesDir, name, ManifestFile)),
 	}
 	layer.Slides[name] = lt
 	return lt
@@ -476,7 +479,7 @@ func addTestSection(layer *LibraryLayer, name string) *LibraryTemplate {
 		Name:         name,
 		Kind:         KindSection,
 		Dir:          path.Join(SectionsDir, name),
-		ManifestPath: path.Join(layer.RootPath, SectionsDir, name, ManifestFile),
+		ManifestPath: displaypath.Display(layer.RootPath, path.Join(SectionsDir, name, ManifestFile)),
 	}
 	layer.Sections[name] = lt
 	return lt
@@ -842,7 +845,7 @@ func TestCheckLayerUniquenessSlideDuplicate(t *testing.T) {
 
 	err := checkLayerUniqueness([]*LibraryLayer{external, local})
 	assertLayerDuplicateError(t, err, "template", "dup",
-		"/ext/slides/dup/template.yaml", "/local/slides/dup/template.yaml")
+		filepath.Join("/ext", SlidesDir, "dup", ManifestFile), filepath.Join("/local", SlidesDir, "dup", ManifestFile))
 }
 
 // TestCheckLayerUniquenessSectionDuplicate proves a section name carried by two
@@ -855,7 +858,7 @@ func TestCheckLayerUniquenessSectionDuplicate(t *testing.T) {
 
 	err := checkLayerUniqueness([]*LibraryLayer{external, local})
 	assertLayerDuplicateError(t, err, "template", "dup",
-		"/ext/sections/dup/template.yaml", "/local/sections/dup/template.yaml")
+		filepath.Join("/ext", SectionsDir, "dup", ManifestFile), filepath.Join("/local", SectionsDir, "dup", ManifestFile))
 }
 
 // TestCheckLayerUniquenessCrossKindDuplicate proves slides and sections share
@@ -870,7 +873,7 @@ func TestCheckLayerUniquenessCrossKindDuplicate(t *testing.T) {
 
 		err := checkLayerUniqueness([]*LibraryLayer{external, local})
 		assertLayerDuplicateError(t, err, "template", "dup",
-			"/ext/slides/dup/template.yaml", "/local/sections/dup/template.yaml")
+			filepath.Join("/ext", SlidesDir, "dup", ManifestFile), filepath.Join("/local", SectionsDir, "dup", ManifestFile))
 	})
 
 	t.Run("external section vs local slide", func(t *testing.T) {
@@ -881,7 +884,7 @@ func TestCheckLayerUniquenessCrossKindDuplicate(t *testing.T) {
 
 		err := checkLayerUniqueness([]*LibraryLayer{external, local})
 		assertLayerDuplicateError(t, err, "template", "dup",
-			"/ext/sections/dup/template.yaml", "/local/slides/dup/template.yaml")
+			filepath.Join("/ext", SectionsDir, "dup", ManifestFile), filepath.Join("/local", SlidesDir, "dup", ManifestFile))
 	})
 }
 
@@ -895,7 +898,8 @@ func TestCheckLayerUniquenessThemeDuplicate(t *testing.T) {
 	addTestTheme(local, "dup")
 
 	err := checkLayerUniqueness([]*LibraryLayer{external, local})
-	assertLayerDuplicateError(t, err, "theme", "dup", "/ext/themes/dup", "/local/themes/dup")
+	assertLayerDuplicateError(t, err, "theme", "dup",
+		filepath.Join("/ext", ThemesDir, "dup"), filepath.Join("/local", ThemesDir, "dup"))
 }
 
 // TestCheckLayerUniquenessMediaDuplicate proves a media path carried by two
@@ -910,7 +914,7 @@ func TestCheckLayerUniquenessMediaDuplicate(t *testing.T) {
 
 		err := checkLayerUniqueness([]*LibraryLayer{external, local})
 		assertLayerDuplicateError(t, err, "media path", "logo.svg",
-			"/ext/media/logo.svg", "/local/media/logo.svg")
+			filepath.Join("/ext", MediaDir, "logo.svg"), filepath.Join("/local", MediaDir, "logo.svg"))
 	})
 
 	t.Run("nested file", func(t *testing.T) {
@@ -921,7 +925,7 @@ func TestCheckLayerUniquenessMediaDuplicate(t *testing.T) {
 
 		err := checkLayerUniqueness([]*LibraryLayer{external, local})
 		assertLayerDuplicateError(t, err, "media path", "video/intro.mp4",
-			"/ext/media/video/intro.mp4", "/local/media/video/intro.mp4")
+			filepath.Join("/ext", MediaDir, "video", "intro.mp4"), filepath.Join("/local", MediaDir, "video", "intro.mp4"))
 	})
 }
 
@@ -966,8 +970,8 @@ func TestCheckLayerUniquenessDeterministicFirstViolation(t *testing.T) {
 	if strings.Contains(first, "media path") {
 		t.Errorf("first violation = %q, want the templates namespace checked before media", first)
 	}
-	if !strings.Contains(first, "/ext/slides/aaa/template.yaml") ||
-		!strings.Contains(first, "/local/slides/aaa/template.yaml") {
+	if !strings.Contains(first, filepath.Join("/ext", SlidesDir, "aaa", ManifestFile)) ||
+		!strings.Contains(first, filepath.Join("/local", SlidesDir, "aaa", ManifestFile)) {
 		t.Errorf("first violation = %q, want both colliding manifest paths", first)
 	}
 }

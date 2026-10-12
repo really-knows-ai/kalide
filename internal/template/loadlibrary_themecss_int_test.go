@@ -2,7 +2,6 @@ package template
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -105,10 +104,10 @@ func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 		t.Skip("integration test: real filesystem")
 	}
 
-	themeDir := path.Join(TemplatesDir, ThemesDir, "plain")
-	themeCSSPath := path.Join(themeDir, ThemeStylesheet)
-	importAPath := path.Join(themeDir, "imports", "a.css")
-	importBPath := path.Join(themeDir, "imports", "b.css")
+	themeDir := filepath.Join(TemplatesDir, ThemesDir, "plain")
+	themeCSSPath := filepath.Join(themeDir, ThemeStylesheet)
+	importAPath := filepath.Join(themeDir, "imports", "a.css")
+	importBPath := filepath.Join(themeDir, "imports", "b.css")
 
 	// validImports accompanies the valid theme.css: both imported stylesheets
 	// resolve and themselves only reference files that exist.
@@ -287,6 +286,76 @@ func TestLoadLibraryIntThemeCSSReferences(t *testing.T) {
 			}
 			if !strings.Contains(libErr.Message, tc.wantSubstr) {
 				t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantSubstr)
+			}
+		})
+	}
+}
+
+// TestLoadLibraryIntThemeCSSEscapeRootSpellingStability proves the theme-CSS
+// escape decision is made on the layer-relative tree, not on how the templates
+// root is spelled: the same escaping reference produces the same verdict for
+// every spelling of one root (a bare root, a trailing-separator root and a
+// "./"-prefixed root). The root only locates the tree in the message, so a
+// differently-spelled root can never flip an escaping reference into an
+// accepted one (or vice versa). This is the theme-CSS half of the containment
+// rewrite pinned by the checkLayoutReferences case in library_int_test.go.
+//
+// It reuses importTestThemeFixture (checkthemecssreferences_imports_test.go)
+// and drives checkThemeCSSReferences directly, so no on-disk library is needed;
+// it stays in the integration file alongside the other theme-CSS step-6 cases.
+func TestLoadLibraryIntThemeCSSEscapeRootSpellingStability(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	// Two spellings of one root: the bare conventional name, the same name with
+	// a trailing path separator, and a "./"-prefixed name. All denote templates/.
+	spellings := []string{
+		TemplatesDir,
+		TemplatesDir + string(filepath.Separator),
+		"." + string(filepath.Separator) + TemplatesDir,
+	}
+
+	cases := []struct {
+		name       string
+		stylesheet string
+		files      map[string][]byte
+		wantErr    bool
+		wantSubstr string
+	}{
+		{
+			name:       "a url() escaping the theme directory is rejected for every root spelling",
+			stylesheet: "body { background: url('../../etc/passwd'); }\n",
+			wantErr:    true,
+			wantSubstr: "escapes its theme directory",
+		},
+		{
+			name:       "a theme-owned relative url() is accepted for every root spelling",
+			stylesheet: "body { background: url('fonts/theme.woff2'); }\n",
+			files:      map[string][]byte{"fonts/theme.woff2": []byte("woff")},
+			wantErr:    false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			th, lib := importTestThemeFixture(tc.stylesheet, tc.files, nil)
+			for _, root := range spellings {
+				err := checkThemeCSSReferences(root, th, lib)
+				if tc.wantErr {
+					if err == nil {
+						t.Errorf("checkThemeCSSReferences(root=%q) = nil, want the escape rejection", root)
+						continue
+					}
+					libErr := asLibraryError(t, err)
+					if !strings.Contains(libErr.Message, tc.wantSubstr) {
+						t.Errorf("root %q: Message = %q, want it to contain %q", root, libErr.Message, tc.wantSubstr)
+					}
+					continue
+				}
+				if err != nil {
+					t.Errorf("checkThemeCSSReferences(root=%q) = %v, want nil", root, err)
+				}
 			}
 		})
 	}

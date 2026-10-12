@@ -1,7 +1,6 @@
 package template
 
 import (
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -434,7 +433,7 @@ func TestLoadDeckLibrary(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		if want := path.Join(bad, LibraryFile); libErr.Path != want {
+		if want := filepath.Join(bad, LibraryFile); libErr.Path != want {
 			t.Errorf("Path = %q, want the resolved root's %q", libErr.Path, want)
 		}
 		if libErr.Line != 1 {
@@ -461,7 +460,7 @@ func TestLoadDeckLibrary(t *testing.T) {
 		if kind != KindSlide {
 			t.Errorf("Kind = %q, want %q", kind, KindSlide)
 		}
-		if want := path.Join(external, SlidesDir, "hello", LayoutFile); tmpl.LayoutPath != want {
+		if want := filepath.Join(external, SlidesDir, "hello", LayoutFile); tmpl.LayoutPath != want {
 			t.Errorf("LayoutPath = %q, want the resolved %q", tmpl.LayoutPath, want)
 		}
 	})
@@ -537,8 +536,8 @@ func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		extManifest := path.Join(external, SlidesDir, "dup", ManifestFile)
-		localManifest := path.Join(localRoot, SlidesDir, "dup", ManifestFile)
+		extManifest := filepath.Join(external, SlidesDir, "dup", ManifestFile)
+		localManifest := filepath.Join(localRoot, SlidesDir, "dup", ManifestFile)
 		if libErr.Path != extManifest {
 			t.Errorf("Path = %q, want the first layer's manifest %q", libErr.Path, extManifest)
 		}
@@ -562,8 +561,8 @@ func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 
 		_, err := LoadDeckLibrary(deckRoot, external)
 		libErr := asLibraryError(t, err)
-		extManifest := path.Join(external, SectionsDir, "dup", ManifestFile)
-		localManifest := path.Join(localRoot, SlidesDir, "dup", ManifestFile)
+		extManifest := filepath.Join(external, SectionsDir, "dup", ManifestFile)
+		localManifest := filepath.Join(localRoot, SlidesDir, "dup", ManifestFile)
 		if libErr.Path != extManifest {
 			t.Errorf("Path = %q, want the first layer's manifest %q", libErr.Path, extManifest)
 		}
@@ -629,7 +628,7 @@ func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 
 		_, err := LoadDeckLibrary(deckRoot, external)
 		libErr := asLibraryError(t, err)
-		wantPath := path.Join(localRoot, SlidesDir, "local-slide", ManifestFile)
+		wantPath := filepath.Join(localRoot, SlidesDir, "local-slide", ManifestFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the local template's manifest %q", libErr.Path, wantPath)
 		}

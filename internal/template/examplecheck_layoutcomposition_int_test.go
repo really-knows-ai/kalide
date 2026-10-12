@@ -302,7 +302,7 @@ func TestLoadDeckLibraryExternalToLocalLayoutIncludeErrorInt(t *testing.T) {
 		t.Fatalf("LoadDeckLibrary() Library = %+v, want nil: the external layout's include names a local-only layout", lib)
 	}
 	libErr := asLibraryError(t, err)
-	wantPath := path.Join(externalRoot, SlidesDir, "ext-host", LayoutFile)
+	wantPath := filepath.Join(externalRoot, SlidesDir, "ext-host", LayoutFile)
 	if libErr.Path != wantPath {
 		t.Errorf("Path = %q, want the external layer's own layout %q", libErr.Path, wantPath)
 	}

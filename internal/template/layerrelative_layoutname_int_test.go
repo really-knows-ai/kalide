@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // This file is the integration-test deliverable for plan.phase-01.task-8: a
@@ -144,6 +146,19 @@ func TestLayerRelativeLayoutNameTwoRootsInt(t *testing.T) {
 	}
 	if a.extCardPath == b.extCardPath {
 		t.Errorf("ext-card on-disk path %q is identical across roots, want distinct roots", a.extCardPath)
+	}
+
+	// The on-disk display paths are built natively (the host OS separator),
+	// while the layer-relative names asserted above stay forward-slash identity
+	// keys. Pinning the native spelling here is what makes the name/path split
+	// explicit: the same layout has a forward-slash name and an OS-native path.
+	wantHostPath := displaypath.Display(filepath.Join(deckRootA, TemplatesDir), SlidesDir+"/host/"+LayoutFile)
+	if a.hostPath != wantHostPath {
+		t.Errorf("host on-disk path = %q, want the native %q", a.hostPath, wantHostPath)
+	}
+	wantExtCardPath := displaypath.Display(externalRootA, SectionsDir+"/ext-card/"+LayoutFile)
+	if a.extCardPath != wantExtCardPath {
+		t.Errorf("ext-card on-disk path = %q, want the native %q", a.extCardPath, wantExtCardPath)
 	}
 
 	// The composition renders identically, and the external layout's marker is

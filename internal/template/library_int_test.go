@@ -3,9 +3,11 @@ package template
 import (
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // This file is the integration-test deliverable for plan.phase-01.task-6:
@@ -283,7 +285,7 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 		// Both paths are named, so neither layer's theme silently wins: the
 		// layers have equal standing (library-layer-uniqueness).
 		assertLayerDuplicateError(t, err, "theme", "dup",
-			path.Join(external, ThemesDir, "dup"), path.Join(localRoot, ThemesDir, "dup"))
+			filepath.Join(external, ThemesDir, "dup"), filepath.Join(localRoot, ThemesDir, "dup"))
 	})
 
 	t.Run("a media path carried by both layers errors naming both media paths", func(t *testing.T) {
@@ -300,6 +302,80 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 		// Both media paths are named, so neither layer's file silently wins:
 		// the layers have equal standing (library-layer-uniqueness).
 		assertLayerDuplicateError(t, err, "media path", "dup.png",
-			path.Join(external, MediaDir, "dup.png"), path.Join(localRoot, MediaDir, "dup.png"))
+			filepath.Join(external, MediaDir, "dup.png"), filepath.Join(localRoot, MediaDir, "dup.png"))
 	})
+}
+
+// TestCheckLayoutReferencesRootSpellingStabilityInt proves layout-reference
+// containment is decided on the layer-relative path, not on how the root is
+// spelled: the same escaping reference (and the same contained reference)
+// yields the same verdict whether the root is bare, trailing-separator or
+// "./"-prefixed. Only the layer-relative path drives the accept/reject
+// decision; the root appears solely in the message, so a differently-spelled
+// root can never turn an escaping reference into an accepted one (or vice
+// versa). This is the checkLayoutReferences half of the containment rewrite
+// that task-17's theme-CSS case pins.
+//
+// checkLayoutReferences is the seam the loader calls per layout at step 6, so
+// it is driven directly here; the verdict does not depend on a successful load.
+func TestCheckLayoutReferencesRootSpellingStabilityInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	// Three spellings of one root (templates/): bare, trailing-separator and
+	// "./"-prefixed. All denote the same templates/ tree.
+	spellings := []string{
+		TemplatesDir,
+		TemplatesDir + string(os.PathSeparator),
+		"." + string(os.PathSeparator) + TemplatesDir,
+	}
+
+	cases := []struct {
+		name    string
+		layout  string
+		wantErr bool
+		substr  string
+	}{
+		{
+			// Three ".." from slides/hello leaves the templates/ tree, so the
+			// reference escapes the layer regardless of how the root is spelled.
+			name:    "an escaping literal src is rejected for every root spelling",
+			layout:  `<img src="../../../secret.png">`,
+			wantErr: true,
+			substr:  "must stay inside",
+		},
+		{
+			name:    "a contained literal src is accepted for every root spelling",
+			layout:  `<img src="img/logo.svg">`,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, root := range spellings {
+				lt := &LibraryTemplate{
+					Dir:        SlidesDir + "/hello",
+					LayoutText: tc.layout,
+					LayoutPath: displaypath.Display(root, SlidesDir+"/hello/"+LayoutFile),
+				}
+				err := checkLayoutReferences(root, lt, nil)
+				if tc.wantErr {
+					if err == nil {
+						t.Errorf("checkLayoutReferences(root=%q) = nil, want the containment rejection", root)
+						continue
+					}
+					libErr := asLibraryError(t, err)
+					if !strings.Contains(libErr.Message, tc.substr) {
+						t.Errorf("root %q: Message = %q, want it to contain %q", root, libErr.Message, tc.substr)
+					}
+					continue
+				}
+				if err != nil {
+					t.Errorf("checkLayoutReferences(root=%q) = %v, want nil", root, err)
+				}
+			}
+		})
+	}
 }

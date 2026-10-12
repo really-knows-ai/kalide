@@ -3,7 +3,6 @@ package template
 import (
 	htmltemplate "html/template"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -120,7 +119,7 @@ func TestLoadLibrarySectionHelperChecksInt(t *testing.T) {
 		t.Skip("integration test: real filesystem")
 	}
 
-	const hostManifest = TemplatesDir + "/" + SlidesDir + "/host/" + ManifestFile
+	hostManifest := filepath.Join(TemplatesDir, SlidesDir, "host", ManifestFile)
 
 	tests := []struct {
 		name        string
@@ -194,7 +193,7 @@ func TestLoadLibrarySectionHelperChecksInt(t *testing.T) {
 				sectionIntFiles("a", "name: a\n", `{{ section "b" }}`),
 				sectionIntFiles("b", "name: b\n", `{{ section "a" }}`),
 			),
-			wantPath:    TemplatesDir + "/" + SectionsDir + "/a/" + ManifestFile,
+			wantPath:    filepath.Join(TemplatesDir, SectionsDir, "a", ManifestFile),
 			wantMessage: `template "a": section template reference cycle: sections/a → sections/b → sections/a`,
 		},
 	}
@@ -357,7 +356,7 @@ func TestLoadLibrarySectionHelpersHappyPathInt(t *testing.T) {
 			t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", badLib)
 		}
 		libErr := asLibraryError(t, err)
-		if want := TemplatesDir + "/" + SlidesDir + "/host/" + LayoutFile; libErr.Path != want {
+		if want := filepath.Join(TemplatesDir, SlidesDir, "host", LayoutFile); libErr.Path != want {
 			t.Errorf("Path = %q, want the offending host layout %q", libErr.Path, want)
 		}
 		if !strings.Contains(libErr.Message, "execute:") || !strings.Contains(libErr.Message, "expected a text field") {
@@ -571,7 +570,7 @@ func TestLoadDeckLibraryCrossLayerSectionHelperInt(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		wantPath := path.Join(localRoot, SlidesDir, "host", ManifestFile)
+		wantPath := filepath.Join(localRoot, SlidesDir, "host", ManifestFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the local calling template's manifest %q", libErr.Path, wantPath)
 		}
@@ -639,7 +638,7 @@ func TestLoadLibraryAtExternalStandaloneInt(t *testing.T) {
 			t.Fatalf("LoadLibraryAt() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		wantPath := path.Join(externalRoot, SlidesDir, "host", ManifestFile)
+		wantPath := filepath.Join(externalRoot, SlidesDir, "host", ManifestFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the external calling template's manifest %q", libErr.Path, wantPath)
 		}
@@ -707,7 +706,7 @@ func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		if wantPath := path.Join(localRoot, SectionsDir, "a", ManifestFile); libErr.Path != wantPath {
+		if wantPath := filepath.Join(localRoot, SectionsDir, "a", ManifestFile); libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the local cycle root's manifest %q", libErr.Path, wantPath)
 		}
 		if libErr.Message != wantCycle {
@@ -725,7 +724,7 @@ func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		if wantPath := path.Join(externalRoot, SectionsDir, "a", ManifestFile); libErr.Path != wantPath {
+		if wantPath := filepath.Join(externalRoot, SectionsDir, "a", ManifestFile); libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the external cycle root's manifest %q", libErr.Path, wantPath)
 		}
 		if libErr.Message != wantCycle {
@@ -754,7 +753,7 @@ func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		if wantPath := path.Join(localRoot, SectionsDir, "d1", ManifestFile); libErr.Path != wantPath {
+		if wantPath := filepath.Join(localRoot, SectionsDir, "d1", ManifestFile); libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the over-deep local chain's root manifest %q", libErr.Path, wantPath)
 		}
 		if !strings.Contains(libErr.Message, "7 levels deep") {
@@ -874,7 +873,7 @@ func TestLoadLibraryChildLoadChecksInt(t *testing.T) {
 					t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
 				}
 				libErr := asLibraryError(t, err)
-				wantPath := TemplatesDir + "/" + SlidesDir + "/host/" + ManifestFile
+				wantPath := filepath.Join(TemplatesDir, SlidesDir, "host", ManifestFile)
 				if libErr.Path != wantPath {
 					t.Errorf("Path = %q, want the calling template's manifest %q", libErr.Path, wantPath)
 				}
@@ -920,7 +919,7 @@ func TestLoadLibraryChildLoadChecksInt(t *testing.T) {
 			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
 		}
 		libErr := asLibraryError(t, err)
-		wantPath := path.Join(localRoot, SlidesDir, "host", ManifestFile)
+		wantPath := filepath.Join(localRoot, SlidesDir, "host", ManifestFile)
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want the local calling template's manifest %q", libErr.Path, wantPath)
 		}
