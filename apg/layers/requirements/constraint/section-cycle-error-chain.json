@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "constraint",
   "name": "section-cycle-error-chain",
-  "body": "Section-template reference cycles are rejected when the library's templates are loaded, and the error names the cycle chain, e.g. `sections/a → sections/b → sections/a`. A reference is a declared `sections:` acceptance, a `section` helper call in a layout, or a `child` constructor's template target (section-helper-load-checks, child-constructor); a cycle closed through helper calls or child arguments is rejected exactly as a declared one. A cycle is never accepted (the composition walk terminates safely and reports the chain instead of looping), and it is a templates error path-qualified to the offending `template.yaml` (template-build-checks).",
+  "body": "A declared-section reference cycle is a templates error naming the chain, e.g. `sections/a → sections/b → sections/a`, unless the declaration whose accepted reference closes the cycle carries `max_depth: N`: then the cycle is bounded self-nesting (requirements.requirement.bounded-self-nesting), the loader walks the declaration graph bounded by max_depth, and the cycle is valid. A reference is a declared `sections:` acceptance, a `section` helper call in a layout, or a `child` constructor's template target (section-helper-load-checks, child-constructor); a helper- or child-closed cycle carries no declared max_depth and is rejected exactly like an unbounded declared one. A cycle no declaration bounds is never accepted (the composition walk terminates safely and reports the chain instead of looping), and it is a templates error path-qualified to the offending `template.yaml` (template-build-checks).",
   "properties": {},
   "out": [],
   "in": []

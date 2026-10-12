@@ -1,0 +1,46 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "bounded-self-nesting",
+  "body": "A section declaration may accept its own template, directly or through a cycle, when that declaration carries `max_depth: N` — a positive integer. The loader walks the declaration graph bounded by max_depth, so a self-referencing or cyclic declared-section acceptance is valid: content may nest the repeated template under itself up to N self-nested levels, and the walk stops at the bound instead of reporting a cycle. A reference cycle whose declarations carry no max_depth is a templates error, the chain error of requirements.constraint.section-cycle-error-chain; bounded self-nesting is the one accepted declared-section cycle. `max_depth` is a positive integer on a section declaration; a value that is not a positive integer is a templates error naming the offending `template.yaml`.\n\nThe authored Markdown syntax is unchanged: a self-nested instance is a heading one level deeper than its parent, naming the declaring section slot (slide-sections), so nesting depth is heading depth and no new author-facing syntax exists. Depth is enforced when the content is parsed, at every level: an instance of the repeated template whose self-nesting depth would exceed the declaration's max_depth is a slide error path-qualified to the offending slide file with its containment chain (error-reporting, nested-section-validation), carrying the message `section \"loop\": nesting deeper than max_depth 1`.\n\nEach nested instance carries the ordinary reserved section context (template-context, item-context). `.item.depth` is the instance's self-nesting depth: the number of enclosing instances whose resolved template is the same template — 0 at the outermost instance of that template in the containment chain and +1 at each self-nested level. `.item.parent` is the enclosing instance at every level; `.item.section` is the declared section name at that level (for example `events` at the top and `loop` nested); `.item.index` and `.item.count` are the instance's real position within its group of siblings at each level. `max_depth: N` bounds `.item.depth` at N, so an instance whose `.item.depth` would exceed N is the depth error above while an instance at depth N is accepted.\n\nA `section` helper call is a composition reference but not a section declaration, so it carries no max_depth and a helper-closed cycle is a templates error (section-helper-load-checks); bounded self-nesting widens the declared-section acceptance graph only and leaves section-helper pass-through rendering unchanged.\n\nAC: a template that declares a `loop` section accepting itself with `max_depth: 1` loads with no cycle error, and a slide nesting `# events` › `## loop` parses and renders, the nested `loop` instance reading `.item.depth` 1, its `.item.parent` the enclosing `events` instance, its `.item.section` `loop`, and its `.item.index`/`.item.count` its real position among its `loop` siblings; a `### loop` nested under a `## loop` (self-nesting depth 2) is a slide error carrying the message `section \"loop\": nesting deeper than max_depth 1`; the same self-accepting declaration without `max_depth` is refused at load with the chain error `section template reference cycle: sections/loop → sections/loop`; a `max_depth` that is not a positive integer is a templates error naming the `template.yaml`; one template that declares `loop` accepting itself with `max_depth: 1` replaces the near-identical timeline-event and loop-event templates, rendering a top `events` instance holding `loop` children that hold no further `loop` children; the authored Markdown syntax is unchanged; a `section`-helper cycle is refused at load.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.item-context",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.section",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.template-composition",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.self-nesting-depth",
+      "properties": {}
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "entity",
   "name": "section",
-  "body": "A section: an instance of a section template. It is named by a heading in a slide, with optional plain-fence YAML frontmatter and a body — heading depth is nesting depth: a depth-n heading starts a child section of the most recent depth-(n-1) section, from `#` down to `######` (slide-sections) — or created directly by the `section` layout helper, whose `fields` are validated like a fence's YAML and whose body against the target's body rule (section-helper). Nesting also arises from section-typed fields (structured YAML data) and from declared child sections; a helper-invoked instance carries the child sections passed as child arguments, each resolved like an authored instance against the target's declared sections (child-constructor, children-forwarding).",
+  "body": "A section: an instance of a section template. It is named by a heading in a slide, with optional plain-fence YAML frontmatter and a body — heading depth is nesting depth: a depth-n heading starts a child section of the most recent depth-(n-1) section, from `#` down to `######` (slide-sections) — or created directly by the `section` layout helper, whose `fields` are validated like a fence's YAML and whose body against the target's body rule (section-helper). Nesting also arises from section-typed fields (structured YAML data) and from declared child sections; a helper-invoked instance carries the child sections passed as child arguments, each resolved like an authored instance against the target's declared sections (child-constructor, children-forwarding). A section instance may also nest under an instance of the same section template when that template's declaration accepts its own template and carries `max_depth: N` (bounded-self-nesting): the instance's `.item.depth` is its self-nesting depth and the declaration bounds it. The authored syntax is unchanged — the nested instance is a deeper heading naming the declaring slot (slide-sections).",
   "properties": {
     "kind": "entity"
   },
@@ -57,6 +57,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.slide-sections",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.bounded-self-nesting",
       "properties": {}
     }
   ]
