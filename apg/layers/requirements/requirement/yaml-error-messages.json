@@ -9,12 +9,17 @@
   "out": [
     {
       "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "target": "domain.value.validation-error",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.load-template-library",
+      "target": "domain.service.load-deck",
       "properties": {}
     }
   ],
