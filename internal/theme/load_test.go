@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // TestLoadDir covers LoadDir (theme-selection, no-built-in-fallback): themes
@@ -60,17 +62,22 @@ func TestLoadDir(t *testing.T) {
 		}
 	})
 
-	t.Run("missing themes directory is a path error", func(t *testing.T) {
+	t.Run("missing themes directory is a native path error", func(t *testing.T) {
 		_, err := LoadDir(fstest.MapFS{}, "templates/themes")
 		if err == nil {
 			t.Fatal("LoadDir succeeded over a missing themes directory, want an error")
 		}
-		if !strings.Contains(err.Error(), "templates/themes") {
-			t.Errorf("error = %q, want it to name templates/themes", err)
+		want := nativeThemePath("templates/themes")
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name the native %q", err, want)
 		}
 		if !strings.Contains(err.Error(), "not found") {
 			t.Errorf("error = %q, want it to say the directory was not found", err)
 		}
+		// LoadDir's io/fs identity root stays forward-slash; only the error's
+		// path is the host OS's native display spelling, and it must not mix
+		// the two separator characters (native-display-paths).
+		assertNoMixedSeparators(t, err.Error())
 	})
 
 	t.Run("themes path exists but is not a directory", func(t *testing.T) {
@@ -79,9 +86,10 @@ func TestLoadDir(t *testing.T) {
 		if err == nil {
 			t.Fatal("LoadDir succeeded over a non-directory themes path, want an error")
 		}
-		if !strings.Contains(err.Error(), "templates/themes") || !strings.Contains(err.Error(), "not a directory") {
-			t.Errorf("error = %q, want it to name templates/themes and say it is not a directory", err)
+		if want := nativeThemePath("templates/themes"); !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "not a directory") {
+			t.Errorf("error = %q, want it to name %q and say it is not a directory", err, want)
 		}
+		assertNoMixedSeparators(t, err.Error())
 	})
 
 	t.Run("theme subdirectory missing theme.css is rejected", func(t *testing.T) {
@@ -92,12 +100,13 @@ func TestLoadDir(t *testing.T) {
 		if err == nil {
 			t.Fatal("LoadDir succeeded with a theme missing theme.css, want an error")
 		}
-		if !strings.Contains(err.Error(), "templates/themes/plain") {
-			t.Errorf("error = %q, want it to name the offending theme directory", err)
+		if want := nativeThemePath("templates/themes/plain"); !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name the native offending theme directory %q", err, want)
 		}
 		if !strings.Contains(err.Error(), "theme.css") {
 			t.Errorf("error = %q, want it to mention theme.css", err)
 		}
+		assertNoMixedSeparators(t, err.Error())
 	})
 
 	t.Run("first offending theme subdirectory wins deterministically", func(t *testing.T) {
@@ -109,10 +118,26 @@ func TestLoadDir(t *testing.T) {
 		if err == nil {
 			t.Fatal("LoadDir succeeded, want the bbb theme (missing theme.css) to fail")
 		}
-		if !strings.Contains(err.Error(), "templates/themes/bbb") {
-			t.Errorf("error = %q, want it to name templates/themes/bbb", err)
+		if want := nativeThemePath("templates/themes/bbb"); !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name the native %q", err, want)
 		}
+		assertNoMixedSeparators(t, err.Error())
 	})
+}
+
+// nativeThemePath renders a forward-slash fs-relative theme path in the host
+// OS's native display spelling — the form theme.LoadDir's errors use
+// (native-display-paths).
+func nativeThemePath(rel string) string { return displaypath.Display("", rel) }
+
+// assertNoMixedSeparators fails when a rendered error carries both the
+// forward-slash identity spelling and the backslash native spelling: LoadDir
+// renders exactly one separator character, the host operating system's.
+func assertNoMixedSeparators(t *testing.T, msg string) {
+	t.Helper()
+	if strings.Contains(msg, "/") && strings.Contains(msg, `\`) {
+		t.Errorf("error %q mixes / and \\ separators, want a single native spelling", msg)
+	}
 }
 
 // equalNames reports whether a and b hold the same strings in order.

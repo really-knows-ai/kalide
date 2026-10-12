@@ -1,6 +1,8 @@
 package validate
 
 import (
+	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"testing/fstest"
@@ -21,6 +23,7 @@ func displayFile(rel string) string { return displaypath.Display("", rel) }
 // fstest.MapFS tree, so the suite touches neither the disk nor the network.
 func TestValidate(t *testing.T) {
 	t.Run("Format", testFormat)
+	t.Run("adapt deck error", testAdaptDeckError)
 	t.Run("ordering", testOrdering)
 	t.Run("determinism", testDeterminism)
 	t.Run("nesting depth", testNestingDepth)
@@ -58,6 +61,53 @@ func testFormat(t *testing.T) {
 		segments[0] = "mutated"
 		if want := displayFile("f.md") + ":3 › one › two: what"; Format(e) != want {
 			t.Fatalf("Format(New(...)) = %q, want %q", Format(e), want)
+		}
+	})
+}
+
+// testAdaptDeckError pins adaptDeckError's identity boundary
+// (native-display-paths): the deck and theme packages position their errors
+// with the host OS's native separator, so adaptDeckError must convert the
+// recovered file back to the forward-slash deck-relative identity before
+// storing it. A ValidationError.File therefore stays "slides/1-a.md" even when
+// the wrapped message spells the location "slides\1-a.md" on Windows; the
+// native spelling is reapplied only when Format renders the location.
+func testAdaptDeckError(t *testing.T) {
+	// native is the spelling internal/deck and internal/theme render on this
+	// host: identity on Unix, backslash-separated on Windows.
+	native := filepath.FromSlash("slides/1-a.md")
+
+	t.Run("positioned error keeps the forward-slash file identity", func(t *testing.T) {
+		verr := adaptDeckError(errors.New(native + ":12: boom"))
+		if verr.File != "slides/1-a.md" {
+			t.Errorf("adaptDeckError(%q).File = %q, want the forward-slash identity %q",
+				native, verr.File, "slides/1-a.md")
+		}
+		if verr.Line != 12 {
+			t.Errorf("adaptDeckError(%q).Line = %d, want 12", native, verr.Line)
+		}
+		if verr.What != "boom" {
+			t.Errorf("adaptDeckError(%q).What = %q, want %q", native, verr.What, "boom")
+		}
+		if got, want := Format(verr), displayFile("slides/1-a.md")+":12: boom"; got != want {
+			t.Errorf("Format(adaptDeckError(%q)) = %q, want the native rendering %q", native, got, want)
+		}
+	})
+
+	t.Run("file-only error keeps the forward-slash file identity", func(t *testing.T) {
+		verr := adaptDeckError(errors.New(native + ": boom"))
+		if verr.File != "slides/1-a.md" {
+			t.Errorf("adaptDeckError(%q).File = %q, want the forward-slash identity %q",
+				native, verr.File, "slides/1-a.md")
+		}
+		if verr.Line != 0 {
+			t.Errorf("adaptDeckError(%q).Line = %d, want 0 (no line)", native, verr.Line)
+		}
+		if verr.What != "boom" {
+			t.Errorf("adaptDeckError(%q).What = %q, want %q", native, verr.What, "boom")
+		}
+		if got, want := Format(verr), displayFile("slides/1-a.md")+": boom"; got != want {
+			t.Errorf("Format(adaptDeckError(%q)) = %q, want the native rendering %q", native, got, want)
 		}
 	})
 }
