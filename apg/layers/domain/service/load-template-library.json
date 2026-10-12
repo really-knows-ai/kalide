@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "load-template-library",
-  "body": "Load template library: resolve the deck's library layers — the external library at the `templates:` path when set (a relative path resolved against the deck root, or an absolute path) and the deck-root `templates/` directory when it exists — then validate each layer (templates-dir-validation), merge them into one library, check that no slide, section, theme or media name is carried by both layers (a duplicate is a templates error naming the name and both paths, library-layer-uniqueness), and build the template and theme registries from the merged set; the first failure is a templates error naming the layer root it comes from. A configured path is authoritative for the external layer and never falls back to the local `templates/`; the local `templates/` is a second layer loaded whenever it exists. The external layer is self-contained: its templates' references resolve within the external library alone and it validates on its own, while a local template's `section` helper call resolves across the merged set (library-layer-references). The step-6 reference checks cover a theme's `theme.css` and every stylesheet it imports within its layer — the same theme directory, another theme, or `media/` (imports followed, bounded and cycle-safe across the whole import graph, cycles detected): a relative `url()`/`@import` resolves from the importing file's own location, a `url()`/`@import` with the reserved `media:` prefix resolves to an existing file under that layer's `media/` (relative to `media/` and staying within it), and a `url()`/`@import` with the reserved `theme:<name>/` prefix resolves to an existing file inside that layer's theme directory (an unknown `<name>` is an error); a missing file, an absolute path, a `..` escape, or any other scheme is reported with the CSS file and line (theme-media-references). The value used by a running session for the external layer is the one captured at startup: a later change to the configured `templates:` value keeps the pinned root and the reload path shows the full-page restart-required error (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
+  "body": "Load template library: resolve the deck's library layers — the external library at the `templates:` path when set (a relative path resolved against the deck root, or an absolute path) and the deck-root `templates/` directory when it exists — then validate each layer (templates-dir-validation), merge them into one library, check that no slide, section, theme or media name is carried by both layers (a duplicate is a templates error naming the name and both paths, library-layer-uniqueness), and build the template and theme registries from the merged set; the first failure is a templates error naming the offending file's on-disk path in its OS's native canonical form (native-display-paths). A configured path is authoritative for the external layer and never falls back to the local `templates/`; the local `templates/` is a second layer loaded whenever it exists. The external layer is self-contained: its templates' references resolve within the external library alone and it validates on its own, while a local template's `section` helper call resolves across the merged set (library-layer-references). The step-6 reference checks cover a theme's `theme.css` and every stylesheet it imports within its layer — the same theme directory, another theme, or `media/` (imports followed, bounded and cycle-safe across the whole import graph, cycles detected): a relative `url()`/`@import` resolves from the importing file's own location, a `url()`/`@import` with the reserved `media:` prefix resolves to an existing file under that layer's `media/` (relative to `media/` and staying within it), and a `url()`/`@import` with the reserved `theme:<name>/` prefix resolves to an existing file inside that layer's theme directory (an unknown `<name>` is an error); a missing file, an absolute path, a `..` escape, or any other scheme is reported with the CSS file and line (theme-media-references). The value used by a running session for the external layer is the one captured at startup: a later change to the configured `templates:` value keeps the pinned root and the reload path shows the full-page restart-required error (see template-retarget-requires-restart, global.constraint.never-serve-broken-deck).",
   "properties": {},
   "out": [
     {
@@ -64,6 +64,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.portable-layout-names",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.raw-source-context",
       "properties": {}
     },
@@ -104,7 +109,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.portable-layout-names",
+      "source": "requirements.requirement.native-display-paths",
       "properties": {}
     }
   ]

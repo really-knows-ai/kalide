@@ -1,0 +1,15 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "native-display-paths",
+  "body": "A user reads a kalide message to find the file it names, and most kalide users run Windows. A forward-slash path, a mixed-separator path or a Windows 8.3 short name is a path the user cannot paste into a terminal or open in a file manager, so the message fails at the one job it has — pointing the user at the file to fix.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.native-display-paths",
+      "properties": {}
+    }
+  ],
+  "in": []
+}

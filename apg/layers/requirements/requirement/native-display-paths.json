@@ -1,0 +1,43 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "native-display-paths",
+  "body": "Every on-disk file or directory path kalide shows to a user is a native, canonical path for the user's OS. This covers error messages, the browser error page, `kalide templates` output, the init, init-library and upgrade reports, and the duplicate-name, media, theme-CSS and manifest errors. The shown path uses the OS separator only — a backslash on Windows, a forward slash on macOS and Linux — and never mixes separators; it uses the long (canonical) name of every directory, never a Windows 8.3 short name such as `RUNNER~1`; and when kalide is started from a directory reached through a symlink and resolution succeeds, the shown path is the resolved real path, while a failed resolution shows the path as given. Identity is unchanged and portable: layout names, template and theme names and media keys stay forward-slash and layer-relative, and a display path is never used as a name or lookup key. Containment rules — such as a theme CSS reference that must not escape its tree — are decided on layer-relative paths, independent of how the root is spelled.\n\nAC:\n- on Windows, a duplicate-name error names both files with backslash separators only and no 8.3 short names;\n- on every OS, the path shown for a file matches that file's canonical path (a test confirms it by file-identity equality against the real file);\n- the end-to-end duplicate-name test passes on the native CI matrix (Windows, macOS and Linux);\n- theme CSS escape detection behaves identically from any root spelling.",
+  "properties": {
+    "feature": "layered-template-libraries"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-layer",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.validation-error",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.layered-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "requirements.note.native-display-paths",
+      "properties": {}
+    }
+  ]
+}

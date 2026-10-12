@@ -104,6 +104,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.portable-layout-names",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.section-helper",
       "properties": {}
     },
@@ -124,7 +129,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.portable-layout-names",
+      "source": "requirements.requirement.native-display-paths",
       "properties": {}
     }
   ]

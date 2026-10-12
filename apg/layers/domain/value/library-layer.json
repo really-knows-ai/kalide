@@ -48,12 +48,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.portable-layout-names",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.readme-layered-libraries",
       "properties": {}
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.portable-layout-names",
+      "source": "requirements.requirement.native-display-paths",
       "properties": {}
     }
   ]

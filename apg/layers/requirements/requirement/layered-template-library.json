@@ -23,6 +23,11 @@
       "properties": {}
     },
     {
+      "kind": "contains",
+      "target": "requirements.requirement.portable-layout-names",
+      "properties": {}
+    },
+    {
       "kind": "drives",
       "target": "domain.entity.template-library",
       "properties": {}
@@ -39,7 +44,7 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.portable-layout-names",
+      "target": "requirements.requirement.native-display-paths",
       "properties": {}
     }
   ],
