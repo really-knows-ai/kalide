@@ -331,28 +331,30 @@ literal list-typed value.
 A layout may include another layout with the standard Go
 `{{ template "<layout name>" . }}` action, so shared markup lives in one
 layout that other slides and sections compose. The layout name is the included
-layout's **root-qualified path inside its own layer**:
+layout's **layer-relative path inside its own layer**:
 
-- `<layer root>/slides/<name>/layout.html.tmpl` for a slide layout, and
-- `<layer root>/sections/<name>/layout.html.tmpl` for a section layout,
+- `slides/<name>/layout.html.tmpl` for a slide layout, and
+- `sections/<name>/layout.html.tmpl` for a section layout.
 
-where `<layer root>` is the directory the library was loaded from. That is
-exactly the name the loader registers each layout under, so the action names
-the path literally, never the bare template name. For a `hello` slide layout
-the call is `{{ template "slides/hello/layout.html.tmpl" . }}` (`<layer root>`
-elided for brevity).
+That name is identical on every OS and wherever the layer sits on disk: it has
+no layer root, no `templates/` prefix, no backslashes and no absolute path. It is
+exactly the name the loader registers each layout under, so the action names the
+path literally, never the bare template name. For a `hello` slide layout the
+call is `{{ template "slides/hello/layout.html.tmpl" . }}`.
 
-A layout may include any layout in its own library by that root-qualified name.
+A layout may include any layout in its own library by that layer-relative name.
 A deck's local-layer layout may additionally include an external library's
-layout by the external layer's own root-qualified name. The reverse is not
+layout by the external layout's layer-relative name. The reverse is not
 allowed: an external library is validated standalone, so a layout there that
 includes a layout existing only in the deck's local layer is a templates error
-("no such template"). The included layout executes in the **invoking** layout's
-namespace, so an included layout's `{{ media "logo.svg" }}` resolves in the
-layer of the layout that named it. A `section` call rebinds to the called
-template's own layer instead, so the called template's media resolves in that
-template's own library. Compose with the `template` action to share markup;
-call with `section` when the target's own library must supply its media.
+(`no such template`) reported at the invoking layout's own on-disk path and
+line, quoting the target name exactly as written. The included layout executes
+in the **invoking** layout's namespace, so an included layout's
+`{{ media "logo.svg" }}` resolves in the layer of the layout that named it. A
+`section` call rebinds to the called template's own layer instead, so the called
+template's media resolves in that template's own library. Compose with the
+`template` action to share markup; call with `section` when the target's own
+library must supply its media.
 
 ## Themes
 

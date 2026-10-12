@@ -119,29 +119,37 @@ never reach the deck's local layer.
 
 A layout may include another library layout with the standard Go
 `{{ template "<layout name>" . }}` action. The included layout is named by its
-**root-qualified path inside its own layer**:
+**layer-relative path inside its own layer**:
 
-- `<layer root>/slides/<name>/layout.html.tmpl` for a slide layout, and
-- `<layer root>/sections/<name>/layout.html.tmpl` for a section layout,
+- `slides/<name>/layout.html.tmpl` for a slide layout, and
+- `sections/<name>/layout.html.tmpl` for a section layout.
 
-where `<layer root>` is the directory that layer was loaded from: the deck-root
-`templates/` for the local layer, or the external library's own root. The
+That name is identical on every OS and wherever the layer sits on disk: it has
+no layer root, no `templates/` prefix, no backslashes and no absolute path. The
 action names that path literally, never the bare template name. For the deck's
 local `hello` slide layout the call is
 
 ```
-{{ template "templates/slides/hello/layout.html.tmpl" . }}
+{{ template "slides/hello/layout.html.tmpl" . }}
 ```
 
-- A layout may include any layout in its **own layer** by that root-qualified
+- A layout may include any layout in its **own layer** by that layer-relative
   name.
 - A **local-layer** layout may additionally include an **external-layer**
-  layout, by the external layer's own root-qualified name: the merged layout
-  namespace registers every layer's layouts, so the call resolves.
+  layout, by the external layer's layer-relative name: the merged layout
+  namespace registers every layer's layouts, so the call resolves. A local
+  slide layout composing an external `shared-badge` section layout names it
+  `sections/shared-badge/layout.html.tmpl`:
+
+  ```
+  {{ template "sections/shared-badge/layout.html.tmpl" . }}
+  ```
+
 - The reverse is **not allowed**. The external library is validated standalone
   before the merge, so an external-layer layout whose `{{ template }}` names a
   layout that exists only in the deck's local layer is a templates error
-  (`no such template`) reported at the external layout's own file.
+  (`no such template`) reported at the external layout's own on-disk path and
+  line, quoting the target name exactly as written.
 
 The included layout executes in the **invoking** layout's namespace, so its
 `{{ media "path" }}` resolves in the **invoking** layer's `media/` — the layer

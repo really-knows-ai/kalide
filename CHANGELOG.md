@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A `{{ template }}` layout name is now **layer-relative** —
+  `slides/<name>/layout.html.tmpl` or `sections/<name>/layout.html.tmpl`,
+  identical on every OS and wherever the layer sits on disk. A name carrying a
+  `templates/` prefix or an absolute path no longer resolves.
+
+### Fixed
+
+- Layout composition now works on Windows and when a deck moves to another
+  folder or machine: an included layout is named the same layer-relative way in
+  every layer and location, with no layer root baked into the name.
+
 ## [0.12.1] - 2026-10-12
 
 ### Fixed
