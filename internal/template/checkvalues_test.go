@@ -150,6 +150,48 @@ func TestCheckValues(t *testing.T) {
 		},
 	}})
 
+	// allTypesTmpl declares one record item field per field type, so a single
+	// wrong-typed record value proves the shared engine reports every field
+	// type's type error — including a record that is not a mapping — at the
+	// same path-qualified, positioned shape (plan.phase-02.task-8).
+	allTypesTmpl := newSlide("alltypes", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "t", Type: FieldText},
+			{Name: "n", Type: FieldNumber},
+			{Name: "d", Type: FieldDate},
+			{Name: "b", Type: FieldBoolean},
+			{Name: "e", Type: FieldEnum, Variants: []string{"a", "b"}},
+			{Name: "i", Type: FieldImage},
+			{Name: "l", Type: FieldLink},
+			{Name: "li", Type: FieldList, Item: &Field{Type: FieldText}},
+			{Name: "st", Type: FieldSectionTemplate, SectionTemplate: "col"},
+			{Name: "rec", Type: FieldList, Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "x", Type: FieldText},
+			}}},
+		},
+	}})
+
+	// allRulesTmpl declares one record item field per field rule, so a single
+	// violating record value proves the shared engine reports every rule's
+	// error at the same path-qualified, positioned shape (plan.phase-02.task-8).
+	allRulesTmpl := newSlide("allrules", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "req", Type: FieldText, Required: true},
+			{Name: "long", Type: FieldText, MaxLength: 2},
+			{Name: "num_min", Type: FieldNumber, Min: &zero},
+			{Name: "num_max", Type: FieldNumber, Max: float64Ptr(10)},
+			{Name: "date_min", Type: FieldDate, MinDate: "2020-01-01"},
+			{Name: "date_max", Type: FieldDate, MaxDate: "2025-12-31"},
+			{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}},
+			{Name: "img", Type: FieldImage},
+			{Name: "url", Type: FieldLink},
+			{Name: "min_list", Type: FieldList, Item: &Field{Type: FieldText}, MinItems: 1},
+			{Name: "max_list", Type: FieldList, Item: &Field{Type: FieldText}, MaxItems: 2},
+		},
+	}})
+
 	const boldAndCode = "**bold** and `code`"
 
 	tests := []struct {
@@ -856,6 +898,93 @@ func TestCheckValues(t *testing.T) {
 			want: []wantErr{we("format", "plain_format", "anything",
 				`field "plain" declares no formats; "anything" is not available`,
 				"remove the key or check the template definition")},
+		},
+
+		// --- every field type and rule, path-qualified and positioned -----
+		// The shared engine is recursive (a list item or a record field is
+		// validated by the same code as a top-level field), so these two cases
+		// place each type and each rule one level down — inside a record list
+		// item — and assert the same rule, full `items › [0] › …` path, what,
+		// fix and attached line the top-level cases assert. They are the
+		// unit-level reference the site tests (plan.phase-02.tasks 10-14)
+		// match.
+		{
+			name: "every field type error is path-qualified and positioned",
+			tmpl: allTypesTmpl,
+			data: map[string]any{"items": []any{map[string]any{
+				"t": 1, "n": true, "d": 1, "b": "yes", "e": 3, "i": 5, "l": 5,
+				"li": "notalist", "st": "notmap", "rec": []any{42},
+			}}},
+			opts: []Option{WithLineSource(func([]PathSegment) int { return 55 })},
+			want: []wantErr{
+				we("type", "items › [0] › t", 1,
+					"type: expected a text field, got a number", "quote the value as a string"),
+				we("type", "items › [0] › n", true,
+					"type: expected a number, got a boolean", "write the number without quotes"),
+				we("type", "items › [0] › d", 1,
+					"type: expected a YYYY-MM-DD date, got a number", "write the date as YYYY-MM-DD"),
+				we("type", "items › [0] › b", "yes",
+					"type: expected a boolean, got a quoted string", "write true or false without quotes"),
+				we("type", "items › [0] › e", 3,
+					"type: expected one of the enum variants, got a number", "use one of: a, b"),
+				we("type", "items › [0] › i", 5,
+					"type: expected an image path, got a number", "write the path as a string"),
+				we("type", "items › [0] › l", 5,
+					"type: expected a link, got a number", "write the link as a string"),
+				we("type", "items › [0] › li", "notalist",
+					"type: expected a list, got a quoted string", "write the value as a YAML sequence"),
+				we("type", "items › [0] › st", "notmap",
+					`type: expected a mapping for section template "col", got a quoted string`,
+					"write the section data as YAML key: value pairs"),
+				we("type", "items › [0] › rec › [0]", 42,
+					"type: expected a mapping for a record, got a number",
+					"write the record as YAML key: value pairs"),
+			},
+			wantLine: 55,
+		},
+		{
+			name: "every field rule error is path-qualified and positioned",
+			tmpl: allRulesTmpl,
+			data: map[string]any{"items": []any{map[string]any{
+				"long":     "abc",
+				"num_min":  -1,
+				"num_max":  11,
+				"date_min": "2019-01-01",
+				"date_max": "2026-01-01",
+				"mode":     "c",
+				"img":      "pic.png",
+				"url":      "mailto:x@example.com",
+				"min_list": []any{},
+				"max_list": []any{"a", "b", "c"},
+			}}},
+			opts: []Option{WithLineSource(func([]PathSegment) int { return 56 })},
+			want: []wantErr{
+				we("required", "items › [0] › req", nil,
+					`required: field "req" is required but missing`, "add a req: value"),
+				we("max_length", "items › [0] › long", "abc",
+					"max_length: text is 3 characters, maximum is 2", "shorten the value"),
+				we("min", "items › [0] › num_min", -1,
+					"min: -1 is below the minimum 0", "use a value of at least 0"),
+				we("max", "items › [0] › num_max", 11,
+					"max: 11 exceeds the maximum 10", "use a value of at most 10"),
+				we("min", "items › [0] › date_min", "2019-01-01",
+					"min: 2019-01-01 is below the minimum 2020-01-01", "use a date on or after 2020-01-01"),
+				we("max", "items › [0] › date_max", "2026-01-01",
+					"max: 2026-01-01 exceeds the maximum 2025-12-31", "use a date on or before 2025-12-31"),
+				we("enum", "items › [0] › mode", "c",
+					`enum: "c" is not one of the allowed variants (a, b)`, "use one of: a, b"),
+				we("image", "items › [0] › img", "pic.png",
+					`image: "pic.png" is not under assets/`,
+					"move the image into the deck's assets/ directory and reference it as assets/…"),
+				we("link", "items › [0] › url", "mailto:x@example.com",
+					`link: "mailto:x@example.com" is neither a #label anchor nor an http(s) URL`,
+					"use a #label anchor or an http(s) URL"),
+				we("min_items", "items › [0] › min_list", []any{},
+					"min_items: 0 item(s) is below the minimum 1", "add at least 1 item(s)"),
+				we("max_items", "items › [0] › max_list", []any{"a", "b", "c"},
+					"max_items: 3 item(s) exceeds the maximum 2", "remove items until at most 2 remain"),
+			},
+			wantLine: 56,
 		},
 	}
 
