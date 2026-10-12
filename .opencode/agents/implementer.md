@@ -1,5 +1,5 @@
 ---
-description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest,config}, README.md, docs/**. Implements plan tasks in the project worktree.
+description: Core implementer for kalide — go.mod/go.sum, Makefile, cmd/kalide, internal/{cli,scaffold,suggest,config,displaypath}, README.md, docs/**. Implements plan tasks in the project worktree.
 mode: subagent
 hidden: true
 generated: true
@@ -61,6 +61,7 @@ permission:
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
     "apg/.worktrees/*/internal/config/**": allow
+    "apg/.worktrees/*/internal/displaypath/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -97,6 +98,7 @@ permission:
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
     "apg/.worktrees/*/internal/config/**": allow
+    "apg/.worktrees/*/internal/displaypath/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -117,6 +119,7 @@ permission:
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
     "apg/.worktrees/*/internal/config/**": allow
+    "apg/.worktrees/*/internal/displaypath/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -137,6 +140,7 @@ permission:
     "apg/.worktrees/*/internal/scaffold/**": allow
     "apg/.worktrees/*/internal/suggest/**": allow
     "apg/.worktrees/*/internal/config/**": allow
+    "apg/.worktrees/*/internal/displaypath/**": allow
     "apg/.worktrees/*/LICENSE": allow
     "apg/.worktrees/*/NOTICE": allow
     "apg/.worktrees/*/TRADEMARKS.md": allow
@@ -196,7 +200,8 @@ linux/{amd64,arm64}), `.gitignore`,
 `README.md`, `docs/**` (user-facing documentation, e.g. `docs/templates.md`,
 `docs/layered-libraries.md`, `docs/cookbook.md`), `cmd/**`, `internal/cli/**`, `internal/scaffold/**`,
 `internal/suggest/**`, `internal/config/**` (per-user settings store, stdlib
-only; its `config_test.go` is test-implementer's), the root legal/release docs `LICENSE`, `NOTICE`,
+only; its `config_test.go` is test-implementer's), `internal/displaypath/**`
+(non-test source only; its `*_test.go` are test-implementer's), the root legal/release docs `LICENSE`, `NOTICE`,
 `TRADEMARKS.md`, `CHANGELOG.md`, and `brand/**` (brand source such as `.svg`
 files and `brand/LICENSE`). **Nothing under `brand/**` is ever `go:embed`'ed or
 copied into `internal/assets`** — brand files are repo artifacts, not shipped
