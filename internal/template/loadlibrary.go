@@ -713,9 +713,12 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 	// root-joined on-disk path, carried for error display only.
 	layoutName := layoutRel
 	layoutPath := path.Join(root, layoutRel)
+	// The layout is the whole namespace at this step, so its name is the only
+	// one a Go error prefix can carry; map it to the on-disk path for display.
+	resolve := namespaceLayoutResolver(layoutName, layoutPath)
 	parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(string(layoutText))
 	if err != nil {
-		return nil, layoutTemplateError(Layout{Name: layoutName, Path: layoutPath}, "", err)
+		return nil, layoutTemplateError(Layout{Name: layoutName, Path: layoutPath}, resolve, "", err)
 	}
 
 	return &LibraryTemplate{

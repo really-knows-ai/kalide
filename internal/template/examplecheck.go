@@ -184,9 +184,13 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	// whole set — rather than lt.LayoutText alone — keeps the shared namespace,
 	// so a layout's `{{ template "<layout name>" . }}` composition call
 	// resolves too (example-layout-composition).
+	// The shared namespace holds every library layout, so an error prefix may
+	// name any of them; resolve each namespace name to its own on-disk path
+	// rather than assuming the invoking template's layout.
+	layoutPaths := libraryLayoutPathResolver(lib)
 	namespace, err := exampleLayoutNamespace(lib, layer, callerFields)
 	if err != nil {
-		return layoutTemplateError(lt.Definition.Layout, "parse", err)
+		return layoutTemplateError(lt.Definition.Layout, layoutPaths, "parse", err)
 	}
 
 	layoutName := lt.Layout.Name()
@@ -195,7 +199,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	}
 	var buf strings.Builder
 	if err := namespace.ExecuteTemplate(&buf, layoutName, ctx); err != nil {
-		return layoutTemplateError(lt.Definition.Layout, "execute", err)
+		return layoutTemplateError(lt.Definition.Layout, layoutPaths, "execute", err)
 	}
 	return nil
 }
@@ -566,13 +570,16 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	if layoutName == "" {
 		layoutName = call.Template.Name
 	}
+	// The target layout is re-parsed alone, so its name is the namespace key a
+	// Go error prefix carries; map it to the target's own on-disk path.
+	layoutPaths := namespaceLayoutResolver(layoutName, call.Template.Layout.Path)
 	parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(call.Template.Layout.Text)
 	if err != nil {
-		return "", layoutTemplateError(call.Template.Layout, "parse target layout", err)
+		return "", layoutTemplateError(call.Template.Layout, layoutPaths, "parse target layout", err)
 	}
 	var buf strings.Builder
 	if err := parsed.Execute(&buf, ctx); err != nil {
-		return "", layoutTemplateError(call.Template.Layout, "execute target layout", err)
+		return "", layoutTemplateError(call.Template.Layout, layoutPaths, "execute target layout", err)
 	}
 	return htmltemplate.HTML(buf.String()), nil
 }

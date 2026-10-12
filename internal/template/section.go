@@ -594,9 +594,12 @@ func (s *Section) HelperCalls(tmpl *Template) ([]HelperCall, error) {
 	if layoutName == "" {
 		layoutName = tmpl.Name
 	}
+	// The layout is parsed alone here, so its name is the only namespace key a
+	// Go error prefix can carry; map it to the layout's own on-disk path.
+	resolve := namespaceLayoutResolver(layoutName, tmpl.Layout.Path)
 	parsed, err := htmltemplate.New(layoutName).Funcs(LayoutFuncMap(nil, "")).Parse(text)
 	if err != nil {
-		return nil, layoutTemplateError(tmpl.Layout, fmt.Sprintf("template %q: parse layout", tmpl.Name), err)
+		return nil, layoutTemplateError(tmpl.Layout, resolve, fmt.Sprintf("template %q: parse layout", tmpl.Name), err)
 	}
 
 	var found []positionedCall
