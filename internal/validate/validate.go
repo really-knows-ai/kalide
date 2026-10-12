@@ -12,6 +12,8 @@ package validate
 import (
 	"fmt"
 	"strings"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // segmentSeparator joins the elements of a ValidationError's Path, and also
@@ -74,7 +76,8 @@ func New(file string, line int, path []string, what, fix string) ValidationError
 }
 
 // Error implements the error interface by delegating to Format, so a
-// ValidationError can be returned and printed directly.
+// ValidationError can be returned and printed directly and always renders the
+// same native display text as Format (native-display-paths).
 func (e ValidationError) Error() string {
 	return Format(e)
 }
@@ -87,8 +90,13 @@ func (e ValidationError) Error() string {
 // The `:line` suffix is omitted entirely when e.Line is 0, and the ` › path`
 // part is omitted when e.Path is empty. Path segments are joined with ` › `,
 // the file/line and path are separated from What by `: `, and Fix is
-// introduced by ` — ` and omitted when empty. Formatting the specification
-// example:
+// introduced by ` — ` and omitted when empty.
+//
+// e.File is the forward-slash deck-relative identity; it is converted to the
+// host OS's native spelling here, at this single display boundary, so the file
+// part of the location reads `slides/3-team.md` on macOS and Linux and
+// `slides\3-team.md` on Windows (native-display-paths, error-reporting).
+// Formatting the specification example:
 //
 //	Format(ValidationError{
 //	    File: "slides/3-team.md", Line: 12,
@@ -98,7 +106,7 @@ func (e ValidationError) Error() string {
 //	// slides/3-team.md:12 › column[1] › people[0] › name: required — add a name: value
 func Format(e ValidationError) string {
 	var b strings.Builder
-	b.WriteString(e.File)
+	b.WriteString(displaypath.Display("", e.File))
 	if e.Line > 0 {
 		fmt.Fprintf(&b, ":%d", e.Line)
 	}

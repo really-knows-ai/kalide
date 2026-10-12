@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/suggest"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
@@ -407,11 +408,15 @@ func nodeLine(n *yaml.Node, fallback int) int {
 }
 
 // positioned formats an error as file:line: message, omitting the line when it
-// is unknown.
+// is unknown. file stays the forward-slash deck-relative identity; the rendered
+// location uses the host OS's native separator, so a slide error reads
+// `slides\3-team.md` on Windows and `slides/3-team.md` on macOS and Linux
+// (native-display-paths).
 func positioned(file string, line int, format string, args ...any) error {
 	msg := fmt.Sprintf(format, args...)
+	pos := displaypath.Display("", file)
 	if line > 0 {
-		return fmt.Errorf("%s:%d: %s", file, line, msg)
+		return fmt.Errorf("%s:%d: %s", pos, line, msg)
 	}
-	return fmt.Errorf("%s: %s", file, msg)
+	return fmt.Errorf("%s: %s", pos, msg)
 }

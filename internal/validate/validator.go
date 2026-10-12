@@ -395,10 +395,13 @@ func adaptDeckError(err error) ValidationError {
 }
 
 // adaptParseError adapts a *slide.ParseError, carrying its file, line,
-// containment path and message across. The path is the rendered containment
-// chain (`columns[2] › blocks[1]`) the parser builds for a nested section
-// instance, or empty at the slide's top level; it becomes the ValidationError
-// path so the canonical ` › ` notation is uniform at any depth
+// containment path and message across. pe.File is the slide's forward-slash
+// deck-relative identity and is carried through unchanged; ValidationError
+// stores identity, and the native spelling of the slide's location is applied
+// only when Format renders it (native-display-paths). The path is the rendered
+// containment chain (`columns[2] › blocks[1]`) the parser builds for a nested
+// section instance, or empty at the slide's top level; it becomes the
+// ValidationError path so the canonical ` › ` notation is uniform at any depth
 // (nested-section-validation, error-reporting). Any other error falls back to
 // adaptDeckError.
 func adaptParseError(err error) ValidationError {

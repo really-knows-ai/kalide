@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
@@ -155,8 +156,13 @@ type ParseError struct {
 }
 
 // Error renders the positioned message.
+//
+// File stays the forward-slash deck-relative identity used for lookup; it is
+// converted to the host OS's native spelling here, at the display boundary, so
+// a deck-relative slide path reads `slides/3-team.md` on macOS and Linux and
+// `slides\3-team.md` on Windows (native-display-paths, error-reporting).
 func (e *ParseError) Error() string {
-	pos := e.File
+	pos := displaypath.Display("", e.File)
 	if e.Line > 0 {
 		pos = fmt.Sprintf("%s:%d", pos, e.Line)
 	}
