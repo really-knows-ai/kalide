@@ -323,6 +323,29 @@ func formatPath(path []PathSegment, field string) []PathSegment {
 	return appendSeg(path, PathSegment{Name: field + "_format"})
 }
 
+// checkNullable handles a YAML null value for one field: a non-nullable field
+// rejects it with the nullable-fields error `got null — this field isn't
+// nullable`, while a nullable field accepts it, so a null runs no type, bound,
+// format or membership check. It reports whether value was a null, in which
+// case the caller stops checking the field either way.
+//
+// It is shared by every validateValue call, so it covers a template's
+// top-level fields and a list's item descriptor alike: a nullable item accepts
+// a null element (`items: [null]`) and skips the item's checks. Null is
+// distinct from absent — mapValues reports a key that is missing and calls
+// validateValue only for a key that is present — so an explicit null reaches
+// here while an omitted field never does.
+func checkNullable(c *checker, path []PathSegment, f *Field, value any) bool {
+	if value != nil {
+		return false
+	}
+	if f.Nullable {
+		return true
+	}
+	c.add(path, "nullable", value, "got null", "this field isn't nullable")
+	return true
+}
+
 // validateValue checks one value against one field's type and rules.
 func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth int) {
 	switch f.Type {
