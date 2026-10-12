@@ -474,26 +474,27 @@ template may not declare a field or section named `deck`, `slide`, `item`,
 A layout may include another library layout with the standard Go
 `{{ template "<layout name>" . }}` action, so shared markup lives in one layout
 that the slides and sections which need it compose. The layout name is the
-included layout's **root-qualified path inside its own layer**:
+included layout's **layer-relative path inside its own layer**:
 
-- `<layer root>/slides/<name>/layout.html.tmpl` for a slide layout, and
-- `<layer root>/sections/<name>/layout.html.tmpl` for a section layout,
+- `slides/<name>/layout.html.tmpl` for a slide layout, and
+- `sections/<name>/layout.html.tmpl` for a section layout.
 
-where `<layer root>` is the directory the layer was loaded from — the
-deck-root `templates/` of the local layer, or the external library's root. That
-is exactly the name the loader builds and registers each layout under, so the
+That name is identical on every OS and wherever the layer sits on disk: it has
+no layer root, no `templates/` prefix, no backslashes and no absolute path. It is
+exactly the name the loader builds and registers each layout under, so the
 action names the path literally, never the bare template name. For the deck's
 local `hello` slide layout the call is
-`{{ template "templates/slides/hello/layout.html.tmpl" . }}`.
+`{{ template "slides/hello/layout.html.tmpl" . }}`.
 
-A layout may include any layout in its **own layer** by that root-qualified
-name. In a two-layer deck a local-layer layout may also include an
-**external-layer** layout by the external layout's own root-qualified name: the
-merged layout namespace keys every layer's layouts, so the call resolves. The
-reverse is not allowed — the external library is validated standalone before the
-merge, so an external-layer layout that includes a local-layer layout is a
-templates error ("no such template") reported at the external layout's own file.
-An external library may never depend on the deck's local layer.
+A layout may include any layout in its **own layer** by that name. In a
+two-layer deck a local-layer layout may also include an **external-layer**
+layout by the external layout's layer-relative name: the merged layout namespace
+keys every layer's layouts, so the call resolves. The reverse is not allowed —
+the external library is validated standalone before the merge, so an
+external-layer layout that includes a local-layer layout is a templates error
+("no such template") reported at the invoking layout's own on-disk path and
+line, quoting the target name exactly as written. An external library may never
+depend on the deck's local layer.
 
 The included layout executes in the **invoking** layout's namespace, so its
 `media` helper binds to the invoking layer's `media/`: an included layout's
