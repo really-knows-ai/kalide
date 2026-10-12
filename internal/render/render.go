@@ -1405,10 +1405,47 @@ func (r *renderer) contextNodes(sections []slide.Section) []template.ContextNode
 // instance it lives in, at every composition depth (section-template-context).
 // Such a value is data-only and its layout is never executed, so it carries no
 // `.item` descriptor (template-language).
+//
+// A nullable field's explicit null converts to nil with no per-type conversion
+// — no format, bound or membership step runs on a null (nullable-fields) — so a
+// null text or date field reaches a layout as nil rather than as "" or a raw
+// value. This also covers a nullable record field and a nullable list item
+// descriptor, because every recursion reaches here. A coerce text field
+// (text-coercion) renders its YAML number or boolean as its string form ("42",
+// "true"). An inline record (record-item-type) is a list's item descriptor: a
+// mapping of typed values, each converted field by field through this same
+// per-type conversion, so a record's text fields arrive pre-rendered and its
+// other fields typed, exactly like a template's top-level fields.
 func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, secCtx *sectionCtx) (any, error) {
+	if raw == nil && f.Nullable {
+		return nil, nil
+	}
 	switch f.Type {
 	case template.FieldText:
 		s, ok := raw.(string)
+		if !ok && f.Coerce {
+			// internal/template's coerceText is unexported, so the render
+			// conversion repeats its number/boolean-to-string form here: the
+			// number 42 becomes "42" and the boolean true becomes "true". A
+			// string is handled above and any other non-string value (already
+			// rejected by validation) keeps the raw passthrough below.
+			switch v := raw.(type) {
+			case bool:
+				s, ok = strconv.FormatBool(v), true
+			default:
+				rv := reflect.ValueOf(raw)
+				if rv.IsValid() {
+					switch rv.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						s, ok = strconv.FormatInt(rv.Int(), 10), true
+					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+						s, ok = strconv.FormatUint(rv.Uint(), 10), true
+					case reflect.Float32, reflect.Float64:
+						s, ok = formatNumber(rv.Float()), true
+					}
+				}
+			}
+		}
 		if !ok {
 			// A non-string value (already rejected by validation) is left as
 			// text for html/template to escape.
@@ -1460,6 +1497,43 @@ func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, s
 			nestedCtx = &sectionCtx{cfg: secCtx.cfg, meta: secCtx.meta, total: secCtx.total}
 		}
 		return r.values(m, nested, nestedCtx)
+
+	case template.FieldRecord:
+		// An inline record (record-item-type) is a list's item descriptor: a
+		// mapping of typed field values, converted field by field through this
+		// same per-type conversion so a record's text fields arrive pre-rendered
+		// and its other fields typed, exactly like a template's top-level
+		// fields. Every declared field is present in the result — an explicit
+		// null is nil (a nullable field; a non-nullable null was rejected), and
+		// an omitted field takes its Default or, with none, is nil — mirroring
+		// renderer.values. The record's own mapping is the `data` a nested
+		// number or date field reads its `<field>_format` sibling from. A record
+		// nests because one of its fields may itself be a list whose item is a
+		// record, which recurses here.
+		m, ok := asMap(raw)
+		if !ok {
+			// A non-mapping value (already rejected by validation) is passed
+			// through unchanged.
+			return raw, nil
+		}
+		out := make(map[string]any, len(f.Fields))
+		for i := range f.Fields {
+			sub := &f.Fields[i]
+			val, present := m[sub.Name]
+			if !present {
+				if sub.Default == nil {
+					out[sub.Name] = nil
+					continue
+				}
+				val = sub.Default
+			}
+			v, err := r.fieldValue(sub, val, m, secCtx)
+			if err != nil {
+				return nil, err
+			}
+			out[sub.Name] = v
+		}
+		return out, nil
 
 	default:
 		// boolean, enum, link and image values render as written.
