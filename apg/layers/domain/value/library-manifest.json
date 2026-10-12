@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "library-manifest",
-  "body": "Library manifest (the resolved library's `library.yaml`; `templates/library.yaml` for a local library): name identifier, optional description, format version (required, currently 1), plus the optional named definitions `groups:` (named accept-lists), `field_sets:` (named field groups) and `types:` (named field types) (named-definition), all part of format 1 (domain.constraint.library-manifest-format-stable). Identity for future git-based sharing.",
+  "body": "Library manifest (the resolved library's `library.yaml`; `templates/library.yaml` for a local library): name identifier, optional description, required format version 1, plus the optional named definitions `groups:` (named accept-lists), `field_sets:` (named field groups) and `types:` (named field types) (named-definition), all part of format 1 (domain.constraint.library-manifest-format-stable). Identity for git-based sharing.",
   "properties": {},
   "out": [],
   "in": [
@@ -13,17 +13,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.named-library-definitions",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.templates-dir-layout",
       "properties": {}
     },
     {
       "kind": "drives",
       "source": "requirements.requirement.upgrade-migrate-format",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.named-library-definitions",
       "properties": {}
     }
   ]
