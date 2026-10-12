@@ -19,6 +19,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 	"github.com/really-knows-ai/kalide/internal/validate"
@@ -177,15 +178,25 @@ func TestServer(t *testing.T) {
 
 	t.Run("page state swaps to error and recovers through Pipeline", func(t *testing.T) {
 		verr := validate.New("slides/2-team.md", 7, []string{"title"}, "required", "add a title: value")
+		// The stored File stays the forward-slash deck-relative identity; the
+		// browser error page (and the terminal log) render it in the host OS's
+		// native spelling (native-display-paths).
+		if verr.File != "slides/2-team.md" {
+			t.Fatalf("ValidationError.File = %q, want the forward-slash identity", verr.File)
+		}
+		wantNative := displaypath.Display("", "slides/2-team.md") + ":7 › title: required — add a title: value"
+		if got := validate.Format(verr); got != wantNative {
+			t.Fatalf("validate.Format(verr) = %q, want the native %q", got, wantNative)
+		}
 		errPage, err := NewErrorPage("Deck", verr)
 		if err != nil {
 			t.Fatalf("NewErrorPage: %v", err)
 		}
-		if want := validate.Format(verr); errPage.Err != want {
-			t.Fatalf("error page Err = %q, want %q", errPage.Err, want)
+		if errPage.Err != wantNative {
+			t.Fatalf("error page Err = %q, want %q", errPage.Err, wantNative)
 		}
-		if !strings.Contains(string(errPage.Doc), validate.Format(verr)) {
-			t.Fatalf("error page document does not carry the formatted error %q", validate.Format(verr))
+		if !strings.Contains(string(errPage.Doc), wantNative) {
+			t.Fatalf("error page document does not carry the formatted error %q", wantNative)
 		}
 
 		deck1 := testPage("DECK-ONE")
@@ -232,11 +243,11 @@ func TestServer(t *testing.T) {
 		if !strings.Contains(body, "Deck error") {
 			t.Fatalf("error state does not serve the error page: %q", body)
 		}
-		if want := validate.Format(verr); !strings.Contains(body, want) {
-			t.Fatalf("error page does not carry %q: %q", want, body)
+		if !strings.Contains(body, wantNative) {
+			t.Fatalf("error page does not carry %q: %q", wantNative, body)
 		}
-		if !strings.Contains(log.String(), validate.Format(verr)) {
-			t.Fatalf("terminal log %q does not print the identical error %q", log.String(), validate.Format(verr))
+		if !strings.Contains(log.String(), wantNative) {
+			t.Fatalf("terminal log %q does not print the identical error %q", log.String(), wantNative)
 		}
 
 		// The next valid edit recovers: the deck page is served again.
@@ -245,7 +256,7 @@ func TestServer(t *testing.T) {
 		if !strings.Contains(body, "DECK-TWO") {
 			t.Fatalf("recovery did not serve the fixed deck: %q", body)
 		}
-		if strings.Contains(body, validate.Format(verr)) {
+		if strings.Contains(body, wantNative) {
 			t.Fatalf("recovered page still shows the error: %q", body)
 		}
 	})

@@ -3,10 +3,12 @@ package render
 import (
 	htmltmpl "html/template"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -191,8 +193,19 @@ func TestRenderSlide(t *testing.T) {
 			t.Error("nil registry: want an error")
 		} else if re, ok := err.(*RenderError); !ok {
 			t.Errorf("nil registry: got %T, want *RenderError", err)
-		} else if re.File != parsed.File {
-			t.Errorf("nil registry: RenderError.File = %q, want %q", re.File, parsed.File)
+		} else {
+			// The stored File stays the forward-slash deck-relative identity;
+			// RenderError.Error renders it in the host OS's native spelling
+			// (native-display-paths).
+			if re.File != parsed.File {
+				t.Errorf("nil registry: RenderError.File = %q, want %q", re.File, parsed.File)
+			}
+			if want := displaypath.Display("", parsed.File) + ": nil template registry"; re.Error() != want {
+				t.Errorf("nil registry: RenderError.Error() = %q, want the native %q", re.Error(), want)
+			}
+			if native := filepath.FromSlash(parsed.File); native != parsed.File && strings.Contains(re.Error(), parsed.File) {
+				t.Errorf("nil registry: RenderError.Error() = %q, want the native %q, not the forward-slash identity", re.Error(), native)
+			}
 		}
 
 		unknown := *parsed

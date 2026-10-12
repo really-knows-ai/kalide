@@ -30,6 +30,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/scaffold"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
@@ -76,9 +77,11 @@ func assertUpgradeReportCounts(t *testing.T, stdout string, refreshed, skipped i
 
 // upgradeReportNamesPath reports whether the printed report names rel as a path
 // line ("  <rel>"), so a case can assert a refreshed or skipped path instead of
-// a bare substring.
+// a bare substring. rel is a forward-slash identity path; the report renders it
+// in the host OS's native separator (native-display-paths), so the expectation
+// is built the same way.
 func upgradeReportNamesPath(stdout, rel string) bool {
-	return strings.Contains(stdout, "  "+rel+"\n")
+	return strings.Contains(stdout, "  "+displaypath.Display("", rel)+"\n")
 }
 
 // TestRunUpgrade is the command-surface suite for `kalide upgrade`
@@ -475,9 +478,16 @@ func TestRunUpgrade(t *testing.T) {
 		if stdout != "" {
 			t.Errorf("runUpgrade(invalid library) stdout = %q, want empty", stdout)
 		}
+		// runUpgrade canonicalises its cwd through displaypath.CanonicalRoot, so
+		// the wrap names the canonical, resolved library root (on macOS a /var
+		// temp dir becomes /private/var).
+		wantLibDir, err := filepath.EvalSymlinks(libDir)
+		if err != nil {
+			t.Fatalf("EvalSymlinks(%s): %v", libDir, err)
+		}
 		for _, want := range []string{
 			"upgrade: validation failed",
-			fmt.Sprintf("upgraded library %s does not load", libDir),
+			fmt.Sprintf("upgraded library %s does not load", wantLibDir),
 		} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("runUpgrade(invalid library) stderr = %q, want it to contain %q", stderr, want)

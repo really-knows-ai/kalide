@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
 
@@ -315,6 +317,39 @@ func TestReloaderLayeredLibraryIntegration(t *testing.T) {
 	}
 	if !strings.Contains(body, `<h1 class="external-edited">Hi</h1>`) || !strings.Contains(body, `<h1 class="local-edited">Lo</h1>`) {
 		t.Fatalf("reverted deck did not resume both layers' templates: %q", body)
+	}
+}
+
+// TestReloaderSlideReadErrorDisplaysNativePath is the int-tier proof that the
+// reload pipeline's slide read error names the slide in the host OS's native
+// spelling, while the slide's deck.Slide.Path stays the forward-slash identity
+// (native-display-paths). It reads the real filesystem, so it is skipped under
+// -short.
+func TestReloaderSlideReadErrorDisplaysNativePath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test reads the real filesystem")
+	}
+
+	dir := t.TempDir()
+	// A deck whose single slide is absent from disk: parseAllSlides' ReadFile
+	// fails and the message must carry the deck-relative path natively.
+	const rel = "slides/1-missing.md"
+	d := &deck.Deck{Stacks: []deck.Stack{
+		{Slide: deck.Slide{Path: rel, Number: 1, Label: "missing"}},
+	}}
+
+	_, err := parseAllSlides(os.DirFS(dir), d, nil)
+	if err == nil {
+		t.Fatalf("parseAllSlides(%s) error = nil, want the missing slide's read error", rel)
+	}
+	if got, want := d.Stacks[0].Slide.Path, rel; got != want {
+		t.Errorf("deck.Slide.Path = %q, want the forward-slash identity %q", got, want)
+	}
+	if want := "read " + displaypath.Display("", rel) + ":"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("read error = %q, want it to name the native path %q", err, want)
+	}
+	if native := filepath.FromSlash(rel); native != rel && strings.Contains(err.Error(), "read "+rel) {
+		t.Errorf("read error = %q, want the native spelling %q, not the forward-slash identity", err, native)
 	}
 }
 

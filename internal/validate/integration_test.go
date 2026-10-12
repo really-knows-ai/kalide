@@ -140,7 +140,9 @@ func TestValidateIntegration(t *testing.T) {
 		if !errors.As(err, &libErr) {
 			t.Fatalf("LoadLibrary() error = %T (%v), want *template.LibraryError", err, err)
 		}
-		if want := template.TemplatesDir + "/sections/group/example.md"; libErr.Path != want {
+		// LibraryError.Path is a root-joined display path: it is shown in the
+		// host OS's native spelling (native-display-paths).
+		if want := displayFile(template.TemplatesDir + "/sections/group/example.md"); libErr.Path != want {
 			t.Errorf("LibraryError.Path = %q, want %q", libErr.Path, want)
 		}
 		if !strings.Contains(libErr.Message, "blocks[0]") {
@@ -167,7 +169,7 @@ func TestValidateIntegration(t *testing.T) {
 		// instance chain. Field errors carry no source line (the parser does
 		// not retain per-value YAML positions), so there is no :line suffix
 		// (whole-deck-validation).
-		want := `slides/3-columns.md › columns[2] › blocks[1] › lable: unknown field "lable" — did you mean "label"?`
+		want := displayFile("slides/3-columns.md") + ` › columns[2] › blocks[1] › lable: unknown field "lable" — did you mean "label"?`
 		if got := Format(verr); got != want {
 			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 		}
@@ -183,7 +185,7 @@ func TestValidateIntegration(t *testing.T) {
 		// The max is counted per parent instance: the error is positioned on
 		// the offending child heading and its path is the parent instance's
 		// chain extended by the bare child name, without a child index.
-		want := `slides/3-columns.md:48 › columns[2] › blocks: section "blocks": at most 2 allowed, found 3`
+		want := displayFile("slides/3-columns.md") + `:48 › columns[2] › blocks: section "blocks": at most 2 allowed, found 3`
 		if got := Format(verr); got != want {
 			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 		}
@@ -200,7 +202,7 @@ func TestValidateIntegration(t *testing.T) {
 		// max_paragraphs, so the body rule is reported as the implied `body`
 		// field with the enclosing instance chain prepended: the nested
 		// instance's `blocks[0]` under `columns[0]` (nested-section-validation).
-		want := `slides/3-columns.md:17 › columns[0] › blocks[0] › body: max_paragraphs: the body has 2 paragraphs, maximum is 1 — shorten the body to at most 1 paragraphs`
+		want := displayFile("slides/3-columns.md") + `:17 › columns[0] › blocks[0] › body: max_paragraphs: the body has 2 paragraphs, maximum is 1 — shorten the body to at most 1 paragraphs`
 		if got := Format(verr); got != want {
 			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 		}
@@ -217,7 +219,7 @@ func TestValidateIntegration(t *testing.T) {
 		// positioned in the body and carries the enclosing instance chain as
 		// its path, with no `body` segment (the issue is the section's body
 		// itself): `columns[0] › blocks[0]` (nested-section-validation).
-		want := `slides/3-columns.md:17 › columns[0] › blocks[0]: block quotes are not allowed — remove the > quote markers and keep the text in the body`
+		want := displayFile("slides/3-columns.md") + `:17 › columns[0] › blocks[0]: block quotes are not allowed — remove the > quote markers and keep the text in the body`
 		if got := Format(verr); got != want {
 			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 		}
@@ -234,7 +236,7 @@ func TestValidateIntegration(t *testing.T) {
 				"kalide.yaml":       "navigation: diagonal\n",
 				"slides/1-title.md": builtinTitleExample,
 			},
-			want: `kalide.yaml:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
+			want: displayFile("kalide.yaml") + `:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
 		},
 		{
 			name: "filename error",
@@ -242,7 +244,7 @@ func TestValidateIntegration(t *testing.T) {
 				"kalide.yaml":         "title: T\n",
 				"slides/notaslide.md": "not a slide\n",
 			},
-			want: "slides/notaslide.md: filename must be <number>[letter]-<label>.md",
+			want: displayFile("slides/notaslide.md") + ": filename must be <number>[letter]-<label>.md",
 		},
 		{
 			name: "frontmatter field error",
@@ -250,7 +252,7 @@ func TestValidateIntegration(t *testing.T) {
 				"kalide.yaml":   "title: T\n",
 				"slides/1-a.md": "---\ntemplate: content\n---\n\nbody.\n\n# columns\n\nA\n\n# columns\n\nB\n",
 			},
-			want: `slides/1-a.md › heading: required: field "heading" is required but missing — add a heading: value`,
+			want: displayFile("slides/1-a.md") + ` › heading: required: field "heading" is required but missing — add a heading: value`,
 		},
 		{
 			name: "body rule error",
@@ -258,7 +260,7 @@ func TestValidateIntegration(t *testing.T) {
 				"kalide.yaml":   "title: T\n",
 				"slides/1-a.md": "---\ntemplate: content\nheading: H\n---\n\none.\n\ntwo.\n\nthree.\n\n# columns\n\nA\n\n# columns\n\nB\n",
 			},
-			want: "slides/1-a.md:5 › body: max_paragraphs: the body has 3 paragraphs, maximum is 2 — shorten the body to at most 2 paragraphs",
+			want: displayFile("slides/1-a.md") + ":5 › body: max_paragraphs: the body has 3 paragraphs, maximum is 2 — shorten the body to at most 2 paragraphs",
 		},
 		{
 			name: "inter-slide link error",
@@ -266,7 +268,7 @@ func TestValidateIntegration(t *testing.T) {
 				"kalide.yaml":          "title: T\n",
 				"slides/1-overview.md": "---\ntemplate: content\nheading: H\n---\n\nSee [x](#zzz).\n\n# columns\n\nA\n\n# columns\n\nB\n",
 			},
-			want: `slides/1-overview.md:6: unknown link label "zzz" — use the label of one of the deck's slides`,
+			want: displayFile("slides/1-overview.md") + `:6: unknown link label "zzz" — use the label of one of the deck's slides`,
 		},
 	}
 
@@ -640,7 +642,7 @@ func TestValidateIntegrationFixtureLibrary(t *testing.T) {
 		if !invalid {
 			t.Fatal("Validate() invalid = false, want the missing title field to fail")
 		}
-		want := `slides/1-hello.md › title: required: field "title" is required but missing — add a title: value`
+		want := displayFile("slides/1-hello.md") + ` › title: required: field "title" is required but missing — add a title: value`
 		if got := Format(verr); got != want {
 			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 		}

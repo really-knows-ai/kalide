@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 	"github.com/really-knows-ai/kalide/internal/validate"
@@ -1280,5 +1281,34 @@ func assertNothingWritten(t *testing.T, dir string) {
 	t.Helper()
 	if _, err := os.Lstat(dir); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("directory %s exists after a failed init (stat err = %v), want nothing written", dir, err)
+	}
+}
+
+// TestWriteHelloSeedNativeErrorPath pins writeHelloSeed's error spelling: a
+// blocked nested seed directory is reported in the host OS's native separator,
+// not the embedded seed's forward-slash path (native-display-paths). It calls
+// writeHelloSeed directly, since Init refuses a pre-existing templates/ before
+// the copy runs.
+func TestWriteHelloSeedNativeErrorPath(t *testing.T) {
+	dir := t.TempDir()
+	// Block a nested seed directory with a regular file, so the walk's MkdirAll
+	// for that directory fails and the error names the seed-relative path.
+	const blocked = "templates/slides"
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, filepath.FromSlash(blocked))), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(blocked)), []byte("not a directory\n"), 0o644); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+
+	err := writeHelloSeed(dir)
+	if err == nil {
+		t.Fatalf("writeHelloSeed(%s) error = nil, want the blocked nested directory to fail", dir)
+	}
+	if want := "init: create " + displaypath.Display("", blocked); !strings.Contains(err.Error(), want) {
+		t.Errorf("writeHelloSeed error = %q, want it to name the native path %q", err, want)
+	}
+	if native := filepath.FromSlash(blocked); native != blocked && strings.Contains(err.Error(), "init: create "+blocked) {
+		t.Errorf("writeHelloSeed error = %q, want the native %q, not the forward-slash identity", err, native)
 	}
 }

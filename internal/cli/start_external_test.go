@@ -40,7 +40,7 @@ func TestStartExternalLibrary(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(start) stdout = %q, want empty (nothing served)", stdout)
 		}
-		want := filepath.Join(parent, "nope")
+		want := filepath.Join(canonicalPath(t, parent), "nope")
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("Run(start) stderr = %q, want it to name the resolved path %q", stderr, want)
 		}
@@ -60,7 +60,7 @@ func TestStartExternalLibrary(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(start) stdout = %q, want empty (nothing served)", stdout)
 		}
-		want := filepath.Join(libDir, "library.yaml")
+		want := filepath.Join(canonicalPath(t, libDir), "library.yaml")
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("Run(start) stderr = %q, want it to name the resolved path %q", stderr, want)
 		}
@@ -112,7 +112,7 @@ func TestStartExternalLibrary(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(start) stdout = %q, want empty (nothing served)", stdout)
 		}
-		want := filepath.Join(libDir, "themes", "default", "theme.css")
+		want := filepath.Join(canonicalPath(t, libDir), "themes", "default", "theme.css")
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("Run(start) stderr = %q, want it to name the resolved theme path %q", stderr, want)
 		}
@@ -173,11 +173,24 @@ func TestStartExternalLibrary(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(templates) stdout = %q, want empty", stdout)
 		}
-		want := filepath.Join(parent, "nope")
+		want := filepath.Join(canonicalPath(t, parent), "nope")
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("Run(templates) stderr = %q, want it to name the resolved path %q", stderr, want)
 		}
 	})
+}
+
+// canonicalPath resolves symlinks so an expectation matches the canonical deck
+// root runStart/runTemplates derive through displaypath.CanonicalRoot: on macOS
+// a /var temp dir becomes /private/var, so the resolved library path is reported
+// under the canonical parent.
+func canonicalPath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%s): %v", path, err)
+	}
+	return resolved
 }
 
 // newExternalCLIDeck writes a real deck at <parent>/deck whose kalide.yaml sets

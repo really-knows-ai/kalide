@@ -30,7 +30,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // TestUpgradeRestoresMigratedThenInvalidLibrary proves Upgrade's end-to-end undo
@@ -178,4 +182,65 @@ func TestUpgradeMigratesAgentGuide(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestRefreshUndoRevertNativePath pins the rollback error's path spelling: a
+// refreshed path the undo never recorded is reported in the host OS's native
+// separator, not the forward-slash identity path the undo keys by
+// (native-display-paths). It drives refreshUndo.revert directly, since the
+// unrecorded path is the reachable failure at this point.
+func TestRefreshUndoRevertNativePath(t *testing.T) {
+	root := t.TempDir()
+	undo := &refreshUndo{root: root, originals: map[string]undoOriginal{}}
+	const rel = "templates/slides/hello/template.yaml"
+	cause := errors.New("synthetic refresh failure")
+
+	err := undo.revert([]string{rel}, cause)
+	if err == nil {
+		t.Fatalf("revert(%q) error = nil, want the unrecorded path reported", rel)
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("revert(%q) error = %v, want it to wrap the cause", rel, err)
+	}
+	if want := displaypath.Display("", rel); !strings.Contains(err.Error(), want) {
+		t.Errorf("revert error = %q, want it to name the native path %q", err, want)
+	}
+	if !strings.Contains(err.Error(), "not recorded before the refresh") {
+		t.Errorf("revert error = %q, want the unrecorded-path reason", err)
+	}
+}
+
+// TestRefreshUndoRevertRestoreErrorNativePath pins the rollback error's spelling
+// when a restore actually fails on disk: the blocked parent directory is named
+// in the host OS's native separator, never slash-normalised
+// (native-display-paths).
+func TestRefreshUndoRevertRestoreErrorNativePath(t *testing.T) {
+	root := t.TempDir()
+	const rel = "templates/slides/hello/template.yaml"
+	// Block the member's parent directory with a regular file, so the restore's
+	// MkdirAll fails and the failure names the native parent path.
+	blocker := filepath.Join(root, "templates", "slides")
+	if err := os.MkdirAll(filepath.Dir(blocker), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(blocker, []byte("not a directory\n"), 0o644); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+
+	undo := &refreshUndo{root: root, originals: map[string]undoOriginal{
+		rel: {existed: true, data: []byte("old\n"), mode: 0o644, modTime: time.Now()},
+	}}
+	cause := errors.New("synthetic refresh failure")
+
+	err := undo.revert([]string{rel}, cause)
+	if err == nil {
+		t.Fatalf("revert(%q) error = nil, want the blocked restore reported", rel)
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("revert(%q) error = %v, want it to wrap the cause", rel, err)
+	}
+	target := filepath.Join(root, filepath.FromSlash(rel))
+	if want := "create " + filepath.Dir(target); !strings.Contains(err.Error(), want) {
+		t.Errorf("revert error = %q, want it to name the native parent %q", err, want)
+	}
 }

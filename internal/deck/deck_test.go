@@ -9,6 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
@@ -71,6 +72,11 @@ func wantErr(t *testing.T, err error, wants ...string) {
 		}
 	}
 }
+
+// displaySlide renders a forward-slash deck-relative slide path in the host
+// OS's native spelling — the form the positioned loaders show
+// (native-display-paths). A Slide.Path stays the forward-slash identity.
+func displaySlide(rel string) string { return displaypath.Display("", rel) }
 
 func testLoadConfig(t *testing.T) {
 	themes := testThemes(t)
@@ -563,7 +569,7 @@ func testLoadSlides(t *testing.T) {
 			"01-intro.txt",
 		} {
 			_, err := LoadSlides(slideFS(name), SlidesDir)
-			wantErr(t, err, path.Join(SlidesDir, name), "filename must be <number>[letter]-<label>.md")
+			wantErr(t, err, displaySlide(path.Join(SlidesDir, name)), "filename must be <number>[letter]-<label>.md")
 			if strings.Contains(err.Error(), ":0") {
 				t.Errorf("filename error %q must be positioned by path only", err.Error())
 			}
@@ -572,7 +578,7 @@ func testLoadSlides(t *testing.T) {
 
 	t.Run("over-large slide number is rejected", func(t *testing.T) {
 		_, err := LoadSlides(slideFS("99999999999999999999-big.md"), SlidesDir)
-		wantErr(t, err, path.Join(SlidesDir, "99999999999999999999-big.md"), "too large")
+		wantErr(t, err, displaySlide(path.Join(SlidesDir, "99999999999999999999-big.md")), "too large")
 	})
 
 	t.Run("numeric ordering puts 10 after 9", func(t *testing.T) {
@@ -655,27 +661,27 @@ func testLoadSlides(t *testing.T) {
 
 	t.Run("duplicate number names both files", func(t *testing.T) {
 		_, err := LoadSlides(slideFS("1-alpha.md", "1-beta.md"), SlidesDir)
-		wantErr(t, err, "slides/1-beta.md", "duplicate slide number 1", "also in slides/1-alpha.md")
+		wantErr(t, err, displaySlide("slides/1-beta.md"), "duplicate slide number 1", "also in "+displaySlide("slides/1-alpha.md"))
 	})
 
 	t.Run("duplicate number+letter names both files", func(t *testing.T) {
 		_, err := LoadSlides(slideFS("1-main.md", "1a-x.md", "1a-y.md"), SlidesDir)
-		wantErr(t, err, "slides/1a-y.md", "duplicate vertical slide 1a", "also in slides/1a-x.md")
+		wantErr(t, err, displaySlide("slides/1a-y.md"), "duplicate vertical slide 1a", "also in "+displaySlide("slides/1a-x.md"))
 	})
 
 	t.Run("orphan letter names the file", func(t *testing.T) {
 		_, err := LoadSlides(slideFS("2-intro.md", "1a-detail.md"), SlidesDir)
-		wantErr(t, err, "slides/1a-detail.md", "vertical slide 1a has no numbered slide 1")
+		wantErr(t, err, displaySlide("slides/1a-detail.md"), "vertical slide 1a has no numbered slide 1")
 	})
 
 	t.Run("duplicate label names both files", func(t *testing.T) {
 		_, err := LoadSlides(slideFS("1-team.md", "2-team.md"), SlidesDir)
-		wantErr(t, err, "slides/2-team.md", `duplicate label "team"`, "also in slides/1-team.md")
+		wantErr(t, err, displaySlide("slides/2-team.md"), `duplicate label "team"`, "also in "+displaySlide("slides/1-team.md"))
 	})
 
 	t.Run("duplicate label across vertical and horizontal names both files", func(t *testing.T) {
 		_, err := LoadSlides(slideFS("1-main.md", "1a-team.md", "2-team.md"), SlidesDir)
-		wantErr(t, err, "slides/2-team.md", `duplicate label "team"`, "also in slides/1a-team.md")
+		wantErr(t, err, displaySlide("slides/2-team.md"), `duplicate label "team"`, "also in "+displaySlide("slides/1a-team.md"))
 	})
 
 	t.Run("nested directory entries are ignored", func(t *testing.T) {

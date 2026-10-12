@@ -1564,3 +1564,44 @@ func TestRefreshScaffoldAgentGuidePointer(t *testing.T) {
 		}
 	})
 }
+
+// TestWriteMemberNativeErrorPath pins writeMember's error spelling: the path it
+// names is the host's native operating-system path (the path the author can
+// open), never the slash-normalised identity spelling. A target that is a
+// directory drives the `upgrade: write` branch; a regular file blocking the
+// member's parent drives the `upgrade: create` branch (native-display-paths).
+func TestWriteMemberNativeErrorPath(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("write error names the native target", func(t *testing.T) {
+		target := filepath.Join(dir, "templates", "slides", "hello", "template.yaml")
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", target, err)
+		}
+		err := writeMember(target, []byte("data"))
+		if err == nil {
+			t.Fatalf("writeMember(%s) error = nil, want writing over a directory to fail", target)
+		}
+		if want := "upgrade: write " + target; !strings.Contains(err.Error(), want) {
+			t.Errorf("writeMember error = %q, want it to name the native target %q", err, want)
+		}
+		if slash := filepath.ToSlash(target); slash != target && strings.Contains(err.Error(), "upgrade: write "+slash) {
+			t.Errorf("writeMember error = %q, want the native %q, not the slash-normalised %q", err, target, slash)
+		}
+	})
+
+	t.Run("create error names the native parent", func(t *testing.T) {
+		// A regular file blocks the member's parent directory, so MkdirAll
+		// fails and the message names the native parent path.
+		blocker := filepath.Join(dir, "blocker")
+		refreshWrite(t, blocker, []byte("not a directory\n"))
+		target := filepath.Join(blocker, "member.txt")
+		err := writeMember(target, []byte("data"))
+		if err == nil {
+			t.Fatalf("writeMember(%s) error = nil, want the blocked parent to fail", target)
+		}
+		if want := "upgrade: create " + filepath.Dir(target); !strings.Contains(err.Error(), want) {
+			t.Errorf("writeMember error = %q, want it to name the native parent %q", err, want)
+		}
+	})
+}

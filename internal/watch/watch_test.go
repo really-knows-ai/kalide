@@ -406,6 +406,7 @@ func expectPath(t *testing.T, ev watch.Event, want string) {
 	t.Helper()
 	for _, p := range ev.Paths {
 		if p == want {
+			assertForwardSlashKey(t, p)
 			return
 		}
 	}
@@ -418,10 +419,23 @@ func expectPathPrefix(t *testing.T, ev watch.Event, prefix string) {
 	t.Helper()
 	for _, p := range ev.Paths {
 		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			assertForwardSlashKey(t, p)
 			return
 		}
 	}
 	t.Fatalf("event paths %v do not contain %q or a path under it", ev.Paths, prefix)
+}
+
+// assertForwardSlashKey pins watch.rel's identity contract: an event path is a
+// deck-relative key using forward slashes on every OS, never the host's native
+// separator. fsnotify hands the watcher OS paths and rel slash-normalises them
+// (filepath.ToSlash); this guards against a "native display" change that would
+// convert that key back to backslashes on Windows (native-display-paths).
+func assertForwardSlashKey(t *testing.T, p string) {
+	t.Helper()
+	if os.PathSeparator != '/' && strings.ContainsRune(p, os.PathSeparator) {
+		t.Fatalf("watch event path %q uses the host separator %q; want a forward-slash identity key", p, string(os.PathSeparator))
+	}
 }
 
 // nonLoopbackIPv4 returns the machine's non-loopback IPv4 addresses, so the

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // fakeTemplate is one fake catalogue entry: a template's usage and, for
@@ -145,7 +147,10 @@ func wantParseError(t *testing.T, err error, file string, line int, wants ...str
 		t.Fatalf("Parse error = %s:%d: %s; want %s:%d", pe.File, pe.Line, pe.Msg, file, line)
 	}
 	if line > 0 {
-		want := fmt.Sprintf("%s:%d", file, line)
+		// pe.File stays the forward-slash identity; ParseError.Error renders
+		// it in the host OS's native spelling at the display boundary
+		// (native-display-paths), so the expectation is built the same way.
+		want := fmt.Sprintf("%s:%d", displaypath.Display("", file), line)
 		if pe.Path != "" {
 			want += " › " + pe.Path
 		}

@@ -15,6 +15,7 @@ package cli
 // never written to.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,33 @@ func TestInitLibraryCommand(t *testing.T) {
 			t.Errorf("stat themes/default/theme.css after init-library: %v, want created", err)
 		} else if fi.IsDir() {
 			t.Errorf("themes/default/theme.css is a directory, want a file")
+		}
+	})
+
+	t.Run("success names the canonicalised native library root", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		// Pre-create the target so it resolves (EvalSymlinks): on macOS a /var
+		// temp dir becomes /private/var, and runInitLibrary names the
+		// canonical, resolved spelling of the directory it wrote.
+		target := filepath.Join(dir, "my-lib")
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		code, stdout, stderr := runCLI("init-library", "my-lib")
+		if code != 0 {
+			t.Fatalf("Run(init-library my-lib) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(init-library my-lib) stderr = %q, want empty", stderr)
+		}
+		wantRoot, err := filepath.EvalSymlinks(target)
+		if err != nil {
+			t.Fatalf("EvalSymlinks(%s): %v", target, err)
+		}
+		if want := fmt.Sprintf(initLibraryCreatedMessage, wantRoot); stdout != want {
+			t.Fatalf("Run(init-library my-lib) stdout =\n  %q\nwant\n  %q", stdout, want)
 		}
 	})
 
