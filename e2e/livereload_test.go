@@ -31,6 +31,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -89,8 +90,11 @@ now broken
 
 // wantBrokenError is the single formatted first error (validate.Format) the
 // broken deck produces: the title field is required and missing. The browser
-// error page and the terminal print this identical string.
-const wantBrokenError = `slides/2-agenda.md › title: required: field "title" is required but missing — add a title: value`
+// error page and the terminal print this identical string. The slide's location
+// is shown in the host OS's native spelling (native-display-paths), so the path
+// is built through filepath.FromSlash rather than a slash-spelled literal.
+var wantBrokenError = filepath.FromSlash("slides/2-agenda.md") +
+	` › title: required: field "title" is required but missing — add a title: value`
 
 // helloTemplateYAML and helloLayoutTmpl are the seed's own
 // templates/slides/hello manifest and layout (internal/scaffold/seed), kept

@@ -42,8 +42,8 @@ import (
 	"fmt"
 	"html"
 	"os"
-	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -525,9 +525,10 @@ func TestExternalLibraryLayeredOverLocal(t *testing.T) {
 	h.WriteFile("templates/slides/external-notice/example.md", []byte("# external-notice\n"))
 	h.WriteFile("templates/media/local-logo.svg", []byte(localLogoMarkup))
 
-	// The loader builds each carrying path with path.Join from the layer root
-	// the running process resolves (getcwd canonicalises macOS /var ->
-	// /private/var), so resolve the roots the same way before comparing.
+	// The loader resolves each carrying layer root the way the running
+	// process does (getcwd canonicalises macOS /var -> /private/var), so the
+	// expected manifests are the EvalSymlinks-resolved roots joined with the
+	// host OS's native separator (native-display-paths).
 	externalManifest := layeredLayerManifestPath(t, h, "../shared-lib", "sections", "external-notice")
 	localManifest := layeredLayerManifestPath(t, h, "templates", "slides", "external-notice")
 
@@ -543,6 +544,8 @@ func TestExternalLibraryLayeredOverLocal(t *testing.T) {
 	if !strings.Contains(errBody, "Deck error") || !strings.Contains(errBody, "error-page__message") {
 		t.Errorf("served page is not the full-page error shell after the duplicate:\n%s", errBody)
 	}
+	// The error page is HTML, so the message and the paths it names are
+	// HTML-escaped: compare and extract against the unescaped text.
 	unescaped := html.UnescapeString(errBody)
 	for _, want := range []string{
 		`template "external-notice" is declared in both`,
@@ -552,6 +555,57 @@ func TestExternalLibraryLayeredOverLocal(t *testing.T) {
 		if !strings.Contains(unescaped, want) {
 			t.Errorf("duplicate-name error does not name %q:\n%s", want, unescaped)
 		}
+	}
+
+	// The duplicate-name error names both carrying files. Rather than trust a
+	// slash-spelled string, extract the two paths it names and confirm each
+	// identifies its real manifest by file identity (native-display-paths AC 2).
+	named := duplicateErrorNamedPaths(t, unescaped)
+	externalInfo, err := os.Stat(externalManifest)
+	if err != nil {
+		t.Fatalf("stat external manifest %q: %v", externalManifest, err)
+	}
+	localInfo, err := os.Stat(localManifest)
+	if err != nil {
+		t.Fatalf("stat local manifest %q: %v", localManifest, err)
+	}
+	var namedExternal, namedLocal bool
+	for _, namedPath := range named {
+		if runtime.GOOS == "windows" {
+			// AC 1: a native on-disk path uses backslashes only and the long
+			// name of every directory — never a forward slash or an 8.3 short
+			// segment such as RUNNER~1.
+			if strings.ContainsRune(namedPath, '/') {
+				t.Errorf("duplicate-name path %q mixes separators, want backslashes only", namedPath)
+			}
+			for _, segment := range strings.Split(namedPath, `\`) {
+				if strings.Contains(segment, "~") {
+					t.Errorf("duplicate-name path %q carries an 8.3 short-name segment %q", namedPath, segment)
+				}
+			}
+		}
+		info, err := os.Stat(namedPath)
+		if err != nil {
+			t.Errorf("duplicate-name path %q does not identify a file: %v", namedPath, err)
+			continue
+		}
+		switch {
+		case os.SameFile(info, externalInfo):
+			namedExternal = true
+		case os.SameFile(info, localInfo):
+			namedLocal = true
+		default:
+			t.Errorf("duplicate-name path %q is neither the external nor the local manifest:\n%s",
+				namedPath, unescaped)
+		}
+	}
+	if !namedExternal {
+		t.Errorf("duplicate-name error does not name the external layer's manifest %q:\n%s",
+			externalManifest, unescaped)
+	}
+	if !namedLocal {
+		t.Errorf("duplicate-name error does not name the local layer's manifest %q:\n%s",
+			localManifest, unescaped)
 	}
 
 	// Removing the duplicate recovers the deck: the reload re-merges both
@@ -644,11 +698,10 @@ func assertLayeredExternalPage(t *testing.T, body string) {
 // layeredLayerManifestPath returns the manifest path the merged loader reports
 // for a template carried by the layer at layerRel (relative to the harness
 // working directory): the layer root resolved to the canonical path the running
-// binary's os.Getwd reports, joined with the template's kind directory and
-// name. The loader builds that path with path.Join, which joins with forward
-// slashes and cleans the `/` segments it joins in, but does NOT translate
-// backslashes: where the layer root is a Windows path its own backslashes are
-// preserved, so the reported path is not forward-slash-only there.
+// binary's os.Getwd reports, joined natively with the template's kind directory
+// and name. The loader shows that path with the host OS's separator
+// (displaypath.Display), so filepath.Join — not path.Join — reproduces it on
+// every OS (native-display-paths).
 func layeredLayerManifestPath(t *testing.T, h *Harness, layerRel, kindDir, name string) string {
 	t.Helper()
 
@@ -656,5 +709,44 @@ func layeredLayerManifestPath(t *testing.T, h *Harness, layerRel, kindDir, name 
 	if err != nil {
 		t.Fatalf("resolve library layer root %s: %v", layerRel, err)
 	}
-	return path.Join(root, kindDir, name, "template.yaml")
+	return filepath.Join(root, kindDir, name, "template.yaml")
+}
+
+// duplicateErrorNamedPaths extracts the two file paths the duplicate-name error
+// page names. body is the page's HTML with HTML entities already unescaped; the
+// single error text is rendered inside <pre class="error-page__message">…</pre>
+// and reads
+//
+//	<path 0>: template "<name>" is declared in both <path 0> and <path 1>
+//
+// so the two named paths are the two operands of the message's " and ". It
+// fails the test when the page or message does not have that shape.
+func duplicateErrorNamedPaths(t *testing.T, body string) [2]string {
+	t.Helper()
+
+	const (
+		messageOpen = `<pre class="error-page__message">`
+		messageEnd  = `</pre>`
+		declared    = ` is declared in both `
+	)
+	open := strings.Index(body, messageOpen)
+	if open < 0 {
+		t.Fatalf("error page has no %s element:\n%s", messageOpen, body)
+	}
+	rest := body[open+len(messageOpen):]
+	end := strings.Index(rest, messageEnd)
+	if end < 0 {
+		t.Fatalf("error page's %s element is unterminated:\n%s", messageOpen, body)
+	}
+	message := rest[:end]
+
+	at := strings.Index(message, declared)
+	if at < 0 {
+		t.Fatalf("duplicate-name error does not carry %q:\n%s", declared, message)
+	}
+	first, second, ok := strings.Cut(message[at+len(declared):], " and ")
+	if !ok {
+		t.Fatalf("duplicate-name error does not name two paths:\n%s", message)
+	}
+	return [2]string{first, second}
 }
