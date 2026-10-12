@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -551,7 +552,7 @@ func LibraryMetaKeys() []string {
 // match the library naming convention, description is optional, and format
 // is a required integer whose only currently accepted value is 1.
 func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
-	metaPath := path.Join(root, LibraryFile)
+	metaPath := displaypath.Display(root, LibraryFile)
 	data, err := fs.ReadFile(sub, LibraryFile)
 	if err != nil {
 		return libraryErrorf(metaPath, 0, "%s not found", LibraryFile).
@@ -657,9 +658,11 @@ func checkCrossKindNames(root string, slideNames, sectionNames []string) error {
 	}
 	for _, name := range slideNames {
 		if _, dup := sections[name]; dup {
-			return libraryErrorf(path.Join(root, SlidesDir, name), 0,
+			slidePath := displaypath.Display(root, path.Join(SlidesDir, name))
+			sectionPath := displaypath.Display(root, path.Join(SectionsDir, name))
+			return libraryErrorf(slidePath, 0,
 				"template %q is declared in both %s and %s",
-				name, path.Join(root, SlidesDir, name), path.Join(root, SectionsDir, name))
+				name, slidePath, sectionPath)
 		}
 	}
 	return nil
@@ -676,33 +679,33 @@ var usageKeyPattern = regexp.MustCompile(`(?m)^usage\s*:`)
 // html/template with only the documented func set.
 func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, name string, funcMap htmltemplate.FuncMap) (*LibraryTemplate, error) {
 	dir := path.Join(kindDir, name)
-	displayDir := path.Join(root, dir)
+	displayDir := displaypath.Display(root, dir)
 
 	manifestRel := path.Join(dir, ManifestFile)
 	manifest, err := fs.ReadFile(sub, manifestRel)
 	if err != nil {
-		return nil, libraryErrorf(path.Join(root, manifestRel), 0, "%s not found", ManifestFile)
+		return nil, libraryErrorf(displaypath.Display(root, manifestRel), 0, "%s not found", ManifestFile)
 	}
 
 	layoutRel := path.Join(dir, LayoutFile)
 	layoutText, err := fs.ReadFile(sub, layoutRel)
 	if err != nil {
-		return nil, libraryErrorf(path.Join(root, layoutRel), 0, "%s not found", LayoutFile)
+		return nil, libraryErrorf(displaypath.Display(root, layoutRel), 0, "%s not found", LayoutFile)
 	}
 
 	exampleRel := path.Join(dir, ExampleFile)
 	example, err := fs.ReadFile(sub, exampleRel)
 	if err != nil {
-		return nil, libraryErrorf(path.Join(root, exampleRel), 0, "%s not found", ExampleFile)
+		return nil, libraryErrorf(displaypath.Display(root, exampleRel), 0, "%s not found", ExampleFile)
 	}
 
 	var probe yaml.Node
 	if err := yaml.Unmarshal(manifest, &probe); err != nil {
-		return nil, libraryErrorf(path.Join(root, manifestRel), 0, "%s: %v", ManifestFile, err)
+		return nil, libraryErrorf(displaypath.Display(root, manifestRel), 0, "%s: %v", ManifestFile, err)
 	}
 	if loc := usageKeyPattern.FindIndex(manifest); loc != nil {
 		line := 1 + strings.Count(string(manifest[:loc[0]]), "\n")
-		return nil, libraryErrorf(path.Join(root, manifestRel), line,
+		return nil, libraryErrorf(displaypath.Display(root, manifestRel), line,
 			"%s must not declare a %q key; usage is derived from its directory (%s)", ManifestFile, "usage", kindDir)
 	}
 
@@ -712,7 +715,7 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 	// writes in a `{{ template "<name>" . }}` action. LayoutPath keeps the
 	// root-joined on-disk path, carried for error display only.
 	layoutName := layoutRel
-	layoutPath := path.Join(root, layoutRel)
+	layoutPath := displaypath.Display(root, layoutRel)
 	// The layout is the whole namespace at this step, so its name is the only
 	// one a Go error prefix can carry; map it to the on-disk path for display.
 	resolve := namespaceLayoutResolver(layoutName, layoutPath)
@@ -725,12 +728,12 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 		Name:          name,
 		Kind:          kind,
 		Dir:           dir,
-		ManifestPath:  displayDir + "/" + ManifestFile,
+		ManifestPath:  displaypath.Display(displayDir, ManifestFile),
 		ManifestBytes: manifest,
 		LayoutPath:    layoutPath,
 		LayoutText:    string(layoutText),
 		Layout:        parsed,
-		ExamplePath:   displayDir + "/" + ExampleFile,
+		ExamplePath:   displaypath.Display(displayDir, ExampleFile),
 		ExampleBytes:  example,
 	}, nil
 }
@@ -743,13 +746,13 @@ func loadLibraryTheme(sub fs.FS, root, name string) (*LibraryTheme, error) {
 	stylesheetRel := path.Join(dir, ThemeStylesheet)
 	css, err := fs.ReadFile(sub, stylesheetRel)
 	if err != nil {
-		return nil, libraryErrorf(path.Join(root, stylesheetRel), 0, "%s not found", ThemeStylesheet)
+		return nil, libraryErrorf(displaypath.Display(root, stylesheetRel), 0, "%s not found", ThemeStylesheet)
 	}
 
 	th := &LibraryTheme{
 		Name:            name,
 		Dir:             dir,
-		StylesheetPath:  path.Join(root, stylesheetRel),
+		StylesheetPath:  displaypath.Display(root, stylesheetRel),
 		StylesheetBytes: css,
 		Files:           make(map[string][]byte),
 	}
@@ -772,7 +775,7 @@ func loadLibraryTheme(sub fs.FS, root, name string) (*LibraryTheme, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, libraryErrorf(path.Join(root, dir), 0, "read theme directory: %v", err)
+		return nil, libraryErrorf(displaypath.Display(root, dir), 0, "read theme directory: %v", err)
 	}
 	return th, nil
 }
@@ -1091,7 +1094,7 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 			return libraryErrorf(displayPath, line,
 				"@import %q: unknown theme %q", target, name)
 		}
-		dir := path.Join(s.root, owner.Dir)
+		dir := displaypath.Display(s.root, owner.Dir)
 		if path.IsAbs(sub) || strings.HasPrefix(sub, "/") {
 			return libraryErrorf(displayPath, line,
 				"@import %q: path %q must be relative to theme directory %s, not absolute",
@@ -1134,7 +1137,7 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 		importRel := path.Clean(path.Join(path.Dir(rel), target))
 		if importRel == ".." || strings.HasPrefix(importRel, "../") || path.IsAbs(importRel) {
 			return libraryErrorf(displayPath, line,
-				"@import %q escapes %s %s", target, desc, path.Join(s.root, s.tree))
+				"@import %q escapes %s %s", target, desc, displaypath.Display(s.root, s.tree))
 		}
 		if s.tree == MediaDir {
 			if s.mediaFS == nil {
@@ -1144,7 +1147,7 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 			b, readErr := fs.ReadFile(s.mediaFS, importRel)
 			if readErr != nil {
 				return libraryErrorf(displayPath, line,
-					"@import %q: file not found inside %s %s", target, desc, path.Join(s.root, s.tree))
+					"@import %q: file not found inside %s %s", target, desc, displaypath.Display(s.root, s.tree))
 			}
 			data = b
 		} else {
@@ -1159,7 +1162,7 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 			}
 			if !exists {
 				return libraryErrorf(displayPath, line,
-					"@import %q: file not found inside %s %s", target, desc, path.Join(s.root, s.tree))
+					"@import %q: file not found inside %s %s", target, desc, displaypath.Display(s.root, s.tree))
 			}
 		}
 		tree, relIn = s.tree, importRel
@@ -1179,7 +1182,7 @@ func (s *themeCSSScanner) checkImport(displayPath, rel string, ref themeCSSRef, 
 			"@import %q: too many imported stylesheets (limit %d)", target, maxThemeCSSImports)
 	}
 	s.visiting[key] = true
-	err := s.scanFile(data, path.Join(s.root, tree, relIn), tree, relIn)
+	err := s.scanFile(data, displaypath.Display(s.root, path.Join(tree, relIn)), tree, relIn)
 	delete(s.visiting, key)
 	if err != nil {
 		return err
@@ -1237,7 +1240,7 @@ func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, lin
 			return libraryErrorf(displayPath, line,
 				"url(%q): unknown theme %q", target, name)
 		}
-		dir := path.Join(s.root, owner.Dir)
+		dir := displaypath.Display(s.root, owner.Dir)
 		if path.IsAbs(sub) || strings.HasPrefix(sub, "/") {
 			return libraryErrorf(displayPath, line,
 				"url(%q): path %q must be relative to theme directory %s, not absolute",
@@ -1279,7 +1282,7 @@ func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, lin
 	urlRel := path.Clean(path.Join(path.Dir(rel), target))
 	if urlRel == ".." || strings.HasPrefix(urlRel, "../") || path.IsAbs(urlRel) {
 		return libraryErrorf(displayPath, line,
-			"url(%q) escapes %s %s", target, desc, path.Join(s.root, s.tree))
+			"url(%q) escapes %s %s", target, desc, displaypath.Display(s.root, s.tree))
 	}
 	if s.tree == MediaDir {
 		if s.mediaFS == nil {
@@ -1294,7 +1297,7 @@ func (s *themeCSSScanner) checkURL(displayPath, rel string, ref themeCSSRef, lin
 	}
 	if !themeOwnsFile(s.themeByTree(s.tree), urlRel) {
 		return libraryErrorf(displayPath, line,
-			"url(%q): file not found inside theme directory %s", target, path.Join(s.root, s.tree))
+			"url(%q): file not found inside theme directory %s", target, displaypath.Display(s.root, s.tree))
 	}
 	return nil
 }
@@ -1364,10 +1367,13 @@ func checkLayoutReferences(root string, t *LibraryTemplate, mediaFS fs.FS) error
 		if ref == "" || isExternalRef(ref) || strings.HasPrefix(ref, "{{") {
 			continue
 		}
-		resolved := path.Clean(path.Join(root, t.Dir, ref))
-		if !strings.HasPrefix(resolved, root+"/") && resolved != root {
+		// Containment is decided on the layer-relative path, so the decision
+		// does not depend on how root is spelled; root only locates the
+		// templates/ tree in the message.
+		rel := path.Clean(path.Join(t.Dir, ref))
+		if rel == ".." || strings.HasPrefix(rel, "../") {
 			return libraryErrorf(t.LayoutPath, 0,
-				"layout reference %q must stay inside %s", ref, root)
+				"layout reference %q must stay inside %s", ref, displaypath.Display(root, ""))
 		}
 	}
 	for _, m := range mediaCallPattern.FindAllStringSubmatch(t.LayoutText, -1) {

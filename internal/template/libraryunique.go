@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"path"
 	"sort"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // This file implements checkLayerUniqueness, the cross-layer half of
@@ -139,7 +141,7 @@ func checkLayerMediaPathUniqueness(layers []*LibraryLayer) error {
 		if layer == nil || !layer.HasMedia || layer.Media == nil {
 			continue
 		}
-		root := path.Join(layer.RootPath, MediaDir)
+		root := displaypath.Display(layer.RootPath, MediaDir)
 		err := fs.WalkDir(layer.Media, ".", func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -147,7 +149,7 @@ func checkLayerMediaPathUniqueness(layers []*LibraryLayer) error {
 			if d.IsDir() {
 				return nil
 			}
-			carriers[p] = append(carriers[p], path.Join(root, p))
+			carriers[p] = append(carriers[p], displaypath.Display(root, p))
 			return nil
 		})
 		if err != nil {
@@ -177,7 +179,7 @@ func layerTemplateCarrierPath(layer *LibraryLayer, lt *LibraryTemplate) string {
 		return lt.ManifestPath
 	}
 	if lt.Dir != "" {
-		return path.Join(layer.RootPath, lt.Dir, ManifestFile)
+		return displaypath.Display(layer.RootPath, path.Join(lt.Dir, ManifestFile))
 	}
 	return layer.RootPath
 }
@@ -191,9 +193,9 @@ func layerThemeCarrierPath(layer *LibraryLayer, th *LibraryTheme) string {
 		return layer.RootPath
 	}
 	if th.Dir != "" {
-		return path.Join(layer.RootPath, th.Dir)
+		return displaypath.Display(layer.RootPath, th.Dir)
 	}
-	return path.Join(layer.RootPath, ThemesDir, th.Name)
+	return displaypath.Display(layer.RootPath, path.Join(ThemesDir, th.Name))
 }
 
 // sortedStringKeys returns m's keys sorted, so a check that iterates a map
