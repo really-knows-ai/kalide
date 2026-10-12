@@ -21,19 +21,23 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
 // initLibraryCreatedPaths are the entries `kalide init-library` advertises and
-// must actually create, spelled as the handler prints them (the empty
-// directories with a trailing slash). The library root itself is the target.
+// must actually create, spelled as the handler prints them: each forward-slash
+// identity path is rendered through displaypath.Display, so the empty
+// directories' trailing marker is the host operating system's native separator
+// (slides\ on Windows, slides/ elsewhere). The library root itself is the
+// target.
 var initLibraryCreatedPaths = []string{
 	"library.yaml",
-	"slides/",
-	"sections/",
-	"media/",
-	"themes/default/theme.css",
+	displaypath.Display("", "slides/"),
+	displaypath.Display("", "sections/"),
+	displaypath.Display("", "media/"),
+	displaypath.Display("", "themes/default/theme.css"),
 }
 
 // TestInitLibraryCommand covers `kalide init-library` from the command surface:
@@ -77,6 +81,10 @@ func TestInitLibraryCommand(t *testing.T) {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("Run(init-library my-lib) stdout = %q, want created path %q", stdout, want)
 			}
+		}
+		// Every reported entry uses one separator spelling only (native).
+		for _, entry := range createdReportEntries(stdout) {
+			assertNoMixedSeparators(t, entry)
 		}
 
 		target := filepath.Join(dir, "my-lib")
@@ -187,6 +195,7 @@ func TestInitLibraryCommand(t *testing.T) {
 				t.Errorf("Run(init-library my-lib) stderr = %q, want refusal mentioning %q", stderr, want)
 			}
 		}
+		assertNoMixedSeparators(t, stderr)
 		if got, err := os.ReadFile(filepath.Join(target, "library.yaml")); err != nil || string(got) != sentinel {
 			t.Errorf("library.yaml changed: content = %q, err = %v; want the pre-existing content", got, err)
 		}
@@ -216,11 +225,12 @@ func TestInitLibraryCommand(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(init-library my-lib) stdout = %q, want empty on refusal", stdout)
 		}
-		for _, want := range []string{"init-library:", "slides/", "already present", "never overwrites"} {
+		for _, want := range []string{"init-library:", displaypath.Display("", "slides/"), "already present", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init-library my-lib) stderr = %q, want refusal mentioning %q", stderr, want)
 			}
 		}
+		assertNoMixedSeparators(t, stderr)
 		if got, err := os.ReadFile(filepath.Join(target, "slides", "keep.txt")); err != nil || string(got) != sentinel {
 			t.Errorf("slides/keep.txt changed: content = %q, err = %v; want the pre-existing content", got, err)
 		}

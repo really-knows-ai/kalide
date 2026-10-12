@@ -32,6 +32,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
@@ -183,16 +184,16 @@ func testInitLibraryRefuses(t *testing.T) {
 		isDir   bool
 		display string
 	}{
-		{"existing library.yaml file", template.LibraryFile, false, template.LibraryFile},
-		{"existing library.yaml directory", template.LibraryFile, true, template.LibraryFile},
-		{"existing slides directory", template.SlidesDir, true, template.SlidesDir + "/"},
-		{"existing slides file", template.SlidesDir, false, template.SlidesDir + "/"},
-		{"existing sections directory", template.SectionsDir, true, template.SectionsDir + "/"},
-		{"existing sections file", template.SectionsDir, false, template.SectionsDir + "/"},
-		{"existing themes directory", template.ThemesDir, true, template.ThemesDir + "/"},
-		{"existing themes file", template.ThemesDir, false, template.ThemesDir + "/"},
-		{"existing media directory", template.MediaDir, true, template.MediaDir + "/"},
-		{"existing media file", template.MediaDir, false, template.MediaDir + "/"},
+		{"existing library.yaml file", template.LibraryFile, false, displaypath.Display("", template.LibraryFile)},
+		{"existing library.yaml directory", template.LibraryFile, true, displaypath.Display("", template.LibraryFile)},
+		{"existing slides directory", template.SlidesDir, true, displaypath.Display("", template.SlidesDir+"/")},
+		{"existing slides file", template.SlidesDir, false, displaypath.Display("", template.SlidesDir+"/")},
+		{"existing sections directory", template.SectionsDir, true, displaypath.Display("", template.SectionsDir+"/")},
+		{"existing sections file", template.SectionsDir, false, displaypath.Display("", template.SectionsDir+"/")},
+		{"existing themes directory", template.ThemesDir, true, displaypath.Display("", template.ThemesDir+"/")},
+		{"existing themes file", template.ThemesDir, false, displaypath.Display("", template.ThemesDir+"/")},
+		{"existing media directory", template.MediaDir, true, displaypath.Display("", template.MediaDir+"/")},
+		{"existing media file", template.MediaDir, false, displaypath.Display("", template.MediaDir+"/")},
 	}
 
 	for _, tc := range cases {
@@ -219,6 +220,9 @@ func testInitLibraryRefuses(t *testing.T) {
 			if !strings.Contains(err.Error(), "never overwrites") {
 				t.Errorf("InitLibrary(%s) error = %q, want the never-overwrites refusal", dir, err)
 			}
+			// The refusal spells the blocking entry natively, never mixing the
+			// identity forward slash with the native backslash.
+			assertNoMixedSeparators(t, err.Error())
 
 			if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
 				t.Fatalf("InitLibrary modified the target on refusal:\n before %v\n after  %v", before, after)
@@ -245,12 +249,20 @@ func testInitLibraryNamesAllConflicts(t *testing.T) {
 		t.Fatal("InitLibrary() error = nil, want a refusal naming every blocking entry")
 	}
 	msg := err.Error()
-	want := []string{template.LibraryFile, template.SlidesDir + "/", template.SectionsDir + "/", template.ThemesDir + "/", template.MediaDir + "/"}
+	want := []string{
+		displaypath.Display("", template.LibraryFile),
+		displaypath.Display("", template.SlidesDir+"/"),
+		displaypath.Display("", template.SectionsDir+"/"),
+		displaypath.Display("", template.ThemesDir+"/"),
+		displaypath.Display("", template.MediaDir+"/"),
+	}
 	for _, w := range want {
 		if !strings.Contains(msg, w) {
 			t.Errorf("InitLibrary() error = %q, want it to name %q", msg, w)
 		}
 	}
+	// Every named entry uses one separator spelling only (native).
+	assertNoMixedSeparators(t, msg)
 	last := -1
 	for _, w := range want {
 		i := strings.Index(msg, w)

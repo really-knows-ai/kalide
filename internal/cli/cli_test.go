@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
 // fixtureLibraryDir is the phase-3 fixture library's project root, relative
@@ -149,24 +151,28 @@ func TestRunRoutesCommands(t *testing.T) {
 		}
 		for _, want := range []string{
 			"kalide.yaml",
-			"slides/1-hello.md",
-			"templates/library.yaml",
-			"templates/slides/hello/template.yaml",
-			"templates/themes/default/theme.css",
-			"assets/",
+			displaypath.Display("", "slides/1-hello.md"),
+			displaypath.Display("", "templates/library.yaml"),
+			displaypath.Display("", "templates/slides/hello/template.yaml"),
+			displaypath.Display("", "templates/themes/default/theme.css"),
+			displaypath.Display("", "assets/"),
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("Run(init) stdout = %q, want created path %q", stdout, want)
 			}
 		}
+		// Every reported entry uses one separator spelling only (native).
+		for _, entry := range createdReportEntries(stdout) {
+			assertNoMixedSeparators(t, entry)
+		}
 
 		// The advertised paths must actually exist in the temp dir.
 		for _, created := range []string{
 			"kalide.yaml",
-			"slides/1-hello.md",
-			"templates/library.yaml",
-			"templates/slides/hello/template.yaml",
-			"templates/themes/default/theme.css",
+			filepath.FromSlash("slides/1-hello.md"),
+			filepath.FromSlash("templates/library.yaml"),
+			filepath.FromSlash("templates/slides/hello/template.yaml"),
+			filepath.FromSlash("templates/themes/default/theme.css"),
 			"assets",
 		} {
 			if _, err := os.Stat(filepath.Join(dir, created)); err != nil {
@@ -183,11 +189,12 @@ func TestRunRoutesCommands(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(init) second run stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"kalide.yaml", "slides/", "templates/", "assets/", "never overwrites"} {
+		for _, want := range []string{"kalide.yaml", displaypath.Display("", "slides/"), displaypath.Display("", "templates/"), displaypath.Display("", "assets/"), "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) second run stderr = %q, want refusal mentioning %q", stderr, want)
 			}
 		}
+		assertNoMixedSeparators(t, stderr)
 	})
 
 	t.Run("start validates before serving", func(t *testing.T) {

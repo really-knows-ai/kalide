@@ -33,22 +33,54 @@ import (
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/config"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/validate"
 	"gopkg.in/yaml.v3"
 )
 
 // initCreatedPaths are the entries `kalide init` advertises and must actually
-// create on an empty directory. "assets/" is the printed form; "assets" is the
-// filesystem form.
+// create on an empty directory. Each is a forward-slash, deck-relative identity
+// spelling rendered through displaypath.Display, so the literal a case matches
+// against the created report is the host operating system's native spelling
+// (templates\library.yaml on Windows, templates/library.yaml elsewhere). The
+// empty-directory entry is appended in its printed "assets/" form where the
+// report is checked.
 var initCreatedPaths = []string{
 	"kalide.yaml",
-	"slides/1-hello.md",
-	"templates/library.yaml",
-	"templates/slides/hello/template.yaml",
-	"templates/slides/hello/layout.html.tmpl",
-	"templates/slides/hello/example.md",
-	"templates/themes/default/theme.css",
+	displaypath.Display("", "slides/1-hello.md"),
+	displaypath.Display("", "templates/library.yaml"),
+	displaypath.Display("", "templates/slides/hello/template.yaml"),
+	displaypath.Display("", "templates/slides/hello/layout.html.tmpl"),
+	displaypath.Display("", "templates/slides/hello/example.md"),
+	displaypath.Display("", "templates/themes/default/theme.css"),
+}
+
+// assertNoMixedSeparators fails when a displayed path carries both the
+// forward-slash identity spelling and the backslash native spelling: a correct
+// display path uses exactly one separator character, the host operating
+// system's.
+func assertNoMixedSeparators(t *testing.T, path string) {
+	t.Helper()
+	if strings.Contains(path, "/") && strings.Contains(path, `\`) {
+		t.Errorf("display path %q mixes / and \\ separators, want a single native spelling", path)
+	}
+}
+
+// createdReportEntries returns the path entries of a created report — every
+// non-empty line after the header, with the two-space indent removed — so a
+// test can assert each entry on its own (for example that none mixes
+// separators).
+func createdReportEntries(report string) []string {
+	lines := strings.Split(report, "\n")
+	entries := make([]string, 0, len(lines))
+	for _, line := range lines[1:] {
+		if line == "" {
+			continue
+		}
+		entries = append(entries, strings.TrimPrefix(line, "  "))
+	}
+	return entries
 }
 
 // TestInit covers `kalide init` end to end from the command surface: argument
@@ -156,11 +188,18 @@ func TestInit(t *testing.T) {
 			t.Errorf("Run(init) stdout = %q, want initCreatedMessage %q", stdout, initCreatedMessage)
 		}
 
-		// The success text lists every created path, spelled deck-relative.
-		for _, want := range append(append([]string{}, initCreatedPaths...), "assets/") {
+		// The success text lists every created path, spelled deck-relative
+		// with the host's native separators ("assets/" becomes "assets\" on
+		// Windows).
+		for _, want := range append(append([]string{}, initCreatedPaths...), displaypath.Display("", "assets/")) {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("Run(init) stdout = %q, want created path %q", stdout, want)
 			}
+		}
+		// Every reported entry uses one separator spelling only: it must not
+		// mix the identity forward slash with the native backslash.
+		for _, entry := range createdReportEntries(stdout) {
+			assertNoMixedSeparators(t, entry)
 		}
 
 		// And each advertised path is really on disk.
@@ -199,10 +238,10 @@ func TestInit(t *testing.T) {
 		isDir   bool   // create a directory (with a sentinel inside) vs a file
 		display string // how the refusal names it
 	}{
-		{name: "slides dir exists", path: "slides", isDir: true, display: "slides/"},
-		{name: "templates dir exists", path: "templates", isDir: true, display: "templates/"},
-		{name: "assets dir exists", path: "assets", isDir: true, display: "assets/"},
-		{name: "kalide.yaml file exists", path: "kalide.yaml", isDir: false, display: "kalide.yaml"},
+		{name: "slides dir exists", path: "slides", isDir: true, display: displaypath.Display("", "slides/")},
+		{name: "templates dir exists", path: "templates", isDir: true, display: displaypath.Display("", "templates/")},
+		{name: "assets dir exists", path: "assets", isDir: true, display: displaypath.Display("", "assets/")},
+		{name: "kalide.yaml file exists", path: "kalide.yaml", isDir: false, display: displaypath.Display("", "kalide.yaml")},
 	}
 	for _, b := range blockers {
 		t.Run(b.name, func(t *testing.T) {
@@ -238,6 +277,9 @@ func TestInit(t *testing.T) {
 					t.Errorf("Run(init) stderr = %q, want refusal mentioning %q", stderr, want)
 				}
 			}
+			// The refusal spells every blocking entry natively, never mixing
+			// the forward-slash identity form with the native backslash.
+			assertNoMixedSeparators(t, stderr)
 
 			// The pre-existing entry is untouched...
 			if b.isDir {
@@ -282,11 +324,12 @@ func TestInit(t *testing.T) {
 		if code == 0 {
 			t.Fatal("Run(init) exit = 0 with all deck paths present, want non-zero")
 		}
-		for _, want := range []string{"slides/", "assets/", "kalide.yaml"} {
+		for _, want := range []string{displaypath.Display("", "slides/"), displaypath.Display("", "assets/"), displaypath.Display("", "kalide.yaml")} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) stderr = %q, want all blocking paths named, missing %q", stderr, want)
 			}
 		}
+		assertNoMixedSeparators(t, stderr)
 	})
 
 	t.Run("extra argument is rejected because there is no --force", func(t *testing.T) {
@@ -332,11 +375,12 @@ func TestInit(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("second Run(init) stdout = %q, want empty", stdout)
 		}
-		for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml", "never overwrites"} {
+		for _, want := range []string{displaypath.Display("", "slides/"), displaypath.Display("", "templates/"), displaypath.Display("", "assets/"), displaypath.Display("", "kalide.yaml"), "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("second Run(init) stderr = %q, want refusal mentioning %q", stderr, want)
 			}
 		}
+		assertNoMixedSeparators(t, stderr)
 	})
 
 	t.Run("--local forces the seed even when a configured default is present", func(t *testing.T) {
@@ -360,7 +404,7 @@ func TestInit(t *testing.T) {
 		}
 		// The seed's local templates/ library is written, not the configured
 		// external default.
-		for _, created := range []string{"templates/library.yaml", "slides/1-hello.md"} {
+		for _, created := range []string{displaypath.Display("", "templates/library.yaml"), displaypath.Display("", "slides/1-hello.md")} {
 			if _, err := os.Stat(filepath.Join(dir, created)); err != nil {
 				t.Errorf("stat %s after init --local: %v, want the seed written", created, err)
 			}
@@ -554,14 +598,19 @@ func TestInitExternalLibrary(t *testing.T) {
 		for _, want := range []string{
 			"../shared-lib",
 			"kalide.yaml",
-			"slides/",
-			"assets/",
+			displaypath.Display("", "slides/"),
+			displaypath.Display("", "assets/"),
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("Run(init ../shared-lib) stdout = %q, want created path %q", stdout, want)
 			}
 		}
-		if strings.Contains(stdout, "templates/library.yaml") || strings.Contains(stdout, "slides/1-hello.md") {
+		// Every reported entry is a single native spelling, with no mixed
+		// separators (the library path in the header is left as given).
+		for _, entry := range createdReportEntries(stdout) {
+			assertNoMixedSeparators(t, entry)
+		}
+		if strings.Contains(stdout, displaypath.Display("", "templates/library.yaml")) || strings.Contains(stdout, displaypath.Display("", "slides/1-hello.md")) {
 			t.Errorf("Run(init ../shared-lib) stdout = %q, want no local templates/ or starter-slide entry", stdout)
 		}
 
@@ -1068,11 +1117,12 @@ func TestInitExternalLibrary(t *testing.T) {
 		if stdout != "" {
 			t.Fatalf("Run(init) stdout = %q, want empty on refusal", stdout)
 		}
-		for _, want := range []string{"init:", "templates/", "already present", "never overwrites"} {
+		for _, want := range []string{"init:", displaypath.Display("", "templates/"), "already present", "never overwrites"} {
 			if !strings.Contains(stderr, want) {
 				t.Errorf("Run(init) stderr = %q, want the seed refusal mentioning %q", stderr, want)
 			}
 		}
+		assertNoMixedSeparators(t, stderr)
 		if got, err := os.ReadFile(filepath.Join(dir, "templates", "keep.txt")); err != nil || string(got) != sentinel {
 			t.Errorf("templates/keep.txt = %q, err = %v; want the pre-existing content unchanged", got, err)
 		}
@@ -1110,12 +1160,12 @@ func TestInitExternalLibrary(t *testing.T) {
 		if stderr != "" {
 			t.Fatalf("Run(init) stderr = %q, want empty", stderr)
 		}
-		for _, want := range []string{"templates/library.yaml", "slides/1-hello.md", "templates/themes/default/theme.css"} {
+		for _, want := range []string{displaypath.Display("", "templates/library.yaml"), displaypath.Display("", "slides/1-hello.md"), displaypath.Display("", "templates/themes/default/theme.css")} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("Run(init) stdout = %q, want the seed created path %q", stdout, want)
 			}
 		}
-		for _, created := range []string{"templates/library.yaml", "slides/1-hello.md", "templates/themes/default/theme.css"} {
+		for _, created := range []string{displaypath.Display("", "templates/library.yaml"), displaypath.Display("", "slides/1-hello.md"), displaypath.Display("", "templates/themes/default/theme.css")} {
 			if _, err := os.Stat(filepath.Join(dir, created)); err != nil {
 				t.Errorf("stat %s after no-arg init: %v, want created", created, err)
 			}

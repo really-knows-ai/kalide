@@ -19,6 +19,17 @@ import (
 	"github.com/really-knows-ai/kalide/internal/validate"
 )
 
+// assertNoMixedSeparators fails when a refused path carries both the
+// forward-slash identity spelling and the backslash native spelling: a correct
+// display path uses exactly one separator character, the host operating
+// system's.
+func assertNoMixedSeparators(t *testing.T, path string) {
+	t.Helper()
+	if strings.Contains(path, "/") && strings.Contains(path, `\`) {
+		t.Errorf("display path %q mixes / and \\ separators, want a single native spelling", path)
+	}
+}
+
 // TestInit covers internal/scaffold.Init on real temporary directories
 // (t.TempDir): a clean directory receives the embedded hello seed verbatim
 // plus an empty assets/; any of the four deck-owned paths already present
@@ -118,14 +129,14 @@ func testInitRefuses(t *testing.T) {
 		isDir   bool   // whether the block is a directory
 		display string // the name Init's message must carry
 	}{
-		{"existing slides/ directory", "slides", true, "slides/"},
-		{"existing slides file", "slides", false, "slides/"},
-		{"existing templates/ directory", "templates", true, "templates/"},
-		{"existing templates file", "templates", false, "templates/"},
-		{"existing assets/ directory", "assets", true, "assets/"},
-		{"existing assets file", "assets", false, "assets/"},
-		{"existing kalide.yaml file", "kalide.yaml", false, "kalide.yaml"},
-		{"existing kalide.yaml directory", "kalide.yaml", true, "kalide.yaml"},
+		{"existing slides/ directory", "slides", true, displaypath.Display("", "slides/")},
+		{"existing slides file", "slides", false, displaypath.Display("", "slides/")},
+		{"existing templates/ directory", "templates", true, displaypath.Display("", "templates/")},
+		{"existing templates file", "templates", false, displaypath.Display("", "templates/")},
+		{"existing assets/ directory", "assets", true, displaypath.Display("", "assets/")},
+		{"existing assets file", "assets", false, displaypath.Display("", "assets/")},
+		{"existing kalide.yaml file", "kalide.yaml", false, displaypath.Display("", "kalide.yaml")},
+		{"existing kalide.yaml directory", "kalide.yaml", true, displaypath.Display("", "kalide.yaml")},
 	}
 
 	for _, tc := range cases {
@@ -148,6 +159,9 @@ func testInitRefuses(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.display) {
 				t.Fatalf("Init() error = %q, want it to name %q", err, tc.display)
 			}
+			// The refusal spells the blocking path natively, never mixing the
+			// identity forward slash with the native backslash.
+			assertNoMixedSeparators(t, err.Error())
 
 			if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
 				t.Fatalf("Init() modified the directory on refusal:\n before %v\n after  %v", before, after)
@@ -173,16 +187,22 @@ func testInitNamesAllConflicts(t *testing.T) {
 		t.Fatal("Init() error = nil, want a refusal naming all four blocking paths")
 	}
 	msg := err.Error()
-	for _, want := range []string{"slides/", "templates/", "assets/", "kalide.yaml"} {
+	slides := displaypath.Display("", "slides/")
+	templates := displaypath.Display("", "templates/")
+	assets := displaypath.Display("", "assets/")
+	kalide := displaypath.Display("", "kalide.yaml")
+	for _, want := range []string{slides, templates, assets, kalide} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("Init() error = %q, want it to name %q", msg, want)
 		}
 	}
+	// Every named path uses one separator spelling only (native).
+	assertNoMixedSeparators(t, msg)
 
-	si := strings.Index(msg, "slides/")
-	ti := strings.Index(msg, "templates/")
-	ai := strings.Index(msg, "assets/")
-	yi := strings.Index(msg, "kalide.yaml")
+	si := strings.Index(msg, slides)
+	ti := strings.Index(msg, templates)
+	ai := strings.Index(msg, assets)
+	yi := strings.Index(msg, kalide)
 	if si < 0 || ti < 0 || ai < 0 || yi < 0 || !(si < ti && ti < ai && ai < yi) {
 		t.Errorf("Init() error = %q, want all paths in order slides/, templates/, assets/, kalide.yaml", msg)
 	}
@@ -949,12 +969,12 @@ func testInitExternalRefusalMatrix(t *testing.T) {
 		isDir   bool
 		display string
 	}{
-		{"existing slides directory", "slides", true, "slides/"},
-		{"existing slides file", "slides", false, "slides/"},
-		{"existing assets directory", "assets", true, "assets/"},
-		{"existing assets file", "assets", false, "assets/"},
-		{"existing kalide.yaml file", "kalide.yaml", false, "kalide.yaml"},
-		{"existing kalide.yaml directory", "kalide.yaml", true, "kalide.yaml"},
+		{"existing slides directory", "slides", true, displaypath.Display("", "slides/")},
+		{"existing slides file", "slides", false, displaypath.Display("", "slides/")},
+		{"existing assets directory", "assets", true, displaypath.Display("", "assets/")},
+		{"existing assets file", "assets", false, displaypath.Display("", "assets/")},
+		{"existing kalide.yaml file", "kalide.yaml", false, displaypath.Display("", "kalide.yaml")},
+		{"existing kalide.yaml directory", "kalide.yaml", true, displaypath.Display("", "kalide.yaml")},
 	}
 
 	for _, p := range paths {
@@ -979,6 +999,7 @@ func testInitExternalRefusalMatrix(t *testing.T) {
 				if !strings.Contains(err.Error(), tc.display) {
 					t.Errorf("Init error = %q, want it to name %q", err, tc.display)
 				}
+				assertNoMixedSeparators(t, err.Error())
 
 				if after := snapshot(t, dir); !reflect.DeepEqual(after, before) {
 					t.Fatalf("Init modified the directory on refusal:\n before %v\n after  %v", before, after)
