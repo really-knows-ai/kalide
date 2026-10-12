@@ -1318,6 +1318,13 @@ func TestCheckValuesCompositionRepeats(t *testing.T) {
 // when no selection is written and reports a *FormatError naming the valid
 // formats. CheckValues only sees the selection key; default_format and the
 // returned function are the Format unit's contract.
+//
+// It also pins that the shared engine (CheckValues) enforces the three
+// closed-set/limit rules — a `_format` selection, an enum's variants and a
+// list's min/max items — identically at every depth: a nested violation is the
+// top-level violation with only its path extended, so the rule, value, what and
+// fix cannot drift between a top-level field, a record list item and a nested
+// section template (plan.phase-02.task-9).
 func TestCheckValuesFormats(t *testing.T) {
 	amount := &Field{Name: "amount", Type: FieldNumber,
 		Formats: []string{"compact", "exact", "percent"}, DefaultFormat: "compact"}
@@ -1405,6 +1412,114 @@ func TestCheckValuesFormats(t *testing.T) {
 		}
 		if !reflect.DeepEqual(fe.Valid, []string{"compact", "exact", "percent"}) {
 			t.Errorf("FormatError.Valid = %v, want the sorted catalogue names", fe.Valid)
+		}
+	})
+
+	// The shared engine (CheckValues) enforces the three closed-set/limit
+	// rules — a `_format` selection, an enum's variants and a list's min/max
+	// items — through the same recursive code at every depth, so a nested
+	// violation is the top-level violation with only its path extended. These
+	// subtests pin that identity: the same rule, value, what and fix at the top
+	// level and inside a record list item, plus a `_format` selection reached
+	// inside a nested section template (plan.phase-02.task-9).
+	trioFields := func() []Field {
+		return []Field{
+			{Name: "amount", Type: FieldNumber, Formats: []string{"compact", "exact"}, DefaultFormat: "compact"},
+			{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}},
+			{Name: "tags", Type: FieldList, Item: &Field{Type: FieldText}, MinItems: 1, MaxItems: 2},
+		}
+	}
+	trioTmpl := newSlide("trio", trioFields()...)
+	trioTmpl.Fields = append(trioTmpl.Fields,
+		Field{Name: "rows", Type: FieldList, Item: &Field{Type: FieldRecord, Fields: trioFields()}})
+
+	t.Run("shared engine enforces selection, variants and limits identically at depth", func(t *testing.T) {
+		want := []wantErr{
+			we("format", "amount_format", "bogus",
+				`unknown format "bogus" for field "amount" (valid: compact, exact)`,
+				"use one of: compact, exact"),
+			we("enum", "mode", "c",
+				`enum: "c" is not one of the allowed variants (a, b)`,
+				"use one of: a, b"),
+			we("min_items", "tags", []any{},
+				"min_items: 0 item(s) is below the minimum 1", "add at least 1 item(s)"),
+		}
+
+		top := CheckValues(map[string]any{
+			"amount_format": "bogus",
+			"mode":          "c",
+			"tags":          []any{},
+		}, trioTmpl, nil)
+		if len(top.Errors) != len(want) {
+			t.Fatalf("top-level errors = %d, want %d\n got: %s", len(top.Errors), len(want), renderErrors(top.Errors))
+		}
+		for i, w := range want {
+			e := top.Errors[i]
+			if e.Rule != w.Rule || e.PathString() != w.Path || !reflect.DeepEqual(e.Value, w.Value) ||
+				e.What != w.What || e.Fix != w.Fix {
+				t.Errorf("top-level error[%d] = %+v, want %+v", i, e, w)
+			}
+		}
+
+		nested := CheckValues(map[string]any{
+			"rows": []any{map[string]any{
+				"amount_format": "bogus",
+				"mode":          "c",
+				"tags":          []any{},
+			}},
+		}, trioTmpl, nil)
+		if len(nested.Errors) != len(want) {
+			t.Fatalf("nested errors = %d, want %d\n got: %s", len(nested.Errors), len(want), renderErrors(nested.Errors))
+		}
+		for i, w := range want {
+			e := nested.Errors[i]
+			if e.Rule != w.Rule || !reflect.DeepEqual(e.Value, w.Value) || e.What != w.What || e.Fix != w.Fix {
+				t.Errorf("nested error[%d] = rule %q value %#v what %q fix %q, want the top-level rule %q value %#v what %q fix %q",
+					i, e.Rule, e.Value, e.What, e.Fix, w.Rule, w.Value, w.What, w.Fix)
+			}
+			if got, wantPath := e.PathString(), "rows › [0] › "+w.Path; got != wantPath {
+				t.Errorf("nested error[%d] path = %q, want the top-level path with the item prefix %q", i, got, wantPath)
+			}
+		}
+	})
+
+	t.Run("shared engine accepts a valid selection, variant and list at depth", func(t *testing.T) {
+		valid := map[string]any{
+			"amount":        1,
+			"amount_format": "exact",
+			"mode":          "a",
+			"tags":          []any{"x"},
+		}
+		if got := CheckValues(valid, trioTmpl, nil); len(got.Errors) != 0 {
+			t.Errorf("top-level errors = %s, want none", renderErrors(got.Errors))
+		}
+		nested := map[string]any{"rows": []any{map[string]any{
+			"amount":        1,
+			"amount_format": "exact",
+			"mode":          "a",
+			"tags":          []any{"x"},
+		}}}
+		if got := CheckValues(nested, trioTmpl, nil); len(got.Errors) != 0 {
+			t.Errorf("nested errors = %s, want none", renderErrors(got.Errors))
+		}
+	})
+
+	t.Run("format selection is enforced inside a nested section template", func(t *testing.T) {
+		inner := newSection("fmtinner", Field{Name: "amount", Type: FieldNumber,
+			Formats: []string{"compact", "exact"}, DefaultFormat: "compact"})
+		outer := newSlide("fmtouter", Field{Name: "block", Type: FieldSectionTemplate, SectionTemplate: "fmtinner"})
+
+		got := CheckValues(map[string]any{
+			"block": map[string]any{"amount_format": "bogus"},
+		}, outer, resolverFor(inner))
+		if len(got.Errors) != 1 {
+			t.Fatalf("errors = %s, want 1", renderErrors(got.Errors))
+		}
+		e := got.Errors[0]
+		if e.Rule != "format" || e.PathString() != "block › amount_format" ||
+			e.What != `unknown format "bogus" for field "amount" (valid: compact, exact)` ||
+			e.Fix != "use one of: compact, exact" {
+			t.Errorf("error = rule %q path %q what %q fix %q", e.Rule, e.PathString(), e.What, e.Fix)
 		}
 	})
 }
