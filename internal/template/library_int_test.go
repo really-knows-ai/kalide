@@ -96,7 +96,12 @@ func containsHint(hint string) bool {
 
 // TestLoadLibraryIntFullLibrary proves a complete on-disk library — slides,
 // sections, a theme with an owned font file, and media including a video —
-// loads cleanly via os.DirFS.
+// loads cleanly via os.DirFS. Its record-field subtest adds a template whose
+// list item is an inline record carrying a coerce text field, plus an example
+// that exercises a nullable null, a coerce number and list-of-record values, so
+// a full load both validates the record schema end to end and converts the
+// example into the step-7 execution context (nullable-fields, record-item-type,
+// text-coercion).
 func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -177,6 +182,140 @@ func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	if _, err := fs.Stat(lib.Media, "video/intro.mp4"); err != nil {
 		t.Errorf("media video/intro.mp4 not present in Library.Media: %v", err)
 	}
+
+	// A library whose slide template declares a list field whose item is an
+	// inline record, beside a nullable field and a coerce text field, loaded
+	// through the real loader: step 7 must VALIDATE the example against the
+	// record schema and CONVERT it into the execution context through the same
+	// nullable/record/coerce conversion the renderer applies
+	// (nullable-fields, record-item-type, text-coercion). LoadLibrary itself
+	// discards the bytes it executes, so — exactly as
+	// fieldrules_default_int_test.go does — the step-7 binding is repeated
+	// in-package and the layout is executed against the context
+	// validateExampleBlock builds, making the conversion observable.
+	t.Run("record-field template and example validate and convert end to end", func(t *testing.T) {
+		const catalogueManifest = `name: catalogue
+fields:
+  - name: heading
+    type: text
+    nullable: true
+  - name: code
+    type: text
+    coerce: true
+  - name: items
+    type: list
+    item:
+      type: record
+      fields:
+        - name: name
+          type: text
+          required: true
+        - name: id
+          type: text
+          coerce: true
+        - name: note
+          type: text
+`
+		// The `len` reads make the coercion observable: a coerce text field left
+		// a YAML number would fail `len` at execution, and a record item left
+		// unconverted would fail `len .id` likewise, so the conversion cannot be
+		// silently skipped.
+		const catalogueLayout = `<div class="catalogue">` +
+			`<span class="catalogue-heading">{{ if .heading }}present{{ else }}nil{{ end }}</span>` +
+			`<span class="catalogue-code">{{ .code }}</span>` +
+			`<span class="catalogue-code-len">{{ len .code }}</span>` +
+			`<span class="catalogue-count">{{ len .items }}</span>` +
+			`{{ range .items }}` +
+			`<span class="catalogue-item" data-name="{{ .name }}" data-id="{{ .id }}" data-id-len="{{ len .id }}" data-note="{{ if .note }}present{{ else }}nil{{ end }}"></span>` +
+			`{{ end }}` +
+			`</div>`
+		const catalogueExample = "---\n" +
+			"template: catalogue\n" +
+			"heading: null\n" +
+			"code: 7\n" +
+			"items:\n" +
+			"  - name: Ada\n" +
+			"    id: 7\n" +
+			"  - name: Grace\n" +
+			"    id: 42\n" +
+			"---\n" +
+			"A catalogue of items.\n"
+
+		// writeCatalogue writes the four required files of a full on-disk
+		// library whose only template is the record-field slide above, with the
+		// given example.md, and returns the project root for os.DirFS. The
+		// manifest and layout are fixed; only the example varies, so the positive
+		// and negative cases differ solely in the example's authored values.
+		writeCatalogue := func(t *testing.T, example string) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+			writeFile(t, filepath.Join(root, SlidesDir, "catalogue", ManifestFile), []byte(catalogueManifest))
+			writeFile(t, filepath.Join(root, SlidesDir, "catalogue", LayoutFile), []byte(catalogueLayout))
+			writeFile(t, filepath.Join(root, SlidesDir, "catalogue", ExampleFile), []byte(example))
+			return projectDir
+		}
+
+		t.Run("the record example validates and converts", func(t *testing.T) {
+			projectDir := writeCatalogue(t, catalogueExample)
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: a valid record-field example must load", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+
+			got, execErr := executeStep7ExampleInt(t, lib, "catalogue", nil)
+			if execErr != nil {
+				t.Fatalf("step-7 example execution error = %v, want nil: the converted record context must execute", execErr)
+			}
+			// The nullable null reads nil, the coerce number reads its string form
+			// (whose `len` would fail if it were still a YAML number), and the
+			// list-of-record reads as one per-item map with its coerce `id` a
+			// string and its omitted optional `note` nil.
+			for _, want := range []string{
+				`<span class="catalogue-heading">nil</span>`,
+				`<span class="catalogue-code">7</span>`,
+				`<span class="catalogue-code-len">1</span>`,
+				`<span class="catalogue-count">2</span>`,
+				`<span class="catalogue-item" data-name="Ada" data-id="7" data-id-len="1" data-note="nil"></span>`,
+				`<span class="catalogue-item" data-name="Grace" data-id="42" data-id-len="2" data-note="nil"></span>`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("step-7 rendered catalogue layout does not contain %q:\n%s", want, got)
+				}
+			}
+		})
+
+		// The validation half is real: a record item that omits its required
+		// field is rejected by LoadLibrary, positioned at the template's
+		// example.md and carrying the full `items › [0] › name` path.
+		t.Run("a violating record item fails the load at the example.md site", func(t *testing.T) {
+			projectDir := writeCatalogue(t,
+				"---\n"+
+					"template: catalogue\n"+
+					"code: 7\n"+
+					"items:\n"+
+					"  - id: 7\n"+
+					"---\n")
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err == nil {
+				t.Fatalf("LoadLibrary() = %+v, nil; want the record item's missing required field to fail the example check", lib)
+			}
+			if lib != nil {
+				t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+			}
+			libErr := asLibraryError(t, err)
+			if want := filepath.Join(TemplatesDir, SlidesDir, "catalogue", ExampleFile); libErr.Path != want {
+				t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
+			}
+			if !strings.Contains(libErr.Message, "items › [0] › name") || !strings.Contains(libErr.Message, "required") {
+				t.Errorf("Message = %q, want a path-qualified required error naming the record field", libErr.Message)
+			}
+		})
+	})
 }
 
 // TestLoadDeckLibraryMergedThemeAndMediaLayers covers LoadDeckLibrary's merged
