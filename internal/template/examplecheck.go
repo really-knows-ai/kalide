@@ -967,13 +967,14 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 // The author-supplied fields are validated with the schema-only CheckValues
 // (task-5), which treats an omitted required field that declares a Default as
 // satisfied; after it passes, applyFieldDefaults materialises each declared
-// field's Default into ctx alongside the supplied values, mirroring
-// renderer.values at render time, so the executed example context carries the
-// same values the renderer would. This happens at every composition depth,
-// because the recursion below runs each nested instance through this same
-// function. The `.raw` source view is built from the authored frontmatter, not
-// here, so a default never leaks into it (a default is not an authored source
-// value).
+// field's Default and every declared field is converted into ctx through the
+// same nullable/record/coerce conversion renderer.values/fieldValue applies at
+// render time (nullable-fields, record-item-type, text-coercion), so the
+// executed example context carries the same values the renderer would. This
+// happens at every composition depth, because the recursion below runs each
+// nested instance through this same function. The `.raw` source view is built
+// from the authored frontmatter, not here, so a default never leaks into it (a
+// default is not an authored source value).
 func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any, container string) error {
 	fm := block.Frontmatter
 	if fm == nil {
@@ -995,8 +996,95 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 	// uses for a section-helper call and renderer.values mirrors at render time:
 	// a supplied value wins, an omitted declared field with a Default gets it,
 	// and the caller's map is copied. CheckValues stays schema-only.
-	for k, v := range applyFieldDefaults(def, fields) {
-		ctx[k] = v
+	//
+	// The defaulted values are then converted into the execution context through
+	// the same per-type conversion renderer.values/fieldValue applies at render
+	// time for the typed schema core (nullable-fields, record-item-type,
+	// text-coercion), so the load-time example context and the render-time
+	// context agree on those values. Every declared field is present in ctx: an
+	// explicit null and an absent optional field (with no Default) both reach the
+	// context as a nil entry; a nullable field's null converts to nil with no
+	// further per-type conversion; a coerce text field's YAML number or boolean
+	// becomes its string form; a list recurses into its item descriptor; and an
+	// inline record becomes one map per item with each declared field converted
+	// recursively by this same per-type conversion. The reserved `template:`
+	// selector and any `<field>_format` sibling are not declared fields, so
+	// neither reaches the context, matching renderer.values.
+	//
+	// A text field stays its authored string at load time: the renderer's
+	// inline-Markdown pre-rendering is render-side only, because a converted
+	// text field there is html/template.HTML, which is not the string a helper
+	// call's text-field validation accepts (a layout may pass a converted field
+	// straight into a `{{ section }}` call). The conversion is a local closure
+	// rather than a package symbol because no task owns a template-side
+	// conversion helper; it mirrors the renderer's FieldList/FieldRecord
+	// recursion and coerceText string form inline, as the render conversion
+	// repeats template.coerceText.
+	var convertExampleField func(f *Field, raw any) any
+	convertExampleField = func(f *Field, raw any) any {
+		if raw == nil && f.Nullable {
+			return nil
+		}
+		switch f.Type {
+		case FieldText:
+			if s, ok := raw.(string); ok {
+				return s
+			}
+			if f.Coerce {
+				if coerced, cok := coerceText(raw); cok {
+					return coerced
+				}
+			}
+			// A non-string value (already rejected by validation) is left as
+			// text for html/template to escape.
+			return raw
+		case FieldList:
+			items, ok := asSlice(raw)
+			if !ok || f.Item == nil {
+				return raw
+			}
+			out := make([]any, len(items))
+			for i, elem := range items {
+				out[i] = convertExampleField(f.Item, elem)
+			}
+			return out
+		case FieldRecord:
+			m, ok := asMap(raw)
+			if !ok {
+				return raw
+			}
+			out := make(map[string]any, len(f.Fields))
+			for i := range f.Fields {
+				sub := &f.Fields[i]
+				val, present := m[sub.Name]
+				if !present {
+					if sub.Default == nil {
+						out[sub.Name] = nil
+						continue
+					}
+					val = sub.Default
+				}
+				out[sub.Name] = convertExampleField(sub, val)
+			}
+			return out
+		default:
+			// boolean, enum, number, date, image, link and section-template
+			// values keep their typed value.
+			return raw
+		}
+	}
+	defaulted := applyFieldDefaults(def, fields)
+	for i := range def.Fields {
+		f := &def.Fields[i]
+		raw, present := defaulted[f.Name]
+		if !present {
+			// An absent optional field with no Default still reaches the
+			// context, as a nil entry, exactly as renderer.values does
+			// (nullable-fields).
+			ctx[f.Name] = nil
+			continue
+		}
+		ctx[f.Name] = convertExampleField(f, raw)
 	}
 
 	// The subheading gate carries whether this block's own enclosing template
