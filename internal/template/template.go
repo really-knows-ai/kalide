@@ -88,8 +88,16 @@ const (
 	FieldList FieldType = "list"
 
 	// FieldSectionTemplate is structured YAML data shaped by the section
-	// template named Field.SectionTemplate (no separate record types).
+	// template named Field.SectionTemplate.
 	FieldSectionTemplate FieldType = "section-template"
+
+	// FieldRecord is an inline record: a list's `item:` descriptor declaring
+	// `type: record` together with its own `fields:` (record-item-type). A
+	// record is never a field's `type:` — it appears only as a list's item
+	// descriptor — and its fields use exactly the same descriptors as a
+	// template's top-level fields, validated recursively. They live in
+	// Field.Fields.
+	FieldRecord FieldType = "record"
 )
 
 // Field is one declared template field: the key Name an author writes, its
@@ -106,9 +114,23 @@ type Field struct {
 	// Type selects the value type and which rules below apply.
 	Type FieldType
 
+	// Nullable accepts an explicit YAML `null` for this field — or, on a
+	// record item descriptor, a null list entry — whatever its Type
+	// (nullable-fields). A null value runs no bound, format or membership
+	// check. Null is distinct from absent: a `required` nullable field's key
+	// must be present (it may be null), and an explicit null never triggers
+	// Default.
+	Nullable bool
+
 	// Plain, for a text field, strips inline Markdown styles silently
 	// instead of interpreting them (field-types `plain` flag).
 	Plain bool
+
+	// Coerce, for a text field, accepts a YAML number or boolean in place of
+	// a string and converts it to its string form (text-coercion). A value
+	// that is neither a string nor, under Coerce, a number or boolean stays
+	// a type error.
+	Coerce bool
 
 	// Variants, for an enum field, is the closed set of accepted values.
 	// Exactly one of them may be the Default, and an enum field's value is
@@ -138,6 +160,14 @@ type Field struct {
 	// irrelevant; its Type (and, for a section-template item, its
 	// SectionTemplate) describes one element. It is nil for non-list fields.
 	Item *Field
+
+	// Fields, for a list item descriptor whose Type is FieldRecord, is the
+	// inline record's field schema: the same descriptors as a template's
+	// top-level fields — name, type, rules and description — validated
+	// recursively, so a record's field may itself be a list whose item is a
+	// record (record-item-type). Each may be Nullable. It is nil for every
+	// other field.
+	Fields []Field
 
 	// Required says the field must be present in the frontmatter.
 	Required bool
