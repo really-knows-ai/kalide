@@ -24,8 +24,10 @@ import (
 // with a nil containment prefix) and the SECTION-INSTANCE site (checkSections
 // calls it with the instance's containment chain). Task 10 below pins the
 // slide-frontmatter site: through the shared CheckValues engine it reports every
-// field type and rule with a positioned, path-qualified error. Task 14 adds the
-// section-instance site to the same test function.
+// field type and rule with a positioned, path-qualified error. Task 14 pins the
+// section-instance site: the same engine reaches the same verdict and the same
+// first error at every instance nesting depth, only with the instance's
+// containment chain prepended to the value path (nested-section-validation).
 //
 // checkFields has no filesystem dependency of its own (fsys is used only for
 // image existence), but it is the field-check step of the real int pipeline, so
@@ -57,8 +59,12 @@ const slideFrontmatterSite = "slides/1-a.md"
 // table (internal/template/checkvalues_test.go) fixes, including the
 // `items › [i] › field` chain that record/list nesting produces.
 //
-// The section-instance site in this same test function belongs to
-// plan.phase-02.task-14.
+// The section-instance site is pinned in this same test function
+// (plan.phase-02.task-14): a dedicated containment-path case and, for every
+// table entry above, a second run through checkFields with the instance's
+// containment chain as prefix, asserting the same shared-engine verdict and
+// error with the chain prepended — at a top-level instance and at deeper,
+// nested instances.
 func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: the field-check step of the real validate pipeline")
@@ -66,6 +72,19 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 
 	emptyReg := template.NewRegistry(nil)
 	emptyFS := fstest.MapFS{}
+
+	// sectionInstancePrefixes are containment chains checkSections hands to
+	// checkFields: the current instance's own `name[index]` segment extends the
+	// enclosing chain, so one segment is a top-level section instance and two or
+	// more are instances nested that deep. The section-instance site must reach
+	// the same verdict and the same shared-engine first error at each depth,
+	// only with the chain prepended to the value path
+	// (nested-section-validation).
+	sectionInstancePrefixes := [][]string{
+		{"columns[2]"},
+		{"columns[2]", "blocks[1]"},
+		{"columns[0]", "blocks[1]", "rows[2]"},
+	}
 
 	t.Run("an omitted required field with a default passes", func(t *testing.T) {
 		tmpl := &template.Template{
@@ -122,6 +141,33 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 		want := New(slideFrontmatterSite, res.Errors[0].Line, valuePath(res.Errors[0].Path), res.Errors[0].What, res.Errors[0].Fix)
 		if !reflect.DeepEqual(verr, want) {
 			t.Errorf("checkFields() error = %#v, want the adapted shared-engine error %#v", verr, want)
+		}
+	})
+
+	// The section-instance site is the same checkFields, only called with the
+	// instance's containment chain instead of a nil prefix. Its error must carry
+	// that full chain — the nested-section-validation AC example, a `label`
+	// typo `lable` inside blocks[1] under columns[2] — with the shared engine's
+	// exact What and Fix.
+	t.Run("the section-instance site carries the instance's containment path", func(t *testing.T) {
+		tmpl := slideSiteTmpl(template.Field{Name: "label", Type: template.FieldText})
+		prefix := []string{"columns[2]", "blocks[1]"}
+
+		verr, invalid := checkFields(emptyFS, slideFrontmatterSite, map[string]any{"lable": "x"}, tmpl, prefix, emptyReg)
+		if !invalid {
+			t.Fatal("checkFields() invalid = false, want the nested unknown-field error")
+		}
+		want := displayFile(slideFrontmatterSite) +
+			` › columns[2] › blocks[1] › lable: unknown field "lable" — did you mean "label"?`
+		if got := Format(verr); got != want {
+			t.Errorf("checkFields() error =\n  %q\nwant\n  %q", got, want)
+		}
+		if verr.File != slideFrontmatterSite {
+			t.Errorf("error File = %q, want %q", verr.File, slideFrontmatterSite)
+		}
+		wantPath := []string{"columns[2]", "blocks[1]", "lable"}
+		if !reflect.DeepEqual(verr.Path, wantPath) {
+			t.Errorf("error Path = %v, want %v", verr.Path, wantPath)
 		}
 	})
 
@@ -378,20 +424,45 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 				if !isZeroValidationError(verr) {
 					t.Errorf("checkFields() error = %#v, want the zero ValidationError", verr)
 				}
-				return
+			} else {
+				if !invalid {
+					t.Fatalf("checkFields() invalid = false, want the error %q", tt.want)
+				}
+				if got := Format(verr); got != tt.want {
+					t.Errorf("checkFields() error =\n  %q\nwant\n  %q", got, tt.want)
+				}
+				// Positioned in the slide file: the slide-frontmatter call
+				// attaches no line source, so the location is the file alone and
+				// the path carries the field chain.
+				if verr.File != slideFrontmatterSite {
+					t.Errorf("error File = %q, want %q", verr.File, slideFrontmatterSite)
+				}
 			}
 
-			if !invalid {
-				t.Fatalf("checkFields() invalid = false, want the error %q", tt.want)
-			}
-			if got := Format(verr); got != tt.want {
-				t.Errorf("checkFields() error =\n  %q\nwant\n  %q", got, tt.want)
-			}
-			// Positioned in the slide file: the slide-frontmatter call attaches
-			// no line source, so the location is the file alone and the path
-			// carries the field chain.
-			if verr.File != slideFrontmatterSite {
-				t.Errorf("error File = %q, want %q", verr.File, slideFrontmatterSite)
+			// The section-instance site: checkSections calls the same checkFields
+			// with the instance's containment chain as prefix. Through the shared
+			// CheckValues engine every field type and rule must reach the same
+			// verdict and the same first error at every nesting depth, only with
+			// the chain prepended to the value path (nested-section-validation).
+			for _, prefix := range sectionInstancePrefixes {
+				instVerr, instInvalid := checkFields(caseFS, slideFrontmatterSite, tt.data, tt.tmpl, prefix, caseReg)
+				if instInvalid != invalid {
+					t.Fatalf("checkFields(prefix %v) invalid = %v, want %v: the shared engine decides both sites", prefix, instInvalid, invalid)
+				}
+				if !invalid {
+					continue
+				}
+				if instVerr.File != slideFrontmatterSite {
+					t.Errorf("checkFields(prefix %v) File = %q, want %q", prefix, instVerr.File, slideFrontmatterSite)
+				}
+				if instVerr.What != verr.What || instVerr.Fix != verr.Fix {
+					t.Errorf("checkFields(prefix %v) = (%q, %q), want the slide site's (%q, %q)",
+						prefix, instVerr.What, instVerr.Fix, verr.What, verr.Fix)
+				}
+				wantPath := append(append([]string(nil), prefix...), verr.Path...)
+				if !reflect.DeepEqual(instVerr.Path, wantPath) {
+					t.Errorf("checkFields(prefix %v) Path = %v, want %v", prefix, instVerr.Path, wantPath)
+				}
 			}
 		})
 	}
