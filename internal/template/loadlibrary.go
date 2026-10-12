@@ -632,11 +632,11 @@ func templateDirNames(sub fs.FS, root, kindDir string) ([]string, error) {
 		return nil, nil
 	}
 	if !info.IsDir() {
-		return nil, libraryErrorf(path.Join(root, kindDir), 0, "%s exists but is not a directory", kindDir)
+		return nil, libraryErrorf(displaypath.Display(root, kindDir), 0, "%s exists but is not a directory", kindDir)
 	}
 	entries, err := fs.ReadDir(sub, kindDir)
 	if err != nil {
-		return nil, libraryErrorf(path.Join(root, kindDir), 0, "read directory: %v", err)
+		return nil, libraryErrorf(displaypath.Display(root, kindDir), 0, "read directory: %v", err)
 	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
