@@ -189,7 +189,7 @@ func parseManifestFields(manifestPath string, val *yaml.Node) ([]Field, error) {
 	}
 	fields := make([]Field, 0, len(val.Content))
 	for _, item := range val.Content {
-		f, err := parseManifestField(manifestPath, item)
+		f, err := parseManifestField(manifestPath, item, false)
 		if err != nil {
 			return nil, err
 		}
@@ -199,8 +199,11 @@ func parseManifestFields(manifestPath string, val *yaml.Node) ([]Field, error) {
 }
 
 // parseManifestField decodes one field entry (or, recursively, a list
-// field's `item:`).
-func parseManifestField(manifestPath string, node *yaml.Node) (*Field, error) {
+// field's `item:`). isItem marks an item descriptor: only there may a `type:`
+// be the inline `record` form (`item: {type: record, fields: [...]}`), whose
+// `fields:` recurse through parseManifestFields (record-item-type). A `record`
+// anywhere else is rejected (record-list-item-only).
+func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Field, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a field")
 	}
@@ -229,6 +232,18 @@ func parseManifestField(manifestPath string, node *yaml.Node) (*Field, error) {
 			}
 			typeStr = s
 			haveType = true
+		case "nullable":
+			b, err := scalarBool(val, manifestPath, kl, "nullable")
+			if err != nil {
+				return nil, err
+			}
+			f.Nullable = b
+		case "coerce":
+			b, err := scalarBool(val, manifestPath, kl, "coerce")
+			if err != nil {
+				return nil, err
+			}
+			f.Coerce = b
 		case "plain":
 			b, err := scalarBool(val, manifestPath, kl, "plain")
 			if err != nil {
@@ -320,18 +335,24 @@ func parseManifestField(manifestPath string, node *yaml.Node) (*Field, error) {
 			}
 			f.SectionTemplate = s
 		case "item":
-			item, err := parseManifestField(manifestPath, val)
+			item, err := parseManifestField(manifestPath, val, true)
 			if err != nil {
 				return nil, err
 			}
 			f.Item = item
+		case "fields":
+			fs, err := parseManifestFields(manifestPath, val)
+			if err != nil {
+				return nil, err
+			}
+			f.Fields = fs
 		default:
 			e := libraryErrorf(manifestPath, kl, "unknown key %q in a field", key.Value)
 			return nil, e.withSuggestion(key.Value, []string{
-				"name", "type", "plain", "required", "default", "description",
-				"max_length", "min_items", "max_items", "min", "max",
-				"min_date", "max_date", "variants", "formats", "default_format",
-				"section_template", "item",
+				"name", "type", "nullable", "coerce", "plain", "required",
+				"default", "description", "max_length", "min_items", "max_items",
+				"min", "max", "min_date", "max_date", "variants", "formats",
+				"default_format", "section_template", "item", "fields",
 			})
 		}
 	}
@@ -342,6 +363,16 @@ func parseManifestField(manifestPath string, node *yaml.Node) (*Field, error) {
 	if !haveType {
 		return nil, libraryErrorf(manifestPath, line, "field %q: missing required key %q", f.Name, "type")
 	}
+	if typeStr == string(FieldRecord) {
+		if !isItem {
+			return nil, libraryErrorf(manifestPath, line, "field %q: type %q is only valid as a list item descriptor", f.Name, typeStr)
+		}
+		if f.Fields == nil {
+			return nil, libraryErrorf(manifestPath, line, "field %q: type %q requires key %q", f.Name, typeStr, "fields")
+		}
+		f.Type = FieldRecord
+		return f, nil
+	}
 	ft, ok := manifestFieldTypes[typeStr]
 	if !ok {
 		valid := make([]string, 0, len(manifestFieldTypes))
@@ -350,6 +381,9 @@ func parseManifestField(manifestPath string, node *yaml.Node) (*Field, error) {
 		}
 		e := libraryErrorf(manifestPath, line, "field %q: unknown type %q", f.Name, typeStr)
 		return nil, e.withSuggestion(typeStr, valid)
+	}
+	if f.Fields != nil {
+		return nil, libraryErrorf(manifestPath, line, "field %q: key %q is only valid on a record item descriptor", f.Name, "fields")
 	}
 	f.Type = ft
 	return f, nil
