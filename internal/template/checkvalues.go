@@ -346,6 +346,31 @@ func checkNullable(c *checker, path []PathSegment, f *Field, value any) bool {
 	return true
 }
 
+// checkRecordValue checks one inline-record value against its record item
+// descriptor's declared fields (record-item-type): the value must be a
+// mapping, and its keys are checked by the same schema-mapping pass as a
+// template's top-level fields — unknown keys (with a closest-match suggestion
+// against the record's fields), required fields and every per-type rule — so a
+// record's field may itself be a list whose item is a record and a nested
+// violation carries the full path, for example `items › [2] › value`.
+//
+// It reports a type violation when the value is not a mapping and otherwise
+// defers to mapValues, which the file already uses for a template's fields; a
+// record carries no sections, body or identity, so a throwaway Template holding
+// only its inline Fields is enough to reuse that pass. It is shared by every
+// validateValue call for a FieldRecord item descriptor.
+func checkRecordValue(c *checker, path []PathSegment, f *Field, value any, depth int) {
+	m, ok := asMap(value)
+	if !ok {
+		c.add(path, "type", value,
+			fmt.Sprintf("type: expected a mapping for a record, got %s", describeValue(value)),
+			"write the record as YAML key: value pairs")
+		return
+	}
+	record := &Template{Fields: f.Fields}
+	c.mapValues(path, record, m, depth)
+}
+
 // validateValue checks one value against one field's type and rules.
 func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth int) {
 	switch f.Type {
