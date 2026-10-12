@@ -186,7 +186,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	// resolves too (example-layout-composition).
 	namespace, err := exampleLayoutNamespace(lib, layer, callerFields)
 	if err != nil {
-		return libraryErrorf(lt.LayoutPath, 0, "parse: %v", err)
+		return layoutTemplateError(lt.Definition.Layout, "parse", err)
 	}
 
 	layoutName := lt.Layout.Name()
@@ -195,7 +195,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	}
 	var buf strings.Builder
 	if err := namespace.ExecuteTemplate(&buf, layoutName, ctx); err != nil {
-		return libraryErrorf(lt.LayoutPath, 0, "execute: %v", err)
+		return layoutTemplateError(lt.Definition.Layout, "execute", err)
 	}
 	return nil
 }
@@ -214,14 +214,16 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 // the set is exactly the layout set render's namespaceForLayer parses from the
 // registry (Registry.Templates) — the union of the layers.
 //
-// The layout name is the one the loader builds and render registers each layout
-// under: lt.Layout.Name(), the layout's path within its own layer
-// (`path.Join(root, slides|sections/<name>/layout.html.tmpl)`, loadlibrary.go),
-// falling back to lt.Name when the loader did not set one — the same
-// lt.Layout.Name()-else-lt.Name fallback layoutName uses in render.go. Because
-// each layer's layouts keep their own root-qualified path name, a two-layer
-// deck resolves a cross-layer include by the target's own root-qualified name
-// (library-layer-references).
+// Every library layout is keyed by the loader-built layer-relative layout name
+// (lt.Layout.Name()), the layout's forward-slash path within its own layer
+// (`slides|sections/<name>/layout.html.tmpl`, loadlibrary.go) — identical on
+// every OS and wherever the layer sits on disk — falling back to lt.Name when
+// the loader did not set one, the same lt.Layout.Name()-else-lt.Name fallback
+// layoutName uses in render.go. Because each layer's layouts keep their own
+// layer-relative name, a two-layer deck resolves a cross-layer include by the
+// target's own layer-relative name (library-layer-references). A failure's
+// position is display-only and comes from the offending layout's on-disk
+// LayoutPath, never from its layer-relative key.
 //
 // layer is the example-checked template's own owning *LibraryLayer, when the
 // merged Library records one; it supplies the media sub-filesystem every
@@ -566,11 +568,11 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	}
 	parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(call.Template.Layout.Text)
 	if err != nil {
-		return "", fmt.Errorf("parse target layout: %w", err)
+		return "", layoutTemplateError(call.Template.Layout, "parse target layout", err)
 	}
 	var buf strings.Builder
 	if err := parsed.Execute(&buf, ctx); err != nil {
-		return "", fmt.Errorf("execute target layout: %w", err)
+		return "", layoutTemplateError(call.Template.Layout, "execute target layout", err)
 	}
 	return htmltemplate.HTML(buf.String()), nil
 }

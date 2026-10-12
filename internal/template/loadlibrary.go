@@ -706,10 +706,16 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 			"%s must not declare a %q key; usage is derived from its directory (%s)", ManifestFile, "usage", kindDir)
 	}
 
-	layoutName := path.Join(root, layoutRel)
+	// The layout's name is its layer-relative forward-slash path within the
+	// layer (slides|sections/<name>/layout.html.tmpl) — the same string on
+	// every OS and wherever the layer sits on disk, and the name an author
+	// writes in a `{{ template "<name>" . }}` action. LayoutPath keeps the
+	// root-joined on-disk path, carried for error display only.
+	layoutName := layoutRel
+	layoutPath := path.Join(root, layoutRel)
 	parsed, err := htmltemplate.New(layoutName).Funcs(funcMap).Parse(string(layoutText))
 	if err != nil {
-		return nil, libraryErrorf(layoutName, 0, "%v", err)
+		return nil, layoutTemplateError(Layout{Name: layoutName, Path: layoutPath}, "", err)
 	}
 
 	return &LibraryTemplate{
@@ -718,7 +724,7 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 		Dir:           dir,
 		ManifestPath:  displayDir + "/" + ManifestFile,
 		ManifestBytes: manifest,
-		LayoutPath:    layoutName,
+		LayoutPath:    layoutPath,
 		LayoutText:    string(layoutText),
 		Layout:        parsed,
 		ExamplePath:   displayDir + "/" + ExampleFile,

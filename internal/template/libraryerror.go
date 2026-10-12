@@ -2,6 +2,8 @@ package template
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/suggest"
@@ -88,6 +90,49 @@ func (e *LibraryError) withSuggestion(name string, candidates []string) *Library
 	c := *e
 	c.Suggestion = suggest.Closest(name, candidates)
 	return &c
+}
+
+// templateErrorLocation matches the location prefix Go's html/template gives
+// its errors: "template: <name>:<line>: " for a text/template parse or execute
+// error and "html/template:<name>:<line>:<col>: " for an html/template error
+// (for example "no such template"). The name is the template's namespace key —
+// a layer-relative layout name for a library layout, never a file path — so it
+// must be replaced by the layout's on-disk display path rather than shown. The
+// match is deliberately unanchored: a caller may wrap the Go error (for
+// example `template %q: parse layout: %w`), and the location is still the only
+// place a layer-relative name could be read as a file location.
+var templateErrorLocation = regexp.MustCompile(`(?:html/)?template:\s*[^:\n]*:(\d+)(?::\d+)?: `)
+
+// layoutTemplateError positions a Go html/template error at layout's on-disk
+// display path, Layout.Path, and the line the Go error reports, rewriting the
+// error's `template: <name>:<line>:` location prefix — whose name is the
+// layout's namespace key — to `<Layout.Path>:<line>`. When Layout.Path is
+// empty — a generated layout with no on-disk file, such as the gallery wrapper
+// — the position falls back to Layout.Name. Only that leading location prefix
+// is rewritten, so a layer-relative layout name is never rendered as a file
+// location while any quoted `{{ template }}` target name inside err stays
+// exactly as written. context, when non-empty, is kept as the message's
+// leading qualifier (for example "execute"), preserving the caller's own
+// description of what failed. An error that carries no location prefix keeps
+// its text and reports no line (0).
+func layoutTemplateError(layout Layout, context string, err error) *LibraryError {
+	path := layout.Path
+	if path == "" {
+		path = layout.Name
+	}
+	line, message := 0, err.Error()
+	if m := templateErrorLocation.FindStringSubmatchIndex(message); m != nil {
+		// Group 1 (m[2]:m[3]) is the line; the whole match, including its
+		// trailing ": ", is the location prefix to strip.
+		if n, convErr := strconv.Atoi(message[m[2]:m[3]]); convErr == nil {
+			line = n
+		}
+		message = message[:m[0]] + message[m[1]:]
+	}
+	if context != "" {
+		message = context + ": " + message
+	}
+	return &LibraryError{Path: path, Line: line, Message: message}
 }
 
 // missingTemplatesDirError reports that the project has no usable

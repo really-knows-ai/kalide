@@ -110,7 +110,11 @@ type LibraryTemplate struct {
 	// into a Template definition is parseManifest (phase 2).
 	ManifestBytes []byte
 
-	// LayoutPath is Dir/layout.html.tmpl.
+	// LayoutPath is the layout's on-disk path: Dir/layout.html.tmpl rooted
+	// at the layer's root. It is used for error display and positioning
+	// only; the layout's parsed Name() is its layer-relative layout name
+	// (e.g. "slides/hello/layout.html.tmpl"), the key it is registered and
+	// looked up under. LayoutPath is never a layout name or a lookup key.
 	LayoutPath string
 
 	// LayoutText is the layout's raw html/template source.

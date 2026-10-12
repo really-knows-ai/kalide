@@ -596,7 +596,7 @@ func (s *Section) HelperCalls(tmpl *Template) ([]HelperCall, error) {
 	}
 	parsed, err := htmltemplate.New(layoutName).Funcs(LayoutFuncMap(nil, "")).Parse(text)
 	if err != nil {
-		return nil, fmt.Errorf("template %q: parse layout: %w", tmpl.Name, err)
+		return nil, layoutTemplateError(tmpl.Layout, fmt.Sprintf("template %q: parse layout", tmpl.Name), err)
 	}
 
 	var found []positionedCall

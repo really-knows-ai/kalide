@@ -81,7 +81,11 @@ func registerLibraryTemplate(r *Registry, lt *LibraryTemplate) error {
 	if err != nil {
 		return err
 	}
-	def.Layout = Layout{Name: lt.Name, Text: lt.LayoutText}
+	// Layout.Name stays the layer-relative layout name (the parsed layout's
+	// own name, or the template name as a fallback); Layout.Path is the
+	// layer's root-joined on-disk layout path, carried for error display
+	// only, never as a namespace or lookup key.
+	def.Layout = Layout{Name: lt.Name, Path: lt.LayoutPath, Text: lt.LayoutText}
 	if lt.Layout != nil {
 		def.Layout.Name = lt.Layout.Name()
 	}

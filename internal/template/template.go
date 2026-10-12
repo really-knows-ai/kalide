@@ -237,12 +237,25 @@ type BodyRule struct {
 }
 
 // Layout is a template's Go html/template layout: its name (used in error
-// messages and template lookup) and its source text. Loading and parsing the
-// layout are not done here.
+// messages and template lookup), its optional on-disk display path and its
+// source text. Loading and parsing the layout are not done here.
 type Layout struct {
-	// Name identifies the layout, e.g. "title" or "title.html.tmpl". It is
-	// the name the layout is parsed and executed under.
+	// Name identifies the layout. It is the name the layout is parsed and
+	// executed under: for an embedded template a name such as
+	// "title.html.tmpl", and for a library layout its layer-relative
+	// forward-slash path within its layer, e.g.
+	// "slides/hello/layout.html.tmpl" — the name an author writes in a
+	// `{{ template "<name>" . }}` action.
 	Name string
+
+	// Path is the layout's on-disk path, e.g.
+	// "templates/slides/hello/layout.html.tmpl". It is display-only: it
+	// carries the position an error or other human-readable output reports.
+	// It is never a namespace key and never used for template lookup — Name
+	// is. It is empty for a generated layout with no on-disk file (for
+	// example the gallery wrapper), in which case an error position falls
+	// back to Name.
+	Path string
 
 	// Text is the layout's html/template source, exactly as loaded from the
 	// embedded assets.
