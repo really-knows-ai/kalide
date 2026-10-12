@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/render"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -781,6 +782,10 @@ func (r *Reloader) errorTitle(fsys fs.FS, themes *theme.Registry) string {
 // before its vertical children — from fsys, keyed by slide path via
 // slide.Slide.File, the convention internal/render.RenderDeck and
 // internal/validate use.
+//
+// A slide's s.Path is its forward-slash identity (the parse and map key), so it
+// stays forward-slash; the error names it in the host OS's native spelling
+// instead (native-display-paths), because the message is shown to the author.
 func parseAllSlides(fsys fs.FS, d *deck.Deck, reg *template.Registry) ([]*slide.Slide, error) {
 	var parsed []*slide.Slide
 	if d == nil {
@@ -794,7 +799,7 @@ func parseAllSlides(fsys fs.FS, d *deck.Deck, reg *template.Registry) ([]*slide.
 		for _, s := range ordered {
 			src, err := fs.ReadFile(fsys, s.Path)
 			if err != nil {
-				return nil, fmt.Errorf("read %s: %w", s.Path, err)
+				return nil, fmt.Errorf("read %s: %w", displaypath.Display("", s.Path), err)
 			}
 			ps, err := slide.Parse(s.Path, src, reg)
 			if err != nil {

@@ -129,7 +129,11 @@ func NewDeckPage(doc htmltmpl.HTML, title string) *Page {
 // validate.Format exactly as terminal output does, so the browser and the
 // terminal show the identical message
 // (requirements.requirement.error-reporting,
-// requirements.requirement.live-reload-error-page). title is the deck title.
+// requirements.requirement.live-reload-error-page). Because validate.Format is
+// the single display boundary where the file location is converted to the host
+// OS's native spelling, the page shows the same native path text the terminal
+// prints (native-display-paths); NewErrorPage itself passes that already-native
+// text through unchanged. title is the deck title.
 //
 // The phase-7 reloader calls this when a watched edit breaks the deck, then
 // publishes the result with SetPage. The server itself keeps running and
