@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "field-type",
-  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum | image | link | list(of one type) | <section-template>.",
+  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum | image | link | list(of one item type) | record (an inline nested record with its own `fields:`, record-item-type) | <section-template>. Every type may be `nullable` (nullable-fields).",
   "properties": {},
   "out": [],
   "in": [
@@ -14,6 +14,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.field-types",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.nullable-fields",
       "properties": {}
     }
   ]

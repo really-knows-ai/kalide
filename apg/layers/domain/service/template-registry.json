@@ -94,6 +94,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.native-display-paths",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.nested-section-validation",
       "properties": {}
     },
@@ -129,7 +134,27 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.native-display-paths",
+      "source": "requirements.requirement.nullable-fields",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.record-item-type",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.cross-field-list-constraints",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.text-coercion",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.internal-templates",
       "properties": {}
     }
   ]

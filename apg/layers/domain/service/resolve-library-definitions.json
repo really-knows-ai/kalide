@@ -1,0 +1,26 @@
+{
+  "layer": "domain",
+  "type": "service",
+  "name": "resolve-library-definitions",
+  "body": "Resolve library definitions: parse the optional `groups:`, `field_sets:` and `types:` sections of each layer's `library.yaml` and resolve their references — `@<group>` in a section declaration's `accepted:`, `- include: <field_set>` in a template's `fields:`, and `type: <name>` in a field descriptor; an unknown reference is a templates error with a closest-match suggestion. The definitions are additive to library.yaml format 1 (domain.constraint.library-manifest-format-stable). Realised by solution.component.template-library-loader and solution.component.template-registry.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.named-library-definitions",
+      "properties": {}
+    }
+  ]
+}

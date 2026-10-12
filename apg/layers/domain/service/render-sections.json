@@ -39,6 +39,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.docs-cookbook",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.item-context",
       "properties": {}
     },
@@ -74,7 +79,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.docs-cookbook",
+      "source": "requirements.requirement.record-item-type",
       "properties": {}
     }
   ]

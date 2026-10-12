@@ -146,6 +146,11 @@
       "kind": "realised-by",
       "source": "domain.service.load-template-library",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.resolve-library-definitions",
+      "properties": {}
     }
   ]
 }

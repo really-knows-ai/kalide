@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "named-library-definitions",
+  "body": "`library.yaml` defines reusable names in three optional sections. `groups:` declares named accept-lists, referenced from a section declaration's `accepted:` as `@<name>` (for example `accepted: [@content-blocks, chart]`), combinable with literal template names. `field_sets:` declares named field groups, referenced from a template's `fields:` as a sequence entry `- include: <name>`. `types:` declares named field types, referenced as a field's `type: <name>` (for example a `colour` enum). A named definition resolves when the library loads; an unknown `@<name>`, `include:` name or `type:` name is a templates error with a closest-match suggestion (closest-match-suggestions). The three sections are additive to `library.yaml` format 1 — the `format:` value stays 1 (domain.constraint.library-manifest-format-stable).",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.named-definition",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-manifest",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.resolve-library-definitions",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.templates-dir-layout",
+      "properties": {}
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "nullable-fields",
+  "body": "Every field and record-item descriptor in a template.yaml field schema carries `nullable: true|false`, defaulting to false. A non-nullable field rejects a YAML `null` value with the error `got null — this field isn't nullable`. A nullable field accepts an explicit `null` for any type (text, number, date, boolean, enum, image, link, list, record, section-template), and a null entry runs no bound, format or membership check: `min`/`max`, `min_date`/`max_date`, `max_length`, `min_items`/`max_items`, `formats`/`default_format` and enum-variant membership all skip a null entry. Null is distinct from absent: a `required: true` nullable field requires the key to be present and it may be null, while omitting the key is governed by the required/default rule, and an explicit `null` never triggers the declared `default`. In layouts an absent value and an explicit `null` both reach the context as a nil value; the reserved `.raw` entry preserves the difference (raw-source-context).",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.field",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.field-type",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.template-definition",
+      "properties": {}
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "named-definition",
+  "body": "A named, reusable definition declared in `library.yaml`: a `group` (a named accept-list used in a section declaration's `accepted:` as `@<name>`), a `field_set` (a named field group used in a template's `fields:` as `- include: <name>`) or a `type` (a named field type used as `type: <name>`, e.g. a `colour` enum). A definition resolves when the library loads; an unknown reference is a templates error with a closest-match suggestion. Additive to library.yaml format 1.",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.named-library-definitions",
+      "properties": {}
+    }
+  ]
+}

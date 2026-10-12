@@ -28,18 +28,13 @@
   ],
   "in": [
     {
-      "kind": "contains",
-      "source": "domain.group.validation",
-      "properties": {}
-    },
-    {
       "kind": "calls",
       "source": "domain.service.watch-deck",
       "properties": {}
     },
     {
-      "kind": "drives",
-      "source": "requirements.requirement.whole-deck-validation",
+      "kind": "contains",
+      "source": "domain.group.validation",
       "properties": {}
     },
     {
@@ -65,6 +60,16 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.markdown-disallowed-errors",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.whole-deck-validation",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.internal-templates",
       "properties": {}
     }
   ]

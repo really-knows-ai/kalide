@@ -9,12 +9,7 @@
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.template-composition",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.template-build-checks",
+      "target": "requirements.requirement.body-rules",
       "properties": {}
     },
     {
@@ -24,12 +19,12 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.body-rules",
+      "target": "requirements.requirement.template-build-checks",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.template-variants",
+      "target": "requirements.requirement.template-composition",
       "properties": {}
     },
     {
@@ -38,12 +33,27 @@
       "properties": {}
     },
     {
+      "kind": "contains",
+      "target": "requirements.requirement.template-variants",
+      "properties": {}
+    },
+    {
       "kind": "drives",
       "target": "domain.entity.template",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.nullable-fields",
       "properties": {}
     }
   ],
   "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.brand-owner",
+      "properties": {}
+    },
     {
       "kind": "contains",
       "source": "requirements.user.template-author",
@@ -56,17 +66,12 @@
     },
     {
       "kind": "depends-on",
-      "source": "requirements.requirement.templates-gallery",
-      "properties": {}
-    },
-    {
-      "kind": "depends-on",
       "source": "requirements.requirement.slide-template-required",
       "properties": {}
     },
     {
-      "kind": "contains",
-      "source": "requirements.stakeholder.brand-owner",
+      "kind": "depends-on",
+      "source": "requirements.requirement.templates-gallery",
       "properties": {}
     }
   ]

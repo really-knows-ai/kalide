@@ -64,6 +64,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.native-display-paths",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.portable-layout-names",
       "properties": {}
     },
@@ -109,7 +114,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.native-display-paths",
+      "source": "requirements.requirement.yaml-error-messages",
       "properties": {}
     }
   ]
