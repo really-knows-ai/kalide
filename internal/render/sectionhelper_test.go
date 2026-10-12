@@ -974,6 +974,77 @@ func TestLayeredLayoutExecuteErrorReportsOnDiskPath(t *testing.T) {
 	}
 }
 
+// TestLayeredIncludedLayoutExecuteErrorReportsOnDiskPath pins the layered-deck
+// counterpart of the case feedback-7 calls out: an error raised INSIDE an
+// included layout, not in the including one. The local slide layout A includes
+// ANOTHER registered layout B (the external section extcallee) with
+// `{{ template "<B name>" . }}`, and B fails at execute time on its own line (a
+// builtin `len` applied to a missing value). The render-time execute path
+// (executeLayeredLayout -> namespaceForLayer) must position the failure at B's
+// OWN on-disk path:line — resolved through the renderer's layoutPaths resolver —
+// never at the including slide's path and never with B's layer-relative name as
+// a file location.
+//
+// The fixture is the real two-layer deck layeredCompositionFixture, loaded
+// through the public LoadDeckLibrary; both layouts' composition text is
+// installed after the load exactly as the probes above do. Rendering the local
+// slide reaches the include at execute time.
+func TestLayeredIncludedLayoutExecuteErrorReportsOnDiskPath(t *testing.T) {
+	deckRoot, extRoot := layeredCompositionFixture(t)
+
+	_, reg, funcMap := mustLayeredRegistryInstalled(t, deckRoot, extRoot, func(lib *template.Library) {
+		included := loadedLayoutName(t, lib, "extcallee")
+		installLayoutText(t, lib, "localslide",
+			`<section class="local-slide">{{ template "`+included+`" . }}</section>`)
+		// B fails at execute time on its own line 2.
+		installLayoutText(t, lib, "extcallee",
+			"<div class=\"ext-callee\">\n  {{ len .missing }}\n</div>\n")
+	})
+
+	parsed := &slide.Slide{File: "slides/1-local.md", Template: "localslide"}
+	_, err := RenderSlide(parsed, "local", &deck.Config{Title: "Layered"},
+		deck.Slide{Number: 1, Label: "local"}, 1, reg, funcMap)
+	if err == nil {
+		t.Fatal("RenderSlide() = nil, want the included layout's execute failure")
+	}
+	var libErr *template.LibraryError
+	if !errors.As(err, &libErr) {
+		t.Fatalf("RenderSlide() error = %T (%v), want *template.LibraryError", err, err)
+	}
+
+	// B (extcallee) is owned by the external layer, so its on-disk path is the
+	// external layer root joined to its layer-relative name; A (localslide) is
+	// the local layer's slide.
+	includedPath := path.Join(extRoot, template.SectionsDir, "extcallee", template.LayoutFile)
+	includingPath := path.Join(deckRoot, template.TemplatesDir, template.SlidesDir, "localslide", template.LayoutFile)
+
+	if libErr.Path != includedPath {
+		t.Errorf("Path = %q, want the included layout's on-disk path %q", libErr.Path, includedPath)
+	}
+	if libErr.Path == includingPath {
+		t.Errorf("Path = %q, want the included layout, not the including slide %q", libErr.Path, includingPath)
+	}
+	if libErr.Line != 2 {
+		t.Errorf("Line = %d, want 2 (the failing action's line in the included layout)", libErr.Line)
+	}
+	if prefix := includedPath + ":2: "; !strings.HasPrefix(libErr.Error(), prefix) {
+		t.Errorf("Error() = %q, want it to begin with the included layout's on-disk position %q", libErr.Error(), prefix)
+	}
+
+	// Neither B's nor A's layer-relative name may be printed as a file
+	// location; B's on-disk path legitimately ends with its layer-relative
+	// name, so drop it first.
+	rest := strings.ReplaceAll(libErr.Error(), includedPath, "")
+	for _, name := range []string{
+		template.SectionsDir + "/extcallee/" + template.LayoutFile,
+		template.SlidesDir + "/localslide/" + template.LayoutFile,
+	} {
+		if strings.Contains(rest, name+":") {
+			t.Errorf("Error() = %q contains %q as a file location, want the on-disk path only", libErr.Error(), name+":")
+		}
+	}
+}
+
 // The child-argument probes below are the unit-test deliverable for
 // plan.phase-02.task-4: the render-time children path
 // (renderer.sectionHelper → template.ResolveSectionCallLayered →

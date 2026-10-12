@@ -368,6 +368,58 @@ func TestLayoutErrorReportsOnDiskPath(t *testing.T) {
 	})
 }
 
+// TestLayoutErrorInIncludedLayoutReportsOnDiskPath pins the case feedback-7
+// calls out: an error raised INSIDE an included layout, not in the including
+// one. Slide layout A executes `{{ template "sections/b/layout.html.tmpl" . }}`;
+// the included section layout B fails at execute time on its own line (a builtin
+// `len` applied to a missing value). Step 7 executes A's layout against the
+// merged library layout namespace, so Go's html/template attributes the failure
+// to B's namespace key `sections/b/layout.html.tmpl`; layoutTemplateError must
+// resolve that key through libraryLayoutPathResolver to B's ON-DISK Layout.Path,
+// never fall back to the invoking A's path, and never print B's layer-relative
+// name as a file location.
+func TestLayoutErrorInIncludedLayoutReportsOnDiskPath(t *testing.T) {
+	// The failing action sits on line 2 of B, while A's include sits on its own
+	// line 1, so a position attributed to the wrong layout cannot coincide.
+	fsys := baseLibraryFS()
+	fsys["sections/b/template.yaml"] = &fstest.MapFile{Data: []byte("name: b\n")}
+	fsys["sections/b/layout.html.tmpl"] = &fstest.MapFile{
+		Data: []byte("<div>\n  {{ len .missing }}\n</div>\n"),
+	}
+	fsys["sections/b/example.md"] = &fstest.MapFile{Data: []byte("# b\n")}
+
+	// A is a slide whose layout includes B by B's layer-relative layout name,
+	// unguarded so step 7 reaches the include.
+	fsys["slides/a/template.yaml"] = &fstest.MapFile{Data: []byte("name: a\n")}
+	fsys["slides/a/layout.html.tmpl"] = &fstest.MapFile{
+		Data: []byte(`<div>{{ template "sections/b/layout.html.tmpl" . }}</div>`),
+	}
+	fsys["slides/a/example.md"] = &fstest.MapFile{Data: []byte("# a\n")}
+
+	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+	if err == nil {
+		t.Fatalf("LoadLibrary() = %+v, nil; want the included layout's execute failure at step 7", lib)
+	}
+	if lib != nil {
+		t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+	}
+	libErr := asLibraryError(t, err)
+
+	// The failure is positioned at the INCLUDED layout B's on-disk file:line,
+	// never at the including layout A's.
+	includedPath := TemplatesDir + "/" + SectionsDir + "/b/" + LayoutFile
+	includingPath := TemplatesDir + "/" + SlidesDir + "/a/" + LayoutFile
+	assertOnDiskLayoutError(t, libErr, includedPath, 2)
+	if libErr.Path == includingPath {
+		t.Errorf("Path = %q, want the included layout, not the including layout %q", libErr.Path, includingPath)
+	}
+	// Neither B's nor A's layer-relative name may be printed as a file
+	// location; B's on-disk path legitimately ends with its layer-relative
+	// name, so assertNoLayerRelativeLocation strips it first.
+	assertNoLayerRelativeLocation(t, libErr.Error(), includedPath,
+		SectionsDir+"/b/"+LayoutFile, SlidesDir+"/a/"+LayoutFile)
+}
+
 // assertOnDiskLayoutError asserts libErr reports the on-disk layout path:line
 // position: Path is wantPath, Line is wantLine, and Error() begins with
 // "<wantPath>:<wantLine>: ".
