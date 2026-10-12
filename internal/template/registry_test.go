@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"gopkg.in/yaml.v3"
 )
 
 // This file is the unit-test deliverable for phase-04.task-8: the Registry
@@ -585,6 +587,129 @@ func TestRegistry(t *testing.T) {
 		// "columns" instances validated end to end (checkLibraryExamples,
 		// step 7) against the column template's own field schema — proven
 		// by LoadLibrary having already returned no error above.
+	})
+
+	// parseManifestField accepts the nullable and coerce keys on any
+	// descriptor and the inline `type: record` form as a list's `item:`: the
+	// record's own `fields:` recurse through parseManifestFields, so a record
+	// field may itself be a list whose item is a record (record-item-type).
+	// Administering the isItem flag directly pins the two halves of the
+	// contract the notes call out — a record is rejected as a field's own
+	// `type:` (it is valid only as an item descriptor) and a record item
+	// descriptor needs no `name`, while a non-record item still does.
+	t.Run("parseManifestField accepts nullable, coerce and an inline record item", func(t *testing.T) {
+		const manifestPath = "templates/slides/x/template.yaml"
+		parseField := func(t *testing.T, src string, isItem bool) (*Field, error) {
+			t.Helper()
+			var doc yaml.Node
+			if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
+				t.Fatalf("yaml.Unmarshal(%q) error = %v", src, err)
+			}
+			return parseManifestField(manifestPath, libraryDocumentMapping(&doc), isItem)
+		}
+
+		t.Run("nullable and coerce on a field", func(t *testing.T) {
+			f, err := parseField(t, "name: label\ntype: text\nnullable: true\ncoerce: true\n", false)
+			if err != nil {
+				t.Fatalf("parseManifestField() error = %v, want nil", err)
+			}
+			if f.Name != "label" || f.Type != FieldText {
+				t.Errorf("field = %+v, want name=label type=text", f)
+			}
+			if !f.Nullable {
+				t.Error("Nullable = false, want true")
+			}
+			if !f.Coerce {
+				t.Error("Coerce = false, want true")
+			}
+		})
+
+		t.Run("inline record item recurses its fields", func(t *testing.T) {
+			const src = `type: record
+fields:
+  - name: label
+    type: text
+  - name: entries
+    type: list
+    item:
+      type: record
+      fields:
+        - name: key
+          type: text
+          nullable: true
+        - name: value
+          type: text
+          coerce: true
+`
+			f, err := parseField(t, src, true)
+			if err != nil {
+				t.Fatalf("parseManifestField() error = %v, want nil", err)
+			}
+			// A record item descriptor needs no `name`: it is described by
+			// its `fields:`.
+			if f.Name != "" {
+				t.Errorf("Name = %q, want empty for a record item descriptor", f.Name)
+			}
+			if f.Type != FieldRecord {
+				t.Fatalf("Type = %q, want %q", f.Type, FieldRecord)
+			}
+			if len(f.Fields) != 2 {
+				t.Fatalf("len(Fields) = %d, want 2", len(f.Fields))
+			}
+			if got := f.Fields[0]; got.Name != "label" || got.Type != FieldText {
+				t.Errorf("Fields[0] = %+v, want name=label type=text", got)
+			}
+			entries := f.Fields[1]
+			if entries.Name != "entries" || entries.Type != FieldList || entries.Item == nil {
+				t.Fatalf("Fields[1] = %+v, want name=entries type=list with an item", entries)
+			}
+			// The list item recurses into a record — itself unnamed — whose
+			// own fields carry the nullable/coerce keys.
+			inner := entries.Item
+			if inner.Name != "" {
+				t.Errorf("inner record item Name = %q, want empty", inner.Name)
+			}
+			if inner.Type != FieldRecord {
+				t.Fatalf("inner record item Type = %q, want %q", inner.Type, FieldRecord)
+			}
+			if len(inner.Fields) != 2 {
+				t.Fatalf("len(inner.Fields) = %d, want 2", len(inner.Fields))
+			}
+			if k := inner.Fields[0]; k.Name != "key" || k.Type != FieldText || !k.Nullable {
+				t.Errorf("inner.Fields[0] = %+v, want name=key type=text nullable=true", k)
+			}
+			if v := inner.Fields[1]; v.Name != "value" || v.Type != FieldText || !v.Coerce {
+				t.Errorf("inner.Fields[1] = %+v, want name=value type=text coerce=true", v)
+			}
+		})
+
+		t.Run("record is rejected as a field type", func(t *testing.T) {
+			_, err := parseField(t, "name: x\ntype: record\nfields:\n  - name: y\n    type: text\n", false)
+			if err == nil {
+				t.Fatal("parseManifestField() error = nil, want a record-as-field-type rejection")
+			}
+			if want := `field "x": type "record" is only valid as a list item descriptor`; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want it to contain %q", err, want)
+			}
+		})
+
+		t.Run("record item requires fields and a non-record item requires a name", func(t *testing.T) {
+			_, err := parseField(t, "type: record\n", true)
+			if err == nil {
+				t.Fatal("parseManifestField() error = nil, want a missing-fields rejection")
+			}
+			if want := `field "": type "record" requires key "fields"`; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want it to contain %q", err, want)
+			}
+
+			_, err = parseField(t, "type: text\n", true)
+			if err == nil {
+				t.Fatal("parseManifestField() error = nil, want a missing-name rejection")
+			}
+			if want := `field: missing required key "name"`; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want it to contain %q", err, want)
+			}
+		})
 	})
 }
 
