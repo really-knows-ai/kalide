@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "closest-match-suggestions",
-  "body": "Unknown field, section, template, config key, theme or named-library-definition (group, field_set, type) names produce an error with a closest-match suggestion (\"did you mean …?\") when one is close.",
+  "body": "Unknown field, section, template, config key, theme, enum value or named-library-definition (group, field_set, type) names, and a media or image path that names no file in its declared roots, produce an error with a closest-match suggestion (\"did you mean …?\") when one is close.",
   "properties": {
     "feature": "validation-errors"
   },

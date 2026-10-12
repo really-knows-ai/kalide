@@ -151,6 +151,11 @@
       "kind": "realised-by",
       "source": "domain.service.resolve-library-definitions",
       "properties": {}
+    },
+    {
+      "kind": "details",
+      "source": "solution.note.variants-from-load-expansion",
+      "properties": {}
     }
   ]
 }

@@ -1,0 +1,25 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "cli-render",
+  "body": "CLI render command: `kalide render [slide] [-o dir] [--full|--fragment]` writes a deck's rendered slide HTML without serving or binding a port. It selects one slide by position label (`<number>[letter]`, deck.Slide.PositionLabel) or by deck-unique label for stdout output, or writes one file per slide, named for its filename stem (`<number>[letter]-<label>.html`), into the `-o dir` directory in deck order; `--full` emits a complete standalone page (the deck page shell, head, embedded assets and theme stylesheet) holding that slide, and `--fragment` emits only the slide's `<section>` markup (the renderer's per-slide output); output is deterministic — byte-identical across runs, with stable deck order and label anchors — so it diffs in CI and feeds screenshot tooling. Exit codes: 0 rendered, 1 validation error (existing error format), 2 usage error (no slide and no `-o`, both `--full` and `--fragment`, or an unknown flag). Owns the render handler in internal/cli; realised by the deck renderer (domain.service.render-deck) and the renderer (domain.service.render-sections).",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.render-deck",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.service.render-sections",
+      "properties": {}
+    }
+  ]
+}

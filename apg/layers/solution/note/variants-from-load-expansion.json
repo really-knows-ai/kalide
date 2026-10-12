@@ -1,0 +1,15 @@
+{
+  "layer": "solution",
+  "type": "note",
+  "name": "variants-from-load-expansion",
+  "body": "Enum `variants_from` expansion, worked. A template's `enum` field that declares `variants_from:` names a glob relative to the resolved library root (e.g. `media/bgs/*.jpg`); while the layer loads, the loader expands that glob against the layer's own root and replaces the field's value set with the matching files' paths relative to the layer's `media/` tree (e.g. `bgs/right-8.jpg`), sorted. A glob that matches no file under the layer's `media/` tree, and a field that declares both `variants:` and `variants_from:`, are templates errors reported with the offending `template.yaml` path. Because the glob is resolved against the layer's own root, an external layer's glob resolves within the external library alone, preserving library self-containment (external-library-self-contained, global.constraint.template-library-shareable).",
+  "properties": {},
+  "out": [
+    {
+      "kind": "details",
+      "target": "solution.component.template-library-loader",
+      "properties": {}
+    }
+  ],
+  "in": []
+}

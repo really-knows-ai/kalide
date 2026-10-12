@@ -59,6 +59,16 @@
       "kind": "contains",
       "target": "requirements.requirement.whole-deck-validation",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-render",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-check",
+      "properties": {}
     }
   ],
   "in": []

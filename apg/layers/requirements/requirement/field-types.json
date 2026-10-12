@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "field-types",
-  "body": "Field types: `text` (inline Markdown following the same inline rules as bodies — bold, italic, inline code, `[]()` links, hard breaks; `[]()` links inside text are validated exactly like body links, so a `#label` must exist; `plain` flag strips styles silently), `number` (written as a plain YAML number, e.g. `1250000`, `0.12`; a quoted/string value = type error), `date` (written as `YYYY-MM-DD`; any other form = error), `boolean`, `enum`, `image` (path under assets/, existence checked), `link` (#label checked or http(s) URL), `list` (exactly one item descriptor), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, item: {type: person}}`). Every type accepts the `nullable` rule (nullable-fields). A field's `type:` names one of these types; a `record` appears as a list's `item:` descriptor — `item: {type: record, fields: [...]}` (record-item-type) — so structured data comes either from a section template used as a field type or from such an inline record.",
+  "body": "Field types: `text` (inline Markdown following the same inline rules as bodies — bold, italic, inline code, `[]()` links, hard breaks; `[]()` links inside text are validated exactly like body links, so a `#label` must exist; `plain` flag strips styles silently), `number` (written as a plain YAML number, e.g. `1250000`, `0.12`; a quoted/string value = type error), `date` (written as `YYYY-MM-DD`; any other form = error), `boolean`, `enum`, `image`, `link` (#label checked or http(s) URL), `list` (exactly one item descriptor), and a section template used as a field type for structured YAML data (e.g. `people: {type: list, item: {type: person}}`). Every type accepts the `nullable` rule (nullable-fields). A field's `type:` names one of these types; a `record` appears as a list's `item:` descriptor — `item: {type: record, fields: [...]}` (record-item-type) — so structured data comes either from a section template used as a field type or from such an inline record. An `image` field's path is existence-checked and, by default, sits under the deck's `assets/`; it may declare `roots:` (`assets`, or a resolved library layer's `media`), `dir:` and `extensions:` to name where its path may point, and its value renders as the resolved URL (image-field-roots). An `enum` field's closed value set is declared inline with `variants:` or expanded from a library-relative glob with `variants_from:` (enum-variants-from).",
   "properties": {
     "feature": "templates"
   },
@@ -30,6 +30,11 @@
     {
       "kind": "drives",
       "target": "domain.value.field-type",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.image-field-roots",
       "properties": {}
     }
   ],

@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "field-type",
-  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum | image | link | list (one item descriptor) | <section-template>. Every type may be `nullable` (nullable-fields). A list's `item:` descriptor may declare an inline `record` with its own `fields:` — `item: {type: record, fields: [...]}` (record-item-type).",
+  "body": "Field type: text (inline Markdown, body inline rules; links validated like body links) | number (plain YAML number; strings are type errors) | date (`YYYY-MM-DD`) | boolean | enum (a closed value set declared inline with `variants:` or expanded from a library-relative glob with `variants_from:`) | image (a path under the deck's `assets/` by default, or under a declared `roots` entry — a library layer's `media` — existence-checked against the declared roots, with `dir`/`extensions` restrictions) | link | list (one item descriptor) | <section-template>. Every type may be `nullable` (nullable-fields). A list's `item:` descriptor may declare an inline `record` with its own `fields:` — `item: {type: record, fields: [...]}` (record-item-type).",
   "properties": {},
   "out": [],
   "in": [
@@ -19,6 +19,16 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.nullable-fields",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.image-field-roots",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.enum-variants-from",
       "properties": {}
     }
   ]

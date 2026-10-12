@@ -1,0 +1,28 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "cli-render",
+  "body": "`kalide render [slide] [-o dir] [--full|--fragment]` writes a deck's rendered slide HTML without serving it (no server, no port, no network; single-binary). With a slide argument it writes the selected slide's HTML to stdout; without a slide argument it writes one file per slide into the directory named by `-o dir`, each file named for its slide's filename stem — `<number>[letter]-<label>.html` (e.g. `3-team.html` for `slides/3-team.md`, `3a-detail.html` for `slides/3a-detail.md`) — in deck order; the no-slide form requires `-o`, and omitting it is a usage error. A slide argument selects a slide by its position label (deck.Slide.PositionLabel: `<number>` for a horizontal slide, `<number><letter>` for a vertical one, e.g. `3` or `3a`, slide-position) or by its deck-unique label (the filename's `<label>`, unique-slide-labels); a position-label match takes precedence over a label match, and an argument matching no slide is an error with a closest-match suggestion. `--full` (the default) writes a complete standalone page — the same page shell, head, embedded assets and theme stylesheet the server serves (pdf-via-print) — whose reveal.js container holds that slide; `--fragment` writes only the slide's `<section>` markup, exactly the fragment the deck page embeds. The two flags are mutually exclusive: giving both is a usage error (exit 2). Output is deterministic — the same deck renders byte-identical HTML across runs, in stable deck order with the slide's label as its anchor id — so the output diffs cleanly in CI and feeds before/after HTML diffs and screenshot tooling. A validation error exits 1 with the existing error-reporting format; a usage error exits 2.\n\nAC:\n- `kalide render 3` (position label) and `kalide render team` (deck label) each print the selected slide's HTML to stdout;\n- `kalide render --fragment 3` prints only that slide's `<section>` markup;\n- `kalide render -o out` writes one `<number>[letter]-<label>.html` file per slide into `out`, in deck order;\n- `kalide render` with no slide argument and no `-o` is a usage error, exit 2;\n- `kalide render --full --fragment 3` is a usage error, exit 2;\n- on a broken deck `kalide render` exits 1 with the standard validation error format;\n- two runs over the same deck produce byte-identical output.",
+  "properties": {
+    "feature": "cli"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.render-deck",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.user.deck-author",
+      "properties": {}
+    }
+  ]
+}

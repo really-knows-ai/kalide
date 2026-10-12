@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "field",
-  "body": "A template field definition: name, type, rules (required, default, max_length — characters after Markdown stripping, min/max_items, min/max, plain, description), display formats for number/date (input is always a plain YAML number / `YYYY-MM-DD`). A field additionally carries `nullable` (default false; nullable-fields); a `text` field may carry `coerce` (text-coercion); and a `list` field may carry `max_items_from`/`min_items_from` referencing another list (cross-field-list-constraints). A required field that declares a default is satisfied when omitted — the default is applied — everywhere a `fields` map is validated (slide and section instances, template examples, `section` helper calls and `child` constructor calls; field-rules). A `fields` map supplied to the `section` helper or to a `child` constructor is checked against that template's field schema by the same rules (section-helper, child-constructor).",
+  "body": "A template field definition: name, type, rules (required, default, max_length — characters after Markdown stripping, min/max_items, min/max, plain, description), display formats for number/date (input is always a plain YAML number / `YYYY-MM-DD`), and the type-specific options: an `enum` field's value set is declared inline with `variants` or expanded from a library-relative glob with `variants_from` (enum-variants-from), and an `image` field may carry `roots` (the deck's `assets` or a library layer's `media`), `dir` and `extensions` (image-field-roots). A field additionally carries `nullable` (default false; nullable-fields); a `text` field may carry `coerce` (text-coercion); and a `list` field may carry `max_items_from`/`min_items_from` referencing another list (cross-field-list-constraints). A required field that declares a default is satisfied when omitted — the default is applied — everywhere a `fields` map is validated (slide and section instances, template examples, `section` helper calls and `child` constructor calls; field-rules). A `fields` map supplied to the `section` helper or to a `child` constructor is checked against that template's field schema by the same rules (section-helper, child-constructor).",
   "properties": {},
   "out": [],
   "in": [
@@ -13,17 +13,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.cross-field-list-constraints",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.field-rules",
       "properties": {}
     },
     {
       "kind": "drives",
       "source": "requirements.requirement.nullable-fields",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.cross-field-list-constraints",
       "properties": {}
     },
     {

@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "constraint",
   "name": "library-manifest-format-stable",
-  "body": "library.yaml declares `format: 1`. The named definitions (`groups:`, `field_sets:`, `types:`) and the schema extensions (the inline `record` list-item type, `nullable`, `coerce`, `max_items_from`/`min_items_from` and top-level `internal`) are part of format 1 and do not change it; a `library.yaml` declaring any other format is an unsupported library format.",
+  "body": "library.yaml declares `format: 1`. The named definitions (`groups:`, `field_sets:`, `types:`) and the schema extensions (the inline `record` list-item type, `nullable`, `coerce`, `max_items_from`/`min_items_from`, the `image` field's `roots`/`dir`/`extensions`, the `enum` field's `variants_from` and top-level `internal`) are part of format 1 and do not change it; a `library.yaml` declaring any other format is an unsupported library format.",
   "properties": {},
   "out": [],
   "in": []

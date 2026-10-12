@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "validate-deck",
-  "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level; fail-fast — stop at and return the first validation error in the fixed order: kalide.yaml → slide filenames (numbering, letters, label uniqueness) → each slide in number/letter order, top-to-bottom by line (frontmatter, body, sections, fields) → inter-slide #label links last (need all labels known).",
+  "body": "Validate deck: apply config, filename, template, section, field, body/Markdown, link and image rules uniformly at every level, in the fixed order: kalide.yaml → slide filenames (numbering, letters, label uniqueness) → each slide in number/letter order, top-to-bottom by line (frontmatter, body, sections, fields) → inter-slide #label links last (need all labels known). It is fail-fast by default — it stops at and returns the first validation error in that order — and it also runs in a collect-all mode that gathers every error, in the same order, for `kalide check --all` (cli-check). An image field's path is existence-checked against its declared roots — the deck's `assets/` by default, or a library layer's `media/` — and a path naming no file is reported with a closest-match suggestion (image-field-roots).",
   "properties": {},
   "out": [
     {
@@ -23,6 +23,11 @@
     {
       "kind": "realised-by",
       "target": "solution.component.markdown-validator",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.cli-check",
       "properties": {}
     }
   ],
@@ -54,6 +59,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.internal-templates",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.markdown-allowed-subset",
       "properties": {}
     },
@@ -69,7 +79,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.internal-templates",
+      "source": "requirements.requirement.cli-check",
       "properties": {}
     }
   ]

@@ -9,12 +9,22 @@
       "kind": "realised-by",
       "target": "solution.component.template-library-loader",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.cli-check",
+      "properties": {}
     }
   ],
   "in": [
     {
       "kind": "contains",
       "source": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.bounded-self-nesting",
       "properties": {}
     },
     {
@@ -115,11 +125,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.yaml-error-messages",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.bounded-self-nesting",
       "properties": {}
     }
   ]

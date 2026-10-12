@@ -1,0 +1,28 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "enum-variants-from",
+  "body": "An `enum` field's closed value set is declared inline with `variants:` (template-variants) or expanded from a library glob with `variants_from:` - a glob relative to the resolved library root whose matching files lie under that layer's `media/` tree (e.g. media/bgs/*.jpg). The glob is expanded when the library loads, and the field's valid values are the matching files, each written as its path relative to the library's `media/` tree - the same base the `image` field's `media` root and the layout `media` helper use (e.g. `bgs/right-8.jpg`) - in sorted order. Declaring `variants:` and `variants_from:` together on one field, or a `variants_from:` glob matching no file, is a templates error at load. A value that is not one of the expanded variants is the existing enum error naming the allowed values, with a closest-match suggestion (closest-match-suggestions). `kalide templates <name>` lists an enum field's effective variants, including those expanded from `variants_from` (cli-templates-show), so an author discovers the available values.\n\nAC:\n- an `enum` field declaring `variants_from:` the glob media/bgs/*.jpg accepts `bgs/right-8.jpg` when the layer carries `media/bgs/right-8.jpg`, and `kalide templates <name>` lists that value;\n- a value outside the expanded set fails with the enum error naming the allowed values and a closest-match suggestion;\n- a field declaring both `variants:` and `variants_from:`, or a `variants_from:` glob matching nothing under the layer's `media/` tree, is a templates error at load;\n- the expanded values are sorted and identical across runs.",
+  "properties": {
+    "feature": "templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.field-type",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.template-variants",
+      "properties": {}
+    }
+  ]
+}
