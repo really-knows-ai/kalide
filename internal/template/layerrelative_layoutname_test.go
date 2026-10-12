@@ -1,6 +1,7 @@
 package template
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -86,7 +87,7 @@ func TestLayerRelativeLayoutNameRejected(t *testing.T) {
 			libErr := asLibraryError(t, err)
 			// The failure is positioned at the invoking layout's on-disk path,
 			// never at a layer-relative name.
-			if want := TemplatesDir + "/" + SlidesDir + "/outer/" + LayoutFile; libErr.Path != want {
+			if want := filepath.Join(TemplatesDir, SlidesDir, "outer", LayoutFile); libErr.Path != want {
 				t.Errorf("Path = %q, want the invoking layout's on-disk path %q", libErr.Path, want)
 			}
 			if !strings.Contains(libErr.Message, "no such template") {

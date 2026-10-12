@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -35,7 +36,7 @@ func importTestThemeFixture(stylesheet string, files map[string][]byte, mediaFS 
 	th := &LibraryTheme{
 		Name:            "default",
 		Dir:             path.Join(ThemesDir, "default"),
-		StylesheetPath:  path.Join("templates", ThemesDir, "default", ThemeStylesheet),
+		StylesheetPath:  filepath.Join(TemplatesDir, ThemesDir, "default", ThemeStylesheet),
 		StylesheetBytes: []byte(stylesheet),
 		Files:           files,
 	}
@@ -59,7 +60,7 @@ func importTestSiblingTheme(name, stylesheet string, files map[string][]byte) *L
 	return &LibraryTheme{
 		Name:            name,
 		Dir:             path.Join(ThemesDir, name),
-		StylesheetPath:  path.Join("templates", ThemesDir, name, ThemeStylesheet),
+		StylesheetPath:  filepath.Join(TemplatesDir, ThemesDir, name, ThemeStylesheet),
 		StylesheetBytes: []byte(stylesheet),
 		Files:           files,
 	}
@@ -70,12 +71,12 @@ func importTestSiblingTheme(name, stylesheet string, files map[string][]byte) *L
 // and a message substring, and every error must be a *LibraryError.
 func TestCheckThemeCSSReferencesImports(t *testing.T) {
 	const root = "templates"
-	themeDir := path.Join("templates", ThemesDir, "default")
-	themeCSSPath := path.Join(themeDir, ThemeStylesheet)
-	xPath := path.Join(themeDir, "x.css")
-	yPath := path.Join(themeDir, "y.css")
-	accentXPath := path.Join("templates", ThemesDir, "accent", "x.css")
-	mediaXPath := path.Join("templates", MediaDir, "x.css")
+	themeDir := filepath.Join(TemplatesDir, ThemesDir, "default")
+	themeCSSPath := filepath.Join(themeDir, ThemeStylesheet)
+	xPath := filepath.Join(themeDir, "x.css")
+	yPath := filepath.Join(themeDir, "y.css")
+	accentXPath := filepath.Join(TemplatesDir, ThemesDir, "accent", "x.css")
+	mediaXPath := filepath.Join(TemplatesDir, MediaDir, "x.css")
 
 	cases := []struct {
 		name       string
@@ -141,7 +142,7 @@ func TestCheckThemeCSSReferencesImports(t *testing.T) {
 				"a.css": []byte("/* intro */\n@import \"theme.css\";\n"),
 			},
 			wantErr:    true,
-			wantPath:   path.Join(themeDir, "a.css"),
+			wantPath:   filepath.Join(themeDir, "a.css"),
 			wantLine:   2,
 			wantSubstr: "import cycle",
 		},
@@ -257,8 +258,8 @@ func TestCheckThemeCSSReferencesImports(t *testing.T) {
 // following every stylesheet.
 func TestCheckThemeCSSReferencesImportsBounded(t *testing.T) {
 	const root = "templates"
-	themeDir := path.Join("templates", ThemesDir, "default")
-	themeCSSPath := path.Join(themeDir, ThemeStylesheet)
+	themeDir := filepath.Join(TemplatesDir, ThemesDir, "default")
+	themeCSSPath := filepath.Join(themeDir, ThemeStylesheet)
 	n := maxThemeCSSImports + 5
 
 	t.Run("fan-out beyond the bound errors at the limit", func(t *testing.T) {
@@ -300,7 +301,7 @@ func TestCheckThemeCSSReferencesImportsBounded(t *testing.T) {
 		libErr := asLibraryError(t, checkThemeCSSReferences(root, th, lib))
 		// The stack already holds theme.css plus c1..c63 when c63
 		// imports c64, so the bound trips on c63's line 1.
-		wantPath := path.Join(themeDir, fmt.Sprintf("c%d.css", maxThemeCSSImports-1))
+		wantPath := filepath.Join(themeDir, fmt.Sprintf("c%d.css", maxThemeCSSImports-1))
 		if libErr.Path != wantPath {
 			t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 		}

@@ -1,7 +1,7 @@
 package template
 
 import (
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -29,10 +29,10 @@ import (
 // on, the exact non-zero line and a message substring.
 func TestCheckThemeCSSReferencesRefErrors(t *testing.T) {
 	const root = "templates"
-	themeDir := path.Join("templates", ThemesDir, "default")
-	themeCSSPath := path.Join(themeDir, ThemeStylesheet)
-	importedPath := path.Join(themeDir, "x.css")
-	accentXPath := path.Join("templates", ThemesDir, "accent", "x.css")
+	themeDir := filepath.Join(TemplatesDir, ThemesDir, "default")
+	themeCSSPath := filepath.Join(themeDir, ThemeStylesheet)
+	importedPath := filepath.Join(themeDir, "x.css")
+	accentXPath := filepath.Join(TemplatesDir, ThemesDir, "accent", "x.css")
 
 	accentSibling := func(files map[string][]byte) []*LibraryTheme {
 		return []*LibraryTheme{importTestSiblingTheme("accent", "/* accent */", files)}

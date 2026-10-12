@@ -1,6 +1,7 @@
 package template
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -298,7 +299,7 @@ func TestCheckLibraryExampleUnknownLayoutNameError(t *testing.T) {
 	// The failure is positioned at the layout that made the bad call, not at
 	// the (absent) include target — the same layout path loadlibrary.go builds:
 	// path.Join(root, slides/hello/layout.html.tmpl), root == TemplatesDir.
-	if want := TemplatesDir + "/" + SlidesDir + "/hello/" + LayoutFile; libErr.Path != want {
+	if want := filepath.Join(TemplatesDir, SlidesDir, "hello", LayoutFile); libErr.Path != want {
 		t.Errorf("Path = %q, want the offending layout %q", libErr.Path, want)
 	}
 	if !strings.Contains(libErr.Message, "execute") {
@@ -340,7 +341,7 @@ func TestLayoutErrorReportsOnDiskPath(t *testing.T) {
 		}
 		libErr := asLibraryError(t, err)
 
-		wantPath := TemplatesDir + "/" + SlidesDir + "/outer/" + LayoutFile
+		wantPath := filepath.Join(TemplatesDir, SlidesDir, "outer", LayoutFile)
 		assertOnDiskLayoutError(t, libErr, wantPath, 1)
 		// The missing target is quoted exactly as written.
 		if quoted := strconv.Quote(missingTarget); !strings.Contains(libErr.Message, quoted) {
@@ -362,7 +363,7 @@ func TestLayoutErrorReportsOnDiskPath(t *testing.T) {
 		}
 		libErr := asLibraryError(t, err)
 
-		wantPath := TemplatesDir + "/" + SlidesDir + "/broken/" + LayoutFile
+		wantPath := filepath.Join(TemplatesDir, SlidesDir, "broken", LayoutFile)
 		assertOnDiskLayoutError(t, libErr, wantPath, 1)
 		assertNoLayerRelativeLocation(t, libErr.Error(), wantPath, SlidesDir+"/broken/"+LayoutFile)
 	})
@@ -407,8 +408,8 @@ func TestLayoutErrorInIncludedLayoutReportsOnDiskPath(t *testing.T) {
 
 	// The failure is positioned at the INCLUDED layout B's on-disk file:line,
 	// never at the including layout A's.
-	includedPath := TemplatesDir + "/" + SectionsDir + "/b/" + LayoutFile
-	includingPath := TemplatesDir + "/" + SlidesDir + "/a/" + LayoutFile
+	includedPath := filepath.Join(TemplatesDir, SectionsDir, "b", LayoutFile)
+	includingPath := filepath.Join(TemplatesDir, SlidesDir, "a", LayoutFile)
 	assertOnDiskLayoutError(t, libErr, includedPath, 2)
 	if libErr.Path == includingPath {
 		t.Errorf("Path = %q, want the included layout, not the including layout %q", libErr.Path, includingPath)

@@ -3,6 +3,7 @@ package template
 import (
 	htmltemplate "html/template"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -278,7 +279,7 @@ func TestFieldRulesUndefaultedExampleInt(t *testing.T) {
 		t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
 	}
 	libErr := asLibraryError(t, err)
-	if want := TemplatesDir + "/" + SlidesDir + "/strict/" + ExampleFile; libErr.Path != want {
+	if want := filepath.Join(TemplatesDir, SlidesDir, "strict", ExampleFile); libErr.Path != want {
 		t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
 	}
 	if !strings.Contains(libErr.Message, "required") || !strings.Contains(libErr.Message, "must") {
