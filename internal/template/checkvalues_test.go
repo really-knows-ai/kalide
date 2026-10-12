@@ -116,6 +116,39 @@ func TestCheckValues(t *testing.T) {
 	bodyTmpl := newSlide("body", Field{Name: "title", Type: FieldText})
 	bodyTmpl.Body = BodyRule{Mode: BodyRequired, MaxWords: 10}
 	effectTmpl := newSlide("effect", Field{Name: "title", Type: FieldText})
+	nullableTmpl := newSlide("nullable",
+		Field{Name: "title", Type: FieldText, Nullable: true},
+		Field{Name: "count", Type: FieldNumber, Nullable: true, Min: &zero},
+		Field{Name: "modes", Type: FieldList, Nullable: true, Item: &Field{Type: FieldText}, MinItems: 1},
+		Field{Name: "mode", Type: FieldEnum, Nullable: true, Variants: []string{"a"}},
+		Field{Name: "when", Type: FieldDate, Nullable: true},
+	)
+	nonNullableTmpl := newSlide("nonnullable", Field{Name: "title", Type: FieldText})
+	reqNullableTmpl := newSlide("reqnullable",
+		Field{Name: "note", Type: FieldText, Required: true, Nullable: true})
+	coerceTmpl := newSlide("coerce",
+		Field{Name: "coerced", Type: FieldText, Coerce: true},
+		Field{Name: "short_coerced", Type: FieldText, Coerce: true, MaxLength: 2},
+		Field{Name: "plain", Type: FieldText},
+	)
+	recordTmpl := newSlide("records", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type:     FieldRecord,
+		Nullable: true,
+		Fields: []Field{
+			{Name: "title", Type: FieldText, Required: true},
+		},
+	}})
+	nestedRecordTmpl := newSlide("nestedrecords", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "values", Type: FieldList, Item: &Field{
+				Type: FieldRecord,
+				Fields: []Field{
+					{Name: "n", Type: FieldNumber, Min: &zero},
+				},
+			}},
+		},
+	}})
 
 	const boldAndCode = "**bold** and `code`"
 
@@ -579,6 +612,130 @@ func TestCheckValues(t *testing.T) {
 			want: []wantErr{we("type", "colitems › [0]", "A",
 				`type: expected a mapping for section template "col", got a quoted string`,
 				"write the section data as YAML key: value pairs")},
+		},
+
+		// --- nullable -----------------------------------------------------
+		{
+			// A non-nullable field rejects an explicit null with the
+			// nullable-fields error, and no type, bound, format or membership
+			// check runs behind it.
+			name: "non-nullable field null rejected",
+			tmpl: nonNullableTmpl,
+			data: map[string]any{"title": nil},
+			want: []wantErr{we("nullable", "title", nil,
+				"got null", "this field isn't nullable")},
+		},
+		{
+			// A nullable field's null is accepted and skips every check: the
+			// text type, the number Min bound, the list MinItems bound, the
+			// enum membership and the date type all stay silent.
+			name: "nullable field null skips every check",
+			tmpl: nullableTmpl,
+			data: map[string]any{
+				"title": nil, "count": nil, "modes": nil, "mode": nil, "when": nil,
+			},
+		},
+		{
+			// Null is distinct from absent: a required nullable field is
+			// satisfied by a present null key.
+			name: "required nullable field present as null accepted",
+			tmpl: reqNullableTmpl,
+			data: map[string]any{"note": nil},
+		},
+		{
+			// The same required nullable field is still reported missing when
+			// its key is absent.
+			name: "required nullable field absent rejected",
+			tmpl: reqNullableTmpl,
+			data: map[string]any{},
+			want: []wantErr{we("required", "note", nil,
+				`required: field "note" is required but missing`, "add a note: value")},
+		},
+
+		// --- record items --------------------------------------------------
+		{
+			// A nullable record item accepts a null element and skips the
+			// record's fields entirely, so its required `title` is not
+			// reported.
+			name: "list item null skips record fields",
+			tmpl: recordTmpl,
+			data: map[string]any{"items": []any{nil}},
+		},
+		{
+			// A non-null record item still checks its record fields.
+			name: "record item missing required field",
+			tmpl: recordTmpl,
+			data: map[string]any{"items": []any{map[string]any{}}},
+			want: []wantErr{we("required", "items › [0] › title", nil,
+				`required: field "title" is required but missing`, "add a title: value")},
+		},
+		{
+			// record -> list -> record: the innermost violation carries the
+			// full `items › [i] › field` path.
+			name: "nested record list record violation carries full path",
+			tmpl: nestedRecordTmpl,
+			data: map[string]any{"items": []any{
+				map[string]any{"values": []any{
+					map[string]any{"n": -1},
+				}},
+			}},
+			want: []wantErr{we("min", "items › [0] › values › [0] › n", -1,
+				"min: -1 is below the minimum 0", "use a value of at least 0")},
+		},
+
+		// --- text coercion -------------------------------------------------
+		{
+			// A coerce text field accepts a YAML number as its string form.
+			name: "coerce text number accepted",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": 42},
+		},
+		{
+			// A coerce text field accepts a YAML boolean as its string form.
+			name: "coerce text boolean accepted",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": true},
+		},
+		{
+			// The coerced string form is what the max_length check sees:
+			// true -> "true" is 4 characters, over the 2-character bound.
+			name: "coerce text boolean checked as its string form",
+			tmpl: coerceTmpl,
+			data: map[string]any{"short_coerced": true},
+			want: []wantErr{we("max_length", "short_coerced", "true",
+				"max_length: text is 4 characters, maximum is 2", "shorten the value")},
+		},
+		{
+			// A non-coerce text field still rejects a YAML number.
+			name: "non-coerce text rejects number",
+			tmpl: coerceTmpl,
+			data: map[string]any{"plain": 42},
+			want: []wantErr{we("type", "plain", 42,
+				"type: expected a text field, got a number", "quote the value as a string")},
+		},
+		{
+			// A non-coerce text field still rejects a YAML boolean.
+			name: "non-coerce text rejects boolean",
+			tmpl: coerceTmpl,
+			data: map[string]any{"plain": true},
+			want: []wantErr{we("type", "plain", true,
+				"type: expected a text field, got a boolean", "quote the value as a string")},
+		},
+		{
+			// Even a coerce text field rejects a mapping.
+			name: "coerce text rejects mapping",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": map[string]any{"a": 1}},
+			want: []wantErr{we("type", "coerced", map[string]any{"a": 1},
+				"type: expected a text field, got a mapping", "quote the value as a string")},
+		},
+		{
+			// Even a coerce text field rejects a list.
+			name: "coerce text rejects list",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": []any{"a"}},
+			want: []wantErr{we("type", "coerced", []any{"a"},
+				"type: expected a text field, got a list", "quote the value as a string")},
 		},
 
 		// --- unknown-field suggestions ------------------------------------
