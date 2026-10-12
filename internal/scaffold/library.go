@@ -149,18 +149,19 @@ func InitLibrary(dir string) error {
 
 	for _, layout := range []string{template.SlidesDir, template.SectionsDir, template.MediaDir} {
 		if err := os.MkdirAll(filepath.Join(dir, layout), 0o755); err != nil {
-			return fmt.Errorf("init-library: create %s/: %w", layout, err)
+			return fmt.Errorf("init-library: create %s: %w", displaypath.Display("", layout+"/"), err)
 		}
 	}
 
 	themeDir := filepath.Join(dir, template.ThemesDir, theme.DefaultName)
 	if err := os.MkdirAll(themeDir, 0o755); err != nil {
-		return fmt.Errorf("init-library: create %s/%s/: %w", template.ThemesDir, theme.DefaultName, err)
+		return fmt.Errorf("init-library: create %s: %w",
+			displaypath.Display("", template.ThemesDir+"/"+theme.DefaultName+"/"), err)
 	}
 	stylesheet := filepath.Join(themeDir, template.ThemeStylesheet)
 	if err := os.WriteFile(stylesheet, []byte(DefaultThemeCSS()), 0o644); err != nil {
-		return fmt.Errorf("init-library: write %s/%s/%s: %w",
-			template.ThemesDir, theme.DefaultName, template.ThemeStylesheet, err)
+		return fmt.Errorf("init-library: write %s: %w",
+			displaypath.Display("", template.ThemesDir+"/"+theme.DefaultName+"/"+template.ThemeStylesheet), err)
 	}
 
 	// Write the library-root agent-guide pair (library-agent-guide,

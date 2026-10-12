@@ -32,6 +32,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
@@ -135,7 +136,7 @@ func InitExternal(dir, externalPath string) error {
 	}
 	for _, name := range []string{"slides", "assets"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
-			return fmt.Errorf("init: create %s/: %w", name, err)
+			return fmt.Errorf("init: create %s: %w", displaypath.Display("", name+"/"), err)
 		}
 	}
 
