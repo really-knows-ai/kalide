@@ -7,17 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.12.3] - 2026-10-12
 
-- On Windows, every file path kalide shows uses backslashes and full folder
-  names (no mixed separators, no 8.3 short names like `RUNNER~1`), and
-  symlinked folders are shown by their real path. This covers errors, the
-  browser error page and init/upgrade reports.
-
-## [0.12.2] - 2026-10-12
-
-0.12.0 and 0.12.1 were tagged but never released; 0.12.2 is the first 0.12
-release and carries all of their changes.
+0.12.0, 0.12.1 and 0.12.2 were tagged but never released; 0.12.3 is the first
+0.12 release and carries all of their changes.
 
 ### Added
 
@@ -88,6 +81,10 @@ release and carries all of their changes.
 - The section-frontmatter example in the embedded deck author guide now renders
   correctly: its nested code fence no longer closes the surrounding example
   block early.
+- On Windows, every file path kalide shows uses backslashes and full folder
+  names (no mixed separators, no 8.3 short names like `RUNNER~1`), and
+  symlinked folders are shown by their real path. This covers errors, the
+  browser error page and init/upgrade reports.
 
 ## [0.11.0] - 2026-10-10
 
@@ -324,8 +321,8 @@ release and carries all of their changes.
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.2...HEAD
-[0.12.2]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.2
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.3
 [0.11.0]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/really-knows-ai/kalide/compare/v0.9.0...v0.10.0
