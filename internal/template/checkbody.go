@@ -50,6 +50,11 @@ type BodyOption func(*bodyConfig)
 // bodyConfig holds the optional position source an option supplies.
 type bodyConfig struct {
 	line int
+
+	// withoutTableCheck suppresses CheckBody's table pass. A caller that owns
+	// its body's table errors elsewhere sets it so CheckBody does not also
+	// emit them (each table error is emitted exactly once per construct).
+	withoutTableCheck bool
 }
 
 // WithBodyLine supplies the 1-based file line at which the body Markdown
@@ -60,6 +65,22 @@ type bodyConfig struct {
 // WithLineSource.
 func WithBodyLine(line int) BodyOption {
 	return func(c *bodyConfig) { c.line = line }
+}
+
+// WithoutTableCheck suppresses CheckBody's table pass, so CheckBody reports no
+// table error for the body. A caller that owns its body's table errors
+// elsewhere passes it, keeping every table error emitted exactly once per
+// construct: the deck path (validate.checkBodyRule, which owns slide, section
+// and notes bodies through validate.checkTables) and the example path
+// (validateExampleBlockAt, whose checkExampleBodySubheadings owns the example
+// block body's table errors) both pass it. CheckBody's table pass then runs
+// only for the callers that rely on it — a section-helper call's literal body
+// and a child constructor's literal body — which pass no option.
+//
+// WithoutTableCheck has no effect until CheckBody's table pass exists; the flag
+// is recorded now so those callers can opt out from the start.
+func WithoutTableCheck() BodyOption {
+	return func(c *bodyConfig) { c.withoutTableCheck = true }
 }
 
 // CheckBody checks one Markdown body against a template's implied `body` rule
@@ -89,6 +110,9 @@ func WithBodyLine(line int) BodyOption {
 // The rule's Tables option is carried through but not enforced here: CheckBody
 // takes the whole BodyRule value, so a template's `body.tables` option reaches
 // every caller unchanged, but table validation is not part of this fixed order.
+// A caller that owns its body's table errors elsewhere passes WithoutTableCheck
+// to suppress CheckBody's table pass (each table error is emitted exactly once
+// per construct).
 //
 // A zero or negative MaxWords, MaxParagraphs or MaxListItems means no limit,
 // matching BodyRule's documentation. An unrecognised BodyMode is treated as
