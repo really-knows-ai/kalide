@@ -344,6 +344,42 @@ type TableRule struct {
 	// excluded. MinRows 0 is no minimum; MaxRows 0 is unbounded.
 	MinRows int
 	MaxRows int
+
+	// CellAttributes are the attributes a cell may set in this template's
+	// tables, declared by the `cell_attributes` list of `body.tables`
+	// (table-cell-attributes). Each is decoded and type-checked at load; an
+	// ambiguous declaration set is refused at load by
+	// checkCellAttributeAmbiguity. Empty when the template declares none.
+	CellAttributes []CellAttribute
+}
+
+// CellAttribute is one cell attribute a template declares for its GFM tables,
+// an entry of the `body.tables.cell_attributes` list (table-cell-attributes).
+// Its Name is what an author writes in a cell's `{...}` attribute group or as
+// a bare-name short-hand; its Kind is the attribute's value type, one of the
+// two field types FieldBoolean and FieldEnum, with Variants the closed set of
+// an enum's accepted values (domain.value.cell-attribute). A declared
+// attribute is type-checked at load like a field of its Kind and appears,
+// typed by this declaration, in a cell's `attrs` map (table-layout-context).
+//
+// The name `br` is reserved and is never a declared cell attribute. A declared
+// name that is both a boolean attribute and an enum variant, or a variant of
+// more than one declared enum, is refused at template load by
+// checkCellAttributeAmbiguity.
+type CellAttribute struct {
+	// Name is the attribute name an author writes, e.g. `bold` or
+	// `highlight`. The reserved name `br` is never a declared attribute.
+	Name string
+
+	// Kind is the attribute's value type: FieldBoolean or FieldEnum. Any
+	// other field type is a templates error at load.
+	Kind FieldType
+
+	// Variants, for an enum attribute, is the closed set of accepted
+	// values. A bare name that is a variant of exactly one declared enum
+	// attribute sets that attribute by mutex (table-cell-attributes). It is
+	// empty for a boolean attribute.
+	Variants []string
 }
 
 // Layout is a template's Go html/template layout: its name (used in error
