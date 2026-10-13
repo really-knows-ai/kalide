@@ -562,11 +562,11 @@ func isSetextHeading(src []byte, h *ast.Heading) bool {
 // paragraph's second line: a paragraph that is just a delimiter row (the line
 // an ATX heading, list item or block quote leaves behind, which GFM reads as
 // that other block, not a table) is not refused. This mirrors ParseTables,
-// which only reads a header candidate that has a following delimiter row. Both
-// the opt-in gate in checkDisallowed and the whole-body table pass
-// (checkTables) reach their verdict through it, so detection and validation
-// agree on what a table is. The offset is returned so a caller can position a
-// table-level issue at the delimiter row.
+// which only reads a header candidate that has a following delimiter row. The
+// opt-in gate in checkDisallowed reaches its verdict through it; the whole-body
+// table pass (checkTables) does not call it, but the two agree on what a
+// delimiter row is because both rest on isTableDelimiterRow. The offset is
+// returned so a caller can position a table-level issue at the delimiter row.
 func hasTableDelimiterRow(src []byte, b lineBlock) (offset int, ok bool) {
 	segs := b.Lines()
 	if segs == nil {
