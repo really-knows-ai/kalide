@@ -437,10 +437,10 @@ func testLoadConfig(t *testing.T) {
 		// plain-scalar mis-read — a `:` inside a plain scalar, or a plain
 		// scalar whose first character is one of `*`/`&`/`%`/`@` that YAML
 		// reads as an alias, anchor, directive or reserved indicator — the
-		// positioned error additionally carries the quoting hint. yaml.v3
-		// reports a lineless error for a longer alias like `*foo`, so the
-		// plain-scalar-start cases use the one-character line-bearing form
-		// (as the template loader and slide parser tests do).
+		// positioned error additionally carries the quoting hint. A named
+		// alias such as `*foo` is rejected by yaml.v3 with a lineless
+		// "unknown anchor" message, so its line is recovered from the source
+		// instead, and the case is still positioned and hinted.
 		cases := []struct {
 			name    string
 			yaml    string
@@ -460,6 +460,20 @@ func testLoadConfig(t *testing.T) {
 				yaml:    "title: Deck\nauthor: *\n",
 				line:    2,
 				message: "did not find expected alphabetic or numeric character",
+				hint:    true,
+			},
+			{
+				name:    "named alias with no matching anchor",
+				yaml:    "title: Deck\nauthor: *foo\n",
+				line:    2,
+				message: "unknown anchor 'foo' referenced",
+				hint:    true,
+			},
+			{
+				name:    "named alias with trailing text",
+				yaml:    "title: Deck\nauthor: *foo bar\n",
+				line:    2,
+				message: "unknown anchor 'foo' referenced",
 				hint:    true,
 			},
 			{

@@ -264,9 +264,9 @@ func testParseFrontmatter(t *testing.T) {
 // containment path; a plain-scalar mis-read — a `:` inside a plain scalar or a
 // plain scalar beginning with `*`, `&`, `%` or `@` — additionally carries the
 // quoting hint, while a failure that is not a plain-scalar mis-read does not.
-// yaml.v3 reports a lineless error for a longer alias like `*foo`, so the
-// plain-scalar-start cases use the one-character form (as the template loader
-// tests do).
+// A named alias such as `*foo` is rejected by yaml.v3 with a lineless
+// "unknown anchor" message, so its line is recovered from the source instead,
+// and the case is still positioned and hinted like the one-character form.
 func testParseYAMLErrors(t *testing.T) {
 	cat := testCatalogue()
 	const file = "slides/1-intro.md"
@@ -282,6 +282,10 @@ func testParseYAMLErrors(t *testing.T) {
 				"mapping values are not allowed in this context", true},
 			{"plain scalar beginning with an alias indicator", "*",
 				"did not find expected alphabetic or numeric character", true},
+			{"named alias with no matching anchor", "*foo",
+				"unknown anchor 'foo' referenced", true},
+			{"named alias with trailing text", "*foo bar",
+				"unknown anchor 'foo' referenced", true},
 			{"plain scalar beginning with an anchor indicator", "&",
 				"did not find expected alphabetic or numeric character", true},
 			{"plain scalar beginning with a directive indicator", "%example.com",
@@ -338,6 +342,25 @@ func testParseYAMLErrors(t *testing.T) {
 				},
 				line: 7, path: "columns[0]",
 				message: "found character that cannot start any token", hint: true,
+			},
+			{
+				name: "named alias with no matching anchor keeps the instance path",
+				lines: []string{
+					"---", "template: content", "---", "",
+					"# columns", "```", "title: *foo", "```",
+				},
+				line: 7, path: "columns[0]",
+				message: "unknown anchor 'foo' referenced", hint: true,
+			},
+			{
+				name: "named alias with trailing text recovers the nested instance line",
+				lines: []string{
+					"---", "template: grouped", "---", "",
+					"# columns", "```", "template: group", "```", "",
+					"## blocks", "```", "weight: *foo bar", "```",
+				},
+				line: 12, path: "columns[0] › blocks[0]",
+				message: "unknown anchor 'foo' referenced", hint: true,
 			},
 			{
 				name: "nested instance carries its full containment path",

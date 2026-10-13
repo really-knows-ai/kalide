@@ -308,7 +308,10 @@ func TestLoadLibraryStep1BadName(t *testing.T) {
 // carrying the offending source line and — when the offending line is a plain
 // scalar YAML mis-read (a `:` inside it, or a first character of `*`/`&`/`%`/`@`
 // that YAML reads as an alias, anchor, directive or reserved indicator) — the
-// quoting hint (requirements.requirement.yaml-error-messages).
+// quoting hint (requirements.requirement.yaml-error-messages). A named alias
+// such as `*foo`, which yaml.v3 rejects with a lineless "unknown anchor"
+// message, still resolves to its source line through the loader's error
+// helper, so it too is positioned and hinted.
 func TestLoadLibraryStep1BadFormat(t *testing.T) {
 	fsys := baseLibraryFS()
 	fsys["library.yaml"] = &fstest.MapFile{Data: []byte("name: demo\nformat: 2\n")}
@@ -346,6 +349,20 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 				yaml:        "name: demo\nformat: 1\ndescription: *\n",
 				wantLine:    3,
 				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with no matching anchor",
+				yaml:        "name: demo\nformat: 1\ndescription: *foo\n",
+				wantLine:    3,
+				wantMessage: "unknown anchor 'foo' referenced",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with trailing text",
+				yaml:        "name: demo\nformat: 1\ndescription: *foo bar\n",
+				wantLine:    3,
+				wantMessage: "unknown anchor 'foo' referenced",
 				wantHint:    true,
 			},
 			{
@@ -419,6 +436,20 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 				manifest:    "name: hello\ndescription: *\n",
 				wantLine:    2,
 				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with no matching anchor",
+				manifest:    "name: hello\ndescription: *foo\n",
+				wantLine:    2,
+				wantMessage: "unknown anchor 'foo' referenced",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with trailing text",
+				manifest:    "name: hello\ndescription: *foo bar\n",
+				wantLine:    2,
+				wantMessage: "unknown anchor 'foo' referenced",
 				wantHint:    true,
 			},
 			{
