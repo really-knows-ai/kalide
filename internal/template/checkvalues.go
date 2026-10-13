@@ -769,7 +769,16 @@ func (c *checker) validateImage(path []PathSegment, f *Field, value any) {
 	}
 	if exists, candidates := c.cfg.imageExists(f, s); !exists {
 		what := fmt.Sprintf("image: %s does not exist", strconv.Quote(s))
+		// The default fix names the root the value was resolved against: a
+		// field whose declared roots admit media/ (imageFieldAllowsMedia) may
+		// name a media-relative path, so "under assets/" would point at a root
+		// the field does not declare; it gets the media wording instead. An
+		// assets-only or no-roots field keeps the pre-existing assets text
+		// byte-identical.
 		fix := "add the file under assets/ or fix the path"
+		if imageFieldAllowsMedia(f) {
+			fix = "add the file under the declared media/ root or fix the path"
+		}
 		if closest := suggest.Closest(s, candidates); closest != "" {
 			fix = fmt.Sprintf("did you mean %q?", closest)
 		}
