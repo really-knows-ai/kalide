@@ -704,7 +704,13 @@ func (c *checker) validateBoolean(path []PathSegment, value any) {
 		"write true or false without quotes")
 }
 
-// validateEnum checks that an enum value is one of the field's variants.
+// validateEnum checks that an enum value is one of the field's effective
+// variants: f.Variants is the field's declared inline variants: set or, when
+// the field declared variants_from:, the variant list expanded from the glob
+// at load (enum-variants-from). A value outside those variants is the enum
+// error naming the allowed variants; when one of them is close to the
+// offending value the fix adds a closest-match "did you mean …?" hint ahead of
+// the allowed-values list, so the author sees the intended variant.
 func (c *checker) validateEnum(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
 	if !ok {
@@ -718,9 +724,13 @@ func (c *checker) validateEnum(path []PathSegment, f *Field, value any) {
 			return
 		}
 	}
+	fix := "use one of: " + strings.Join(f.Variants, ", ")
+	if closest := suggest.Closest(s, f.Variants); closest != "" {
+		fix = fmt.Sprintf("did you mean %q? use one of: %s", closest, strings.Join(f.Variants, ", "))
+	}
 	c.add(path, "enum", value,
 		fmt.Sprintf("enum: %s is not one of the allowed variants (%s)", strconv.Quote(s), strings.Join(f.Variants, ", ")),
-		"use one of: "+strings.Join(f.Variants, ", "))
+		fix)
 }
 
 // validateImage checks an image field's authored path against the field's
