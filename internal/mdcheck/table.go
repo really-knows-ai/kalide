@@ -31,7 +31,10 @@
 
 package mdcheck
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // TableOptions carries the effective GFM-table limits for a body: the fewest
 // and most tables it may contain, and the fewest and most columns and rows one
@@ -226,4 +229,200 @@ func unescapeTablePipes(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+// KindTable classifies an issue raised by this GFM-table parser and the table
+// pass built on it: a strict column-count violation, a breached table limit or
+// a cell-attribute violation (gfm-tables, table-errors, table-limits). It marks
+// the issues a table pass surfaces so they stay distinct from the ordinary
+// Markdown-subset checks and are reported through the table path.
+const KindTable Kind = "table"
+
+// parseTable parses the GFM table whose header row is lines[start]. The caller
+// has already established — through the delimiter-row test — that lines[start+1]
+// is a delimiter row. lines is the body split into lines and firstLine is the
+// 1-based number of the line formed by lines[0], so the line of lines[i] is
+// firstLine+i.
+//
+// The header cells come from lines[start] and the per-column alignment from
+// lines[start+1], whose cells are each `:?-+:?` at least one hyphen long:
+// `:---` is left, `:---:` centre, `---:` right and `---` none. The body rows
+// continue from lines[start+2] until the first line that begins another block —
+// a blank line, an ATX heading, a block quote, a fence, a list item, a thematic
+// break or an HTML block — or the end of the body (table-syntax).
+//
+// The parse is strict about column counts (table-limits): the delimiter row
+// must have the header's cell count and every body row must have the header's
+// cell count exactly. A header/delimiter mismatch is one Issue positioned at
+// the delimiter row; a body row of the wrong width is one Issue positioned at
+// that row and naming it with its 1-based body-row index, for example
+// `rows[2]: 3 cells, header has 4`. A mismatch never demotes the table to a
+// paragraph.
+//
+// It returns the parsed Table (every cell's Line set from firstLine and its
+// Column from the row source), the Issues in source order — nil when the table
+// is sound — and the index of the first line after the table, so the caller can
+// resume scanning there. parseTable sets no Issue File: the caller supplies the
+// body's own identity. When an Issue is returned the table is malformed, so its
+// Rows may hold rows of differing widths; only a sound table has Headers, Align
+// and every row the same length.
+func parseTable(lines []string, start int, firstLine int) (Table, []Issue, int) {
+	if start < 0 || start+1 >= len(lines) {
+		return Table{}, nil, start + 1
+	}
+
+	headers := splitTableRow(lines[start])
+	for i := range headers {
+		headers[i].Line = firstLine + start
+	}
+	delimCells := splitTableRow(lines[start+1])
+
+	// The header fixes the column count, so every alignment belongs to a
+	// header column: a delimiter cell past the header's count is dropped and a
+	// missing one leaves that column with no alignment.
+	align := make([]string, len(headers))
+	for i := range align {
+		if i < len(delimCells) {
+			align[i] = tableDelimiterAlign(delimCells[i].Text)
+		}
+	}
+
+	table := Table{Headers: headers, Align: align, Line: firstLine + start}
+
+	var issues []Issue
+	if len(delimCells) != len(headers) {
+		issues = append(issues, Issue{
+			Line:    firstLine + start + 1,
+			Col:     rowColumn(lines[start+1]),
+			Kind:    KindTable,
+			Message: fmt.Sprintf("header has %d cells, delimiter row has %d", len(headers), len(delimCells)),
+		})
+	}
+
+	i := start + 2
+	rowIndex := 0
+	for ; i < len(lines); i++ {
+		if tableBlockStart(lines[i]) {
+			break
+		}
+		rowIndex++
+		cells := splitTableRow(lines[i])
+		for j := range cells {
+			cells[j].Line = firstLine + i
+		}
+		table.Rows = append(table.Rows, cells)
+		if len(cells) != len(headers) {
+			issues = append(issues, Issue{
+				Line:    firstLine + i,
+				Col:     rowColumn(lines[i]),
+				Kind:    KindTable,
+				Message: fmt.Sprintf("rows[%d]: %d cells, header has %d", rowIndex, len(cells), len(headers)),
+			})
+		}
+	}
+	return table, issues, i
+}
+
+// rowColumn returns the 1-based byte column of a row's first non-space, non-tab
+// byte, or 1 for a blank row. It is where parseTable positions a row-level
+// Issue, so the line points into the offending row rather than at the table.
+func rowColumn(line string) int {
+	for i := 0; i < len(line); i++ {
+		if line[i] != ' ' && line[i] != '\t' {
+			return i + 1
+		}
+	}
+	return 1
+}
+
+// tableDelimiterAlign reads one delimiter-row cell's alignment: `:---` is
+// left, `:---:` centre, `---:` right and `---` none. The cell has already been
+// trimmed by splitTableRow. A cell that is not a valid `:?-+:?` delimiter cell
+// yields no alignment; the caller has already established that the row is a
+// delimiter row, so its own test owns that rejection.
+func tableDelimiterAlign(cell string) string {
+	s := cell
+	if s == "" {
+		return ""
+	}
+	left := s[0] == ':'
+	right := s[len(s)-1] == ':' && len(s) > 1
+	mid := s
+	if left {
+		mid = mid[1:]
+	}
+	if right && len(mid) > 0 {
+		mid = mid[:len(mid)-1]
+	}
+	if mid == "" || strings.Trim(mid, "-") != "" {
+		return ""
+	}
+	switch {
+	case left && right:
+		return "center"
+	case left:
+		return "left"
+	case right:
+		return "right"
+	}
+	return ""
+}
+
+// tableBlockStart reports whether line begins a block other than the table's
+// own body rows, ending the table (table-syntax): a blank line, an ATX heading,
+// a block quote, a fenced code block, a list item, a thematic break or an HTML
+// block. Leading spaces and tabs are ignored, so an indented block still ends
+// the table.
+func tableBlockStart(line string) bool {
+	s := strings.TrimLeft(line, " \t")
+	if s == "" {
+		return true // blank line
+	}
+	switch {
+	case strings.HasPrefix(s, "#"): // ATX heading
+		return true
+	case strings.HasPrefix(s, ">"): // block quote
+		return true
+	case strings.HasPrefix(s, "```"), strings.HasPrefix(s, "~~~"): // fenced code
+		return true
+	case tableListMarkerAt(s) >= 0: // list item
+		return true
+	case strings.HasPrefix(s, "<"): // HTML block
+		return true
+	}
+	_, ok := thematicBreakMarker([]byte(line))
+	return ok
+}
+
+// tableListMarkerAt reports whether s begins a CommonMark list item — a bullet
+// `-`, `*` or `+`, or an ordered marker of up to nine digits followed by `.` or
+// `)` — and returns the marker's byte length, or -1 when s does not begin a
+// list item. The marker must be followed by a space, a tab or the end of the
+// line, so a table row such as `- | -` still ends the table while `-|-` does
+// not.
+func tableListMarkerAt(s string) int {
+	if s == "" {
+		return -1
+	}
+	switch s[0] {
+	case '-', '*', '+':
+		if len(s) == 1 || s[1] == ' ' || s[1] == '\t' {
+			return 1
+		}
+		return -1
+	}
+	digits := 0
+	for digits < len(s) && s[digits] >= '0' && s[digits] <= '9' {
+		digits++
+	}
+	if digits == 0 || digits > 9 {
+		return -1
+	}
+	if digits >= len(s) || (s[digits] != '.' && s[digits] != ')') {
+		return -1
+	}
+	if digits+1 < len(s) && s[digits+1] != ' ' && s[digits+1] != '\t' {
+		return -1
+	}
+	return digits + 1
 }
