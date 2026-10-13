@@ -1059,9 +1059,11 @@ func exampleTemplateName(fm map[string]any) (string, bool) {
 // field/body/section values a layout expects, and recurses into each declared
 // child instance. container is the instance's own containment path
 // (`columns[2]`) or "" at the root; child errors extend it and carry the full
-// path (nested-section-validation).
-func validateExampleBlock(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any) error {
-	return validateExampleBlockAt(path, def, block, resolve, ctx, "")
+// path (nested-section-validation). imageExists is the load-time image-field
+// existence resolver, forwarded unchanged to validateExampleBlockAt
+// (image-field-roots).
+func validateExampleBlock(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), imageExists func(f *Field, path string) (exists bool, candidates []string), ctx map[string]any) error {
+	return validateExampleBlockAt(path, def, block, resolve, imageExists, ctx, "")
 }
 
 // validateExampleBlockAt is validateExampleBlock with the owning instance's
