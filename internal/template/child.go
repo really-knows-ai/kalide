@@ -471,6 +471,14 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 // declared sections name the children; a nil parent with an empty set returns no
 // children.
 //
+// ancestors is the enclosing instances' chain of resolved template names above
+// parent — the child/children argument set's ancestor identity, empty at the
+// top level, the same convention ResolveChildCall and DataContext take. Every
+// ResolveChildCall this issues is passed it, so each resolved child's `.item`
+// descriptor carries `depth` computed through the shared InstanceDepth helper
+// against the child's own resolved template (item-context,
+// bounded-self-nesting).
+//
 // reqs is the ordered child-argument set the call passed. Each element is one of
 // two kinds:
 //
@@ -504,7 +512,11 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 // Nested children — a literal request's Children and a forwarded entry's `.data`
 // — are resolved recursively with the child's OWN instantiated template as the
 // parent, so grandchildren name that template's declared sections; the recursion
-// carries checkCounts through unchanged (nested-section-validation). Each
+// carries checkCounts through unchanged (nested-section-validation). It also
+// threads the child's own ancestor chain — ancestors with the child's resolved
+// template appended — so each grandchild's `.item.depth` counts its enclosing
+// same-template ancestors along the full chain (item-context,
+// bounded-self-nesting). Each
 // resolved nested set is recorded BOTH on the wrapper ResolvedChild (its
 // Children) and on the child's own SectionCall.Children, so a caller rendering
 // the child's own resolved instance reads its grandchildren from that instance
@@ -521,7 +533,7 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 // to render (section-helper-load-checks). A render-time call resolving a
 // complete set passes true; a load-time check of literal children that cannot
 // see the whole set passes false.
-func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, reqs []*ChildRequest, parentFields map[string]any, checkCounts bool) ([]*ResolvedChild, error) {
+func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, reqs []*ChildRequest, ancestors []string, parentFields map[string]any, checkCounts bool) ([]*ResolvedChild, error) {
 	if parent == nil {
 		if len(reqs) == 0 {
 			return nil, nil
@@ -571,10 +583,7 @@ func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(na
 		index := seen[ec.section]
 		seen[ec.section] = index + 1
 
-		// The enclosing instance's ancestor chain is threaded by ResolveChildren
-		// (task-23); a call site without one passes nil, so the child's depth
-		// is 0.
-		call, err := ResolveChildCall(lookup, layerOf, parent, ec.req, index, counts[ec.section], nil, parentFields)
+		call, err := ResolveChildCall(lookup, layerOf, parent, ec.req, index, counts[ec.section], ancestors, parentFields)
 		if err != nil {
 			return nil, err
 		}
@@ -586,7 +595,11 @@ func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(na
 		// reported rather than silently accepted; when counts are skipped an
 		// empty set has nothing to resolve.
 		if len(ec.req.Children) > 0 || checkCounts {
-			nested, err := ResolveChildren(lookup, layerOf, call.Template, ec.req.Children, call.Values, checkCounts)
+			// The child's own ancestor chain: the enclosing chain with the
+			// child's resolved template appended, so each grandchild computes
+			// its depth against the full chain (item-context).
+			nestedAncestors := append(append([]string{}, ancestors...), call.Template.Name)
+			nested, err := ResolveChildren(lookup, layerOf, call.Template, ec.req.Children, nestedAncestors, call.Values, checkCounts)
 			if err != nil {
 				return nil, err
 			}

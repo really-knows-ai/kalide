@@ -912,7 +912,11 @@ func ResolveSectionCall(resolve func(name string) (*Template, bool), name string
 // descriptor's depth counts the target's enclosing same-template ancestors
 // through the shared InstanceDepth helper: a call from a slide layout, or any
 // call whose ancestors carry no template equal to the target name, has depth 0
-// (item-context). It is the same ancestor convention DataContext takes.
+// (item-context). It is the same ancestor convention DataContext takes. The
+// target's own children are resolved with the target instance's chain — this
+// chain with the target name appended — so each child's `.item.depth` is
+// computed against its full enclosing chain (item-context,
+// bounded-self-nesting).
 //
 // The trailing children are resolved with the same resolve/layerOf pair, so a
 // child naming a template that lives in the other library layer carries that
@@ -971,11 +975,16 @@ func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), laye
 
 	// Resolve the call's child arguments against the target's declared
 	// sections, with the target's effective values as each child's
-	// `.item.parent`. ResolveChildren is called even for an empty set so a
-	// target declaring a mandatory child section the call leaves unfilled is
-	// rejected here, by the same per-declaration min/max check that enforces the
-	// count over the full passed set (nested-section-validation).
-	resolved, err := ResolveChildren(resolve, layerOf, target, children, effective, true)
+	// `.item.parent`. The children's ancestor chain is the target instance's
+	// own chain — the enclosing chain with the target's resolved name appended
+	// — so each child's `.item.depth` counts its enclosing same-template
+	// ancestors along the full chain (item-context, bounded-self-nesting).
+	// ResolveChildren is called even for an empty set so a target declaring a
+	// mandatory child section the call leaves unfilled is rejected here, by the
+	// same per-declaration min/max check that enforces the count over the full
+	// passed set (nested-section-validation).
+	childAncestors := append(append([]string{}, ancestors...), name)
+	resolved, err := ResolveChildren(resolve, layerOf, target, children, childAncestors, effective, true)
 	if err != nil {
 		return nil, err
 	}
