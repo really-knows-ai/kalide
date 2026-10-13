@@ -42,6 +42,15 @@ import (
 //     instance with per-name sibling counts, each carrying its own
 //     `raw`/`item`/`data`, and the recursion sets a child's `item.parent` to
 //     the enclosing instance's source values.
+//
+// plan.phase-05.task-11 extends the file with the reserved table context
+// (table-layout-context, gfm-tables): TestLoadLibraryTableContextAlwaysPresent
+// proves a slide layout and a section-helper target layout read `.table`/
+// `.tables` at load with table nil and tables an empty list when the template
+// does not opt in through `body.tables` and the body carries no table, and
+// TestLoadLibraryTableContextOptInBody proves a table-opt-in template's
+// table-bearing example body loads with a layout reading `.table.rows`/
+// `.tables` (at slide level and through a section-helper target).
 
 // unguardedExampleLibraryFS is a minimal, otherwise-valid in-memory library
 // whose layouts read the reserved load-time context with no guard:
@@ -616,6 +625,215 @@ func TestDataContext(t *testing.T) {
 			t.Errorf("raw = %v, want empty without a resolved template", raw)
 		}
 	})
+}
+
+// TestLoadLibraryTableContextAlwaysPresent is plan.phase-05.task-11's
+// no-opt-in half (table-layout-context, template-context): the reserved
+// `.table`/`.tables` entries are ALWAYS present in the load-time example
+// context, at slide level (checkLibraryExample) and in a section-helper target
+// (exampleSectionRunner.render, both in examplecheck.go), so a layout reads them
+// at step 7 even when the template does not opt in through `body.tables` and its
+// body carries no table. LoadLibrary discards the rendered bytes, so a
+// successful load is itself the regression assertion that the layouts execute;
+// the entries' exact values are asserted directly (exampleTableContext) and the
+// section-helper target's HTML is observed through exampleSectionHelper.
+//
+// `.table` is a BARE nil (not a typed nil map), so an unguarded
+// `{{ .table.rows }}` in a body that carries no table fails to execute ("nil
+// pointer evaluating interface {}.rows"). A layout therefore tests `.table`
+// with `{{ if .table }}` before dereferencing it, while `.tables` is always a
+// non-nil list and is read (ranged or measured) unguarded. The table-bearing
+// case is covered by TestLoadLibraryTableContextOptInBody.
+func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
+	fsys := fstest.MapFS{
+		"library.yaml": {Data: []byte("name: demo\nformat: 1\n")},
+
+		// The slide declares a field, so its example block is parsed and the
+		// explicit nil/empty table entries are published. Its layout tests
+		// `{{ if .table }}` and reads `.tables` unguarded, and calls the
+		// section-helper target with a table-less body.
+		"slides/main/template.yaml": {Data: []byte(
+			"name: main\n" +
+				"fields:\n" +
+				"  - name: title\n    type: text\n" +
+				"body:\n  mode: optional\n")},
+		"slides/main/layout.html.tmpl": {Data: []byte(
+			`<section class="main">` +
+				`<span class="main-table">{{ if .table }}table{{ else }}none{{ end }}</span>` +
+				`<span class="main-tables">{{ len .tables }}</span>` +
+				`<span class="main-section">{{ section "target" nil "Target body." }}</span>` +
+				`</section>`)},
+		"slides/main/example.md": {Data: []byte(
+			"---\n" +
+				"template: main\n" +
+				"title: Main Title\n" +
+				"---\n" +
+				"Main body.\n")},
+
+		// The section-helper target reads the same entries; its own schema-free
+		// example is not shape-checked, so its layout also executes against the
+		// default nil/empty entries.
+		"sections/target/template.yaml": {Data: []byte("name: target\nbody:\n  mode: optional\n")},
+		"sections/target/layout.html.tmpl": {Data: []byte(
+			`<span class="target-table">{{ if .table }}table{{ else }}none{{ end }}</span>` +
+				`<span class="target-tables">{{ len .tables }}</span>`)},
+		"sections/target/example.md": {Data: []byte("# target\n")},
+	}
+
+	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+	if err != nil {
+		t.Fatalf("LoadLibrary() error = %v, want nil: the always-present .table/.tables entries must let these layouts execute at load", err)
+	}
+	if lib == nil {
+		t.Fatal("LoadLibrary() returned nil Library with nil error")
+	}
+	for _, name := range []string{"main", "target"} {
+		lt, _, ok := lib.TemplateByName(name)
+		if !ok || lt == nil || lt.Definition == nil {
+			t.Fatalf("template %q not loaded with a Definition: ok=%v", name, ok)
+		}
+	}
+
+	// A body with no table gives a nil `.table` and a NON-NIL empty `.tables`
+	// list, so `.tables` can be read without a guard.
+	table, tables := exampleTableContext("Main body.", nil)
+	if table != nil {
+		t.Errorf("exampleTableContext(no-table body) table = %v, want nil", table)
+	}
+	if tables == nil {
+		t.Error("exampleTableContext(no-table body) tables = nil, want a non-nil empty list")
+	} else if len(tables) != 0 {
+		t.Errorf("exampleTableContext(no-table body) tables = %v, want an empty list", tables)
+	}
+
+	// A section-helper target executes with the same entries through
+	// exampleSectionRunner.render; observe its rendered HTML directly.
+	helper := exampleSectionHelper(lib, nil)
+	got, err := helper("target", nil, "Target body.")
+	if err != nil {
+		t.Fatalf(`helper("target") error = %v, want nil`, err)
+	}
+	for _, want := range []string{
+		`<span class="target-table">none</span>`,
+		`<span class="target-tables">0</span>`,
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf(`helper("target") = %q, want it to contain %q`, string(got), want)
+		}
+	}
+}
+
+// TestLoadLibraryTableContextOptInBody is plan.phase-05.task-11's opt-in half
+// (table-layout-context, gfm-tables): an opted-in template's example body
+// carrying a GFM table loads cleanly with a layout that reads the table context
+// (`{{ range .table.rows }}` and `.tables`) at slide level (checkLibraryExample)
+// and through a section-helper target whose call supplies a literal table body
+// (exampleSectionRunner.render).
+//
+// `.table.rows` is ranged under an `{{ if .table }}` guard — the target's own
+// schema-free example executes with table nil, where a bare-nil `.table` cannot
+// be dereferenced — while `.tables` is read unguarded. The example body's table
+// is parsed into the reserved entries and asserted directly; the helper target's
+// rendered HTML is observed through exampleSectionHelper.
+func TestLoadLibraryTableContextOptInBody(t *testing.T) {
+	// The slide's example body carries a real table (real newlines). The
+	// section-helper call supplies a second, distinct table as a template string
+	// literal whose `\n` escapes html/template unquotes to the real newlines
+	// mdcheck's parser reads.
+	const bodyTable = "| Name | Value |\n| --- | --- |\n| a | 1 |\n"
+	const helperBodyEscaped = `| h1 | h2 |\n| --- | --- |\n| x | y |`
+	const helperBody = "| h1 | h2 |\n| --- | --- |\n| x | y |"
+
+	fsys := fstest.MapFS{
+		"library.yaml": {Data: []byte("name: demo\nformat: 1\n")},
+
+		"slides/main/template.yaml": {Data: []byte(
+			"name: main\n" +
+				"fields:\n" +
+				"  - name: title\n    type: text\n" +
+				"body:\n  mode: optional\n  tables:\n    max_tables: 1\n")},
+		"slides/main/layout.html.tmpl": {Data: []byte(
+			`<section class="main">` +
+				`<span class="main-table">{{ if .table }}table{{ else }}none{{ end }}</span>` +
+				`<span class="main-tables">{{ len .tables }}</span>` +
+				`{{ if .table }}{{ range .table.rows }}<span class="main-row">{{ range . }}{{ .html }}{{ end }}</span>{{ end }}{{ end }}` +
+				`{{ section "target" nil "` + helperBodyEscaped + `" }}` +
+				`</section>`)},
+		"slides/main/example.md": {Data: []byte(
+			"---\n" +
+				"template: main\n" +
+				"title: Main Title\n" +
+				"---\n" +
+				bodyTable)},
+
+		"sections/target/template.yaml": {Data: []byte(
+			"name: target\n" +
+				"body:\n  mode: optional\n  tables:\n    max_tables: 1\n")},
+		"sections/target/layout.html.tmpl": {Data: []byte(
+			`<span class="target-table">{{ if .table }}table{{ else }}none{{ end }}</span>` +
+				`<span class="target-tables">{{ len .tables }}</span>` +
+				`{{ if .table }}{{ range .table.rows }}<span class="target-row">{{ range . }}{{ .html }}{{ end }}</span>{{ end }}{{ end }}`)},
+		"sections/target/example.md": {Data: []byte("# target\n")},
+	}
+
+	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+	if err != nil {
+		t.Fatalf("LoadLibrary() error = %v, want nil: the opted-in table bodies must load with layouts reading .table.rows/.tables", err)
+	}
+	if lib == nil {
+		t.Fatal("LoadLibrary() returned nil Library with nil error")
+	}
+
+	// The slide example body's table is parsed into the reserved entries.
+	main, _, ok := lib.TemplateByName("main")
+	if !ok || main == nil || main.Definition == nil {
+		t.Fatal(`TemplateByName("main") not loaded with a Definition`)
+	}
+	block, err := parseExampleBlock(string(main.ExampleBytes), main.Kind, 1)
+	if err != nil {
+		t.Fatalf("parseExampleBlock(main) error = %v", err)
+	}
+	table, tables := exampleTableContext(block.Body, nil)
+	if table == nil {
+		t.Fatal("exampleTableContext(opt-in body) table = nil, want the body's first parsed table")
+	}
+	if len(tables) != 1 {
+		t.Fatalf("exampleTableContext(opt-in body) tables = %v, want exactly one table", tables)
+	}
+	tableMap := contextMap(t, table, "table")
+	headers, ok := tableMap["headers"].([]any)
+	if !ok || len(headers) != 2 {
+		t.Fatalf(`table["headers"] = %#v, want two header cells`, tableMap["headers"])
+	}
+	rows, ok := tableMap["rows"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf(`table["rows"] = %#v, want one body row`, tableMap["rows"])
+	}
+	firstRow, ok := rows[0].([]any)
+	if !ok || len(firstRow) != 2 {
+		t.Fatalf("table row = %#v, want two cells in column order", rows[0])
+	}
+	cell := contextMap(t, firstRow[0], "first body cell")
+	if got, ok := cell["html"].(htmltemplate.HTML); !ok || got != "a" {
+		t.Errorf("first body cell html = %v, want %q", cell["html"], "a")
+	}
+
+	// exampleSectionRunner.render publishes the CALL body's parsed table for the
+	// section-helper target's layout; observe its rendered HTML directly.
+	helper := exampleSectionHelper(lib, nil)
+	got, err := helper("target", nil, helperBody)
+	if err != nil {
+		t.Fatalf(`helper("target") error = %v, want nil`, err)
+	}
+	for _, want := range []string{
+		`<span class="target-table">table</span>`,
+		`<span class="target-tables">1</span>`,
+		`<span class="target-row">xy</span>`,
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf(`helper("target") = %q, want it to contain %q`, string(got), want)
+		}
+	}
 }
 
 // exampleLibraryResolver returns a name → *Template resolver over a loaded
