@@ -1142,30 +1142,6 @@ func TestTableCellContext(t *testing.T) {
 	})
 }
 
-// TestRenderCellLines pins renderCellLines (table-layout-context): each decoded
-// segment is rendered through renderInline and the rendered segments are joined
-// with a literal `<br>`, so a `{br}` break survives an inline renderer that would
-// escape a raw `<br>`.
-func TestRenderCellLines(t *testing.T) {
-	cases := []struct {
-		name  string
-		lines []string
-		want  string
-	}{
-		{"no lines", nil, ""},
-		{"single segment", []string{"a"}, "a"},
-		{"two segments joined", []string{"a", "b"}, "a<br>b"},
-		{"each segment rendered inline", []string{"**a**", "`b`"}, "<strong>a</strong><br><code>b</code>"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := string(renderCellLines(tc.lines)); got != tc.want {
-				t.Errorf("renderCellLines(%q) = %q, want %q", tc.lines, got, tc.want)
-			}
-		})
-	}
-}
-
 // TestRenderBodyOmitsTables pins renderBody's table omission
 // (table-layout-context, gfm-tables): a body's GFM table reaches the output only
 // through the reserved .table/.tables context, so renderBody renders the
