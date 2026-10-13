@@ -154,12 +154,11 @@ func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, 
 // in source order. startLine is the body's 1-based line in the file, so a
 // body link error is positioned absolutely.
 //
-// mdcheck.ExtractLinks reports two streams: the links themselves (a bad-scheme
-// link is still a Link, with an empty Label) and a positioned Issue for every
-// destination that is neither `#label` nor http(s). The two are merged by
-// source position so the errors are reported in document order; an Issue is the
-// scheme error for its Link and is reported first at the same position, and the
-// co-located Link is then skipped because the Issue already is its error. Every
+// mdcheck.ExtractLinks reports two streams: the links themselves and a
+// positioned Issue for every destination that is neither `#label` nor http(s).
+// A bad-scheme link appears in both, so the Issue is taken as that link's error
+// and the co-located Link is skipped; the two streams are otherwise merged by
+// source position so the errors are reported in document order. Every other
 // offending link of the body is returned, in merged source order, rather than
 // only the first.
 func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}, candidates []string) []ValidationError {
@@ -170,10 +169,22 @@ func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}
 		Mode:      mdcheck.BodyMode,
 		StartLine: startLine,
 	})
+
+	// The positions an Issue already covers: a link there is the same link the
+	// Issue describes, so it must not be reported a second time by the label
+	// pass below.
+	reported := make(map[[2]int]struct{}, len(issues))
+	for _, iss := range issues {
+		reported[[2]int{iss.Line, iss.Col}] = struct{}{}
+	}
+
 	var errs []ValidationError
 	for _, ev := range mergeLinkEvents(links, issues) {
 		if ev.issue != nil {
 			errs = append(errs, adaptIssue(*ev.issue, nil))
+			continue
+		}
+		if _, ok := reported[[2]int{ev.link.Line, ev.link.Col}]; ok {
 			continue
 		}
 		if verr, invalid := checkLabelRef(file, ev.link.Label, ev.link.Destination, nil, ev.link.Line, labels, candidates); invalid {
