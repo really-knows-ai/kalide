@@ -2122,22 +2122,6 @@ func renderInline(src string) htmltmpl.HTML {
 	return htmltmpl.HTML(out)
 }
 
-// renderCellLines renders one decoded table cell's line segments to inline
-// HTML. A cell's content is split at each `{br}` break by mdcheck (the decoded
-// cell's Lines), and a raw `<br>` handed to the Markdown renderer would be
-// escaped, so each segment is rendered independently through renderInline and
-// the rendered segments are joined with a literal `<br>`.
-func renderCellLines(lines []string) htmltmpl.HTML {
-	if len(lines) == 0 {
-		return ""
-	}
-	rendered := make([]string, len(lines))
-	for i, seg := range lines {
-		rendered[i] = string(renderInline(seg))
-	}
-	return htmltmpl.HTML(strings.Join(rendered, "<br>"))
-}
-
 // cellAttributeSpecs returns the plain mdcheck cell-attribute descriptors for
 // the cell attributes a template declares in its `body.tables` rule, the set
 // tableContext decodes each parsed table cell's `{...}` groups against
