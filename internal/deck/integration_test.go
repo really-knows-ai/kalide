@@ -16,10 +16,12 @@ import (
 )
 
 // integrationTemplate is one fake catalogue entry used by the integration test:
-// a template's usage and, for slide templates, its declared sections with the
-// section templates they accept and their repeat bounds.
+// a template's usage, whether it is internal (`internal: true`), and, for slide
+// templates, its declared sections with the section templates they accept and
+// their repeat bounds.
 type integrationTemplate struct {
 	usage    string
+	internal bool
 	sections []string
 	accepted map[string][]string
 	min      map[string]int
@@ -33,12 +35,12 @@ type integrationTemplate struct {
 // SectionDecl.
 type integrationCatalog map[string]integrationTemplate
 
-func (c integrationCatalog) LookupSlideTemplate(name string) (string, bool) {
+func (c integrationCatalog) LookupSlideTemplate(name string) (string, bool, bool) {
 	t, ok := c[name]
 	if !ok {
-		return "", false
+		return "", false, false
 	}
-	return t.usage, true
+	return t.usage, t.internal, true
 }
 
 func (c integrationCatalog) TemplateNames() []string {
