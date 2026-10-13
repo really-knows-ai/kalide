@@ -579,14 +579,21 @@ type exampleSectionRunner struct {
 // gives the same resolved call and returns its trusted HTML.
 //
 // The context mirrors checkLibraryExample's slide/section context so the target
-// sees a consistent shape: its effective field values as top-level entries, the
-// reserved `deck`/`slide` entries (the empty example stand-ins), the resolved
-// `.item` descriptor (parent callerFields, or the parent target's values for a
-// child), the reserved `.raw` source view built by the shared RawContext from
-// the call's AUTHORED Source — the supplied fields before the target's defaults,
-// so a default never leaks into `.raw` as an authored value
-// (raw-source-context) — and the reserved `.data` entry built by the shared
-// DataContext over the call's resolved children, so an unguarded
+// sees a consistent shape: its effective field values as top-level entries —
+// every declared field present, an absent optional field with no default as a
+// nil entry exactly as the render-time helper's values conversion presents it,
+// so a layout cannot tell an absent optional from an explicit null
+// (nullable-fields) — the reserved `deck`/`slide` entries (the empty example
+// stand-ins), the resolved `.item` descriptor (parent callerFields, or the
+// parent target's values for a child), the reserved `.raw` source view built by
+// the shared RawContext from the call's AUTHORED Source — the supplied fields
+// before the target's defaults, so a default never leaks into `.raw` as an
+// authored value (raw-source-context) — and the reserved `.data` entry built by
+// the shared DataContext over the call's resolved children with the target's own
+// resolved-template chain as their ancestors, so each `.data` item's depth
+// counts its enclosing same-template ancestors through the shared InstanceDepth
+// helper over exactly the chain the children were resolved with (item-context,
+// section-data-context) and an unguarded
 // `{{ .data.<child> }}` (and a nested `children "<section>" .data.<section>`
 // forwarding its entries) executes at load exactly as at render time
 // (section-data-context, children-forwarding). Each resolved child is rendered
@@ -606,13 +613,40 @@ type exampleSectionRunner struct {
 // (call.Layer.Media) when one is known (library-layer-references); a nil layer
 // falls back to lib.Media, the pre-layer behaviour.
 func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, error) {
-	ctx := make(map[string]any, len(call.Values)+6)
+	ctx := make(map[string]any, len(call.Values)+len(call.Template.Fields)+6)
 	for k, v := range call.Values {
 		ctx[k] = v
+	}
+	// Every declared field is present in the target's context, exactly as the
+	// render-time helper's values conversion presents it: an absent optional
+	// field with no default has no entry in call.Values (defaults-first
+	// resolution leaves it out), yet values exposes it as a nil entry, so a
+	// layout cannot tell an absent optional from an explicit null
+	// (nullable-fields). Mirror that here so the load-time and render-time
+	// target contexts agree.
+	for i := range call.Template.Fields {
+		if _, present := ctx[call.Template.Fields[i].Name]; !present {
+			ctx[call.Template.Fields[i].Name] = nil
+		}
 	}
 	ctx["deck"] = emptyExampleDeckContext()
 	ctx["slide"] = emptyExampleSlideContext()
 	ctx["item"] = call.Item
+	// The target is both the parent of the call's resolved children and the
+	// calling instance for any `{{ section … }}` call its own layout makes: its
+	// own chain of resolved template names is the runner's caller chain with the
+	// target's resolved name appended (its ancestor chain plus itself). Passing
+	// that chain as the children's ancestors makes each `.data` item's depth
+	// count its enclosing same-template ancestors through the shared
+	// InstanceDepth helper over exactly the chain ResolveSectionCallLayered
+	// resolved the children with, so a `.data` item and the child's own `.item`
+	// descriptor agree (item-context, section-data-context, bounded-self-nesting);
+	// giving it to the nested `section` helper lets a nested call compute its
+	// target's `.item.depth` identically.
+	targetChain := make([]string, 0, len(ex.callerChain)+1)
+	targetChain = append(targetChain, ex.callerChain...)
+	targetChain = append(targetChain, call.Template.Name)
+
 	// `.raw` is the instance's authored source view — RawContext over the
 	// call's Source (supplied fields, before defaults) — and, exactly as
 	// renderSection passes secCtx.raw, it is also the parent each child's
@@ -620,7 +654,7 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	// data views agree (raw-source-context, section-data-context).
 	raw := RawContext(call.Source, call.Template, call.Body)
 	ctx["raw"] = raw
-	ctx["data"] = DataContext(exampleChildNodes(call.Children), nil, raw)
+	ctx["data"] = DataContext(exampleChildNodes(call.Children), targetChain, raw)
 	if strings.TrimSpace(call.Body) != "" {
 		ctx["body"] = call.Body
 	}
@@ -632,15 +666,6 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	if call.Layer != nil {
 		mediaFS = call.Layer.Media
 	}
-	// The target is now the calling instance for any `{{ section … }}` call its
-	// own layout makes: its own chain of resolved template names is the runner's
-	// caller chain with the target's resolved name appended (its ancestor chain
-	// plus itself), the enclosing chain those nested calls pass so their targets'
-	// `.item.depth` is computed through the shared InstanceDepth helper exactly
-	// as at render time (item-context, bounded-self-nesting).
-	targetChain := make([]string, 0, len(ex.callerChain)+1)
-	targetChain = append(targetChain, ex.callerChain...)
-	targetChain = append(targetChain, call.Template.Name)
 	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
 	funcMap["section"] = exampleSectionHelper(ex.lib, call.Values, targetChain...)
 
