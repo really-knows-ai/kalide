@@ -66,7 +66,10 @@ func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, bo
 //     "gallery" accepting two (>1 => a template: is required);
 //   - limited / needs / once: "columns" with a hard max, a min, and a max of 1;
 //   - badnotes: a slide template that (illegally) declares the reserved
-//     "notes" section name.
+//     "notes" section name;
+//   - internal-slide / internal-section: templates flagged internal, which
+//     TemplateNames still lists (so a closest-match suggestion can name them)
+//     but which are refused as a Markdown template target (internal-templates).
 func testCatalogue() fakeCatalogue {
 	return fakeCatalogue{
 		"title": {usage: "slide"},
@@ -110,6 +113,14 @@ func testCatalogue() fakeCatalogue {
 			accepted: map[string][]string{"blocks": {"block", "brick"}}},
 		"block": {usage: "section"},
 		"brick": {usage: "section"},
+
+		// Internal templates: listed by TemplateNames (so a closest-match
+		// suggestion can name them) but refused as a Markdown template target
+		// — a slide frontmatter `template:` or a section instance's
+		// `template:` naming one is an internal-template error, distinct from
+		// unknown (internal-templates).
+		"internal-slide":   {usage: "slide", internal: true},
+		"internal-section": {usage: "section", internal: true},
 	}
 }
 
@@ -191,7 +202,9 @@ func wantParseErrorPath(t *testing.T, err error, file string, line int, path str
 func TestParse(t *testing.T) {
 	t.Run("constants", testParseConstants)
 	t.Run("frontmatter", testParseFrontmatter)
+	t.Run("yaml errors", testParseYAMLErrors)
 	t.Run("template", testParseTemplate)
+	t.Run("internal template", testParseInternalTemplate)
 	t.Run("structure", testParseStructure)
 	t.Run("nested sections", testParseNestedSections)
 	t.Run("sections", testParseSections)
@@ -244,6 +257,127 @@ func testParseFrontmatter(t *testing.T) {
 	})
 }
 
+// testParseYAMLErrors covers parseBlock's YAML parse-error reporting through
+// yamlErrorWithLine (requirements.requirement.yaml-error-messages): a
+// malformed slide frontmatter or section-instance frontmatter reports the
+// offending source line, absolute within the file, and keeps the instance's
+// containment path; a plain-scalar mis-read — a `:` inside a plain scalar or a
+// plain scalar beginning with `*`, `&`, `%` or `@` — additionally carries the
+// quoting hint, while a failure that is not a plain-scalar mis-read does not.
+// yaml.v3 reports a lineless error for a longer alias like `*foo`, so the
+// plain-scalar-start cases use the one-character form (as the template loader
+// tests do).
+func testParseYAMLErrors(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("slide frontmatter", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			value   string
+			message string
+			hint    bool
+		}{
+			{"colon inside a plain scalar", "Hello: world",
+				"mapping values are not allowed in this context", true},
+			{"plain scalar beginning with an alias indicator", "*",
+				"did not find expected alphabetic or numeric character", true},
+			{"plain scalar beginning with an anchor indicator", "&",
+				"did not find expected alphabetic or numeric character", true},
+			{"plain scalar beginning with a directive indicator", "%example.com",
+				"found character that cannot start any token", true},
+			{"plain scalar beginning with a reserved indicator", "@example.com",
+				"found character that cannot start any token", true},
+			{"malformed YAML that is not a plain-scalar mis-read carries no hint", `"unterminated`,
+				"found unexpected end of stream", false},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := Parse(file, src(
+					"---",
+					"title: "+tc.value,
+					"template: title",
+					"---",
+				), cat)
+				wants := []string{"invalid YAML: " + tc.message}
+				if tc.hint {
+					wants = append(wants, "(quote the value as a string)")
+				}
+				wantParseErrorPath(t, err, file, 2, "", wants...)
+				assertNoQuotingHint(t, err, tc.hint)
+			})
+		}
+	})
+
+	// A malformed section-instance frontmatter keeps the instance's
+	// containment path, at the top level and nested, alongside the line and
+	// hint treatment.
+	t.Run("section-instance frontmatter", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			lines   []string
+			line    int
+			path    string
+			message string
+			hint    bool
+		}{
+			{
+				name: "colon inside a plain scalar keeps the instance path",
+				lines: []string{
+					"---", "template: content", "---", "",
+					"# columns", "```", "title: Hello: world", "```",
+				},
+				line: 7, path: "columns[0]",
+				message: "mapping values are not allowed in this context", hint: true,
+			},
+			{
+				name: "plain scalar beginning with a reserved indicator",
+				lines: []string{
+					"---", "template: content", "---", "",
+					"# columns", "```", "title: @example.com", "```",
+				},
+				line: 7, path: "columns[0]",
+				message: "found character that cannot start any token", hint: true,
+			},
+			{
+				name: "nested instance carries its full containment path",
+				lines: []string{
+					"---", "template: grouped", "---", "",
+					"# columns", "```", "template: group", "```", "",
+					"## blocks", "```", "weight: Hello: world", "```",
+				},
+				line: 12, path: "columns[0] › blocks[0]",
+				message: "mapping values are not allowed in this context", hint: true,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := Parse(file, src(tc.lines...), cat)
+				wants := []string{"invalid YAML: " + tc.message}
+				if tc.hint {
+					wants = append(wants, "(quote the value as a string)")
+				}
+				wantParseErrorPath(t, err, file, tc.line, tc.path, wants...)
+				assertNoQuotingHint(t, err, tc.hint)
+			})
+		}
+	})
+}
+
+// assertNoQuotingHint fails when hint is false but err carries the
+// plain-scalar quoting hint. wantParseError only checks that the wanted
+// substrings are present, so this pins the absence of the hint for a
+// non-plain-scalar mis-read.
+func assertNoQuotingHint(t *testing.T, err error, hint bool) {
+	t.Helper()
+	if hint || err == nil {
+		return
+	}
+	if strings.Contains(err.Error(), "quote the value as a string") {
+		t.Fatalf("error carries a quoting hint, want none: %v", err)
+	}
+}
+
 // testParseTemplate covers slide-template lookup and usage through Catalogue.
 func testParseTemplate(t *testing.T) {
 	cat := testCatalogue()
@@ -272,6 +406,74 @@ func testParseTemplate(t *testing.T) {
 		_, err := Parse(file, src("---", "title: X", "template: titel", "---"), cat)
 		wantParseError(t, err, file, 3, `did you mean "title"?`)
 	})
+}
+
+// testParseInternalTemplate covers the internal-template refusal
+// (internal-templates) at the parser's Markdown template-targets: a slide
+// frontmatter `template:` or a section instance's `template:` naming a
+// template whose Internal flag is set is refused with a clear, positioned
+// error — carrying the instance's containment path for a section — distinct
+// from the unknown-template error. The name stays listed by TemplateNames for
+// a closest-match suggestion (pinned in the catalogue helpers), so it is
+// refused as internal, never as unknown.
+func testParseInternalTemplate(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("slide frontmatter refuses an internal slide template", func(t *testing.T) {
+		_, err := Parse(file, src("---", "template: internal-slide", "---"), cat)
+		wantParseErrorPath(t, err, file, 2, "",
+			`template "internal-slide" is internal and cannot be used as a slide template`)
+		assertNotUnknownTemplate(t, err)
+	})
+
+	t.Run("section instance refuses an internal section template", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: internal-section",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 7, "columns[0]",
+			`template "internal-section" is internal and cannot be used as a section template`)
+		assertNotUnknownTemplate(t, err)
+	})
+
+	// The internal refusal is the parser's answer even when the template's
+	// usage is the other kind: an internal slide template reaching a section
+	// instance is refused as internal, not as a slide-usage/section mismatch.
+	t.Run("internal refusal precedes the usage mismatch", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: internal-slide",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 7, "columns[0]",
+			`template "internal-slide" is internal and cannot be used as a section template`)
+		assertNotUnknownTemplate(t, err)
+	})
+}
+
+// assertNotUnknownTemplate fails when err reads as an unknown-template error
+// (with its optional closest-match suggestion), so an internal-template
+// refusal stays distinct from an unknown name.
+func assertNotUnknownTemplate(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	if strings.Contains(err.Error(), "unknown template") {
+		t.Fatalf("internal-template error reads as unknown: %v", err)
+	}
 }
 
 // testParseStructure covers the body-before-first-section boundary and the
