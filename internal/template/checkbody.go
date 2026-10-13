@@ -86,6 +86,10 @@ func WithBodyLine(line int) BodyOption {
 //  6. Subheadings forbidden but the body has a `##`/`###` heading —
 //     "subheadings".
 //
+// The rule's Tables option is carried through but not enforced here: CheckBody
+// takes the whole BodyRule value, so a template's `body.tables` option reaches
+// every caller unchanged, but table validation is not part of this fixed order.
+//
 // A zero or negative MaxWords, MaxParagraphs or MaxListItems means no limit,
 // matching BodyRule's documentation. An unrecognised BodyMode is treated as
 // optional (build-time checks own mode validity), so CheckBody never reports a
