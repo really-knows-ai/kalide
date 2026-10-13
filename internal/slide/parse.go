@@ -743,9 +743,10 @@ func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name strin
 // (from the slide template for a top-level section, from resolveChildTemplate
 // for a child), it resolves the instance's `template:` into out: required when
 // the parent declares more than one accepted template, resolved automatically
-// when exactly one is accepted, refused for the reserved `notes` name, checked
-// to be a section-usage template, and checked for membership in the accepted
-// set. It never derives declarations.
+// when exactly one is accepted, refused for the reserved `notes` name, refused
+// when it names an internal template (internal-templates), checked to be a
+// section-usage template, and checked for membership in the accepted set. It
+// never derives declarations.
 //
 // fenceLine is the line of the opening ``` fence (0 when there is no
 // frontmatter), headingLine the section heading line, and path the instance's
@@ -788,9 +789,13 @@ func resolveSectionTemplate(file string, cat Catalogue, section string,
 		return perr(line,
 			"%q is reserved and cannot be used as a section template", NotesSection)
 	}
-	usage, _, ok := cat.LookupSlideTemplate(tmplName)
+	usage, internal, ok := cat.LookupSlideTemplate(tmplName)
 	if !ok {
 		return unknownName(file, line, path, "template", tmplName, cat.TemplateNames())
+	}
+	if internal {
+		return perr(line,
+			"template %q is internal and cannot be used as a section template", tmplName)
 	}
 	if usage != "section" {
 		return perr(line,
