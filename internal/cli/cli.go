@@ -36,8 +36,21 @@ Usage:
                              recognised key is default-template-dir
   kalide start [--port N] [--no-open]
                              Validate and serve the deck, then open a browser
-  kalide templates [name]    List the project's templates/ library, or show
-                             one template by name
+  kalide check [--all] [--json]
+                             Validate the deck (and its library and theme)
+                             without serving it. By default it reports the
+                             first error; --all collects every error in the
+                             same order, and --json emits a machine-readable
+                             report on stdout
+  kalide render [slide] [-o dir] [--full|--fragment]
+                             Write a slide's rendered HTML without serving
+                             it. With a slide, print it to stdout; without
+                             one, write one <number>[letter]-<label>.html
+                             file per slide into -o (required)
+  kalide templates [--all] [name]
+                             List the project's templates/ library (--all
+                             includes internal templates), or show one
+                             template by name
   kalide upgrade             Refresh kalide-owned scaffold files and apply
                              format migrations to the deck or template library
                              in the current directory; takes no path and no
@@ -58,8 +71,16 @@ Usage:
 //   - no arguments and `help` print usage and return 0;
 //   - `version`, `--version` and `-v` print a single line `kalide <version>`
 //     to stdout and return 0;
-//   - `templates [name]` routes to runTemplates, which lists the project's
-//     templates/ library or documents one template by name;
+//   - `templates [--all] [name]` routes to runTemplates, which lists the
+//     project's templates/ library (including internal templates only with
+//     --all) or documents one template by name;
+//   - `check [--all] [--json]` routes to runCheck, which validates the whole
+//     deck — and its resolved library and theme — without serving it, reporting
+//     the first error (or every error with --all) and emitting a
+//     machine-readable report with --json;
+//   - `render [slide] [-o dir] [--full|--fragment]` routes to runRender, which
+//     writes a deck's rendered slide HTML without serving it: the selected
+//     slide to stdout, or one file per slide into the required -o directory;
 //   - `start [--port N] [--no-open]` routes to runStart, which validates the
 //     whole deck and then serves it with live reload until a shutdown signal;
 //   - `init [path]` routes to runInit. With no [path] it seeds a minimal
@@ -112,8 +133,22 @@ func Run(args []string, version string, stdout, stderr io.Writer) int {
 		return runUpgrade(args[2:], stdout, stderr)
 	case "start":
 		return runStart(args[2:], stdout, stderr)
+	case "check":
+		return runCheck(args[2:], stdout, stderr)
+	case "render":
+		return runRender(args[2:], stdout, stderr)
 	case "templates":
-		if len(args) > 3 {
+		// `--all` is a listing flag, not a template name: at most one name is
+		// accepted beside it (runTemplates parses --all itself). Any other
+		// extra argument is a usage error.
+		names := 0
+		for _, arg := range args[2:] {
+			if arg == "--all" {
+				continue
+			}
+			names++
+		}
+		if names > 1 {
 			fmt.Fprintf(stderr, "kalide templates: expected at most one template name\n\n")
 			fmt.Fprint(stderr, usage)
 			return 2
