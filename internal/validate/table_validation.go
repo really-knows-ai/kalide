@@ -62,30 +62,11 @@ func mdcheckTableOptions(rule *template.TableRule) mdcheck.TableOptions {
 // mdcheckCellAttributeSpecs converts a template's decoded CellAttribute
 // declarations into mdcheck's own plain CellAttributeSpec descriptors, the
 // closed set mdcheck's cell-extension decoder resolves a cell's `{...}` group
-// against (mdcheck.Options.CellAttributes). The descriptor's Kind is mapped
-// explicitly to mdcheck's plain boolean/enum constants; the variants are
-// copied, so the returned slice never aliases the template's own (read-only)
-// declaration slice. A template that declares none yields nil.
+// against (mdcheck.Options.CellAttributes). It is a thin wrapper over the
+// shared template.CellAttributeSpecs, keeping the historical helper name for
+// its existing callers while the conversion body lives in exactly one place.
 func mdcheckCellAttributeSpecs(attrs []template.CellAttribute) []mdcheck.CellAttributeSpec {
-	if len(attrs) == 0 {
-		return nil
-	}
-	specs := make([]mdcheck.CellAttributeSpec, len(attrs))
-	for i, a := range attrs {
-		kind := string(a.Kind)
-		switch a.Kind {
-		case template.FieldBoolean:
-			kind = mdcheck.CellAttributeBoolean
-		case template.FieldEnum:
-			kind = mdcheck.CellAttributeEnum
-		}
-		specs[i] = mdcheck.CellAttributeSpec{
-			Name:     a.Name,
-			Kind:     kind,
-			Variants: append([]string(nil), a.Variants...),
-		}
-	}
-	return specs
+	return template.CellAttributeSpecs(attrs)
 }
 
 // checkTables runs the GFM-table pass for one Markdown body against the
