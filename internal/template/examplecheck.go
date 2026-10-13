@@ -1423,23 +1423,27 @@ func emptyExampleSlideContext() map[string]any {
 // deck-data-in-templates), plus the reserved source-context namespaces `.raw`
 // (the author's original source values) and `.data` (the authored section tree
 // as data), whose members are template-specific and so cannot be enumerated as
-// leaf keys (raw-source-context, section-data-context). The `.deck`/`.slide`
-// keys derive from those two functions, which stay the single source of truth
-// for the fixed namespace shapes; `raw`/`data` are the dynamic source-values and
-// authored-section-tree views. Callers that must enumerate the context
-// vocabulary (notably the agent-guide drift self-test) do not duplicate the
-// list. The returned slice is a fresh allocation.
+// leaf keys (raw-source-context, section-data-context). It also names the
+// reserved table namespaces `.table` (the body's first parsed table) and
+// `.tables` (the body's parsed tables in source order), whose members are
+// likewise template-specific and so cannot be enumerated as leaf keys. The
+// `.deck`/`.slide` keys derive from those two functions, which stay the single
+// source of truth for the fixed namespace shapes; `raw`/`data`/`table`/`tables`
+// are the dynamic source-values, authored-section-tree and parsed-table views.
+// Callers that must enumerate the context vocabulary (notably the agent-guide
+// drift self-test) do not duplicate the list. The returned slice is a fresh
+// allocation.
 func ContextKeys() []string {
 	deck := emptyExampleDeckContext()
 	slide := emptyExampleSlideContext()
-	out := make([]string, 0, len(deck)+len(slide)+2)
+	out := make([]string, 0, len(deck)+len(slide)+4)
 	for key := range deck {
 		out = append(out, "deck."+key)
 	}
 	for key := range slide {
 		out = append(out, "slide."+key)
 	}
-	out = append(out, ".raw", ".data")
+	out = append(out, ".raw", ".data", ".table", ".tables")
 	sort.Strings(out)
 	return out
 }
