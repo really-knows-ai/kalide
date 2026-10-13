@@ -1078,7 +1078,16 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 // nested instance through this same function. The `.raw` source view is built
 // from the authored frontmatter, not here, so a default never leaks into it (a
 // default is not an authored source value).
-func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any, container string) error {
+//
+// imageExists is the load-time image-field existence resolver threaded into
+// CheckValues through WithImageExists (image-field-roots): checkLibraryExample
+// closes it over the owning layer's media/ tree with a nil assets filesystem,
+// because no deck exists at load, so only a media-root image field is
+// existence-checked and an assets/no-roots field stays unchecked. It is passed
+// unchanged into every recursive nested-instance call, so an image field at any
+// composition depth is resolved identically. A nil resolver leaves image
+// existence unchecked.
+func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), imageExists func(f *Field, path string) (exists bool, candidates []string), ctx map[string]any, container string) error {
 	fm := block.Frontmatter
 	if fm == nil {
 		fm = map[string]any{}
@@ -1091,7 +1100,7 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 		fields[k] = v
 	}
 
-	if res := CheckValues(fields, def, resolve); len(res.Errors) > 0 {
+	if res := CheckValues(fields, def, resolve, WithImageExists(imageExists)); len(res.Errors) > 0 {
 		e := res.Errors[0]
 		return exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
 	}
@@ -1240,7 +1249,7 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 			return exampleError(path, sec.Line, childPath, "example section %q uses template %q, which is not defined", sec.Name, chosen)
 		}
 		nestedCtx := map[string]any{}
-		if err := validateExampleBlockAt(path, nested, sec.exampleBlock, resolve, nestedCtx, childPath); err != nil {
+		if err := validateExampleBlockAt(path, nested, sec.exampleBlock, resolve, imageExists, nestedCtx, childPath); err != nil {
 			return err
 		}
 		sectionValues[sec.Name] = append(sectionValues[sec.Name], nestedCtx)
