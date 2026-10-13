@@ -318,11 +318,14 @@ func visit(ctx *walkContext, node ast.Node) []Issue {
 //     link reference definitions.
 //   - tables: the CommonMark core has no table syntax, so a GFM table parses as
 //     an ordinary paragraph; it is caught by looking for a delimiter row among
-//     the paragraph's own source lines rather than by node kind. This is the
-//     opt-out refusal (markdown-disallowed-errors): when the enclosing template
-//     opts in (ctx.tables is non-nil) the table is accepted here and validated
-//     by the whole-body table pass (checkTables), so the construct yields
-//     exactly one error on either path.
+//     the paragraph's own source lines (hasTableDelimiterRow), with the same
+//     recognition the whole-body table pass uses, rather than by node kind. This
+//     is the opt-out refusal (markdown-disallowed-errors): when the enclosing
+//     template opts in (ctx.tables is non-nil) the table is accepted here and
+//     validated by the whole-body table pass (checkTables), so the construct
+//     yields exactly one error on either path. The refusal is positioned at the
+//     delimiter row — the line that makes the paragraph a table — so the gate
+//     and the table pass point at the same place.
 //   - the extension-syntax heuristics (~~strike~~, ==highlight==, ^sup^, ~sub~,
 //     :emoji:) that the core parser leaves as literal text. They scan ast.Text
 //     segments only — never inline code content, never link destinations — and
@@ -365,7 +368,7 @@ func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 			"images are not allowed in Markdown",
 			"use the slide's image field instead of a Markdown image")}
 	case *ast.Paragraph:
-		if hasTableDelimiterRow(ctx.source, n) {
+		if off, ok := hasTableDelimiterRow(ctx.source, n); ok {
 			// The template opts in (ctx.tables != nil): the table pass
 			// (checkTables) owns this table's validation, so the paragraph is
 			// accepted here and the table is not refused.
@@ -373,8 +376,10 @@ func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 				return nil
 			}
 			// The template does not accept tables: this is the single opt-out
-			// refusal (markdown-disallowed-errors).
-			return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
+			// refusal (markdown-disallowed-errors), positioned at the delimiter
+			// row — the line that makes the paragraph a table — so the gate and
+			// the table pass agree on where the table is.
+			return []Issue{ctx.newIssueAt(off, KindDisallowedConstruct,
 				"tables are not allowed",
 				"opt in to tables with the `tables` option in the template's body rule, or use a list instead")}
 		}
@@ -544,12 +549,22 @@ func isSetextHeading(src []byte, h *ast.Heading) bool {
 }
 
 // hasTableDelimiterRow reports whether a paragraph contains a GFM table
-// delimiter row (for example `| --- | :--: |`). CommonMark core has no tables,
-// so this is the only signal that the author wrote one.
-func hasTableDelimiterRow(src []byte, b lineBlock) bool {
+// delimiter row (for example `| --- | :--: |`) and, when it does, the byte
+// offset in src at which that row begins. CommonMark core has no tables, so a
+// GFM table parses as an ordinary paragraph and this is the only signal that
+// the author wrote one.
+//
+// The per-line test is isTableDelimiterRow, the parser's own delimiter-row
+// recognition (table.go), which splits a row with splitTableRow — so a
+// backslash-escaped `\|` is a literal pipe rather than a separator, exactly as
+// parseTable reads a table's rows. Both the opt-in gate in checkDisallowed and
+// the whole-body table pass (checkTables) reach their verdict through it, so
+// detection and validation agree on what a table is. The offset is returned so
+// a caller can position a table-level issue at the delimiter row.
+func hasTableDelimiterRow(src []byte, b lineBlock) (offset int, ok bool) {
 	segs := b.Lines()
 	if segs == nil {
-		return false
+		return 0, false
 	}
 	for i := 0; i < segs.Len(); i++ {
 		seg := segs.At(i)
@@ -557,32 +572,36 @@ func hasTableDelimiterRow(src []byte, b lineBlock) bool {
 			continue
 		}
 		if isTableDelimiterRow(string(src[seg.Start:seg.Stop])) {
-			return true
+			return seg.Start, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 // isTableDelimiterRow reports whether a single source line is a GFM table
-// delimiter row: every non-empty `|`-separated cell consists only of `-` and
-// `:` and at least one cell is present.
+// delimiter row. It is the parser's own delimiter-row recognition (table.go):
+// the line's cells are split with splitTableRow, the same splitter parseTable
+// reads a table's rows with, so a backslash-escaped `\|` is a literal pipe and
+// never a separator and the opt-in gate and the table pass agree on what a
+// delimiter row is. A delimiter row has at least one pipe and at least one
+// non-empty cell, and every non-empty cell consists only of `-` and `:` with at
+// least one `-` — the `:?-+:?` shape, its leading and trailing colon optional.
 func isTableDelimiterRow(line string) bool {
-	s := strings.TrimSpace(line)
-	if !strings.Contains(s, "|") || !strings.Contains(s, "-") {
+	if s := strings.TrimSpace(line); !strings.Contains(s, "|") || !strings.Contains(s, "-") {
 		return false
 	}
 	sawCell := false
-	for _, cell := range strings.Split(s, "|") {
-		cell = strings.TrimSpace(cell)
-		if cell == "" {
+	for _, cell := range splitTableRow(line) {
+		text := strings.TrimSpace(cell.Text)
+		if text == "" {
 			continue
 		}
-		if !strings.Contains(cell, "-") {
+		if !strings.Contains(text, "-") {
 			return false
 		}
 		sawCell = true
-		for i := 0; i < len(cell); i++ {
-			if cell[i] != '-' && cell[i] != ':' {
+		for i := 0; i < len(text); i++ {
+			if text[i] != '-' && text[i] != ':' {
 				return false
 			}
 		}
