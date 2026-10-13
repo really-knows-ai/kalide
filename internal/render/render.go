@@ -2145,37 +2145,15 @@ func renderCellLines(lines []string) htmltmpl.HTML {
 // in to tables (a nil Body.Tables), or one that declares no cell attributes,
 // yields nil, so a cell's attrs map is empty.
 //
-// mdcheck.CellAttributeSpec is mdcheck's own plain descriptor, deliberately
-// independent of internal/template; the conversion maps each declared
-// CellAttribute's kind to mdcheck's boolean/enum constant and copies its
-// variants, so the returned slice never aliases the template's read-only
-// declaration slice. It mirrors internal/template's (and internal/validate's)
-// unexported mdcheckCellAttributeSpecs; those converters are unexported, so
-// render carries this small mirror rather than importing one (gfm-tables).
+// It is a thin wrapper over the shared template.CellAttributeSpecs, which owns
+// the template.CellAttribute→mdcheck.CellAttributeSpec conversion — the kind
+// mapping to mdcheck's boolean/enum constants and the copy of each declaration's
+// variants — so that conversion lives in exactly one place (gfm-tables).
 func cellAttributeSpecs(tmpl *template.Template) []mdcheck.CellAttributeSpec {
 	if tmpl == nil || tmpl.Body.Tables == nil {
 		return nil
 	}
-	attrs := tmpl.Body.Tables.CellAttributes
-	if len(attrs) == 0 {
-		return nil
-	}
-	specs := make([]mdcheck.CellAttributeSpec, len(attrs))
-	for i, a := range attrs {
-		kind := string(a.Kind)
-		switch a.Kind {
-		case template.FieldBoolean:
-			kind = mdcheck.CellAttributeBoolean
-		case template.FieldEnum:
-			kind = mdcheck.CellAttributeEnum
-		}
-		specs[i] = mdcheck.CellAttributeSpec{
-			Name:     a.Name,
-			Kind:     kind,
-			Variants: append([]string(nil), a.Variants...),
-		}
-	}
-	return specs
+	return template.CellAttributeSpecs(tmpl.Body.Tables.CellAttributes)
 }
 
 // plainText returns an inline-Markdown field's visible text with all styles
