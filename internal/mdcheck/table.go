@@ -30,3 +30,31 @@
 // the offending row or cell rather than at the start of the table.
 
 package mdcheck
+
+// TableOptions carries the effective GFM-table limits for a body: the fewest
+// and most tables it may contain, and the fewest and most columns and rows one
+// of its tables may have. It is mdcheck's own plain limits type, so the parser
+// and the validator can carry limits without importing a schema package
+// (table-limits).
+//
+// The values are the effective limits: the caller — the template loader or the
+// validator converting a template's TableRule — supplies them, and mdcheck
+// applies no defaults of its own beyond what the caller passes. The zero value
+// therefore imposes no bound at all: a `Min*` field of 0 is no minimum and a
+// `Max*` field of 0 is unbounded.
+type TableOptions struct {
+	// MinTables and MaxTables bound the number of tables in one body.
+	// MinTables 0 is no minimum; MaxTables 0 is unbounded.
+	MinTables int
+	MaxTables int
+
+	// MinColumns and MaxColumns bound one table's column count, the header
+	// row included. MinColumns 0 is no minimum; MaxColumns 0 is unbounded.
+	MinColumns int
+	MaxColumns int
+
+	// MinRows and MaxRows bound one table's body rows, the header row
+	// excluded. MinRows 0 is no minimum; MaxRows 0 is unbounded.
+	MinRows int
+	MaxRows int
+}
