@@ -723,10 +723,10 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	}
 	// The target carries the reserved `.table`/`.tables` entries ALWAYS,
 	// mirroring the render-time section helper (template-context,
-	// table-layout-context): the call body's first parsed GFM table (nil when
-	// it carries none) and its source-ordered tables (an empty list when it
-	// carries none), parsed against the target template's declared cell
-	// attributes. The body's tables reach the target layout through these
+	// table-layout-context): the call body's first parsed GFM table (a typed
+	// nil map when it carries none) and its source-ordered tables (an empty
+	// list when it carries none), parsed against the target template's declared
+	// cell attributes. The body's tables reach the target layout through these
 	// entries alone — `.body` stays free of tables, exactly as renderBody omits
 	// them — so a target layout reading `.table.rows` or `.tables` executes at
 	// load as it would at render.
@@ -1483,11 +1483,20 @@ func emptyExampleSlideContext() map[string]any {
 // exampleTableContext parses body's GFM tables and returns the two reserved
 // table context entries a layout exposes, mirroring internal/render's
 // tableContext exactly (table-layout-context): table is body's FIRST parsed
-// table as the table map, or nil when body carries no table, and tables is
-// every parsed table in source order, as a non-nil but empty list when body
-// carries none. internal/template cannot import internal/render (it would
-// create an import cycle, as emptyExampleDeckContext notes), so the shape is
-// mirrored here intentionally.
+// table as the table map, or a TYPED nil map (map[string]any(nil)) when body
+// carries no table, and tables is every parsed table in source order, as a
+// non-nil but empty list when body carries none. internal/template cannot
+// import internal/render (it would create an import cycle, as
+// emptyExampleDeckContext notes), so the shape is mirrored here intentionally.
+//
+// The no-table value is deliberately a typed nil map rather than a bare nil
+// interface, matching render.tableContext: `{{ if .table }}` is then falsy (a
+// nil map has length 0), while `{{ .table.rows }}` and `{{ range .table.rows }}`
+// evaluate the absent key to an invalid value with no error — a no-op range —
+// instead of failing with "nil pointer evaluating interface {}.rows", which a
+// bare nil interface produces. That keeps the documented AC shape
+// `{{ range .table.rows }}` a no-op on a body with no table at load time just as
+// at render time.
 //
 // specs are the enclosing template's declared cell attributes, the set each
 // cell's `{...}` groups are decoded against (table-cell-attributes). The pair
@@ -1532,6 +1541,11 @@ func exampleTableContext(body string, specs []mdcheck.CellAttributeSpec) (table 
 
 	if len(parsed) > 0 {
 		table = tables[0]
+	} else {
+		// A typed nil map, not a bare nil: see the doc comment — it keeps
+		// `{{ if .table }}` falsy while `{{ range .table.rows }}` stays a
+		// no-op instead of erroring, matching render.tableContext.
+		table = map[string]any(nil)
 	}
 	return table, tables
 }
