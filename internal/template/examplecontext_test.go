@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
 )
 
 // This file is the unit-test deliverable for plan.phase-03.task-18: the
@@ -635,8 +637,9 @@ func TestDataContext(t *testing.T) {
 // at step 7 even when the template does not opt in through `body.tables` and its
 // body carries no table. LoadLibrary discards the rendered bytes, so a
 // successful load is itself the regression assertion that the layouts execute;
-// the entries' exact values are asserted directly (exampleTableContext) and the
-// section-helper target's HTML is observed through exampleSectionHelper.
+// the entries' exact values are asserted directly through the shared
+// mdcheck.TableContext builder — the same builder the example path calls — and
+// the section-helper target's HTML is observed through exampleSectionHelper.
 //
 // `.table` is a TYPED nil map (map[string]any(nil)), so a layout reads the
 // documented AC shape `{{ range .table.rows }}` UNGUARDED in a body that carries
@@ -702,20 +705,22 @@ func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
 	}
 
 	// A body with no table gives a TYPED nil `.table` (map[string]any(nil)) and
-	// a NON-NIL empty `.tables` list, so both can be read without a guard.
-	table, tables := exampleTableContext("Main body.", nil)
+	// a NON-NIL empty `.tables` list, so both can be read without a guard. The
+	// pair is built through the shared mdcheck.TableContext — the single
+	// builder the example path now calls — with the load-time example renderer.
+	table, tables := mdcheck.TableContext("Main body.", nil, exampleRenderInline)
 	tm, ok := table.(map[string]any)
 	if !ok {
-		t.Errorf("exampleTableContext(no-table body) table = %T, want map[string]any", table)
+		t.Errorf("mdcheck.TableContext(no-table body) table = %T, want map[string]any", table)
 	} else if tm != nil {
-		t.Errorf("exampleTableContext(no-table body) table = %v, want a typed nil map", tm)
+		t.Errorf("mdcheck.TableContext(no-table body) table = %v, want a typed nil map", tm)
 	} else if len(tm) != 0 {
-		t.Errorf("exampleTableContext(no-table body) len(table) = %d, want 0", len(tm))
+		t.Errorf("mdcheck.TableContext(no-table body) len(table) = %d, want 0", len(tm))
 	}
 	if tables == nil {
-		t.Error("exampleTableContext(no-table body) tables = nil, want a non-nil empty list")
+		t.Error("mdcheck.TableContext(no-table body) tables = nil, want a non-nil empty list")
 	} else if len(tables) != 0 {
-		t.Errorf("exampleTableContext(no-table body) tables = %v, want an empty list", tables)
+		t.Errorf("mdcheck.TableContext(no-table body) tables = %v, want an empty list", tables)
 	}
 
 	// A section-helper target executes the unguarded `{{ range .table.rows }}`
@@ -795,7 +800,9 @@ func TestLoadLibraryTableContextOptInBody(t *testing.T) {
 		t.Fatal("LoadLibrary() returned nil Library with nil error")
 	}
 
-	// The slide example body's table is parsed into the reserved entries.
+	// The slide example body's table is parsed into the reserved entries
+	// through the shared mdcheck.TableContext — the single builder the example
+	// path calls — with the load-time example renderer.
 	main, _, ok := lib.TemplateByName("main")
 	if !ok || main == nil || main.Definition == nil {
 		t.Fatal(`TemplateByName("main") not loaded with a Definition`)
@@ -804,12 +811,12 @@ func TestLoadLibraryTableContextOptInBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExampleBlock(main) error = %v", err)
 	}
-	table, tables := exampleTableContext(block.Body, nil)
+	table, tables := mdcheck.TableContext(block.Body, nil, exampleRenderInline)
 	if table == nil {
-		t.Fatal("exampleTableContext(opt-in body) table = nil, want the body's first parsed table")
+		t.Fatal("mdcheck.TableContext(opt-in body) table = nil, want the body's first parsed table")
 	}
 	if len(tables) != 1 {
-		t.Fatalf("exampleTableContext(opt-in body) tables = %v, want exactly one table", tables)
+		t.Fatalf("mdcheck.TableContext(opt-in body) tables = %v, want exactly one table", tables)
 	}
 	tableMap := contextMap(t, table, "table")
 	headers, ok := tableMap["headers"].([]any)
