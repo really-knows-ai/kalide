@@ -456,6 +456,14 @@ func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, ma
 // so a partially built fixture can exercise the other checks), and its declared
 // field and section names must be non-empty, unique, and free of the reserved
 // `body`, `notes`, `deck`, `slide`, `item`, `raw` and `data` names.
+//
+// It also validates every list field's cross-field bound
+// (cross-field-list-constraints): a max_items_from/min_items_from must name a
+// declared list field — a leading `/name` a top-level field of the template, a
+// bare name a peer in the field's own scope — recursing into an inline record's
+// item fields so a bound declared inside a record resolves against that
+// record's siblings. A reference that names no field, or a field that is not a
+// list, is rejected here before any content is validated.
 func checkDefinition(t *Template) error {
 	if t == nil {
 		return errors.New("template: definition must not be nil")
@@ -495,6 +503,64 @@ func checkDefinition(t *Template) error {
 		if err := checkFieldVariants(t.Name, &t.Fields[i]); err != nil {
 			return err
 		}
+	}
+
+	// cross-field-list-constraints: each list field's max_items_from and
+	// min_items_from must name a declared list field — a leading `/name` a
+	// top-level field of the template, a bare name a peer in the field's own
+	// scope (a sibling within the enclosing inline record, or a top-level field
+	// for a top-level field). The reference is resolved here, at load, so a
+	// broken bound is rejected before any content is validated; an unresolvable
+	// name is a templates error carrying a closest-match suggestion. Record item
+	// fields are walked recursively, each record's own fields forming the scope
+	// its bare names resolve against, while a `/name` always names a top-level
+	// field.
+	var checkListRefs func(scope []Field) error
+	checkListRefs = func(scope []Field) error {
+		for i := range scope {
+			f := &scope[i]
+			for _, ref := range []struct{ key, val string }{
+				{"max_items_from", f.MaxItemsFrom},
+				{"min_items_from", f.MinItemsFrom},
+			} {
+				if ref.val == "" {
+					continue
+				}
+				name := ref.val
+				lookup := scope
+				if strings.HasPrefix(name, "/") {
+					name = strings.TrimPrefix(name, "/")
+					lookup = t.Fields
+				}
+				var found *Field
+				candidates := make([]string, 0, len(lookup))
+				for j := range lookup {
+					candidates = append(candidates, lookup[j].Name)
+					if lookup[j].Name == name {
+						found = &lookup[j]
+					}
+				}
+				if found == nil {
+					msg := fmt.Sprintf("template %q: field %q: key %q names %q, which is not a declared field", t.Name, f.Name, ref.key, ref.val)
+					if closest := suggest.Closest(name, candidates); closest != "" {
+						msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+					}
+					return errors.New(msg)
+				}
+				if found.Type != FieldList {
+					return fmt.Errorf("template %q: field %q: key %q names %q, which is not a list field", t.Name, f.Name, ref.key, ref.val)
+				}
+			}
+			if f.Item != nil && f.Item.Type == FieldRecord {
+				if err := checkListRefs(f.Item.Fields); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := checkListRefs(t.Fields); err != nil {
+		return err
 	}
 	return nil
 }
