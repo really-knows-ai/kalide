@@ -16,8 +16,10 @@ package scaffold
 // have no canonical accessor, so they are authored scope alongside deckGuideCLI;
 // so are the delta's keys that only unexported switches parse — the section
 // declaration keys (name/accepted/min/max/max_depth), the reserved item-context
-// key item.depth (`.item.depth`), the image path keys (roots/dir/extensions)
-// and the enum keys (variants/variants_from) — see
+// key item.depth (`.item.depth`), the image path keys (roots/dir/extensions),
+// the enum keys (variants/variants_from) and the body.tables rule keys
+// (min_tables/max_tables/min_columns/max_columns/min_rows/max_rows and
+// cell_attributes) — plus the reserved table context names (table/tables) — see
 // agentGuideAuthoredScopeGroups. The vocabulary is never restated as a
 // hand-maintained fixture list: a format token added to the implementation is
 // returned by an accessor and immediately has to appear in a guide, so a token
@@ -260,6 +262,36 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 		}
 	})
 
+	t.Run("negative: a guide that omits a table token is detected", func(t *testing.T) {
+		// The table authored scope (agentGuideTableRuleKeys,
+		// agentGuideTableContextKeys) mirrors the body.tables parser and the
+		// reserved table context names, so the drift test must fail — never
+		// pass vacuously — when a guide drops one of those tokens. Build a
+		// synthetic guide carrying every table token as a real inline code span,
+		// then remove one token at a time and assert it is no longer satisfied:
+		// that is exactly the membership decision
+		// agentGuideAssertGuideCarries reds on.
+		tokens := append(append([]string{}, agentGuideTableRuleKeys...), agentGuideTableContextKeys...)
+		if len(tokens) < 2 {
+			t.Fatalf("the table authored scope carries %d token(s), want at least 2 to exercise a missing token", len(tokens))
+		}
+		var b strings.Builder
+		for _, tok := range tokens {
+			fmt.Fprintf(&b, "`%s` ", tok)
+		}
+		carried := b.String()
+		for _, tok := range tokens {
+			if !agentGuideContainsToken(carried, tok) {
+				t.Errorf("agentGuideContainsToken(synthetic guide, %q) = false, want true; the synthetic guide carries every table token", tok)
+				continue
+			}
+			without := strings.Replace(carried, fmt.Sprintf("`%s` ", tok), "", 1)
+			if agentGuideContainsToken(without, tok) {
+				t.Errorf("agentGuideContainsToken(synthetic guide without %q) = true, want false; a table token removed from a guide must fail the drift test", tok)
+			}
+		}
+	})
+
 	t.Run("context-aware matching rejects substring-only presence", func(t *testing.T) {
 		// The negative cases are the feedback-17 regressions: a token present
 		// only inside a longer word, or only in ordinary prose, must NOT count,
@@ -448,14 +480,46 @@ func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 //     switch.
 //   - enum key: the enum field's variants and variants_from keys
 //     (enum-variants-from) are parsed only by the same unexported switch.
+//   - table rule key: the `body.tables` sub-keys min_tables, max_tables,
+//     min_columns, max_columns, min_rows, max_rows and cell_attributes
+//     (table-limits, table-cell-attributes) are parsed only by
+//     parseManifestTables's unexported switch.
+//   - table context key: the reserved `table`/`tables` names are the
+//     `.table`/`.tables` render-context namespaces (table-layout-context) and
+//     reserved declared names (requirements.constraint.reserved-template-names).
 func agentGuideAuthoredScopeGroups() []agentGuideTokenGroup {
 	return []agentGuideTokenGroup{
 		{name: "section declaration key", tokens: []string{"name", "accepted", "min", "max", "max_depth"}},
 		{name: "reserved item-context key", tokens: []string{"item.depth"}},
 		{name: "image path key", tokens: []string{"roots", "dir", "extensions"}},
 		{name: "enum key", tokens: []string{"variants", "variants_from"}},
+		{name: "table rule key", tokens: agentGuideTableRuleKeys},
+		{name: "table context key", tokens: agentGuideTableContextKeys},
 	}
 }
+
+// agentGuideTableRuleKeys is the `body.tables` rule's sub-key family: the
+// numeric limits min_tables/max_tables/min_columns/max_columns/min_rows/
+// max_rows and the cell_attributes declaration list (table-limits,
+// table-cell-attributes). parseManifestTables parses them only in its
+// unexported inline switch, so no exported accessor enumerates them and they
+// are authored scope here, exactly as the image, enum and section-declaration
+// keys are. They belong to both guides' scopes, so a guide that omits one fails
+// the drift test.
+var agentGuideTableRuleKeys = []string{
+	"min_tables", "max_tables", "min_columns", "max_columns",
+	"min_rows", "max_rows", "cell_attributes",
+}
+
+// agentGuideTableContextKeys is the reserved table context-name family: `table`
+// and `tables` are the `.table`/`.tables` render-context namespaces
+// (table-layout-context) and reserved declared names
+// (requirements.constraint.reserved-template-names). They are authored here so
+// the table feature's drift coverage names them alongside its rule keys, even
+// though the generic reserved-name and ContextKeys accessors also carry them;
+// both guides' scopes require them, so a guide that omits one fails the drift
+// test.
+var agentGuideTableContextKeys = []string{"table", "tables"}
 
 // agentGuideCompositionTokens returns the `{{ template }}` layout-composition
 // tokens both guides must carry (guide-layout-composition, example-layout-
