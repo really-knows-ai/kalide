@@ -38,24 +38,27 @@ import (
 //   - an http or https URL is allowed;
 //   - any other destination is an error.
 //
-// checkLinks is fail-fast like the rest of the validator: it returns the first
-// offending link in that order and whether one was found.
+// checkLinks is collect-all like every step the fixed-order walk drives: it
+// returns every offending link in that order, not only the first.
 
 // checkLinks runs the inter-slide link pass over the loaded deck d. d must be
 // the deck model deck.LoadSlides produced; reg must be the same populated
-// registry Validate used for the structural steps. It returns the first link
-// error and whether one was found.
+// registry Validate used for the structural steps. It returns every link error
+// in the deck's number/letter order — each slide in order, and within it its
+// fields, body, sections recursively then its notes — rather than only the
+// first.
 //
 // Every slide is re-parsed through internal/slide to recover the bodies and
 // section structure that carry the links; this is cheap for a deck-sized input
 // and keeps the pass self-contained rather than threading state out of the
 // step-3 loop.
-func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationError, bool) {
+func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) []ValidationError {
 	if d == nil {
-		return ValidationError{}, false
+		return nil
 	}
 	labels, candidates := knownLabels(d)
 
+	var errs []ValidationError
 	for _, stack := range d.Stacks {
 		ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
 		ordered = append(ordered, stack.Slide)
@@ -63,23 +66,23 @@ func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationErr
 		for _, s := range ordered {
 			src, err := fs.ReadFile(fsys, s.Path)
 			if err != nil {
-				return New(s.Path, 0, nil,
+				errs = append(errs, New(s.Path, 0, nil,
 					fmt.Sprintf("cannot read slide: %v", err),
-					"check that the slide file exists and is readable"), true
+					"check that the slide file exists and is readable"))
+				continue
 			}
 			// Step 3 already parsed every slide successfully, so a parse error
-			// here is unreachable; the guard keeps the pass fail-fast rather
-			// than dereferencing a nil slide.
+			// here is unreachable; the guard keeps the pass from
+			// dereferencing a nil slide and lets the next slide still run.
 			ps, err := slide.Parse(s.Path, src, reg)
 			if err != nil {
-				return adaptParseError(err), true
+				errs = append(errs, adaptParseError(err))
+				continue
 			}
-			if errs := checkSlideLinks(s.Path, ps, reg, labels, candidates); len(errs) > 0 {
-				return errs[0], true
-			}
+			errs = append(errs, checkSlideLinks(s.Path, ps, reg, labels, candidates)...)
 		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkSlideLinks checks one parsed slide's links in the same top-to-bottom

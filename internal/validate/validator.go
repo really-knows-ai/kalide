@@ -129,8 +129,8 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 
 	// Step 4: inter-slide #label links, last, now that every slide in the deck
 	// has passed steps 1–3 and every slide label is therefore known.
-	if verr, invalid := checkLinks(fsys, d, reg); invalid {
-		return verr, true
+	if errs := checkLinks(fsys, d, reg); len(errs) > 0 {
+		return errs[0], true
 	}
 	return ValidationError{}, false
 }
