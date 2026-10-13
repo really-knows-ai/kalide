@@ -116,6 +116,32 @@ func mediaBaseForLayer(layer *template.LibraryLayer) string {
 	return mediaURLPrefix
 }
 
+// imageRootMedia is the image field `roots:` entry naming the library layer's
+// media/ tree (image-field-roots): a field declaring it takes a media-relative
+// path and resolves to the same URL the layout `media` helper produces for the
+// owning layer's media/. It mirrors internal/template's unexported
+// imageRootMedia — the two packages cannot share the constant directly, and the
+// manifest parser is the source of truth for the accepted root names, rejecting
+// any other — exactly as mediaURLPrefix mirrors internal/server.MediaPath.
+const imageRootMedia = "media"
+
+// imageFieldAllowsMedia reports whether f declares a media root, so an image
+// field that declares one takes a media-relative path resolving to the layout
+// media helper's URL for its owning layer (image-field-roots). A field with no
+// roots — or only an assets root — keeps the written deck-relative `assets/…`
+// value, exactly as before.
+func imageFieldAllowsMedia(f *template.Field) bool {
+	if f == nil {
+		return false
+	}
+	for _, root := range f.Roots {
+		if root == imageRootMedia {
+			return true
+		}
+	}
+	return false
+}
+
 // RenderSlide renders one parsed, validated slide as a single reveal.js
 // <section> fragment, ready to be placed directly inside the deck page's
 // `.reveal > .slides` container.
@@ -366,6 +392,19 @@ type renderer struct {
 	// (funcMapForLayer), so a media reference inside a called section resolves
 	// in the layer that owns it (section-helper, library-layer-references).
 	funcMap htmltmpl.FuncMap
+
+	// fieldMedia is the `media` helper of the template whose fields values is
+	// currently converting — the owning layer's media resolver, exactly the
+	// func that template's layout `{{ media … }}` references execute with
+	// (funcMapForLayer). values sets it for the duration of one template's
+	// field conversion and restores it afterwards, so an image field's media
+	// root resolves in the layer that owns the field's template, and a nested
+	// section-template-as-type value, whose values call sets it for ITS own
+	// template, does not leak its layer into the enclosing template
+	// (image-field-roots). It is nil when no owning-layer media helper is
+	// known (a renderer without a registry, or a bare layout), in which case a
+	// media-root image field keeps its written value.
+	fieldMedia func(string) (string, error)
 
 	// layerMediaBase maps a *template.LibraryLayer to the served media URL base
 	// its `media` helper resolves under. It is the renderer's per-layer URL hook:
@@ -1300,6 +1339,23 @@ func (r *renderer) funcMapForLayer(layer *template.LibraryLayer) htmltmpl.FuncMa
 	return fm
 }
 
+// mediaForTemplate returns the `media` helper the layout of t executes with —
+// the owning layer's media resolver — or nil when the renderer holds no
+// registry or t is nil. It is funcMapForLayer's `media` entry, so an image
+// field's media root produces exactly the URL a `{{ media … }}` reference in
+// the same template's layout produces: a two-layer deck's external layer
+// resolves under its own prefix and media filesystem, while a sole-layer deck
+// (or a registry with no provenance) keeps the caller's `media` helper, whose
+// base the deck supplied to RenderSlide (image-field-roots,
+// library-layer-references).
+func (r *renderer) mediaForTemplate(t *template.Template) func(string) (string, error) {
+	if r == nil || r.reg == nil || t == nil {
+		return nil
+	}
+	fn, _ := r.funcMapForLayer(r.reg.LayerOf(t.Name))["media"].(func(string) (string, error))
+	return fn
+}
+
 // deckContext builds the reserved `deck` execution context
 // (deck-data-in-templates): the deck-wide config values under title, author
 // and date, plus the author-declared properties under properties. title is
@@ -1455,6 +1511,16 @@ type sectionCtx struct {
 // entry. A section-template-as-type field value keeps `deck`/`slide` but is
 // data-only and carries no `item`, `raw` or `data`.
 func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sectionCtx) (map[string]any, error) {
+	// The fields converted below belong to t, so an image field's media root
+	// resolves through the media helper of t's OWNING layer for the duration
+	// of this call (image-field-roots). Saving and restoring the resolver lets
+	// a nested section-template-as-type value — which recurses through values
+	// for its own template — resolve in its own layer without leaking that
+	// layer into the enclosing template's remaining fields.
+	prevMedia := r.fieldMedia
+	r.fieldMedia = r.mediaForTemplate(t)
+	defer func() { r.fieldMedia = prevMedia }()
+
 	out := make(map[string]any, len(t.Fields))
 	for i := range t.Fields {
 		f := &t.Fields[i]
@@ -1570,6 +1636,14 @@ func (r *renderer) contextNodes(sections []slide.Section) []template.ContextNode
 // mapping of typed values, each converted field by field through this same
 // per-type conversion, so a record's text fields arrive pre-rendered and its
 // other fields typed, exactly like a template's top-level fields.
+//
+// An image field (image-field-roots) resolves to the URL of the file it names
+// in its declared roots: a media root through the owning template's `media`
+// helper (renderer.fieldMedia, set by values for the template being
+// converted), so the layout receives the same URL a `{{ media … }}` reference
+// in that template's layout produces; an assets root — and a field with no
+// roots — keeps the written deck-relative `assets/…` value, which the deck page
+// serves under the assets URL exactly as before.
 func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, secCtx *sectionCtx) (any, error) {
 	if raw == nil && f.Nullable {
 		return nil, nil
@@ -1689,8 +1763,38 @@ func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, s
 		}
 		return out, nil
 
+	case template.FieldImage:
+		// An image field renders as the resolved URL of the file it names in
+		// its declared roots (image-field-roots). A field that declares a
+		// `media` root takes a media-relative path, so it resolves through the
+		// owning template's `media` helper — the very func its layout's
+		// `{{ media … }}` references execute with (imageFieldAllowsMedia,
+		// mediaForTemplate) — and reaches the layout as that helper's URL.
+		// When the roots include both `assets` and `media`, the helper's own
+		// existence check decides: a path that exists in the owning layer's
+		// media/ resolves to the media URL, and any other path (an assets
+		// value) keeps the written `assets/…` value, which the deck page
+		// serves under the assets URL exactly as before (server.AssetsPath). A
+		// field with no roots, or an assets-only root, never consults media
+		// and keeps the written value byte-identically.
+		if !imageFieldAllowsMedia(f) {
+			return raw, nil
+		}
+		s, ok := raw.(string)
+		if !ok {
+			return raw, nil
+		}
+		if r.fieldMedia != nil {
+			if url, err := r.fieldMedia(s); err == nil && url != "" {
+				return url, nil
+			}
+		}
+		// No owning-layer media helper, or the path names no file in a
+		// declared media root: keep the written value (the assets behaviour).
+		return raw, nil
+
 	default:
-		// boolean, enum, link and image values render as written.
+		// boolean, enum and link values render as written.
 		return raw, nil
 	}
 }
