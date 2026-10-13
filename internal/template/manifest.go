@@ -442,6 +442,107 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 	return f, nil
 }
 
+// namedDefinitionKind identifies which of the three named-definition sections
+// of a library.yaml — groups, field_sets and types
+// (named-library-definitions) — a bare definition name is resolved against.
+type namedDefinitionKind int
+
+const (
+	// namedDefinitionGroup is a named accept-list: a section declaration
+	// references it from its `accepted:` as `@<name>`, combinable with
+	// literal template names.
+	namedDefinitionGroup namedDefinitionKind = iota
+
+	// namedDefinitionFieldSet is a named field group: a template references
+	// it from its `fields:` as the sequence entry `- include: <name>`.
+	namedDefinitionFieldSet
+
+	// namedDefinitionType is a named field type: a field references it as
+	// `type: <name>`, expanding the named descriptor into the field.
+	namedDefinitionType
+)
+
+// String names the kind as a resolveNamedDefinition error reads it: "group",
+// "field set" or "type".
+func (k namedDefinitionKind) String() string {
+	switch k {
+	case namedDefinitionGroup:
+		return "group"
+	case namedDefinitionFieldSet:
+		return "field set"
+	case namedDefinitionType:
+		return "type"
+	default:
+		return "definition"
+	}
+}
+
+// resolveNamedDefinition resolves name against defs, the owning library layer's
+// named definitions (LibraryLayer.Definitions), for the given kind
+// (named-library-definitions). It returns the definition — a group's accept-list
+// ([]string), a field set's fields ([]Field) or a named type's descriptor
+// (Field) — and reports a name that no definition of that kind carries as a
+// positioned templates error (a *LibraryError) carrying a closest-match
+// suggestion (closest-match-suggestions).
+//
+// defs is the definitions of the layer that owns the referencing template; a
+// nil defs holds no definitions, so every name is unknown. name is the bare
+// definition name — the caller strips a reference's `@` sigil (and any
+// `include:`/`type:` key) before calling — and supplies the position
+// (manifestPath, line) of the reference. A type name's suggestion set is every
+// valid field type, the built-in types (manifestFieldTypes) as well as the
+// declared named types, so a misspelling of either is suggested.
+func resolveNamedDefinition(kind namedDefinitionKind, name string, defs *LibraryDefinitions, manifestPath string, line int) (any, error) {
+	switch kind {
+	case namedDefinitionGroup:
+		if defs != nil {
+			if group, ok := defs.Groups[name]; ok {
+				return group, nil
+			}
+		}
+	case namedDefinitionFieldSet:
+		if defs != nil {
+			if set, ok := defs.FieldSets[name]; ok {
+				return set, nil
+			}
+		}
+	case namedDefinitionType:
+		if defs != nil {
+			if t, ok := defs.Types[name]; ok {
+				return t, nil
+			}
+		}
+	}
+	e := libraryErrorf(manifestPath, line, "unknown %s %q", kind, name)
+	return nil, e.withSuggestion(name, namedDefinitionCandidates(kind, defs))
+}
+
+// namedDefinitionCandidates returns the names a resolveNamedDefinition error
+// suggests against: the names declared of the given kind, plus, for a type, the
+// built-in field types. It returns nil when there are none.
+func namedDefinitionCandidates(kind namedDefinitionKind, defs *LibraryDefinitions) []string {
+	switch kind {
+	case namedDefinitionGroup:
+		if defs == nil {
+			return nil
+		}
+		return sortedStringKeys(defs.Groups)
+	case namedDefinitionFieldSet:
+		if defs == nil {
+			return nil
+		}
+		return sortedStringKeys(defs.FieldSets)
+	case namedDefinitionType:
+		out := sortedStringKeys(manifestFieldTypes)
+		if defs != nil {
+			out = append(out, sortedStringKeys(defs.Types)...)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 // parseManifestSections decodes the `sections:` sequence.
 func parseManifestSections(manifestPath string, val *yaml.Node) ([]SectionDecl, error) {
 	if val.Kind != yaml.SequenceNode {
