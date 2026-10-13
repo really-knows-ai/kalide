@@ -82,7 +82,8 @@ type ValueError struct {
 	Line int
 
 	// Rule names the violated rule: "type", "required", "date", "enum",
-	// "image", "link", "max_length", "min_items", "max_items", "min", "max",
+	// "image", "link", "max_length", "min_items", "max_items",
+	// "max_items_from", "min_items_from", "min", "max",
 	// "unknown-field", "section-template", a body rule name ("required",
 	// "disallowed", "max_words", "max_paragraphs", "max_list_items",
 	// "subheadings" from CheckBody), or a mdcheck kind for inline text
@@ -369,6 +370,53 @@ func checkRecordValue(c *checker, path []PathSegment, f *Field, value any, depth
 	}
 	record := &Template{Fields: f.Fields}
 	c.mapValues(path, record, m, depth)
+}
+
+// checkCrossFieldListConstraints enforces one list field's cross-field bound
+// (cross-field-list-constraints): rule names the reference being enforced,
+// either "max_items_from" — the field's item count must not exceed the named
+// peer list's count — or "min_items_from" — it must be at least the peer's
+// count. value is this list field's value and peer/peerValue are the field the
+// reference names and its value in the same mapping. The caller resolves the
+// reference — a leading `/name` names a top-level field of the template, a bare
+// name a sibling within the enclosing inline record — so this helper only
+// compares the two lengths; it is shared by the mapping pass at every nesting
+// depth, so a bound declared inside an inline record is enforced through the
+// same helper as a top-level one.
+//
+// A violated bound is reported as one error naming both fields (this field and
+// the peer) and both lengths, so the author sees the field, its peer and the
+// two counts together; a value or peer that is not a list carries no length to
+// compare and is skipped. The caller invokes it once per reference, so a field
+// declaring both bounds toward different peers has each enforced against its
+// own peer.
+func checkCrossFieldListConstraints(c *checker, path []PathSegment, f *Field, rule string, value any, peer *Field, peerValue any) {
+	if c == nil || f == nil || peer == nil {
+		return
+	}
+	items, ok := asSlice(value)
+	if !ok {
+		return
+	}
+	peerItems, ok := asSlice(peerValue)
+	if !ok {
+		return
+	}
+	n, bound := len(items), len(peerItems)
+	switch rule {
+	case "max_items_from":
+		if n > bound {
+			c.add(path, "max_items_from", value,
+				fmt.Sprintf("max_items_from: field %q has %d item(s), more than field %q has %d", f.Name, n, peer.Name, bound),
+				fmt.Sprintf("remove items until at most %d remain", bound))
+		}
+	case "min_items_from":
+		if n < bound {
+			c.add(path, "min_items_from", value,
+				fmt.Sprintf("min_items_from: field %q has %d item(s), fewer than field %q has %d", f.Name, n, peer.Name, bound),
+				fmt.Sprintf("add items until at least %d remain", bound))
+		}
+	}
 }
 
 // validateValue checks one value against one field's type and rules.
