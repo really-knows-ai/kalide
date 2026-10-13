@@ -499,6 +499,154 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	return out, nil
 }
 
+// walkBoundedSelfNesting walks a declared-section self-nesting or cyclic
+// acceptance to the longest composition chain its max_depth declarations allow,
+// so the walk stops at a bound instead of reporting a reference cycle
+// (requirements.requirement.bounded-self-nesting,
+// requirements.constraint.section-cycle-error-chain).
+//
+// Section.Walk calls it when a declared-section acceptance names a template
+// already on the composition path — the reference cycle it would otherwise
+// report as *SectionCycleError. The cycle is bounded when a declaration on it
+// carries max_depth: N, and the walk then follows the cycle to the longest chain
+// its bounds allow, a composition prefix plus one heading per bounded level.
+//
+// resolve is the same name → *Template lookup Section.Walk holds. start is the
+// template the acceptance recurs to (the resolved template of the section name
+// already on the path), and ancestors is the composition chain above it, root
+// first, as resolved template names — start's own name is NOT included (the
+// caller passes the path up to but excluding the first occurrence of the
+// repeated name). The returned chain is the full chain the walk produces:
+// ancestors, start, then one heading per bounded level. closing is the
+// declaration whose accepted section closed the cycle, the edge from the last
+// ancestor to start; it is part of the cycle, so its max_depth counts toward
+// boundedness. A nil closing leaves that edge unbounded.
+//
+// Only declared-section acceptances are walked: a `section` helper call is a
+// composition reference but not a heading and carries no max_depth, so a
+// helper-closed cycle is not bounded here and stays *SectionCycleError in Walk.
+// Each declaration with max_depth N bounds the instances it produces — an
+// instance resolving to the accepted template has at most N enclosing instances
+// of that same template, so its .item.depth is at most N — and the walk stops
+// adding that template once it already appears N+1 times on the chain. When
+// several declarations on one cycle carry max_depth, each enforces its own bound
+// independently and the walk stops at the first bound the chain reaches.
+//
+// bounded reports whether a max_depth declaration stopped the walk. When it is
+// true, chain is the longest bounded chain and maxDepth is the bound that
+// stopped it, for the depth-limit error's max_depth clause
+// (requirements.constraint.section-depth-limit). When it is false the cycle
+// carries no max_depth and is an unbounded reference cycle: chain is nil and
+// Section.Walk must report it as *SectionCycleError. A referenced name the
+// resolver does not define is an error, exactly as Section.Walk reports one; a
+// nil start or resolver yields no chain and no error.
+func walkBoundedSelfNesting(resolve func(name string) (*Template, bool), start *Template, ancestors []string, closing *SectionDecl) (chain []string, bounded bool, maxDepth int, err error) {
+	if start == nil || resolve == nil {
+		return nil, false, 0, nil
+	}
+
+	// counts[name] is how many times a resolved template name already appears on
+	// the chain: the enclosing-instance count (.item.depth) a declaration's
+	// max_depth bounds.
+	counts := make(map[string]int, len(ancestors)+1)
+	for _, name := range ancestors {
+		counts[name]++
+	}
+	chain = make([]string, 0, len(ancestors)+1)
+	chain = append(chain, ancestors...)
+	chain = append(chain, start.Name)
+	counts[start.Name]++
+
+	// decls[i] is the declaration whose accepted section led to chain[i] (nil for
+	// the composition prefix), so a revisited name can inspect the declarations
+	// on the cycle it closes and decide whether a max_depth bounds it.
+	decls := make([]*SectionDecl, len(chain))
+	decls[len(ancestors)] = closing
+
+	longest := append([]string(nil), chain...)
+	longestMaxDepth := 0
+	bounded = false
+	unbounded := false
+	var walkErr error
+
+	onChain := func(name string) int {
+		for i, n := range chain {
+			if n == name {
+				return i
+			}
+		}
+		return -1
+	}
+
+	var walk func(t *Template)
+	walk = func(t *Template) {
+		if unbounded || walkErr != nil || t == nil {
+			return
+		}
+		for i := range t.Sections {
+			d := &t.Sections[i]
+			for _, accepted := range d.Accepted {
+				nested, ok := resolve(accepted)
+				if !ok || nested == nil {
+					walkErr = fmt.Errorf("section template %q is not defined", accepted)
+					return
+				}
+				// The declaration's bound: an instance it produces resolves to
+				// the accepted template and has counts[nested.Name] enclosing
+				// instances of that same template, so its .item.depth must not
+				// exceed max_depth.
+				if d.MaxDepth > 0 && counts[nested.Name] > d.MaxDepth {
+					bounded = true
+					if len(chain) > len(longest) {
+						longest = append([]string(nil), chain...)
+						longestMaxDepth = d.MaxDepth
+					}
+					continue
+				}
+				if idx := onChain(nested.Name); idx >= 0 {
+					// The edge closes a cycle. It is bounded only when a
+					// declaration on the cycle carries max_depth: the closing
+					// edge d plus every edge after the first occurrence at idx.
+					// Otherwise the walk could never terminate, so the cycle is
+					// an unbounded reference cycle.
+					cycleBounded := d.MaxDepth > 0
+					for j := idx + 1; j < len(decls) && !cycleBounded; j++ {
+						if decls[j] != nil && decls[j].MaxDepth > 0 {
+							cycleBounded = true
+						}
+					}
+					if !cycleBounded {
+						unbounded = true
+						return
+					}
+				}
+				counts[nested.Name]++
+				chain = append(chain, nested.Name)
+				decls = append(decls, d)
+				walk(nested)
+				decls = decls[:len(decls)-1]
+				chain = chain[:len(chain)-1]
+				counts[nested.Name]--
+				if unbounded || walkErr != nil {
+					return
+				}
+			}
+		}
+		if len(chain) > len(longest) {
+			longest = append([]string(nil), chain...)
+		}
+	}
+
+	walk(start)
+	if walkErr != nil {
+		return nil, false, 0, walkErr
+	}
+	if unbounded {
+		return nil, false, 0, nil
+	}
+	return longest, bounded, longestMaxDepth, nil
+}
+
 // Variant is one enum field's layout-variant selection: the field that selects
 // the variant and the effective variant value.
 type Variant struct {
