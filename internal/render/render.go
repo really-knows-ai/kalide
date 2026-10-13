@@ -507,7 +507,14 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	// by the same shared builders the load-time example execution uses, so the
 	// two halves cannot drift (template-context).
 	secCtx.raw = template.RawContext(sec.Frontmatter, tmpl, sec.Body)
-	secCtx.data = template.DataContext(r.contextNodes(sec.Children), nil, secCtx.raw)
+	// The instance's own ancestor chain: the enclosing chain it inherited with
+	// its own resolved template appended — the same value renderInstance
+	// threads onto each child context. Passing it as the shared builder's
+	// ancestor identity makes each authored child's `.data` item descriptor
+	// carry the per-level depth the render side's executed item descriptors
+	// use (item-context, bounded-self-nesting).
+	instanceAncestors := append(append([]string{}, secCtx.ancestors...), tmpl.Name)
+	secCtx.data = template.DataContext(r.contextNodes(sec.Children), instanceAncestors, secCtx.raw)
 	return r.renderInstance(sec, tmpl, r.reg.LayerOf(tmpl.Name), secCtx)
 }
 
