@@ -732,11 +732,11 @@ type sectionDecl struct {
 // validation only; it never resolves the instance's `template:` value.
 func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name string, line int, path string) (sectionDecl, error) {
 	names := cat.SectionNames(parentTemplate)
-	accepted, minRep, maxRep, _, ok := cat.SectionDecl(parentTemplate, name)
+	accepted, minRep, maxRep, maxDepth, ok := cat.SectionDecl(parentTemplate, name)
 	if !ok {
 		return sectionDecl{}, unknownName(file, line, path, "section", name, names)
 	}
-	return sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}, nil
+	return sectionDecl{accepted: accepted, min: minRep, max: maxRep, maxDepth: maxDepth, ok: true}, nil
 }
 
 // resolveSectionTemplate is the parent-level `template:` resolution entry
