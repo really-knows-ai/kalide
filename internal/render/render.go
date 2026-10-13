@@ -473,6 +473,20 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 		data["body"] = body
 	}
 
+	// The reserved `.table`/`.tables` entries are ALWAYS present in the slide
+	// layout map (template-context, table-layout-context): the slide's first
+	// parsed GFM table (or nil) and its source-ordered tables (an empty list
+	// when the body carries none). The body's tables are parsed against the
+	// slide template's declared cell attributes, so each cell's `{...}` groups
+	// decode exactly as validation resolved them. A template that does not opt
+	// in to tables declares none; the body then cannot contain a table and the
+	// entries stay nil/empty, so a layout reads them without a guard. The raw
+	// body source is used — `.body` keeps carrying only the non-table content,
+	// rendered by renderBody above (tables omitted).
+	table, tables := tableContext(s.Body, cellAttributeSpecs(tmpl))
+	data["table"] = table
+	data["tables"] = tables
+
 	// Top-level section instances are rendered through their own layouts,
 	// bottom-up, and grouped by their declared name as lists of trusted HTML,
 	// preserving source order, so a layout ranges over them in the order the
@@ -648,6 +662,17 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 		}
 		data["body"] = body
 	}
+
+	// Every section instance, like the slide layout, carries the reserved
+	// `.table`/`.tables` entries ALWAYS (template-context,
+	// table-layout-context): the instance's first parsed GFM table (or nil)
+	// and its source-ordered tables (an empty list when the body carries
+	// none), parsed against this instance's template's declared cell
+	// attributes. `.body` keeps carrying only the non-table content rendered
+	// above (renderBody omits tables).
+	table, tables := tableContext(sec.Body, cellAttributeSpecs(tmpl))
+	data["table"] = table
+	data["tables"] = tables
 
 	// Render this instance's child instances and attach them to its map as
 	// trusted-HTML lists keyed by declared section name — one element per child
@@ -1183,6 +1208,15 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 		}
 		data["body"] = rendered
 	}
+	// The section-helper target, like every section instance, carries the
+	// reserved `.table`/`.tables` entries ALWAYS (template-context,
+	// table-layout-context): the call body's first parsed GFM table (or nil)
+	// and its source-ordered tables (an empty list when the body carries
+	// none), parsed against the target template's declared cell attributes.
+	// `.body` keeps carrying only the non-table content rendered above.
+	targetTable, targetTables := tableContext(call.Body, cellAttributeSpecs(call.Template))
+	data["table"] = targetTable
+	data["tables"] = targetTables
 	// Merge the target's rendered child-section lists into its layout map, one
 	// trusted-HTML element per passed child in passed order, keyed by declared
 	// section name, so the target's own layout splices each child's markup. The
@@ -2102,6 +2136,46 @@ func renderCellLines(lines []string) htmltmpl.HTML {
 		rendered[i] = string(renderInline(seg))
 	}
 	return htmltmpl.HTML(strings.Join(rendered, "<br>"))
+}
+
+// cellAttributeSpecs returns the plain mdcheck cell-attribute descriptors for
+// the cell attributes a template declares in its `body.tables` rule, the set
+// tableContext decodes each parsed table cell's `{...}` groups against
+// (table-layout-context, table-cell-attributes). A template that does not opt
+// in to tables (a nil Body.Tables), or one that declares no cell attributes,
+// yields nil, so a cell's attrs map is empty.
+//
+// mdcheck.CellAttributeSpec is mdcheck's own plain descriptor, deliberately
+// independent of internal/template; the conversion maps each declared
+// CellAttribute's kind to mdcheck's boolean/enum constant and copies its
+// variants, so the returned slice never aliases the template's read-only
+// declaration slice. It mirrors internal/template's (and internal/validate's)
+// unexported mdcheckCellAttributeSpecs; those converters are unexported, so
+// render carries this small mirror rather than importing one (gfm-tables).
+func cellAttributeSpecs(tmpl *template.Template) []mdcheck.CellAttributeSpec {
+	if tmpl == nil || tmpl.Body.Tables == nil {
+		return nil
+	}
+	attrs := tmpl.Body.Tables.CellAttributes
+	if len(attrs) == 0 {
+		return nil
+	}
+	specs := make([]mdcheck.CellAttributeSpec, len(attrs))
+	for i, a := range attrs {
+		kind := string(a.Kind)
+		switch a.Kind {
+		case template.FieldBoolean:
+			kind = mdcheck.CellAttributeBoolean
+		case template.FieldEnum:
+			kind = mdcheck.CellAttributeEnum
+		}
+		specs[i] = mdcheck.CellAttributeSpec{
+			Name:     a.Name,
+			Kind:     kind,
+			Variants: append([]string(nil), a.Variants...),
+		}
+	}
+	return specs
 }
 
 // plainText returns an inline-Markdown field's visible text with all styles
