@@ -90,8 +90,8 @@ func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationErr
 func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
 	tmpl, _ := reg.Lookup(ps.Template)
 
-	if verr, invalid := checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates); invalid {
-		return verr, true
+	if errs := checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates); len(errs) > 0 {
+		return errs[0], true
 	}
 	if errs := checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates); len(errs) > 0 {
 		return errs[0], true
@@ -119,8 +119,8 @@ func checkSectionLinks(file string, sections []slide.Section, reg *template.Regi
 		if sec.Template != "" {
 			secTmpl, _ = reg.Lookup(sec.Template)
 		}
-		if verr, invalid := checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates); invalid {
-			return verr, true
+		if errs := checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates); len(errs) > 0 {
+			return errs[0], true
 		}
 		if errs := checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates); len(errs) > 0 {
 			return errs[0], true
@@ -141,19 +141,22 @@ func checkSectionLinks(file string, sections []slide.Section, reg *template.Regi
 // field carries the field's path but no line, exactly as the field errors of
 // step 3 do. Non-http(s) field destinations never reach here: template's
 // validateLink/validateText already reject them in step 3, and the deck must
-// have passed step 3 for this pass to run. It returns the first error and
-// whether one was found.
-func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// have passed step 3 for this pass to run. It returns every error of every
+// `#label` target CheckValues collected from the data map — link fields and
+// inline text fields alike — in declaration order with their paths, rather than
+// only the first.
+func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
 	if tmpl == nil || len(data) == 0 {
-		return ValidationError{}, false
+		return nil
 	}
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup)
+	var errs []ValidationError
 	for _, lr := range res.Links {
 		if verr, invalid := checkLabelRef(file, lr.Label, lr.Destination, valuePath(lr.Path), 0, labels, candidates); invalid {
-			return verr, true
+			errs = append(errs, verr)
 		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkBodyLinks collects the inline links of one Markdown body and checks them
