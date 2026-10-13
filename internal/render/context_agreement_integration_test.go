@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -116,6 +117,8 @@ fields:
   - name: subtitle
     type: text
     default: Defaulted
+  - name: summary
+    type: text
   - name: nickname
     type: text
     nullable: true
@@ -144,11 +147,14 @@ body:
 `
 
 	// agreementHostLayout prints ONLY the reserved source views — its own `.raw`
-	// and its authored children as `.data` — plus the typed-schema field values
-	// BOTH halves convert identically (a nullable null, a coerced string and a
-	// per-item record map). It never prints a converted text field value through
-	// any other name: the render half pre-renders text through inline Markdown
-	// while the load half keeps the authored string, so only `.raw` carries text.
+	// (including its `.raw` key listing, so an explicit null stays a PRESENT
+	// entry while an omitted optional field is ABSENT) and its authored children
+	// as `.data` (each entry's `.item.depth`, the shared InstanceDepth value at
+	// every level) — plus the typed-schema field values BOTH halves convert
+	// identically (a nullable null, a coerced string and a per-item record map).
+	// It never prints a converted text field value through any other name: the
+	// render half pre-renders text through inline Markdown while the load half
+	// keeps the authored string, so only `.raw` carries text.
 	// The `len` reads make the coercion observable: a coerce text field that was
 	// left a YAML number would fail `len` on both halves, and a record item that
 	// was left an unconverted map would fail `len .id` likewise — so neither
@@ -156,7 +162,9 @@ body:
 	agreementHostLayout = `<div class="agree-host">` +
 		`<span class="host-raw-title">{{ .raw.title }}</span>` +
 		`<span class="host-raw-body">{{ .raw.body }}</span>` +
+		`<span class="host-raw-keys">{{ range $k, $v := .raw }}{{ $k }};{{ end }}</span>` +
 		`<span class="host-field-nickname">{{ if .nickname }}present{{ else }}nil{{ end }}</span>` +
+		`<span class="host-field-summary">{{ if .summary }}present{{ else }}nil{{ end }}</span>` +
 		`<span class="host-field-code">{{ .code }}</span>` +
 		`<span class="host-field-code-len">{{ len .code }}</span>` +
 		`<span class="host-field-people-count">{{ len .people }}</span>` +
@@ -164,12 +172,14 @@ body:
 		`<span class="host-field-person" data-name="{{ .name }}" data-id="{{ .id }}" data-id-len="{{ len .id }}" data-note="{{ if .note }}present{{ else }}nil{{ end }}"></span>` +
 		`{{ end }}` +
 		`{{ range .data.blocks }}` +
-		`<span class="host-block" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}">` +
+		`<span class="host-block" data-index="{{ .item.index }}" data-depth="{{ .item.depth }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}">` +
 		`<span class="host-block-raw-text">{{ .raw.text }}</span>` +
 		`<span class="host-block-raw-body">{{ .raw.body }}</span>` +
+		`<span class="host-block-raw-keys">{{ range $k, $v := .raw }}{{ $k }};{{ end }}</span>` +
 		`{{ range .data.leaves }}` +
-		`<span class="host-leaf" data-index="{{ .item.index }}" data-count="{{ .item.count }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent-text="{{ .item.parent.text }}">` +
+		`<span class="host-leaf" data-index="{{ .item.index }}" data-depth="{{ .item.depth }}" data-count="{{ .item.count }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent-text="{{ .item.parent.text }}">` +
 		`<span class="host-leaf-raw-name">{{ .raw.name }}</span>` +
+		`<span class="host-leaf-raw-keys">{{ range $k, $v := .raw }}{{ $k }};{{ end }}</span>` +
 		`</span>` +
 		`{{ end }}` +
 		`</span>` +
@@ -190,8 +200,15 @@ body:
   mode: optional
 `
 
-	agreementBlockLayout = `<div class="agree-block">` +
-		`<span class="agree-block-text">{{ .text }}</span>` +
+	// agreementBlockLayout prints ONLY the reserved `.item`/`.raw` views (never a
+	// converted field value), so the block's load-time-equivalent execution and
+	// its render-time execution produce identical bytes: the block's executed
+	// `.item.depth` (0 — no enclosing same-template ancestor) and its `.raw` key
+	// listing (`body;text;`, an authored body present, the `template` selector
+	// excluded).
+	agreementBlockLayout = `<div class="agree-block" data-depth="{{ .item.depth }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}">` +
+		`<span class="agree-block-raw-text">{{ .raw.text }}</span>` +
+		`<span class="agree-block-raw-keys">{{ range $k, $v := .raw }}{{ $k }};{{ end }}</span>` +
 		`</div>`
 
 	agreementBlockExample = "```\n" +
@@ -213,11 +230,37 @@ body:
   mode: disallowed
 `
 
-	agreementLeafLayout = `<span class="agree-leaf"><span class="leaf-raw-name">{{ .raw.name }}</span></span>`
+	// agreementLeafLayout prints ONLY the reserved `.item`/`.raw` views, so the
+	// leaf's load-time-equivalent execution and its render-time execution match
+	// byte for byte: the leaf's executed `.item.depth` (0) and its `.raw` key
+	// listing (`name;`, a body the example does not supply is absent).
+	agreementLeafLayout = `<span class="agree-leaf" data-depth="{{ .item.depth }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}"><span class="leaf-raw-name">{{ .raw.name }}</span><span class="leaf-raw-keys">{{ range $k, $v := .raw }}{{ $k }};{{ end }}</span></span>`
 
 	agreementLeafExample = "```\n" +
 		"name: Sample leaf\n" +
 		"```\n"
+
+	// The self-nesting probe: a slide template declaring a `loop` section
+	// accepting the `agreerepeatloop` section template, which declares the SAME
+	// `loop` section accepting `agreerepeatloop` — a self-accepting (cyclic)
+	// declaration. The chain is built directly in the test (Register, no
+	// Validate) so the loader still rejects the cycle until phase 7 adds
+	// max_depth, while the render pipeline (which never validates) genuinely
+	// renders it. The slide layout reads the top-level `.data.loop` entry's
+	// `item.depth`, and the loop layout reads its own executed `item.depth` and
+	// its own `.data.loop` entry's `item.depth`, so the three self-nested levels
+	// read 0/1/2 from BOTH the executed descriptor and the shared `.data` view
+	// (item-context, bounded-self-nesting).
+	agreeRepeatSlideLayout = `<section class="agree-repeat-slide">` +
+		`{{ range .data.loop }}<span class="agree-repeat-data" data-depth="{{ .item.depth }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}"><span class="agree-repeat-data-name">{{ .raw.name }}</span></span>{{ end }}` +
+		`{{ range .loop }}{{ . }}{{ end }}` +
+		`</section>`
+
+	agreeRepeatLoopLayout = `<div class="agree-repeat-loop" data-depth="{{ .item.depth }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}">` +
+		`<span class="agree-repeat-name">{{ .raw.name }}</span>` +
+		`{{ range .data.loop }}<span class="agree-repeat-data" data-depth="{{ .item.depth }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}"><span class="agree-repeat-data-name">{{ .raw.name }}</span></span>{{ end }}` +
+		`{{ range .loop }}{{ . }}{{ end }}` +
+		`</div>`
 )
 
 // TestLoadAndRenderRawDataContextAgree asserts that load-time and render-time
@@ -235,13 +278,29 @@ body:
 // It pins (raw-source-context, section-data-context, item-context,
 // template-context, nullable-fields, record-item-type, text-coercion): the
 // slide's `.raw.title`/`.raw.body` are the author's source, not the converted
-// text values; `.data.blocks` carries one entry per authored instance, each
-// with its own `.raw`/`.item`, and a nested instance's children are reached
-// through its entry's `.data` with `.item.parent` the enclosing source values;
-// the nullable `nickname` reads nil, the coerce `code` reads "7" and the
-// `people` list reads as one map per item with its coerce `id` a string and its
-// omitted optional `note` nil; and the render-time page reproduces the
-// load-time-equivalent fragment byte for byte.
+// text values; the slide's `.raw` key listing keeps an explicitly null declared
+// field (`nickname:`) as a PRESENT entry while an omitted optional field
+// (`summary`) is ABSENT (raw-source-context); `.data.blocks` carries one entry
+// per authored instance, each with its own `.raw`/`.item` (whose `depth` is the
+// shared InstanceDepth value at every level), and a nested instance's children
+// are reached through its entry's `.data` with `.item.parent` the enclosing
+// source values; the nullable `nickname` reads nil, the coerce `code` reads "7"
+// and the `people` list reads as one map per item with its coerce `id` a string
+// and its omitted optional `note` nil; and the render-time page reproduces the
+// load-time-equivalent fragment byte for byte — the slide fragment, and each
+// executed block/leaf fragment (its `.item.depth` and `.raw` key listing built
+// by the shared builders) — so the two halves cannot drift.
+//
+// The loadable fixture composes four DISTINCT templates (agreehost →
+// agreeblock → agreeleaf), so every level's `item.depth` is 0. A level whose
+// resolved template REPEATS needs a self-nesting declaration, which is a
+// composition cycle template.LoadLibrary/Registry.Validate reject until phase 7
+// adds max_depth; the subtest below pins the repeated case — the renderer's
+// executed `.item.depth` beside the shared `template.DataContext` `.data` view —
+// on a chain built directly with Register (no Validate), compared against the
+// same load-time builder (`template.DataContext` over the test's neutral-node
+// adapter, the render-package counterpart of internal/template's unexported
+// exampleContextNodes).
 func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test reads a real deck directory from disk")
@@ -306,7 +365,12 @@ func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	// reserved `.raw` view.
 	loadFields := map[string]any{
 		"nickname": nil,
-		"code":     "7",
+		// summary is declared but omitted: neither half supplies a source
+		// value, so both present it as a nil entry — the ABSENT counterpart of
+		// the explicit-null `nickname`, whose `.raw` presence below distinguishes
+		// the two (raw-source-context).
+		"summary": nil,
+		"code":    "7",
 		"people": []any{
 			map[string]any{"name": "Ada", "id": "7", "note": nil},
 			map[string]any{"name": "Grace", "id": "42", "note": nil},
@@ -330,26 +394,39 @@ func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	for _, want := range []string{
 		`<span class="host-raw-title">**Host** title</span>`,
 		`<span class="host-raw-body">Host *body* source.`,
+		// The `.raw` key listing: the explicitly null `nickname` is a PRESENT
+		// entry while the omitted optional `summary` is ABSENT. The explicit null
+		// and the absent optional are indistinguishable as converted values (both
+		// nil) but distinct here (raw-source-context); `subtitle` (declared with a
+		// default the author did not write) is likewise absent, as is the reserved
+		// `template` selector and any undeclared key.
+		`<span class="host-raw-keys">body;code;nickname;people;title;</span>`,
 		// The converted typed-schema values, identical on both halves: the
-		// nullable null reads as nil, the coerce number as its string form (whose
-		// `len` would fail if it were still a YAML number), and the list-of-record
-		// as one per-item map (its coerce `id` a string, its omitted optional
-		// `note` nil).
+		// nullable null reads as nil, the omitted optional `summary` nil, the
+		// coerce number as its string form (whose `len` would fail if it were
+		// still a YAML number), and the list-of-record as one per-item map (its
+		// coerce `id` a string, its omitted optional `note` nil).
 		`<span class="host-field-nickname">nil</span>`,
+		`<span class="host-field-summary">nil</span>`,
 		`<span class="host-field-code">7</span>`,
 		`<span class="host-field-code-len">1</span>`,
 		`<span class="host-field-people-count">2</span>`,
 		`<span class="host-field-person" data-name="Ada" data-id="7" data-id-len="1" data-note="nil"></span>`,
 		`<span class="host-field-person" data-name="Grace" data-id="42" data-id-len="2" data-note="nil"></span>`,
-		`data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="blocks" data-template="agreeblock" data-parent="absent"`,
-		`data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="blocks" data-template="agreeblock" data-parent="absent"`,
+		// The `.data` view's per-level item depth: both blocks are the same
+		// template at the top level (no enclosing same-template ancestor, depth
+		// 0), and their nested leaves resolve the distinct agreeleaf (depth 0).
+		`data-index="0" data-depth="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="blocks" data-template="agreeblock" data-parent="absent"`,
+		`data-index="1" data-depth="0" data-number="2" data-count="2" data-first="false" data-last="true" data-section="blocks" data-template="agreeblock" data-parent="absent"`,
 		`<span class="host-block-raw-text">**First** block</span>`,
 		`<span class="host-block-raw-body">First block body source.`,
 		`<span class="host-block-raw-text">Second block</span>`,
-		`data-index="0" data-count="2" data-section="leaves" data-template="agreeleaf" data-parent-text="**First** block"`,
-		`data-index="1" data-count="2" data-section="leaves" data-template="agreeleaf" data-parent-text="**First** block"`,
+		`<span class="host-block-raw-keys">body;text;</span>`,
+		`data-index="0" data-depth="0" data-count="2" data-section="leaves" data-template="agreeleaf" data-parent-text="**First** block"`,
+		`data-index="1" data-depth="0" data-count="2" data-section="leaves" data-template="agreeleaf" data-parent-text="**First** block"`,
 		`<span class="host-leaf-raw-name">**Ada**</span>`,
 		`<span class="host-leaf-raw-name">Grace</span>`,
+		`<span class="host-leaf-raw-keys">name;</span>`,
 	} {
 		if !strings.Contains(loadHostHTML, want) {
 			t.Errorf("load-time-equivalent slide fragment does not contain %q:\n%s", want, loadHostHTML)
@@ -379,10 +456,144 @@ func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 
 	// AGREE: the render-time page embeds the load-time-context execution
 	// byte for byte. A divergent `.raw`/`.data`/`.item` on either side — a
-	// different source view, a missing item descriptor, a child tree keyed or
-	// parented differently — would break this containment.
+	// different source view, a different `.item.depth`, a child tree keyed or
+	// parented differently — would break this containment. This covers the
+	// slide's own `.raw` key listing (explicit null vs absent) and each applied
+	// `.data` entry's `.item.depth`.
 	if !strings.Contains(page, loadHostHTML) {
 		t.Errorf("render-time page does not embed the load-time-equivalent .raw/.data fragment:\nwant (load-time context execution):\n%s\npage:\n%s", loadHostHTML, page)
+	}
+
+	// The block and leaf layouts themselves are exercised UNGUARDED by
+	// LoadLibrary's step-7 example execution above (the agreeblock/agreeleaf
+	// examples run their own layouts against the section-instance `.item`/`.raw`
+	// the loader builds), so a successful load already proves those layouts read
+	// the reserved context at load time; the render-time sibling of each is
+	// pinned by the self-nested subtest below (an executed section layout whose
+	// own `.item.depth` and `.raw` key listing must match the shared builder).
+
+	// A level whose resolved template REPEATS needs a self-nesting declaration,
+	// which is a composition cycle that LoadLibrary/Registry.Validate reject
+	// until phase 7 adds max_depth. The render pipeline never validates, so a
+	// self-nesting chain built directly here (Register, no Validate) genuinely
+	// renders and pins the +1-per-repeat rule at every level, compared against
+	// the same load-time builder (`template.DataContext` over the test's
+	// neutral-node adapter) the load-time example execution walks.
+	t.Run("a self-nested chain agrees on per-level item.depth", func(t *testing.T) {
+		repeatReg := template.NewRegistry(nil)
+		for _, tmpl := range []*template.Template{
+			{
+				Name:     "agreerepeat",
+				Usage:    template.UsageSlide,
+				Sections: []template.SectionDecl{{Name: "loop", Accepted: []string{"agreerepeatloop"}, Max: 4}},
+				Body:     template.BodyRule{Mode: template.BodyOptional},
+				Layout:   template.Layout{Text: agreeRepeatSlideLayout},
+			},
+			{
+				Name:     "agreerepeatloop",
+				Usage:    template.UsageSection,
+				Fields:   []template.Field{{Name: "name", Type: template.FieldText, Required: true}},
+				Sections: []template.SectionDecl{{Name: "loop", Accepted: []string{"agreerepeatloop"}, Max: 4}},
+				Body:     template.BodyRule{Mode: template.BodyDisallowed},
+				Layout:   template.Layout{Text: agreeRepeatLoopLayout},
+			},
+		} {
+			if err := repeatReg.Register(tmpl); err != nil {
+				t.Fatalf("register template %q: %v", tmpl.Name, err)
+			}
+		}
+
+		// One `loop` instance nested three levels deep, every level resolving
+		// the SAME template (agreerepeatloop) through the self-accepting `loop`
+		// declaration, so the enclosed chain each level's depth is measured
+		// against repeats at each step.
+		inner := slide.Section{Name: "loop", Level: 3, Index: 0, Template: "agreerepeatloop", Frontmatter: map[string]any{"name": "inner"}}
+		mid := slide.Section{Name: "loop", Level: 2, Index: 0, Template: "agreerepeatloop", Frontmatter: map[string]any{"name": "mid"}, Children: []slide.Section{inner}}
+		outer := slide.Section{Name: "loop", Level: 1, Index: 0, Template: "agreerepeatloop", Frontmatter: map[string]any{"name": "outer"}, Children: []slide.Section{mid}}
+		parsed := &slide.Slide{
+			File:        "slides/1-agree-repeat.md",
+			Template:    "agreerepeat",
+			Frontmatter: map[string]any{},
+			Sections:    []slide.Section{outer},
+		}
+
+		rendered, err := RenderSlide(parsed, "agree-repeat", &deck.Config{Title: "Agree Repeat Deck"}, deck.Slide{Number: 1, Label: "agree-repeat"}, 1, repeatReg, template.LayoutFuncMap(nil, ""))
+		if err != nil {
+			t.Fatalf("RenderSlide: %v", err)
+		}
+		repeatPage := string(rendered)
+
+		// The renderer's EXECUTED item descriptors: the slide's top-level
+		// instance is depth 0, the inner `loop` nested in it depth 1 and the
+		// innermost depth 2.
+		for _, want := range []string{
+			`<div class="agree-repeat-loop" data-depth="0" data-section="loop" data-template="agreerepeatloop">`,
+			`<div class="agree-repeat-loop" data-depth="1" data-section="loop" data-template="agreerepeatloop">`,
+			`<div class="agree-repeat-loop" data-depth="2" data-section="loop" data-template="agreerepeatloop">`,
+		} {
+			if !strings.Contains(repeatPage, want) {
+				t.Errorf("self-nested render page does not contain the executed descriptor %q:\n%s", want, repeatPage)
+			}
+		}
+		// The renderer's own `.data` view carries the same per-level depth (the
+		// slide's `.data.loop` is 0, the outer loop's `.data.loop` is 1, the mid
+		// loop's `.data.loop` is 2).
+		for _, want := range []string{
+			`<span class="agree-repeat-data" data-depth="0" data-section="loop" data-template="agreerepeatloop">`,
+			`<span class="agree-repeat-data" data-depth="1" data-section="loop" data-template="agreerepeatloop">`,
+			`<span class="agree-repeat-data" data-depth="2" data-section="loop" data-template="agreerepeatloop">`,
+		} {
+			if !strings.Contains(repeatPage, want) {
+				t.Errorf("self-nested render page does not contain the data entry %q:\n%s", want, repeatPage)
+			}
+		}
+
+		// The load-time builder walks the same authored tree with the same
+		// ancestors and reads the same 0/1/2 per-level depth, so the two halves
+		// cannot drift.
+		loadLoop := template.DataContext(agreementNodes(repeatReg, parsed.Sections), nil, nil)
+		if got, want := agreeLoopChainDepths(t, loadLoop), []int{0, 1, 2}; !reflect.DeepEqual(got, want) {
+			t.Errorf("shared template.DataContext per-level item.depth = %v, want %v", got, want)
+		}
+	})
+}
+
+// agreeEntryList asserts v is the []map[string]any a `template.DataContext` key
+// maps to and returns it; a nil or absent key yields nil, so an entry with no
+// children is not an error.
+func agreeEntryList(t *testing.T, v any, what string) []map[string]any {
+	t.Helper()
+	if v == nil {
+		return nil
+	}
+	list, ok := v.([]map[string]any)
+	if !ok {
+		t.Fatalf("%s = %#v (%T), want []map[string]any", what, v, v)
+	}
+	return list
+}
+
+// agreeLoopChainDepths walks the `loop` chain of a `template.DataContext` view
+// (each level's first entry, then that entry's own `.data`), returning the
+// per-level `.item.depth` in order.
+func agreeLoopChainDepths(t *testing.T, data map[string]any) []int {
+	t.Helper()
+	var depths []int
+	for {
+		entries := agreeEntryList(t, data["loop"], `data["loop"]`)
+		if len(entries) == 0 {
+			return depths
+		}
+		depth, ok := entries[0]["item"].(map[string]any)["depth"].(int)
+		if !ok {
+			t.Fatalf(`data["loop"][0].item.depth = %#v, want int`, entries[0]["item"])
+		}
+		depths = append(depths, depth)
+		next, ok := entries[0]["data"].(map[string]any)
+		if !ok {
+			return depths
+		}
+		data = next
 	}
 }
 
