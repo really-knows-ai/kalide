@@ -1097,6 +1097,144 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 		assertLayerDuplicateError(t, err, "media path", "dup.png",
 			filepath.Join(external, MediaDir, "dup.png"), filepath.Join(localRoot, MediaDir, "dup.png"))
 	})
+
+	// A deck whose local and external layers each carry the SAME relative
+	// media/ tree (media/bgs/*.jpg) but a different file proves a layer's
+	// template resolves its references in ITS OWN layer, never the other
+	// layer's or the merged primary's: the external template's
+	// `variants_from: media/bgs/*.jpg` glob expands only against the external
+	// layer's media/, and an image field with roots [media] on the external
+	// template existence-checks against the external layer's media/ alone
+	// (enum-variants-from, image-field-roots, library-layer-references).
+	t.Run("a layer's template expands variants_from and resolves image media in its own layer", func(t *testing.T) {
+		// Both layers declare the same image/enum slide schema and the same
+		// layer-root-relative glob media/bgs/*.jpg, so an expansion against
+		// the wrong layer is observable purely from the differing file names.
+		const layerLayout = `<section class="layer">` +
+			`<span class="cover">{{ .cover }}</span>` +
+			`<span class="effect">{{ .effect }}</span>` +
+			`</section>`
+
+		// writeLayerWithMediaTemplate writes a one-slide library at dir whose
+		// slide declares the image/enum schema above and whose media/ tree
+		// holds exactly one bgs/*.jpg — the given mediaFile — so each layer's
+		// glob has a distinct, layer-local match.
+		writeLayerWithMediaTemplate := func(dir, name, mediaFile string) {
+			t.Helper()
+			manifest := "name: " + name + "\nfields:\n" +
+				"  - name: cover\n" +
+				"    type: image\n" +
+				"    roots:\n" +
+				"      - media\n" +
+				"    dir: bgs\n" +
+				"    extensions:\n" +
+				"      - jpg\n" +
+				"  - name: effect\n" +
+				"    type: enum\n" +
+				"    variants_from: media/bgs/*.jpg\n"
+			writeFile(t, filepath.Join(dir, LibraryFile), []byte("name: "+name+"\nformat: 1\n"))
+			writeFile(t, filepath.Join(dir, SlidesDir, name, ManifestFile), []byte(manifest))
+			writeFile(t, filepath.Join(dir, SlidesDir, name, LayoutFile), []byte(layerLayout))
+			writeFile(t, filepath.Join(dir, SlidesDir, name, ExampleFile),
+				[]byte("---\ntemplate: "+name+"\n---\nA "+name+".\n"))
+			writeFile(t, filepath.Join(dir, MediaDir, "bgs", mediaFile), []byte(mediaFile))
+		}
+
+		// fieldNamed returns a loaded definition's field by name.
+		fieldNamed := func(t *testing.T, def *Template, name string) *Field {
+			t.Helper()
+			if def == nil {
+				t.Fatalf("loaded definition is nil, want one carrying field %q", name)
+			}
+			for i := range def.Fields {
+				if def.Fields[i].Name == name {
+					return &def.Fields[i]
+				}
+			}
+			t.Fatalf("field %q not found in the loaded definition (fields: %+v)", name, def.Fields)
+			return nil
+		}
+
+		deckRoot := t.TempDir()
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+		external := t.TempDir()
+		writeLayerWithMediaTemplate(localRoot, "local-slide", "right-9.jpg")
+		writeLayerWithMediaTemplate(external, "ext-slide", "right-8.jpg")
+
+		lib, err := LoadDeckLibrary(deckRoot, external)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary: %v", err)
+		}
+
+		// The external template's owning layer is the external layer, so its
+		// glob and its media-root image field resolve in the external library
+		// (the layer whose file is right-8.jpg, not the local right-9.jpg).
+		reg, err := NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("NewRegistryFromLibrary: %v", err)
+		}
+		extLayer := reg.LayerOf("ext-slide")
+		if extLayer == nil {
+			t.Fatal("LayerOf(ext-slide) = nil, want the external owning layer so its glob and media resolve there")
+		}
+		if extLayer.RootPath != external {
+			t.Fatalf("LayerOf(ext-slide).RootPath = %q, want the external layer %q", extLayer.RootPath, external)
+		}
+		if localLayer := reg.LayerOf("local-slide"); localLayer == nil || localLayer.RootPath != localRoot {
+			t.Errorf("LayerOf(local-slide) = %+v, want the local layer %q", localLayer, localRoot)
+		}
+
+		ext, _, ok := lib.TemplateByName("ext-slide")
+		if !ok || ext == nil || ext.Definition == nil {
+			t.Fatal(`TemplateByName("ext-slide") definition not loaded`)
+		}
+
+		// The external template's glob expanded against the external layer's
+		// media alone: only bgs/right-8.jpg, never the local layer's
+		// bgs/right-9.jpg, and the glob is cleared once expanded.
+		effect := fieldNamed(t, ext.Definition, "effect")
+		if effect.VariantsFrom != "" {
+			t.Errorf("ext effect.VariantsFrom = %q after load, want cleared (expanded against the owning layer)", effect.VariantsFrom)
+		}
+		if !reflect.DeepEqual(effect.Variants, []string{"bgs/right-8.jpg"}) {
+			t.Errorf("ext effect.Variants = %#v, want [bgs/right-8.jpg] (the external layer's media only)", effect.Variants)
+		}
+
+		// The local template, declaring the same relative glob, expands against
+		// the local layer's media alone: the expansion is per-layer, never
+		// merged across the layers.
+		local, _, ok := lib.TemplateByName("local-slide")
+		if !ok || local == nil || local.Definition == nil {
+			t.Fatal(`TemplateByName("local-slide") definition not loaded`)
+		}
+		localEffect := fieldNamed(t, local.Definition, "effect")
+		if !reflect.DeepEqual(localEffect.Variants, []string{"bgs/right-9.jpg"}) {
+			t.Errorf("local effect.Variants = %#v, want [bgs/right-9.jpg] (the local layer's media only)", localEffect.Variants)
+		}
+
+		// The whole-deck validator resolves a media-root image field against
+		// the owning layer's media (validate.checkFields closes over
+		// reg.LayerOf(tmpl.Name).Media); here that is the external layer's.
+		imgExists := WithImageExists(ImageExistsFunc(nil, extLayer.Media))
+
+		// A file that exists only in the external layer's media is accepted...
+		if got := CheckValues(map[string]any{"cover": "bgs/right-8.jpg"}, ext.Definition, nil, imgExists); len(got.Errors) != 0 {
+			t.Errorf("CheckValues(external-only image) errors = %s, want none", renderErrors(got.Errors))
+		}
+		// ...and one that exists only in the local layer's media is rejected,
+		// with candidates drawn from the external layer alone: the suggestion
+		// names the external bgs/right-8.jpg, never the local bgs/right-9.jpg.
+		got := CheckValues(map[string]any{"cover": "bgs/right-9.jpg"}, ext.Definition, nil, imgExists)
+		if len(got.Errors) != 1 {
+			t.Fatalf("CheckValues(local-only image) errors = %s, want exactly 1", renderErrors(got.Errors))
+		}
+		if e := got.Errors[0]; e.Rule != "image" || e.PathString() != "cover" ||
+			e.What != `image: "bgs/right-9.jpg" does not exist` ||
+			e.Fix != `did you mean "bgs/right-8.jpg"?` {
+			t.Errorf("local-only-image error = rule %q path %q what %q fix %q, want the image error suggesting the external layer's bgs/right-8.jpg",
+				e.Rule, e.PathString(), e.What, e.Fix)
+		}
+	})
 }
 
 // TestCheckLayoutReferencesRootSpellingStabilityInt proves layout-reference
