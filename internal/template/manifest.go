@@ -712,7 +712,11 @@ func parseManifestSections(manifestPath string, val *yaml.Node, defs *LibraryDef
 
 // parseManifestSection decodes one `sections:` entry. defs is the owning
 // layer's named definitions (parseManifest), threaded through for the
-// section's `@group` accepted entries.
+// section's `accepted:` entries: an `@<name>` entry resolves to the named
+// accept-list (group) it references, expanding in place and combinable with
+// literal section-template names, while an unknown group name is a positioned
+// templates error carrying a closest-match suggestion
+// (named-library-definitions, closest-match-suggestions).
 func parseManifestSection(manifestPath string, node *yaml.Node, defs *LibraryDefinitions) (*SectionDecl, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a section")
@@ -735,11 +739,33 @@ func parseManifestSection(manifestPath string, node *yaml.Node, defs *LibraryDef
 			d.Name = s
 			haveName = true
 		case "accepted":
-			ss, err := scalarStringList(val, manifestPath, kl, "accepted")
-			if err != nil {
-				return nil, err
+			// Each entry is a literal section-template name or an
+			// `@<name>` reference to a named accept-list (group) in the
+			// owning layer's definitions, which expands in place to the
+			// group's template names and is combinable with literal names
+			// (named-library-definitions). The sequence is walked here
+			// rather than through scalarStringList so an `@<name>` entry is
+			// resolved at its own line.
+			if val.Kind != yaml.SequenceNode {
+				return nil, libraryErrorf(manifestPath, kl, "key %q: expected a sequence of strings", "accepted")
 			}
-			d.Accepted = ss
+			names := make([]string, 0, len(val.Content))
+			for _, item := range val.Content {
+				if item.Kind != yaml.ScalarNode || item.ShortTag() != "!!str" {
+					return nil, libraryErrorf(manifestPath, nodeLineOr(item, kl), "key %q: expected a sequence of strings", "accepted")
+				}
+				if strings.HasPrefix(item.Value, "@") {
+					il := nodeLineOr(item, kl)
+					def, err := resolveNamedDefinition(namedDefinitionGroup, item.Value[1:], defs, manifestPath, il)
+					if err != nil {
+						return nil, err
+					}
+					names = append(names, def.([]string)...)
+					continue
+				}
+				names = append(names, item.Value)
+			}
+			d.Accepted = names
 		case "min":
 			n, err := scalarInt(val, manifestPath, kl, "min")
 			if err != nil {
