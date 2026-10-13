@@ -861,6 +861,14 @@ var usageKeyPattern = regexp.MustCompile(`(?m)^usage\s*:`)
 // root/kindDir/name: the three required files must be present, the manifest
 // must be well-formed YAML with no `usage:` key, and the layout must parse as
 // html/template with only the documented func set.
+//
+// A malformed template.yaml manifest is reported through parseLibraryErrorLine
+// as the step-3 templates error, carrying the offending source line and, for
+// an offending plain scalar, the quoting hint
+// (requirements.requirement.yaml-error-messages) — the same treatment
+// loadLibraryMeta gives a malformed library.yaml. The required-file checks
+// (each step-3 file present), the reserved `usage:` key check and the layout
+// parse are unchanged.
 func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, name string, funcMap htmltemplate.FuncMap) (*LibraryTemplate, error) {
 	dir := path.Join(kindDir, name)
 	displayDir := displaypath.Display(root, dir)
@@ -885,7 +893,7 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 
 	var probe yaml.Node
 	if err := yaml.Unmarshal(manifest, &probe); err != nil {
-		return nil, libraryErrorf(displaypath.Display(root, manifestRel), 0, "%s: %v", ManifestFile, err)
+		return nil, parseLibraryErrorLine(displaypath.Display(root, manifestRel), manifest, err)
 	}
 	if loc := usageKeyPattern.FindIndex(manifest); loc != nil {
 		line := 1 + strings.Count(string(manifest[:loc[0]]), "\n")
