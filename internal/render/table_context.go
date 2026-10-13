@@ -51,6 +51,12 @@ func tableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec)
 // no table, and tables is every parsed table in source order, as a non-nil but
 // empty list when the body carries none.
 //
+// It is a thin caller of the shared mdcheck.TableContext, the ONE table-context
+// builder the renderer and the load-time example context build through:
+// renderInline is passed as the render-inline function, so the `{br}`/`{...}`
+// stripping, the `{html, attrs}` cell shape and the `.table`/`.tables` pair all
+// live in mdcheck and render re-implements no table-context building.
+//
 // body is the body's Markdown source — the same source renderBody renders — and
 // specs is the enclosing template's declared cell attributes, the set each
 // cell's `{...}` groups are decoded against (table-cell-attributes). The pair is
@@ -69,58 +75,17 @@ func tableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec)
 // produces. That keeps the documented AC shape `{{ range .table.rows }}` a
 // no-op on a body with no table.
 //
-// Parsing is permissive: tableContext passes the zero mdcheck.TableOptions (no
-// limit bounds) and startLine 1, because by render time validation has already
-// accepted the body and enforced the template's declared table limits
-// (table-limits); this parse only re-derives the tables to render. Any issues
-// the parser returns are therefore ignored, and a body validation accepted
-// yields none.
+// Parsing is permissive: mdcheck.TableContext passes the zero
+// mdcheck.TableOptions (no limit bounds) and startLine 1, because by render time
+// validation has already accepted the body and enforced the template's declared
+// table limits (table-limits); this parse only re-derives the tables to render.
+// Any issues the parser returns are therefore ignored, and a body validation
+// accepted yields none.
 //
-// Each table is a map with:
-//
-//   - headers: the header cells in column order, each a tableCellContext map
-//     ({html, attrs});
-//   - align: the per-column alignments in column order, each "left", "center",
-//     "right" or "" for none, copied so the table map aliases nothing;
-//   - rows: the body rows source-ordered, each a list of cells in column order,
-//     each cell a tableCellContext map.
-//
-// A cell map is built by tableCellContext, so the cell's `{br}`/`{...}`
-// extensions are decoded by mdcheck and its visible html is the decoded
-// segments joined with `<br>`; render never re-implements the stripping.
+// The returned tables are mdcheck.TableContext's: each table map carries
+// headers, align and rows in column order, and each cell is a `{html, attrs}`
+// map whose html is the decoded `{br}` segments rendered through renderInline
+// and joined with `<br>`.
 func tableContext(body string, specs []mdcheck.CellAttributeSpec) (table any, tables []any) {
-	parsed, _ := mdcheck.ParseTables(body, 1, mdcheck.TableOptions{})
-
-	tables = make([]any, len(parsed))
-	for i, t := range parsed {
-		headers := make([]any, len(t.Headers))
-		for j, cell := range t.Headers {
-			headers[j] = tableCellContext(cell, specs)
-		}
-		rows := make([]any, len(t.Rows))
-		for r, row := range t.Rows {
-			cells := make([]any, len(row))
-			for c, cell := range row {
-				cells[c] = tableCellContext(cell, specs)
-			}
-			rows[r] = cells
-		}
-		align := make([]string, len(t.Align))
-		copy(align, t.Align)
-		tables[i] = map[string]any{
-			"headers": headers,
-			"align":   align,
-			"rows":    rows,
-		}
-	}
-
-	if len(parsed) > 0 {
-		table = tables[0]
-	} else {
-		// A typed nil map, not a bare nil: see the doc comment — it keeps
-		// `{{ if .table }}` falsy while `{{ range .table.rows }}` stays a
-		// no-op instead of erroring.
-		table = map[string]any(nil)
-	}
-	return table, tables
+	return mdcheck.TableContext(body, specs, renderInline)
 }
