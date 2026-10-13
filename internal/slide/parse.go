@@ -845,7 +845,9 @@ func templateInBlock(file string, b *catalogueBlock, path string) (name string, 
 // of the block's first YAML line; the text is padded with newlines so every
 // node line and YAML error position is absolute within the file. An empty block
 // decodes to an empty block with no mapping. path is the containment path of
-// the section the block belongs to, or "" for the slide frontmatter.
+// the section the block belongs to, or "" for the slide frontmatter. A parse
+// failure is reported through yamlErrorWithLine: the offending source line and,
+// for an offending plain scalar, the quoting hint, keeping path.
 func parseBlock(file string, lines []string, startLine int, path string) (*catalogueBlock, error) {
 	b := &catalogueBlock{values: map[string]any{}}
 	if len(lines) == 0 {
@@ -860,8 +862,7 @@ func parseBlock(file string, lines []string, startLine int, path string) (*catal
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
-		return nil, &ParseError{File: file, Line: startLine, Path: path,
-			Msg: fmt.Sprintf("invalid YAML: %v", err)}
+		return nil, yamlErrorWithLine(file, []byte(text), path, err)
 	}
 	m := documentMapping(&doc)
 	if m == nil {
