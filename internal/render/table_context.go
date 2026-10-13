@@ -43,3 +43,71 @@ func tableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec)
 		"attrs": decoded.Attrs,
 	}
 }
+
+// tableContext parses one body's Markdown source for its GFM tables and returns
+// the two reserved table entries a template context exposes
+// (table-layout-context, gfm-tables): table is the body's FIRST parsed table as
+// the table map, or nil when the body carries no table, and tables is every
+// parsed table in source order, as a non-nil but empty list when the body
+// carries none.
+//
+// body is the body's Markdown source — the same source renderBody renders — and
+// specs is the enclosing template's declared cell attributes, the set each
+// cell's `{...}` groups are decoded against (table-cell-attributes). The pair is
+// returned rather than a single map so the renderer can set the two reserved
+// entries directly (data["table"], data["tables"]) and keep the
+// always-present shape explicit: table is always the first table or nil and
+// tables is always a (possibly empty) list, in a template that does not declare
+// `tables` and in any body that carries no table, so a layout reads the entries
+// without a guard.
+//
+// Parsing is permissive: tableContext passes the zero mdcheck.TableOptions (no
+// limit bounds) and startLine 1, because by render time validation has already
+// accepted the body and enforced the template's declared table limits
+// (table-limits); this parse only re-derives the tables to render. Any issues
+// the parser returns are therefore ignored, and a body validation accepted
+// yields none.
+//
+// Each table is a map with:
+//
+//   - headers: the header cells in column order, each a tableCellContext map
+//     ({html, attrs});
+//   - align: the per-column alignments in column order, each "left", "center",
+//     "right" or "" for none, copied so the table map aliases nothing;
+//   - rows: the body rows source-ordered, each a list of cells in column order,
+//     each cell a tableCellContext map.
+//
+// A cell map is built by tableCellContext, so the cell's `{br}`/`{...}`
+// extensions are decoded by mdcheck and its visible html is the decoded
+// segments joined with `<br>`; render never re-implements the stripping.
+func tableContext(body string, specs []mdcheck.CellAttributeSpec) (table any, tables []any) {
+	parsed, _ := mdcheck.ParseTables(body, 1, mdcheck.TableOptions{})
+
+	tables = make([]any, len(parsed))
+	for i, t := range parsed {
+		headers := make([]any, len(t.Headers))
+		for j, cell := range t.Headers {
+			headers[j] = tableCellContext(cell, specs)
+		}
+		rows := make([]any, len(t.Rows))
+		for r, row := range t.Rows {
+			cells := make([]any, len(row))
+			for c, cell := range row {
+				cells[c] = tableCellContext(cell, specs)
+			}
+			rows[r] = cells
+		}
+		align := make([]string, len(t.Align))
+		copy(align, t.Align)
+		tables[i] = map[string]any{
+			"headers": headers,
+			"align":   align,
+			"rows":    rows,
+		}
+	}
+
+	if len(parsed) > 0 {
+		table = tables[0]
+	}
+	return table, tables
+}
