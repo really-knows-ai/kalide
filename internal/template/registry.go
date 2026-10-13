@@ -393,15 +393,19 @@ func checkInternalTemplate(t *Template) bool {
 	return t != nil && t.Internal
 }
 
-// LookupSlideTemplate reports how the named template may be used and whether it
-// exists at all: usage is "slide" or "section", and ok is false when no
-// template has that name. It is part of the slide.Catalogue contract.
-func (r *Registry) LookupSlideTemplate(name string) (usage string, ok bool) {
+// LookupSlideTemplate reports how the named template may be used, whether it is
+// internal, and whether it exists at all: usage is "slide" or "section",
+// internal is the named template's Internal flag (false when no template has
+// that name), and ok is false when no template has that name. An internal
+// template is still returned here with ok true — the caller distinguishes it
+// from an unknown name — and the Catalogue surface refuses it as a Markdown
+// target. It is part of the slide.Catalogue contract.
+func (r *Registry) LookupSlideTemplate(name string) (usage string, internal bool, ok bool) {
 	t, ok := r.Lookup(name)
 	if !ok || t == nil {
-		return "", false
+		return "", false, false
 	}
-	return string(t.Usage), true
+	return string(t.Usage), checkInternalTemplate(t), true
 }
 
 // TemplateNames returns every registered template name, sorted, so callers can
