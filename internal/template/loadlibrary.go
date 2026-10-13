@@ -535,13 +535,20 @@ func checkLibraryBuildNested(lib *Library) error {
 }
 
 // libraryMetaKeys is the complete set of library.yaml keys loadLibraryMeta
-// handles, in declaration order. It is both the accepted-key set and the
-// candidate list for closest-match suggestions.
-var libraryMetaKeys = []string{"name", "description", "format"}
+// handles, in declaration order: the required `name` and `format`, the optional
+// `description`, and the optional named-definition sections `groups`,
+// `field_sets` and `types` (named-library-definitions), which are accepted
+// here and parsed in one pass by loadLibraryDefinitions below. It is both the
+// accepted-key set and the candidate list for closest-match suggestions, so it
+// stays in step with the switch in loadLibraryMeta.
+var libraryMetaKeys = []string{"name", "description", "format", "groups", "field_sets", "types"}
 
 // LibraryMetaKeys returns the sorted accepted library.yaml keys loadLibraryMeta
-// handles — description, format and name. It is the single source of truth for
-// the library metadata vocabulary. The returned slice is a fresh allocation.
+// handles — description, field_sets, format, groups, name and types. It is the
+// single source of truth for the library.yaml key vocabulary, covering the
+// metadata keys (name, description, format) and the optional named-definition
+// sections (groups, field_sets, types) admitted by the loader. The returned
+// slice is a fresh allocation.
 func LibraryMetaKeys() []string {
 	out := make([]string, len(libraryMetaKeys))
 	copy(out, libraryMetaKeys)
