@@ -825,11 +825,13 @@ type SectionCall struct {
 
 	// Item is the one-item `.item` descriptor the target executes under
 	// (item-context): index 0, number and count 1, first and last true,
-	// section and template the target name, and parent the caller's fields
-	// (nil from a slide layout). The helper call is the sole instance of its
-	// own one-item group: the children the call passes are the target's own
-	// child instances (Children) and each carries its own sibling descriptor,
-	// so they never enter this one.
+	// section and template the target name, depth the target's self-nesting
+	// depth (InstanceDepth of the enclosing ancestors' resolved template names
+	// against the target name), and parent the caller's fields (nil from a
+	// slide layout). The helper call is the sole instance of its own one-item
+	// group: the children the call passes are the target's own child instances
+	// (Children) and each carries its own sibling descriptor, so they never
+	// enter this one.
 	Item map[string]any
 }
 
@@ -889,8 +891,13 @@ type SectionCall struct {
 // *Registry.LayerOf — calls ResolveSectionCallLayered directly so the resolved
 // target's owning layer is carried out on SectionCall.Layer
 // (library-layer-references).
+//
+// ResolveSectionCall likewise passes a nil ancestor chain, so the one-item
+// descriptor's depth is 0 (item-context); a caller that knows the enclosing
+// instances' resolved template names calls ResolveSectionCallLayered directly
+// to have the depth computed through the shared InstanceDepth helper.
 func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
-	return ResolveSectionCallLayered(resolve, nil, name, fields, body, parent, children...)
+	return ResolveSectionCallLayered(resolve, nil, name, fields, body, nil, parent, children...)
 }
 
 // ResolveSectionCallLayered is ResolveSectionCall plus layer provenance: it
@@ -898,6 +905,14 @@ func ResolveSectionCall(resolve func(name string) (*Template, bool), name string
 // checks, child resolution and error contract (see ResolveSectionCall) and
 // additionally records the owning layer of the resolved target on
 // SectionCall.Layer.
+//
+// ancestors is the enclosing instances' chain of resolved template names above
+// the target — empty at the top level, and including the calling instance when
+// the call is made from a section instance — carried so the one-item
+// descriptor's depth counts the target's enclosing same-template ancestors
+// through the shared InstanceDepth helper: a call from a slide layout, or any
+// call whose ancestors carry no template equal to the target name, has depth 0
+// (item-context). It is the same ancestor convention DataContext takes.
 //
 // The trailing children are resolved with the same resolve/layerOf pair, so a
 // child naming a template that lives in the other library layer carries that
@@ -921,7 +936,7 @@ func ResolveSectionCall(resolve func(name string) (*Template, bool), name string
 // whose owning layer is unknown (a single-root library, or a registry built in
 // code). Consumers treat a nil Layer as "resolve against the primary/merged
 // root" (SectionCall.Layer).
-func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, name string, fields map[string]any, body string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
+func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, name string, fields map[string]any, body string, ancestors []string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
 	if resolve == nil {
 		return nil, fmt.Errorf("section helper: no template resolver for %q", name)
 	}
@@ -979,6 +994,7 @@ func ResolveSectionCallLayered(resolve func(name string) (*Template, bool), laye
 			"last":     true,
 			"section":  name,
 			"template": name,
+			"depth":    InstanceDepth(ancestors, name),
 			"parent":   parent,
 		},
 	}

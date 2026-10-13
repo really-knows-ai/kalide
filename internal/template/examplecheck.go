@@ -434,7 +434,7 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 			return "", err
 		}
 
-		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, callerFields, children...)
+		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, nil, callerFields, children...)
 		if err != nil {
 			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
