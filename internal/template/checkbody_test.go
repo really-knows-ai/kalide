@@ -49,10 +49,17 @@ func tableBodyRule() *TableRule {
 
 // tableBody is a GFM-table-like Markdown body: three pipe-delimited lines that
 // goldmark's CommonMark core (no table extension) parses as one plain
-// paragraph. Phase 1 carries the tables option but adds no table validation to
-// CheckBody, so with Mode optional and no size or heading limit this body must
-// pass whether or not the rule opts in.
+// paragraph. Phase 4's table pass judges it: without the `body.tables` option
+// mdcheck refuses it at its delimiter row (the opt-out refusal), with the
+// option carried the table pass validates and accepts it, and WithoutTableCheck
+// suppresses the pass entirely.
 const tableBody = "| Name | Value |\n| --- | --- |\n| alpha | 1 |"
+
+// tableOptOutFix is the guidance mdcheck emits alongside the opt-out refusal
+// (checkDisallowed) for a table in a body whose template has not opted in
+// through `body.tables`. The message itself is the implementation's own
+// tableOptOutMessage const; this is the fix half, which has no source const.
+const tableOptOutFix = "opt in to tables with the `tables` option in the template's body rule, or use a list instead"
 
 // TestCheckBody is the table-driven suite for template.CheckBody. Each case
 // asserts the first violation's rule, path, actual value, author-facing
@@ -266,20 +273,30 @@ func TestCheckBody(t *testing.T) {
 		},
 
 		// --- tables option -------------------------------------------------
-		// Phase 1 only carries `body.tables` on the BodyRule: CheckBody must
-		// behave identically with or without the option, performing no table
-		// refusal (a table-like body is not judged here), and every
-		// fixed-order check (mode, size limits, subheadings) must still fire
-		// exactly as before when the option is present.
+		// Phase 4 adds the table pass to CheckBody: without `body.tables` a
+		// table-like body is refused at its delimiter row (the mdcheck opt-out
+		// refusal, guidance naming the `tables` option); with the option
+		// carried the same body is judged by the table pass and accepted; and
+		// WithoutTableCheck suppresses the pass for a caller that owns its
+		// body's table errors elsewhere. Every fixed-order check (mode, size
+		// limits, subheadings) still fires exactly as before whether or not
+		// the option is present.
 		{
-			name: "tables: a table-like body passes without the option",
+			name: "tables: a table-like body is refused without the option",
 			rule: BodyRule{Mode: BodyOptional},
 			body: tableBody,
+			want: weBody("disallowed-construct", tableBody, tableOptOutMessage, tableOptOutFix),
 		},
 		{
 			name: "tables: a table-like body passes with the option carried",
 			rule: BodyRule{Mode: BodyOptional, Tables: tableBodyRule()},
 			body: tableBody,
+		},
+		{
+			name: "tables: WithoutTableCheck suppresses the refusal without the option",
+			rule: BodyRule{Mode: BodyOptional},
+			body: tableBody,
+			opts: []BodyOption{WithoutTableCheck()},
 		},
 		{
 			name: "tables: the option does not alter required",
@@ -467,11 +484,20 @@ func TestCheckBody(t *testing.T) {
 			},
 			{
 				// A manifest-declared `body.tables` option reaches CheckBody
-				// through BodyRule.Tables without altering the body outcome:
-				// phase 1 performs no table refusal here.
+				// through BodyRule.Tables: the table pass accepts the
+				// table-like body against the declared limits and cell
+				// attributes.
 				name:     "tables declared: a table-like body passes",
 				manifest: "body:\n  mode: optional\n  tables:\n    max_tables: 2\n    cell_attributes:\n      - name: bold\n        type: boolean\n",
 				body:     tableBody,
+			},
+			{
+				// Without the option a manifest-declared body rule refuses the
+				// table-like body at its delimiter row, naming `tables`.
+				name:     "tables absent: a table-like body is refused",
+				manifest: "body:\n  mode: optional\n",
+				body:     tableBody,
+				want:     weBody("disallowed-construct", tableBody, tableOptOutMessage, tableOptOutFix),
 			},
 			{
 				name:     "tables declared: max_words still applies",
