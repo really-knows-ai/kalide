@@ -443,8 +443,10 @@ func (e *SectionDepthError) Error() string {
 // carry max_depth is a bounded self-nesting
 // (requirements.requirement.bounded-self-nesting), so it is accepted and
 // followed to the longest chain its bounds allow (walkBoundedSelfNesting)
-// instead of being reported; that full bounded chain is then measured against
-// the six-heading-level bound
+// instead of being reported; that bounded chain's heading depth — the heading
+// level of the repeated name's first occurrence plus one per bounded
+// declared-section level, so helper-reached path entries add no level — is
+// then measured against the six-heading-level bound
 // (requirements.constraint.section-depth-limit), and an over-deep one is
 // reported as *SectionDepthError carrying the chain and the max_depth that
 // produced it. A cycle with no max_depth on it — including a helper- or
@@ -476,7 +478,7 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	emitted := make(map[string]bool)
 	onPath := make(map[string]bool)
 
-	var walk func(t *Template, depth int, path []string) error
+	var walk func(t *Template, depth int, path []string, depths []int) error
 
 	// descend follows one reference edge: resolve the target, record it once,
 	// then walk it — unless the name is already on the path (a reference
@@ -484,10 +486,13 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 	// self-nesting, which is accepted to the longest chain its max_depth
 	// bounds allow instead of reported. depth is the target's heading level,
 	// so a declared-section edge passes depth+1 (it is a heading) while a
-	// helper edge passes depth unchanged (it is not). closing is the
-	// declaration whose accepted section this edge descends, or nil for a
-	// helper/child edge, which is not a heading and carries no max_depth.
-	descend := func(name string, depth int, path []string, closing *SectionDecl) error {
+	// helper edge passes depth unchanged (it is not). depths is the heading
+	// level of each path entry, parallel to path, so a bounded chain's heading
+	// depth can be measured from the repeated name's first occurrence without
+	// counting helper-reached entries. closing is the declaration whose
+	// accepted section this edge descends, or nil for a helper/child edge,
+	// which is not a heading and carries no max_depth.
+	descend := func(name string, depth int, path []string, depths []int, closing *SectionDecl) error {
 		if onPath[name] {
 			if closing != nil {
 				// The acceptance recurs to a template already on the path: a
@@ -521,7 +526,17 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 					return err
 				}
 				if bounded {
-					if len(chain) > sectionDepthLimit {
+					// Measure the bounded chain's heading depth, not its
+					// length. depths[idx] is the heading level at which the
+					// repeated name first appeared; each level
+					// walkBoundedSelfNesting added past it is a declared-section
+					// acceptance, one heading level deeper. Helper-reached path
+					// entries are composition references but not headings, so
+					// len(chain) would count them and wrongly refuse a legal
+					// chain whose headings stay within the bound
+					// (requirements.constraint.section-depth-limit).
+					headingDepth := depths[idx] + len(chain) - len(ancestors) - 1
+					if headingDepth > sectionDepthLimit {
 						return &SectionDepthError{Path: chain, Limit: sectionDepthLimit, MaxDepth: maxDepth}
 					}
 					// Within the bound: the bounded walk already accounted for
@@ -548,15 +563,16 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 		}
 		// Recurse even into an already-emitted template: a deeper path
 		// through it must still be counted against the bound.
-		return walk(nested, depth, path)
+		return walk(nested, depth, path, depths)
 	}
 
-	walk = func(t *Template, depth int, path []string) error {
+	walk = func(t *Template, depth int, path []string, depths []int) error {
 		if t == nil {
 			return nil
 		}
 		onPath[t.Name] = true
 		path = append(path, t.Name)
+		depths = append(depths, depth)
 		defer delete(onPath, t.Name)
 
 		if depth > sectionDepthLimit {
@@ -569,7 +585,7 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 		for i := range t.Sections {
 			d := &t.Sections[i]
 			for _, name := range d.Accepted {
-				if err := descend(name, depth+1, path, d); err != nil {
+				if err := descend(name, depth+1, path, depths, d); err != nil {
 					return err
 				}
 			}
@@ -581,14 +597,14 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 			return err
 		}
 		for _, name := range refs {
-			if err := descend(name, depth, path, nil); err != nil {
+			if err := descend(name, depth, path, depths, nil); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 
-	if err := walk(tmpl, 1, nil); err != nil {
+	if err := walk(tmpl, 1, nil, nil); err != nil {
 		return nil, err
 	}
 	return out, nil
