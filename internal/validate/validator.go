@@ -257,7 +257,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) []Validatio
 	// slide template declares child sections, so a heading at any depth is a
 	// section marker there and deeper headings stay subheadings otherwise
 	// (markdown-allowed-subset).
-	errs = append(errs, checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil)...)
+	errs = append(errs, checkBody(s.Path, ps.Body, ps.BodyLine, tmpl, nil)...)
 	if ve, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
 		errs = append(errs, ve)
 	}
@@ -273,7 +273,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) []Validatio
 	// last. `# notes` is top-level only, and a deeper heading never starts
 	// notes, so the notes body carries the slide body's subheading gate.
 	if ps.Notes != nil {
-		errs = append(errs, checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil)...)
+		errs = append(errs, checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, tmpl, nil)...)
 	}
 
 	return errs
@@ -309,7 +309,7 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 			continue
 		}
 		errs = append(errs, checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg)...)
-		errs = append(errs, checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix)...)
+		errs = append(errs, checkBody(file, sec.Body, sec.BodyLine, secTmpl, secPrefix)...)
 		if ve, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
 			errs = append(errs, ve)
 		}
@@ -365,29 +365,63 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 }
 
 // checkBody checks one Markdown body (a slide body, a section body or the notes
-// body) against the accepted Markdown subset through internal/mdcheck. startLine
-// is the body's 1-based line in the file, so issues are positioned absolutely.
-// declaresChildSections is the enclosing template's child-section state, which
-// mdcheck.Check's subheading gate carries (markdown-allowed-subset). prefix, when
-// non-empty, is the enclosing section instance's containment chain and becomes
-// the issue's path, so a nested Markdown-subset issue reads
-// `columns[0] › blocks[0]` (nested-section-validation); the slide and notes
-// bodies pass nil. It returns every issue mdcheck.Check reports, positioned and
-// path-qualified, in issue order (collect-all), so one body contributes all of
-// its errors rather than only the first.
-func checkBody(file, body string, startLine int, declaresChildSections bool, prefix []string) []ValidationError {
+// body) against the accepted Markdown subset through internal/mdcheck and, when
+// the enclosing template opts in to GFM tables, against that template's table
+// rule. startLine is the body's 1-based line in the file, so issues are
+// positioned absolutely. tmpl is the enclosing template (the slide template for
+// the slide and notes bodies, the section's own template for a section body);
+// its child-section state is the subheading gate mdcheck.Check carries
+// (markdown-allowed-subset) and its body rule's Tables is the table option
+// (table-opt-in). prefix, when non-empty, is the enclosing section instance's
+// containment chain and becomes the issue's path, so a nested Markdown-subset
+// issue reads `columns[0] › blocks[0]` (nested-section-validation); the slide
+// and notes bodies pass nil. It returns every issue mdcheck.Check reports,
+// positioned and path-qualified, in issue order (collect-all), so one body
+// contributes all of its errors rather than only the first.
+//
+// When tmpl opts in, the enclosing TableRule is converted to mdcheck's plain
+// options (mdcheckTableOptions / mdcheckCellAttributeSpecs) and passed into
+// this call's mdcheck.Check, so an opted-in table is accepted there rather than
+// refused by checkDisallowed; the table pass then owns every table violation.
+// The ordinary check's own KindTable issues (mdcheck's whole-body table pass,
+// which runs because the option is set) are dropped from its result and
+// validate.checkTables is appended instead, so each table error is emitted
+// exactly once with checkTables' positioned row/cell path and fix
+// (table-errors). A template that does not opt in leaves the option unset, so
+// the single opt-out refusal (checkDisallowed, KindDisallowedConstruct) still
+// surfaces exactly as before.
+func checkBody(file, body string, startLine int, tmpl *template.Template, prefix []string) []ValidationError {
 	if body == "" {
 		return nil
 	}
-	issues := mdcheck.Check(file, []byte(body), mdcheck.Options{
+	var tableRule *template.TableRule
+	if tmpl != nil {
+		tableRule = tmpl.Body.Tables
+	}
+
+	opts := mdcheck.Options{
 		Mode:                          mdcheck.BodyMode,
 		StartLine:                     startLine,
-		TemplateDeclaresChildSections: declaresChildSections,
-	})
+		TemplateDeclaresChildSections: declaresChildSections(tmpl),
+	}
+	if tableRule != nil {
+		tables := mdcheckTableOptions(tableRule)
+		opts.Tables = &tables
+		opts.CellAttributes = mdcheckCellAttributeSpecs(tableRule.CellAttributes)
+	}
+
+	issues := mdcheck.Check(file, []byte(body), opts)
 	errs := make([]ValidationError, 0, len(issues))
 	for _, iss := range issues {
+		if iss.Kind == mdcheck.KindTable {
+			// checkTables owns every table violation, with its positioned
+			// row/cell path and fix; skip the ordinary check's copy so each
+			// table error is emitted exactly once.
+			continue
+		}
 		errs = append(errs, adaptIssue(iss, prefix))
 	}
+	errs = append(errs, checkTables(file, body, startLine, tableRule, prefix)...)
 	return errs
 }
 
