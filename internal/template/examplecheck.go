@@ -1249,14 +1249,24 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 	// declares child sections, so a heading at any depth is a section marker
 	// there and deeper headings stay subheadings otherwise
 	// (markdown-allowed-subset); CheckBody then enforces the template's own
-	// body.subheadings rule.
-	if ve, invalid := CheckBody(def.Body, block.Body, WithBodyLine(block.BodyLine)); invalid {
+	// body.subheadings rule. CheckBody's own table pass is suppressed here
+	// (WithoutTableCheck): checkExampleBodySubheadings below is the example
+	// block body's single table-error source, so the example body's table
+	// errors are emitted exactly once (table-opt-in, table-errors).
+	if ve, invalid := CheckBody(def.Body, block.Body, WithBodyLine(block.BodyLine), WithoutTableCheck()); invalid {
 		return exampleError(path, ve.Line, container, "%s", ve.What)
 	}
-	if declares := len(def.Sections) > 0; declares || !def.Body.Subheadings {
-		if err := checkExampleBodySubheadings(path, def, block, container); err != nil {
-			return err
-		}
+	// The example body's table check runs for every template, whatever the
+	// subheading state, so a template that allows subheadings and declares no
+	// child sections still reaches it (table-opt-in, table-errors). The guard
+	// keeps governing only the subheading refusal, which
+	// checkExampleBodySubheadings gates on checkSubheadings: a template that
+	// declares child sections makes a heading at any depth a section marker,
+	// and a template that forbids subheadings refuses them — the same
+	// condition that previously suppressed the whole call.
+	checkSubheadings := len(def.Sections) > 0 || !def.Body.Subheadings
+	if err := checkExampleBodySubheadings(path, def, block, container, checkSubheadings); err != nil {
+		return err
 	}
 	if strings.TrimSpace(block.Body) != "" {
 		ctx["body"] = block.Body
@@ -1333,7 +1343,11 @@ func exampleError(path string, line int, container, format string, args ...any) 
 // any depth is then a section marker) or when the template forbids
 // subheadings; depths 4-6 are refused in subheading position
 // (markdown-allowed-subset). It reports the first offending heading with the
-// instance's containment path.
+// instance's containment path. checkSubheadings carries whether the subheading
+// refusal applies at all — validateExampleBlockAt passes
+// len(def.Sections) > 0 || !def.Body.Subheadings, the condition that governs
+// the subheading refusal — so a template that allows subheadings and declares
+// no child sections refuses none, exactly as before.
 //
 // It is also the example block body's single table-error source
 // (table-opt-in, table-errors): the enclosing template's `body.tables` option
@@ -1341,15 +1355,17 @@ func exampleError(path string, line int, container, format string, args ...any) 
 // (mdcheckTableOptions / mdcheckCellAttributeSpecs) and mdcheck.Check runs in
 // BodyMode with it, so a non-opted-in body's table is the single opt-out
 // refusal and an opted-in body's table is checked for its strict column
-// counts, declared limits and cell attributes. Only heading-level issues and
-// table-kind issues (isTableIssue) are surfaced; every other mdcheck issue is
-// dropped, since the remaining Markdown-subset issues belong to the ordinary
-// body check. Each surfaced issue is a *LibraryError carrying the issue's line
-// and the instance's containment path. validateExampleBlockAt passes
-// template.WithoutTableCheck() to its own CheckBody call (task-9, task-17), so
-// CheckBody's table pass does not also run for the example body and each table
-// error is emitted exactly once.
-func checkExampleBodySubheadings(path string, def *Template, block *exampleBlock, container string) error {
+// counts, declared limits and cell attributes. The table check runs for every
+// template, whatever checkSubheadings says, so the example body's tables are
+// validated regardless of the subheading state. Only heading-level issues
+// (when checkSubheadings) and table-kind issues (isTableIssue) are surfaced;
+// every other mdcheck issue is dropped, since the remaining Markdown-subset
+// issues belong to the ordinary body check. Each surfaced issue is a
+// *LibraryError carrying the issue's line and the instance's containment path.
+// validateExampleBlockAt passes template.WithoutTableCheck() to its own
+// CheckBody call (task-9, task-17), so CheckBody's table pass does not also run
+// for the example body and each table error is emitted exactly once.
+func checkExampleBodySubheadings(path string, def *Template, block *exampleBlock, container string, checkSubheadings bool) error {
 	if strings.TrimSpace(block.Body) == "" {
 		return nil
 	}
@@ -1365,7 +1381,7 @@ func checkExampleBodySubheadings(path string, def *Template, block *exampleBlock
 	}
 	issues := mdcheck.Check(path, []byte(block.Body), opts)
 	for _, iss := range issues {
-		if iss.Kind == mdcheck.KindUnsupportedConstruct && strings.Contains(iss.Message, "heading level") {
+		if checkSubheadings && iss.Kind == mdcheck.KindUnsupportedConstruct && strings.Contains(iss.Message, "heading level") {
 			return exampleError(path, iss.Line, container, "%s", iss.Message)
 		}
 		if isTableIssue(iss) {
