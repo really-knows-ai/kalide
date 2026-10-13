@@ -1,0 +1,21 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "table-limits",
+  "body": "The `body.tables` mapping bounds each table independently. `min_tables` and `max_tables` count the tables in a body; `min_columns`/`max_columns` and `min_rows`/`max_rows` bound one table, a row here being a body row with the header excluded. The defaults are `min_tables: 0`, `max_tables: 1`, `min_columns: 1`, `max_columns: 0` (unbounded), `min_rows: 0` and `max_rows: 0` (unbounded): an explicit `0` on a `max_*` key is unbounded and a `min_*` value of `0` is no minimum. The limits are declared per template and apply to every table in every body that template owns (table-opt-in). A limit a table breaks is a violation naming the limit and the actual count, for example `max_columns: table has 12 columns, maximum is 10` (table-errors), reported as a validation error whose line points into the table.\n\nAC: a body with more tables than `max_tables` errors naming `max_tables` and the count; a body with fewer tables than `min_tables` errors naming `min_tables`; a table wider than `max_columns` or narrower than `min_columns` errors naming that limit and the count; a table with more body rows than `max_rows`, or fewer than `min_rows`, errors naming that limit and the count; the default `max_tables: 1` admits exactly one table, and `max_tables: 0` (unbounded) admits many.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.table-limits",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.gfm-tables",
+      "properties": {}
+    }
+  ]
+}

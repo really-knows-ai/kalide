@@ -1,0 +1,26 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "table-layout-context",
+  "body": "A template that accepts tables receives its body's parsed tables in its layout context (template-context). Each table carries `headers`, `align` and `rows`: `.table.headers` is the header cells in column order; `.table.align` is the per-column alignments (`\"left\"`, `\"center\"`, `\"right\"` or `\"\"` for none) in column order; and `.table.rows` is the body rows, each a list of cells in column order. A cell is a map with `html` — its inline-Markdown content rendered to HTML, with `{br}` as `<br>` — and `attrs` — a map keyed by the template's declared cell-attribute names, holding each attribute's value for the cell or nil when the cell does not set it (table-cell-attributes). `.tables` is the source-ordered list of the body's tables (empty when the body carries none), and `.table` is the first of those tables or nil; the default `max_tables: 1` template uses `.table` (table-limits). The context belongs to the template whose body carries the tables, at slide level and in every section instance it resolves. A table is part of the body, so it is not part of the pre-rendered `.body` HTML (body-rules): a template renders its tables from the table context. `table` and `tables` are reserved top-level context names, unavailable as field or section names (requirements.constraint.reserved-template-names).\n\nAC: a layout reads `{{ range .table.rows }}`, a cell's `{{ .html }}` and `{{ index .attrs \"highlight\" }}`; `.table.align` gives each column's alignment; a body with no table gives `.tables` an empty list and `.table` nil; a body with two tables gives `.tables` two entries in source order; a template declaring a field or section named `table` or `tables` is a templates error.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.table",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.table-cell",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.gfm-tables",
+      "properties": {}
+    }
+  ]
+}

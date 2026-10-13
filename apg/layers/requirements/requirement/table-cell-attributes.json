@@ -1,0 +1,26 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "table-cell-attributes",
+  "body": "A cell's content carries, beyond inline Markdown, a line break and attribute groups. `{br}` is a line break anywhere in a cell and renders as `<br>` in the cell's HTML. An attribute group `{…}` is recognised anywhere in a cell — the convention is at the cell's end — and sets one or more declared cell attributes: `{highlight:green}` sets `highlight` to `green`; `{bold}` sets the boolean `bold` to true (`{bold}` is `{bold:true}`); a group may set several attributes, as `{highlight:green, bold}` does. A backslash-escaped brace (`\\{`) is a literal brace, not a group. `br` is reserved and is never a declarable cell attribute.\n\nShort-hand names resolve by mutex: a bare name that is the variant of exactly one declared enum cell attribute sets that attribute to that variant, so `{green}` sets `highlight:green` when `green` is a variant of the one declared `highlight` enum; a cell holds at most one value per attribute by construction. A bare name that is both a declared boolean attribute and an enum variant, or a variant of more than one declared enum attribute, is a template load error naming the ambiguous name — a templates error path-qualified to the offending `template.yaml`. A boolean attribute's `{name:true}`/`{name:false}` and an enum attribute's `{name:variant}` are always accepted; a value that is not of the attribute's declared type is a validation error naming the attribute and the value.\n\nA cell attribute is declared in the template's `body.tables.cell_attributes` list with the usual field descriptors (`name`, `type`, and an enum's `variants`), and is type-checked. An attribute a cell uses that its enclosing template does not declare is an error with a closest-match suggestion, for example `unknown cell attribute \"hilight\": did you mean \"highlight\"?`. Attributes apply to header cells exactly as to body cells.\n\nAC: `{br}` renders a `<br>` in a cell; `{highlight:green}` sets the enum attribute; `{bold}` equals `{bold:true}`; `{highlight:green, bold}` sets both; `\\{` is a literal brace; `{green}` resolves to the sole matching enum variant; a bare name that is both a declared boolean and an enum variant, or a variant of two enums, is a template load error; an unknown attribute is an error with the closest-match suggestion over the declared attributes; a wrong-typed value is a validation error; `br` declared as a cell attribute is a templates error; a header cell's attribute is exposed exactly like a body cell's.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.cell-attribute",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.table-cell",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.gfm-tables",
+      "properties": {}
+    }
+  ]
+}

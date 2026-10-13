@@ -1,0 +1,20 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "cell-attribute",
+  "body": "A cell attribute a template declares in its `body.tables.cell_attributes` list with the usual field descriptors (domain.value.field): `name`, `type` (the boolean and enum field types of domain.value.field-type) and an enum's `variants`. A declared attribute is set in a cell by an attribute group or a short-hand (table-cell-attributes) and appears in the cell's `attrs` map, typed by its declaration (table-layout-context). `br` is reserved and is never a declared cell attribute. An attribute a cell uses that its template does not declare is an error with a closest-match suggestion over the declared attributes; a bare name that is both a declared boolean attribute and an enum variant, or a variant of more than one declared enum, is a template load error (table-cell-attributes).",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-cell-attributes",
+      "properties": {}
+    }
+  ]
+}

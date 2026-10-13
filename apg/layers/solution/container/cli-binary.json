@@ -14,7 +14,17 @@
     },
     {
       "kind": "contains",
+      "target": "solution.component.cli-check",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "solution.component.cli-commands",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "solution.component.cli-render",
       "properties": {}
     },
     {
@@ -104,12 +114,7 @@
     },
     {
       "kind": "contains",
-      "target": "solution.component.cli-check",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "solution.component.cli-render",
+      "target": "solution.component.table-parser",
       "properties": {}
     }
   ],

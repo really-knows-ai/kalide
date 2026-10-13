@@ -1,0 +1,43 @@
+{
+  "layer": "domain",
+  "type": "entity",
+  "name": "table",
+  "body": "A GFM table parsed from a body whose template declares the `tables` option (gfm-tables, table-opt-in): a header row, a delimiter row and zero or more body rows of cells (domain.value.table-cell), each column carrying an alignment (domain.value.table-alignment). It is parsed per GFM's table extension with strict column counts — every row's cell count equals the header's, and a mismatch is an error rather than GFM's padding/truncation (table-syntax) — and is bounded by the template's declared limits (domain.value.table-limits). It belongs to a body (domain.value.body) and is exposed to the template's layout under `.table`/`.tables` (table-layout-context). The authored syntax is GFM's: leading and trailing pipes optional, cells trimmed, `\\|` a literal pipe, cell content inline Markdown, the table ending at a blank line or the start of another block.",
+  "properties": {
+    "kind": "entity"
+  },
+  "out": [
+    {
+      "kind": "realised-by",
+      "target": "solution.component.table-parser",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.markdown-validator",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.gfm-tables",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-syntax",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-layout-context",
+      "properties": {}
+    }
+  ]
+}

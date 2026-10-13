@@ -1,0 +1,25 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "table-cell",
+  "body": "A table cell (domain.entity.table): its content is inline Markdown (markdown-allowed-subset) plus the cell extensions `{br}` (line break) and `{…}` attribute groups (table-cell-attributes). It renders to HTML with `{br}` as `<br>`, and carries the declared cell attributes the cell sets (domain.value.cell-attribute), each typed by its declaration. A cell reaches a layout as a map with `html` and `attrs`, and header cells carry attributes exactly as body cells do (table-layout-context).",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-cell-attributes",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-layout-context",
+      "properties": {}
+    }
+  ]
+}

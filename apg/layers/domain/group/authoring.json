@@ -72,6 +72,21 @@
       "kind": "realised-by",
       "target": "solution.container.cli-binary",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.entity.table",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.table-cell",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "domain.value.table-alignment",
+      "properties": {}
     }
   ],
   "in": [
@@ -87,17 +102,17 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.single-binary",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
       "source": "requirements.requirement.agent-guide-reference",
       "properties": {}
     },
     {
       "kind": "drives",
       "source": "requirements.requirement.readme-commands",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.single-binary",
       "properties": {}
     }
   ]

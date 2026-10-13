@@ -1,0 +1,21 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "table-opt-in",
+  "body": "A template opts its body in to GFM tables with the `body.tables` mapping in its `template.yaml`. Absent, the key leaves the body without tables: a body carrying a table is refused (markdown-disallowed-errors). The scalar `false` is the explicit opt-out and is equivalent to the key being absent. A `tables:` mapping opts the template in and declares the option's sub-keys `min_tables`, `max_tables`, `min_columns`, `max_columns`, `min_rows`, `max_rows` and `cell_attributes` (table-limits, table-cell-attributes); any other value of `tables`, and any unknown sub-key, is a templates error naming the offending `template.yaml`. The table rejection of a template that does not opt in carries guidance that names the `tables` option, so an author is told how to enable tables (markdown-disallowed-errors). A template that declares `tables` accepts tables in every body it owns — a slide body, a section body, and a body supplied to the `section` helper or to a `child` constructor (body-rules).\n\nAC: a template whose `template.yaml` declares `body.tables` parses and validates a table in its body and in its example; the same template without the key, or with `tables: false`, refuses the same table with guidance naming the `tables` option; a `tables:` mapping with an unknown sub-key, or a `tables:` value that is neither a mapping nor `false`, is a templates error naming the offending `template.yaml`; a body supplied to the `section` helper for a target that declares `tables` is validated with tables enabled.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.body-rule",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.gfm-tables",
+      "properties": {}
+    }
+  ]
+}

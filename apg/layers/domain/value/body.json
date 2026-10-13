@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "body",
-  "body": "Markdown body of a slide/section/notes: restricted CommonMark subset (paragraphs, ##/### headings, lists ≤1 nesting; bold, italic, code, links, hard breaks). Measured for words, paragraphs, list items, subheadings. A body supplied to the `section` helper or to a `child` constructor is checked against the same rules for the target template (section-helper, child-constructor).",
+  "body": "Markdown body of a slide/section/notes: restricted CommonMark subset (paragraphs, GFM tables where the enclosing template declares the `tables` option, ##/### headings, lists ≤1 nesting; bold, italic, code, links, hard breaks). Measured for words, paragraphs, list items, subheadings. A body supplied to the `section` helper or to a `child` constructor is checked against the same rules for the target template (section-helper, child-constructor).",
   "properties": {},
   "out": [],
   "in": [
@@ -19,6 +19,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.markdown-disallowed-errors",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-syntax",
       "properties": {}
     }
   ]

@@ -1,0 +1,20 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "table-limits",
+  "body": "The limits a template's `body.tables` declares for each table (gfm-tables, table-opt-in): `min_tables`/`max_tables` count a body's tables, while `min_columns`/`max_columns` and `min_rows`/`max_rows` bound one table, with `min_rows`/`max_rows` counting body rows and excluding the header. The defaults are `min_tables` 0, `max_tables` 1, `min_columns` 1, `max_columns` 0 (unbounded), `min_rows` 0 and `max_rows` 0 (unbounded); an explicit `0` on a `max_*` key is unbounded. A violation names the limit and the actual count (table-limits, table-errors).",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.templating",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.table-limits",
+      "properties": {}
+    }
+  ]
+}

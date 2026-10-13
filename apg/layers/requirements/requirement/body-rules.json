@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "body-rules",
-  "body": "Every template has an implied `body` field: required / optional / disallowed, with limits max_words, max_paragraphs, max_list_items, subheadings allowed?. Body only comes from Markdown after the frontmatter; a `body:` key in YAML = error with guidance. Section templates used as field types take YAML data only. A `body` supplied to the `section` helper or to a `child` constructor is checked against that template's body rule by the same rules (section-helper, child-constructor).",
+  "body": "Every template has an implied `body` field: required / optional / disallowed, with limits max_words, max_paragraphs, max_list_items, subheadings allowed?, and a `tables` option — absent or `false` keeps Markdown tables rejected, while a mapping accepts GFM tables with the declared limits and cell attributes (gfm-tables, table-opt-in, table-limits, table-cell-attributes). Body only comes from Markdown after the frontmatter; a `body:` key in YAML = error with guidance. Section templates used as field types take YAML data only. A `body` supplied to the `section` helper or to a `child` constructor is checked against that template's body rule by the same rules (section-helper, child-constructor).",
   "properties": {
     "feature": "templates"
   },

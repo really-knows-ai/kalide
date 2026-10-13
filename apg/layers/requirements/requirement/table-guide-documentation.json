@@ -1,0 +1,31 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "table-guide-documentation",
+  "body": "The template-author reference (`docs/templates.md`, docs-templates) documents the `body.tables` option — its sub-keys `min_tables`, `max_tables`, `min_columns`, `max_columns`, `min_rows`, `max_rows` and `cell_attributes` — and the `cell_attributes` descriptors (`name`, `type`, enum `variants`), together with the cell-extension syntax (`{br}` and the `{…}` attribute groups, including the boolean and enum short-hands), and both embedded author guides (`AGENTS_KALIDE.md`, agent-authoring and library-agent-guide) carry the same, so an agent enables and uses tables without reading Go source. The build/test-time guide drift self-test (agent-guide-drift-check) carries the new tokens for both guides, in the authored-scope style it already uses for format keys with no canonical accessor (such as the section-declaration keys and the enum/image field keys).\n\nAC: `docs/templates.md` documents the `tables` key, every sub-key and `cell_attributes`; both embedded author guides carry the `tables` key, its sub-keys and `cell_attributes`; removing a carried token from a guide fails the guide drift self-test.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.agent-guide",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-agent-guide",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.group.templating",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.gfm-tables",
+      "properties": {}
+    }
+  ]
+}

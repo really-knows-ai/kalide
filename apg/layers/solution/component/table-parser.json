@@ -1,0 +1,81 @@
+{
+  "layer": "solution",
+  "type": "component",
+  "name": "table-parser",
+  "body": "GFM table parser and cell-extension decoder (gfm-tables). It reads the `body.tables` option a template declares (template-registry), parses each body's GFM tables — header row, delimiter row and body rows with strict column counts, leading and trailing pipes optional and cells trimmed, per-column alignment from the delimiter row, `\\|` as a literal pipe, inline-Markdown cell content, the table ending at a blank line or another block's start (table-syntax) — decodes each cell's extensions (`{br}` and the `{…}` attribute groups, including the boolean/enum short-hands and the `\\{` escape, table-cell-attributes), validates the parsed table against the template's declared limits (table-limits) and declared cell attributes (type-checking a value and suggesting the closest declared attribute for an unknown one), and hands each parsed table to the render context under `.table`/`.tables` (table-layout-context). Its seams are the template body rule and manifest parsing in internal/template (BodyRule, parseManifestBody, CheckBody), the Markdown walk in internal/mdcheck (table detection and validation), and the renderer's body/text rendering in internal/render (renderBody, renderInline).",
+  "properties": {},
+  "out": [
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/mdcheck.Check",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/mdcheck.checkDisallowed",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/mdcheck.hasTableDelimiterRow",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/mdcheck/walk.go",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.CheckBody",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/checkbody.go",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.parseManifestBody",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/template/manifest.go",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/template.BodyRule",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "internal/render/render.go",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/render.renderBody",
+      "properties": {}
+    },
+    {
+      "kind": "implemented-by",
+      "target": "go.github.com/really-knows-ai/kalide/internal/render.renderInline",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "solution.container.cli-binary",
+      "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "source": "domain.entity.table",
+      "properties": {}
+    }
+  ]
+}

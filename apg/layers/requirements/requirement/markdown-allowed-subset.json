@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "markdown-allowed-subset",
-  "body": "Bodies accept: blocks — paragraphs; Markdown subheadings `##` and `###`, but only where the enclosing template declares no child sections (a heading at any depth 1–6 is a section marker when the enclosing template declares child sections — slide-sections, template-composition); bulleted and numbered lists (max one nesting level); inline — core CommonMark bold, italic, inline code, `[]()` links, hard line breaks. `#` is reserved for section markers.",
+  "body": "Bodies accept: blocks — paragraphs; GFM tables where the enclosing template declares the `tables` option (gfm-tables, table-opt-in), with strict column counts and the declared limits and cell attributes (table-syntax, table-limits, table-cell-attributes); Markdown subheadings `##` and `###`, but only where the enclosing template declares no child sections (a heading at any depth 1–6 is a section marker when the enclosing template declares child sections — slide-sections, template-composition); bulleted and numbered lists (max one nesting level); inline — core CommonMark bold, italic, inline code, `[]()` links, hard line breaks. `#` is reserved for section markers.",
   "properties": {
     "feature": "markdown"
   },
@@ -25,6 +25,11 @@
     {
       "kind": "drives",
       "target": "domain.value.body",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.gfm-tables",
       "properties": {}
     }
   ],

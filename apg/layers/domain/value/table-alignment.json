@@ -1,0 +1,15 @@
+{
+  "layer": "domain",
+  "type": "value",
+  "name": "table-alignment",
+  "body": "A table column's alignment, read from its delimiter cell (table-syntax): left (`:---`), center (`:---:`), right (`---:`) or none (`---`). It is exposed per column in a table's layout context under `align` (table-layout-context).",
+  "properties": {},
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "domain.group.authoring",
+      "properties": {}
+    }
+  ]
+}
