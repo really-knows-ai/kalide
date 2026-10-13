@@ -612,6 +612,15 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 		for i := range sec.Children {
 			counts[sec.Children[i].Name]++
 		}
+		// This instance's own ancestor chain: the enclosing chain it inherited
+		// with its own resolved template appended. Each authored child's depth
+		// counts this instance among its enclosing same-template ancestors, and
+		// the child context carries the same chain as the enclosing chain it
+		// passes on, so a bounded self-nested authored chain reads `item.depth`
+		// at every level (item-context, bounded-self-nesting). The child's
+		// `item.section` and `item.parent` stay as before; only depth is
+		// computed here rather than mechanically 0.
+		instanceAncestors := append(append([]string{}, secCtx.ancestors...), tmpl.Name)
 		for i := range sec.Children {
 			child := &sec.Children[i]
 			if child.Template == "" {
@@ -622,11 +631,12 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 				continue
 			}
 			childCtx := &sectionCtx{
-				cfg:    secCtx.cfg,
-				meta:   secCtx.meta,
-				total:  secCtx.total,
-				item:   itemContext(child.Index, counts[child.Name], 0, child.Name, child.Template, data),
-				parent: data,
+				cfg:       secCtx.cfg,
+				meta:      secCtx.meta,
+				total:     secCtx.total,
+				item:      itemContext(child.Index, counts[child.Name], template.InstanceDepth(instanceAncestors, child.Template), child.Name, child.Template, data),
+				parent:    data,
+				ancestors: instanceAncestors,
 			}
 			rendered, err := r.renderSection(child, childTmpl, childCtx)
 			if err != nil {
@@ -1261,6 +1271,18 @@ type sectionCtx struct {
 	// (item-context). It is nil at the top level, where the parent is the
 	// slide, not a section instance.
 	parent map[string]any
+
+	// ancestors is the chain of resolved template names of the enclosing
+	// instances ABOVE the instance this context belongs to — its section
+	// template's ancestors — empty at the top level, where the slide is not an
+	// instance of any template (item-context, bounded-self-nesting). The
+	// instance's OWN chain, the one its authored children's depth is computed
+	// against, is this chain with its own resolved template appended
+	// (renderInstance); renderInstance threads that own chain onto each child
+	// context, so a bounded self-nested authored chain reads `item.depth` at
+	// every level. renderSection/renderChildren pass the instance's own chain
+	// to the shared template.DataContext on the same convention.
+	ancestors []string
 
 	// raw is the instance's reserved `.raw` context (raw-source-context): the
 	// source view of the author's original values, built by the caller with
