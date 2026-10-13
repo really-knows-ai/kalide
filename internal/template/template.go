@@ -137,6 +137,18 @@ type Field struct {
 	// how a layout variant is selected (template-variants).
 	Variants []string
 
+	// VariantsFrom, for an enum field, is instead of an inline Variants set
+	// a glob relative to the root of the library layer that owns the
+	// template, whose matching files lie under that layer's media/ tree
+	// (e.g. `media/bgs/*.jpg`). The glob is expanded when the layer loads;
+	// the field's valid values are the matching files, each written
+	// relative to that layer's media/ tree (e.g. `bgs/right-8.jpg`), in
+	// sorted order. Declaring Variants and VariantsFrom together on one
+	// field, or a VariantsFrom glob matching no file, is a templates error
+	// at load (enum-variants-from). An empty VariantsFrom means no
+	// expansion.
+	VariantsFrom string
+
 	// Formats, for a number or date field, is the closed set of named display
 	// formats the author may select with this field's reserved
 	// `<field>_format` sibling key. For example a number field may declare
@@ -154,6 +166,24 @@ type Field struct {
 	// section-usage template whose fields describe this field's structured
 	// YAML value.
 	SectionTemplate string
+
+	// Roots, for an image field, names the root set the field's path points
+	// at, in written order: "assets", the deck's assets/ tree, or "media",
+	// the media/ tree of the library layer that owns the field's template
+	// (image-field-roots). A path is resolved against the roots in their
+	// written order and must name an existing file in a declared root; with
+	// no Roots it resolves under the deck's assets/.
+	Roots []string
+
+	// Dir, for an image field, optionally restricts the accepted path to a
+	// subdirectory within a root. An empty Dir means no subdirectory
+	// restriction (image-field-roots).
+	Dir string
+
+	// Extensions, for an image field, optionally restricts the accepted
+	// path to a set of allowed file-name extensions. An empty Extensions
+	// means no extension restriction (image-field-roots).
+	Extensions []string
 
 	// Item, for a list field, is the single item type every element must
 	// have (field-types: list of exactly one item type). Its Name is
