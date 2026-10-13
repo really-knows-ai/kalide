@@ -318,6 +318,34 @@ type BodyRule struct {
 	Subheadings bool
 }
 
+// TableRule is a template's optional GFM-table rule, declared as the
+// `body.tables` mapping in its `template.yaml` (table-opt-in). A template that
+// declares it accepts GFM tables in every body it owns; a template without it
+// has no TableRule and refuses a body's table. Its limits bound each table in
+// every body the template owns, independently (table-limits).
+//
+// The zero value of a `min_*` field is no minimum. The zero value of a `max_*`
+// field is unbounded, except MaxTables: its declared default is 1, which the
+// manifest parser writes when `max_tables` is absent, while an explicit
+// `max_tables: 0` means unbounded.
+type TableRule struct {
+	// MinTables and MaxTables count the tables in one body. MinTables 0 is
+	// no minimum; MaxTables 0 is unbounded and defaults to 1 when
+	// `max_tables` is absent.
+	MinTables int
+	MaxTables int
+
+	// MinColumns and MaxColumns bound one table's column count. MinColumns
+	// 0 is no minimum; MaxColumns 0 is unbounded.
+	MinColumns int
+	MaxColumns int
+
+	// MinRows and MaxRows bound one table's body rows, the header
+	// excluded. MinRows 0 is no minimum; MaxRows 0 is unbounded.
+	MinRows int
+	MaxRows int
+}
+
 // Layout is a template's Go html/template layout: its name (used in error
 // messages and template lookup), its optional on-disk display path and its
 // source text. Loading and parsing the layout are not done here.
