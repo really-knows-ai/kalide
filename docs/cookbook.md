@@ -442,6 +442,111 @@ title: Beta
   above it: the loader walks the longest chain the bound allows and refuses the
   declaration at load if that chain would exceed the six-heading-level syntax.
 
+## A table in a body
+
+A template opts into GFM tables in its body with the `tables` key of its
+`body:` block; the body's non-table content stays under `{{ .body }}` and each
+parsed table arrives under `.table`/`.tables`. A metrics slide accepts one table
+of at most four columns and six body rows, and declares a `highlight` enum and a
+`bold` boolean cell attribute:
+
+`slides/metrics/template.yaml`:
+
+```yaml
+description: A slide whose body carries one table.
+fields:
+  - name: title
+    type: text
+    required: true
+body:
+  mode: optional
+  tables:
+    min_tables: 0        # fewest tables in a body; 0 = no minimum
+    max_tables: 1        # most tables in a body; 0 = unbounded; default 1
+    min_columns: 2       # fewest columns, header included
+    max_columns: 4       # most columns, header included; 0 = unbounded
+    min_rows: 1          # fewest body rows, the header excluded
+    max_rows: 6          # most body rows, the header excluded; 0 = unbounded
+    cell_attributes:
+      - name: highlight  # an enum cell attribute
+        type: enum
+        variants: [none, green, amber]
+      - name: bold       # a boolean cell attribute
+        type: boolean
+```
+
+`slides/metrics/layout.html.tmpl` renders `.table` with no guard: the entry is
+always present, nil only when the body carries no table.
+
+```html
+<section class="metrics">
+  <h1>{{ .title }}</h1>
+  <table>
+    <thead>
+      <tr>{{ range .table.headers }}<th>{{ .html }}</th>{{ end }}</tr>
+    </thead>
+    <tbody>
+      {{ range .table.rows }}
+      <tr>{{ range . }}<td{{ with index .attrs "highlight" }} class="highlight-{{ . }}"{{ end }}>{{ .html }}</td>{{ end }}</tr>
+      {{ end }}
+    </tbody>
+  </table>
+  {{ .body }}
+</section>
+```
+
+`slides/metrics/example.md` is a real slide source; each cell is inline Markdown
+plus the `{br}` and `{…}` extensions, and the table sits in the body where the
+author writes it:
+
+```markdown
+---
+template: metrics
+title: Key metrics
+---
+| Metric | This week | Trend               |
+| :----- | --------: | ------------------: |
+| Reads  | 1,204     | {green} up          |
+| Writes | 88        | Steady{br}no change |
+```
+
+- A table is an **opt-in**: without a `tables` mapping (or with `tables: false`)
+  a body's table is refused with guidance naming the `tables` option, and a
+  `tables:` value that is neither a mapping nor `false`, or an unknown sub-key,
+  fails template load naming the offending `template.yaml`.
+- `min_tables`/`max_tables` bound the tables in one body, and
+  `min_columns`/`max_columns` (header included) and `min_rows`/`max_rows` (body
+  rows only) bound one table. An explicit `0` on a `max_*` key is unbounded and a
+  `0` on a `min_*` key is no minimum; a breach is an error naming the limit and
+  the actual count.
+- The accepted table is GFM's: a header row, a delimiter row of at least one `-`
+  per column (written `:---`, `---:` or `:---:` for left, right or centre
+  alignment), then the body rows. Leading and trailing `|` are optional and every
+  cell is trimmed, `\|` is a literal pipe, and column counts are strict — a body
+  or delimiter row whose cell count differs from the header's is an error, never
+  a paragraph.
+- `cell_attributes` declares each attribute's `name` and a `type` of `boolean` or
+  `enum` (an enum carrying a non-empty `variants` list). `{bold}` is
+  `{bold:true}`, `{highlight:green}` sets the enum, `{highlight:green, bold}`
+  sets both, and the bare variant `{green}` sets the one declared enum carrying
+  it. A `\{` is a literal brace and a brace inside an inline code span or a link
+  is literal text; an undeclared attribute — or a value of the wrong type — is an
+  error, the former with a closest-match suggestion. `br` is reserved and is
+  never a declared cell attribute.
+- `{br}` is a line break, rendered as `<br>`. The `{…}` group sits outside an
+  inline code span and a link (by convention at the cell's end) and is stripped
+  from the cell's visible content.
+- Each cell is a map with `.html` — the cell's inline Markdown rendered, `{br}`
+  as `<br>` — and `.attrs`, keyed by the declared names. An unset attribute is
+  nil, so `{{ index .attrs "highlight" }}` is empty: guard it with `with`/`if` as
+  above. Header cells carry the same `{html, attrs}` shape under
+  `.table.headers`.
+- `.tables` is every parsed table in source order (an empty list when the body
+  carries none) and `.table` is the body's first table (nil when there is none);
+  both are always present, so a layout reads them without a guard. Each table
+  appears **only** through these entries: `{{ .body }}` is the body's non-table
+  content, so the layout places the table itself.
+
 ## Theme `media:` and `theme:<name>/` references
 
 A theme's `theme.css` — and every CSS it `@import`s — references servable
