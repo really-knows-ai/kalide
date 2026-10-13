@@ -38,6 +38,9 @@ import (
 	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/suggest"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 )
 
 // TableOptions carries the effective GFM-table limits for a body: the fewest
@@ -290,6 +293,189 @@ func cellAttributeNames(specs []CellAttributeSpec) []string {
 		names = append(names, spec.Name)
 	}
 	return names
+}
+
+// decodeCellAttributes decodes one parsed table cell's extensions against the
+// enclosing template's declared cell attributes and returns the cell's visible
+// inline content together with its decoded attribute set
+// (table-cell-attributes).
+//
+// cell is the parsed cell — its Text is the cell's trimmed inline-Markdown
+// source — and specs are the template's declared cell attributes. The decode
+// applies to a header cell exactly as to a body cell: both are TableCells, and a
+// header cell's attribute is exposed exactly like a body cell's.
+//
+// Two extensions are removed from the cell's visible content:
+//
+//   - `{br}` is a line break: it ends the current segment and begins the next,
+//     and never survives into Lines as a raw `<br>`. A cell with no `{br}` has a
+//     single segment.
+//   - a `{...}` group sets one or more declared attributes: its
+//     comma-separated `name` / `name:value` occurrences are resolved with
+//     resolveCellAttribute, and the whole group is removed from the visible
+//     content.
+//
+// Both are recognised only in the cell's ordinary inline text. A brace inside
+// an inline code span, or inside a link's text or destination, is literal cell
+// content and declares nothing (the code-span case reuses insideCodeSpan), and a
+// backslash-escaped brace, `\{`, is a literal brace that opens no group (reusing
+// maskBackslashEscapes). The reserved name `br` is never a declared attribute.
+//
+// Attrs carries one entry per declared attribute, keyed by its name: the value
+// the cell set for it — a bool for a boolean attribute and a string, the chosen
+// variant, for an enum — or nil for every declared attribute the cell leaves
+// unset, so an unset attribute is present rather than absent.
+//
+// The first occurrence resolveCellAttribute rejects is returned as err; the
+// cell's remaining occurrences are still resolved so the returned DecodedCell is
+// as complete as possible. The caller turns the error into a validation issue
+// positioned at the cell.
+func decodeCellAttributes(cell TableCell, specs []CellAttributeSpec) (DecodedCell, error) {
+	src := []byte(cell.Text)
+	scannable := cellTextScannable(src)
+	// maskBackslashEscapes blanks every backslash escape, so a `\{` no longer
+	// looks like a group opener and a `\}` no longer looks like a closer. The
+	// masked slice has the same length as src, so offsets line up and the
+	// visible content is still taken from the unmasked src.
+	masked := []byte(maskBackslashEscapes(cell.Text))
+
+	attrs := make(map[string]any, len(specs))
+	for _, spec := range specs {
+		attrs[spec.Name] = nil
+	}
+
+	var lines []string
+	var line strings.Builder
+	var firstErr error
+
+	for i := 0; i < len(src); {
+		if !scannable[i] || masked[i] != '{' {
+			line.WriteByte(src[i])
+			i++
+			continue
+		}
+		end := cellGroupEnd(masked, scannable, i)
+		if end < 0 {
+			// An unclosed `{` (or one that would cross into literal text) is
+			// content, not a group.
+			line.WriteByte(src[i])
+			i++
+			continue
+		}
+		if group := string(src[i+1 : end]); group == reservedCellAttribute {
+			// `{br}` is the cell's line break, never an attribute.
+			lines = append(lines, line.String())
+			line.Reset()
+		} else {
+			for _, occurrence := range strings.Split(group, ",") {
+				name, value, err := resolveCellOccurrence(strings.TrimSpace(occurrence), specs)
+				if err != nil {
+					if firstErr == nil {
+						firstErr = err
+					}
+					continue
+				}
+				attrs[name] = value
+			}
+		}
+		i = end + 1
+	}
+	lines = append(lines, line.String())
+
+	return DecodedCell{Lines: lines, Attrs: attrs}, firstErr
+}
+
+// cellGroupEnd returns the index of the `}` that closes the `{...}` group whose
+// `{` is at start in the masked cell source, or -1 when start does not open a
+// closed group. A group is confined to one run of scannable cell text: an
+// opener or closer that would cross into literal text — an inline code span or a
+// link — does not form a group, and a second `{` before the closer means the
+// opener was literal text as well (groups do not nest).
+func cellGroupEnd(masked []byte, scannable []bool, start int) int {
+	for k := start + 1; k < len(masked); k++ {
+		if !scannable[k] {
+			return -1
+		}
+		switch masked[k] {
+		case '}':
+			return k
+		case '{':
+			return -1
+		}
+	}
+	return -1
+}
+
+// cellTextScannable marks, for one cell's source bytes, which bytes are ordinary
+// inline cell text where the `{br}` and `{...}` extensions are recognised. A
+// byte is scannable when it belongs to an ast.Text node that is neither content
+// of an inline code span (insideCodeSpan) nor the text of an inline link; every
+// other byte — code-span content, a link's text and destination, emphasis
+// markers, and a character the parser resolved from a backslash escape — is
+// literal and never opens a group.
+func cellTextScannable(src []byte) []bool {
+	scannable := make([]bool, len(src))
+	doc := goldmark.New().Parser().Parse(text.NewReader(src))
+	markCellTextScannable(doc, scannable)
+	return scannable
+}
+
+// markCellTextScannable marks the scannable bytes of node's subtree in
+// scannable: the source bytes of every ast.Text run that is neither inline-code
+// content nor inline-link text.
+func markCellTextScannable(node ast.Node, scannable []bool) {
+	if t, ok := node.(*ast.Text); ok && !insideCodeSpan(t) && !insideLink(t) {
+		for i := t.Segment.Start; i < t.Segment.Stop && i < len(scannable); i++ {
+			if i >= 0 {
+				scannable[i] = true
+			}
+		}
+	}
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		markCellTextScannable(child, scannable)
+	}
+}
+
+// insideLink reports whether node is content of an inline link — its text. The
+// destination is stored on the link node rather than as a Text node, so it is
+// never scanned either. A `{...}` in a link's text is literal, like a `{...}` in
+// a code span; a decorating group sits outside the link, for example after it at
+// the cell's end.
+func insideLink(node ast.Node) bool {
+	for p := node.Parent(); p != nil; p = p.Parent() {
+		switch p.(type) {
+		case *ast.Link, *ast.AutoLink, *ast.Image:
+			return true
+		}
+	}
+	return false
+}
+
+// resolveCellOccurrence resolves one occurrence from a cell's `{...}` group and
+// returns the declared attribute name it sets together with its typed value. It
+// delegates the typing and the value check to resolveCellAttribute and, because
+// that returns only the value, recovers the attribute name: the name before the
+// first colon for a `name:value` occurrence, the declared boolean's own name for
+// a bare boolean, or the sole declared enum for a bare enum variant — the mutex
+// short-hand, unambiguous because the template loader rejects an ambiguous
+// declaration set. An occurrence resolveCellAttribute rejects yields its error
+// and no name.
+func resolveCellOccurrence(occurrence string, specs []CellAttributeSpec) (string, any, error) {
+	value, err := resolveCellAttribute(occurrence, specs)
+	if err != nil {
+		return "", nil, err
+	}
+	name, _, hasValue := strings.Cut(occurrence, ":")
+	if hasValue {
+		return name, value, nil
+	}
+	if spec, ok := lookupCellAttribute(specs, name); ok && spec.Kind == CellAttributeBoolean {
+		return spec.Name, value, nil
+	}
+	if spec, ok := enumCellAttributeForVariant(specs, name); ok {
+		return spec.Name, value, nil
+	}
+	return name, value, nil
 }
 
 // TableCell is one cell of a parsed GFM table: the cell's trimmed
