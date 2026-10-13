@@ -720,6 +720,26 @@ fields:
 	})
 }
 
+// mustParseDefinitions parses a library.yaml document carrying the optional
+// named-definition sections (groups:, field_sets:, types:) into the
+// *LibraryDefinitions a template's type:/include:/@group references resolve
+// against at parseManifest time (named-library-definitions). It reads only
+// those three sections, so the rest of the document (name, format, …) is
+// irrelevant to it; a malformed section fails the test. A document with none
+// of the three sections yields a nil *LibraryDefinitions.
+func mustParseDefinitions(t *testing.T, libraryYAML string) *LibraryDefinitions {
+	t.Helper()
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(libraryYAML), &doc); err != nil {
+		t.Fatalf("yaml.Unmarshal(library.yaml) error = %v, want nil", err)
+	}
+	defs, err := loadLibraryDefinitions(LibraryFile, &doc)
+	if err != nil {
+		t.Fatalf("loadLibraryDefinitions() error = %v, want nil", err)
+	}
+	return defs
+}
+
 // TestRegistryRejections gives one failing fixture registry per build-time
 // rejection and asserts the specific error text. Some fixtures are rejected at
 // Register (local definition) and some only at Validate (cross-template and
@@ -931,6 +951,145 @@ func TestRegistryRejections(t *testing.T) {
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "required" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "required")
+		}
+	})
+
+	// named-library-definitions (plan.phase-04.task-15): a template's `type:`
+	// and `- include:` references and a section's `@group` `accepted:` entry
+	// resolve against the OWNING layer's parsed LibraryDefinitions
+	// (parseManifest's defs argument), and an unknown name of any of the three
+	// kinds is a positioned templates error carrying a closest-match
+	// suggestion. defs mirrors the sections a library.yaml declares: groups
+	// (accept-lists), field_sets and types.
+	defs := mustParseDefinitions(t, `name: rej
+format: 1
+groups:
+  accents:
+    - emphasis
+    - note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants: [red, green, blue]
+    description: a named colour
+`)
+
+	t.Run("a named type expands into the referencing field", func(t *testing.T) {
+		def := mustParseManifest(t, "host", KindSlide,
+			"fields:\n  - name: accent\n    type: colour\n    required: true\n    description: the slide accent\n"+
+				"  - name: tint\n    type: colour\n", defs)
+		if len(def.Fields) != 2 {
+			t.Fatalf("len(Fields) = %d, want 2 (both reference the named type colour)", len(def.Fields))
+		}
+		accent := def.Fields[0]
+		if accent.Name != "accent" {
+			t.Errorf("Fields[0].Name = %q, want the referencing field's name %q (the named type's own name is not kept)", accent.Name, "accent")
+		}
+		if accent.Type != FieldEnum {
+			t.Errorf("Fields[0].Type = %q, want %q (the named type's type)", accent.Type, FieldEnum)
+		}
+		if !reflect.DeepEqual(accent.Variants, []string{"red", "green", "blue"}) {
+			t.Errorf("Fields[0].Variants = %v, want the named type's variants", accent.Variants)
+		}
+		if !accent.Required {
+			t.Error("Fields[0].Required = false, want true: the referencing field's own required key overrides")
+		}
+		if accent.Description != "the slide accent" {
+			t.Errorf("Fields[0].Description = %q, want the referencing field's own description (it overrides)", accent.Description)
+		}
+		tint := def.Fields[1]
+		if tint.Name != "tint" || tint.Type != FieldEnum {
+			t.Errorf("Fields[1] = %+v, want name=tint type=enum", tint)
+		}
+		if tint.Description != "a named colour" {
+			t.Errorf("Fields[1].Description = %q, want the named type's description (the referencing field omits it)", tint.Description)
+		}
+		if tint.Required {
+			t.Error("Fields[1].Required = true, want false: the named type's own required is kept when the referencing field omits it")
+		}
+	})
+
+	t.Run("an include expands the named field set in place", func(t *testing.T) {
+		def := mustParseManifest(t, "host", KindSlide,
+			"fields:\n  - include: meta\n  - name: title\n    type: text\n", defs)
+		if len(def.Fields) != 3 {
+			t.Fatalf("len(Fields) = %d, want 3 (two from the meta field set, then title)", len(def.Fields))
+		}
+		if def.Fields[0].Name != "subtitle" || def.Fields[0].Type != FieldText {
+			t.Errorf("Fields[0] = %+v, want the field set's subtitle:text", def.Fields[0])
+		}
+		if def.Fields[1].Name != "weight" || def.Fields[1].Type != FieldNumber {
+			t.Errorf("Fields[1] = %+v, want the field set's weight:number", def.Fields[1])
+		}
+		if def.Fields[2].Name != "title" || def.Fields[2].Type != FieldText {
+			t.Errorf("Fields[2] = %+v, want the literal title:text after the expanded set", def.Fields[2])
+		}
+	})
+
+	t.Run("an @group expands into accepted in place with literal names", func(t *testing.T) {
+		def := mustParseManifest(t, "host", KindSlide,
+			"sections:\n  - name: asides\n    accepted: [\"@accents\", literal]\n", defs)
+		if len(def.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(def.Sections))
+		}
+		want := []string{"emphasis", "note", "literal"}
+		if got := def.Sections[0].Accepted; !reflect.DeepEqual(got, want) {
+			t.Errorf("Accepted = %v, want the group expanded in place then the literal name, %v", got, want)
+		}
+	})
+
+	t.Run("a named type used as a list item descriptor still requires a name", func(t *testing.T) {
+		// A named type expanded into a top-level field takes the referencing
+		// field's `name:`, and a record item needs none; a non-record item
+		// descriptor (here naming the type colour) is still a field and still
+		// needs its own `name:`.
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: colour\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `missing required key "name"`) {
+			t.Errorf("Message = %q, want it to require a name on the non-record item descriptor", libErr.Message)
+		}
+	})
+
+	t.Run("unknown named type suggests the closest type", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"fields:\n  - name: accent\n    type: colur\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `unknown type "colur"`) {
+			t.Errorf("Message = %q, want it to name the unknown type", libErr.Message)
+		}
+		if libErr.Suggestion != "colour" {
+			t.Errorf("Suggestion = %q, want the declared named type %q", libErr.Suggestion, "colour")
+		}
+	})
+
+	t.Run("unknown include suggests the closest field set", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"fields:\n  - include: metaa\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `unknown field set "metaa"`) {
+			t.Errorf("Message = %q, want it to name the unknown field set", libErr.Message)
+		}
+		if libErr.Suggestion != "meta" {
+			t.Errorf("Suggestion = %q, want the declared field set %q", libErr.Suggestion, "meta")
+		}
+	})
+
+	t.Run("unknown @group suggests the closest group", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"sections:\n  - name: asides\n    accepted: [\"@acents\"]\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `unknown group "acents"`) {
+			t.Errorf("Message = %q, want it to name the unknown group", libErr.Message)
+		}
+		if libErr.Suggestion != "accents" {
+			t.Errorf("Suggestion = %q, want the declared group %q", libErr.Suggestion, "accents")
 		}
 	})
 
