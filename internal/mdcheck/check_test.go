@@ -123,9 +123,9 @@ func TestCheckDisallowed(t *testing.T) {
 			name: "table",
 			mode: BodyMode,
 			src:  "| a | b |\n| --- | --- |\n| 1 | 2 |\n",
-			want: []Issue{issue(1, 1, KindDisallowedConstruct,
+			want: []Issue{issue(2, 1, KindDisallowedConstruct,
 				"tables are not allowed",
-				"use a section template or a list instead of a Markdown table")},
+				"opt in to tables with the `tables` option in the template's body rule, or use a list instead")},
 		},
 		{
 			name: "blockquote",
