@@ -259,6 +259,47 @@ func testLinks(t *testing.T) {
 		wantError(t, mustRegistry(t, refs), deckFiles("kalide.yaml", "title: T\n", "slides/1-refs.md", "---\ntemplate: refs\ntarget: \"https://example.com\"\nnote: \"see [x](#nope2)\"\n---\n"),
 			displayFile("slides/1-refs.md")+` › note: unknown link label "nope2" — use the label of one of the deck's slides`)
 	})
+
+	// Collect-all: every link error of the deck is reported once, in document
+	// order. The slide's frontmatter fields come first (they sit at the top of
+	// the file) and carry their paths but no line; then the body's links in
+	// source order, each carrying its line. A bad-scheme destination is
+	// reported as that link's own error when its document position is reached,
+	// between the unknown labels around it.
+	t.Run("collect-all reports every link error in document order", func(t *testing.T) {
+		refs := &template.Template{Name: "refs", Usage: template.UsageSlide,
+			Fields: []template.Field{{Name: "target", Type: template.FieldLink}, {Name: "note", Type: template.FieldText}},
+			Body:   template.BodyRule{Mode: template.BodyOptional}}
+
+		files := deckFiles(
+			"kalide.yaml", "title: T\n",
+			"slides/1-a.md", "---\ntemplate: refs\ntarget: \"#nope\"\nnote: \"see [x](#nope2)\"\n---\n\nSee [a](#missing) then [b](ftp://example.com) and [c](#alsomissing).\n",
+		)
+		wantAllErrors(t, mustRegistry(t, refs), files, []string{
+			displayFile("slides/1-a.md") + ` › target: unknown link label "nope" — use the label of one of the deck's slides`,
+			displayFile("slides/1-a.md") + ` › note: unknown link label "nope2" — use the label of one of the deck's slides`,
+			displayFile("slides/1-a.md") + `:7: unknown link label "missing" — use the label of one of the deck's slides`,
+			displayFile("slides/1-a.md") + `:7: link destination "ftp://example.com" uses the unsupported "ftp" scheme — use a #label link or an http(s) URL, for example [text](#label) or [text](https://example.com)`,
+			displayFile("slides/1-a.md") + `:7: unknown link label "alsomissing" — use the label of one of the deck's slides`,
+		})
+	})
+
+	// The collect-all link pass resolves only `#label` destinations, so a
+	// bad-scheme link in a `link` field — already reported once by the step-3
+	// field pass — is not reported a second time by the link pass.
+	t.Run("collect-all reports a bad-scheme field link once", func(t *testing.T) {
+		refs := &template.Template{Name: "refs", Usage: template.UsageSlide,
+			Fields: []template.Field{{Name: "target", Type: template.FieldLink}},
+			Body:   template.BodyRule{Mode: template.BodyOptional}}
+
+		files := deckFiles(
+			"kalide.yaml", "title: T\n",
+			"slides/1-a.md", "---\ntemplate: refs\ntarget: \"ftp://example.com\"\n---\n",
+		)
+		wantAllErrors(t, mustRegistry(t, refs), files, []string{
+			displayFile("slides/1-a.md") + ` › target: link: "ftp://example.com" is neither a #label anchor nor an http(s) URL — use a #label anchor or an http(s) URL`,
+		})
+	})
 }
 
 // testValidDeck asserts a sound deck returns the zero ValidationError and false,
