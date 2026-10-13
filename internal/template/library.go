@@ -87,6 +87,38 @@ type LibraryMeta struct {
 	Format int
 }
 
+// LibraryDefinitions is the set of named, reusable definitions a
+// library.yaml may declare (named-library-definitions): the named accept-lists
+// (Groups), the named field groups (FieldSets) and the named field types
+// (Types). All three sections are optional and are resolved when the library
+// loads; each is additive to library.yaml format 1 and does not change the
+// `format:` value (domain.constraint.library-manifest-format-stable).
+//
+// A definition is referenced by name from a template and resolved in the
+// library layer that owns the referencing template: a section declaration's
+// `accepted:` entry `@<name>` names a Groups entry (combinable with literal
+// template names), a template's `fields:` sequence entry `- include: <name>`
+// names a FieldSets entry, and a field's `type: <name>` names a Types entry.
+// An unknown name is a templates error with a closest-match suggestion
+// (closest-match-suggestions). A nil LibraryDefinitions holds no definitions.
+type LibraryDefinitions struct {
+	// Groups maps a named accept-list to the section-template names it
+	// contains. A section declaration references the list as `@<name>` in its
+	// `accepted:`, combinable with literal template names.
+	Groups map[string][]string
+
+	// FieldSets maps a named field group to the fields it contributes. A
+	// template's `fields:` references the group as a sequence entry
+	// `- include: <name>`, which expands to the named set's fields in place.
+	FieldSets map[string][]Field
+
+	// Types maps a named field type to its descriptor. A field references the
+	// type as `type: <name>`, which expands the named descriptor (for example
+	// a `colour` enum and its variants) into the referencing field; the map
+	// key, not the descriptor's Name, is the type name.
+	Types map[string]Field
+}
+
 // LibraryTemplate is one slide or section template directory,
 // templates/<slides|sections>/<name>/, holding its three required files
 // (templates-dir-layout).
