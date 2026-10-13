@@ -786,8 +786,34 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 
 	// The target's own `.data` view is built by the same shared builder the
 	// load-time example runner uses, over the neutral child-node tree, so the
-	// two views cannot drift (section-data-context).
-	data := template.DataContext(childNodes(children), nil, secCtx.raw)
+	// two views cannot drift (section-data-context). The ancestor identity the
+	// builder walks is the target's OWN chain of resolved template names — the
+	// enclosing chain with the target's resolved name appended — so each of the
+	// target's resolved children's `.data` item descriptors carries the
+	// per-level `item.depth` its executed `.item` does, exactly as
+	// exampleSectionRunner.render passes targetChain = callerChain +
+	// call.Template.Name (item-context, bounded-self-nesting).
+	//
+	// Its base is the renderer's current caller chain: at this point
+	// r.callerChain still holds the CALLING instance's own chain, because the
+	// target's own chain is published only AFTER its children are rendered —
+	// sectionHelper sets r.callerChain = targetChain below, after this call,
+	// and renderInstance likewise publishes its own chain after its resolved
+	// children render — so appending the target's resolved name yields the
+	// target's own chain. The target's resolved name is its sectionCtx `.item`
+	// descriptor's `template` entry, the same value
+	// ResolveSectionCallLayered/ResolveChildCall recorded there. From a slide
+	// layout r.callerChain is nil and the target is not an instance of any
+	// template, so its own chain is just its resolved name, identically to the
+	// load-time example side.
+	targetName := ""
+	if secCtx.item != nil {
+		if name, ok := secCtx.item["template"].(string); ok {
+			targetName = name
+		}
+	}
+	targetAncestors := append(append([]string{}, r.callerChain...), targetName)
+	data := template.DataContext(childNodes(children), targetAncestors, secCtx.raw)
 
 	lists := make(map[string][]htmltmpl.HTML, len(children))
 	for _, child := range children {
