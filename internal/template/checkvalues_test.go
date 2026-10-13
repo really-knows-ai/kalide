@@ -150,6 +150,47 @@ func TestCheckValues(t *testing.T) {
 		},
 	}})
 
+	// crossFromTmpl declares two top-level list fields so a leading `/name`
+	// max_items_from on one enforces against the other by name
+	// (cross-field-list-constraints, plan.phase-03.task-7).
+	crossFromTmpl := newSlide("crossfrom",
+		Field{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "/b"},
+		Field{Name: "b", Type: FieldList, Item: &Field{Type: FieldText}},
+	)
+	// crossMinTmpl declares the min_items_from direction against a top-level
+	// peer list.
+	crossMinTmpl := newSlide("crossmin",
+		Field{Name: "c", Type: FieldList, Item: &Field{Type: FieldText}, MinItemsFrom: "/d"},
+		Field{Name: "d", Type: FieldList, Item: &Field{Type: FieldText}},
+	)
+	// crossRecordTmpl declares both lists inside one inline record, so a bare
+	// max_items_from names the record sibling.
+	crossRecordTmpl := newSlide("crossrecord", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "b"},
+			{Name: "b", Type: FieldList, Item: &Field{Type: FieldText}},
+		},
+	}})
+	// crossSlashRecordTmpl writes a `/name` inside a record: it still names the
+	// enclosing template's top-level field, never a record sibling.
+	crossSlashRecordTmpl := newSlide("crossslashrecord",
+		Field{Name: "top", Type: FieldList, Item: &Field{Type: FieldText}},
+		Field{Name: "items", Type: FieldList, Item: &Field{
+			Type: FieldRecord,
+			Fields: []Field{
+				{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "/top"},
+			},
+		}},
+	)
+	// crossSkipTmpl points one bound at an absent top-level field and the other
+	// at a non-list top-level field: neither peer carries a length to compare,
+	// so both bounds are skipped rather than reported.
+	crossSkipTmpl := newSlide("crossskip",
+		Field{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "/missing", MinItemsFrom: "/mixed"},
+		Field{Name: "mixed", Type: FieldText},
+	)
+
 	// allTypesTmpl declares one record item field per field type, so a single
 	// wrong-typed record value proves the shared engine reports every field
 	// type's type error — including a record that is not a mapping — at the
@@ -723,6 +764,64 @@ func TestCheckValues(t *testing.T) {
 			}},
 			want: []wantErr{we("min", "items › [0] › values › [0] › n", -1,
 				"min: -1 is below the minimum 0", "use a value of at least 0")},
+		},
+
+		// --- cross-field list bounds (max_items_from/min_items_from) ------
+		// A list field's cross-field bound is enforced against a named peer
+		// list and reported as one error naming both fields and both lengths
+		// (cross-field-list-constraints, plan.phase-03.task-7). A leading
+		// `/name` names a top-level field — even from inside a record — while
+		// a bare name names a sibling within the enclosing inline record.
+		{
+			name: "max_items_from over peer reports one two-field error",
+			tmpl: crossFromTmpl,
+			data: map[string]any{"a": []any{"x", "y", "z"}, "b": []any{"p", "q"}},
+			want: []wantErr{we("max_items_from", "a", []any{"x", "y", "z"},
+				`max_items_from: field "a" has 3 item(s), more than field "b" has 2`,
+				"remove items until at most 2 remain")},
+		},
+		{
+			name: "max_items_from equal to its peer accepted",
+			tmpl: crossFromTmpl,
+			data: map[string]any{"a": []any{"x", "y"}, "b": []any{"p", "q"}},
+		},
+		{
+			name: "min_items_from under peer reports one two-field error",
+			tmpl: crossMinTmpl,
+			data: map[string]any{"c": []any{"x"}, "d": []any{"p", "q"}},
+			want: []wantErr{we("min_items_from", "c", []any{"x"},
+				`min_items_from: field "c" has 1 item(s), fewer than field "d" has 2`,
+				"add items until at least 2 remain")},
+		},
+		{
+			name: "min_items_from equal to its peer accepted",
+			tmpl: crossMinTmpl,
+			data: map[string]any{"c": []any{"x", "y"}, "d": []any{"p", "q"}},
+		},
+		{
+			name: "bare name enforces against a record sibling",
+			tmpl: crossRecordTmpl,
+			data: map[string]any{"items": []any{map[string]any{
+				"a": []any{"x", "y", "z"}, "b": []any{"p", "q"},
+			}}},
+			want: []wantErr{we("max_items_from", "items › [0] › a", []any{"x", "y", "z"},
+				`max_items_from: field "a" has 3 item(s), more than field "b" has 2`,
+				"remove items until at most 2 remain")},
+		},
+		{
+			name: "slash name inside a record resolves the top-level field",
+			tmpl: crossSlashRecordTmpl,
+			data: map[string]any{"top": []any{"p", "q"}, "items": []any{map[string]any{
+				"a": []any{"x", "y", "z"},
+			}}},
+			want: []wantErr{we("max_items_from", "items › [0] › a", []any{"x", "y", "z"},
+				`max_items_from: field "a" has 3 item(s), more than field "top" has 2`,
+				"remove items until at most 2 remain")},
+		},
+		{
+			name: "absent peer and non-list peer are skipped",
+			tmpl: crossSkipTmpl,
+			data: map[string]any{"a": []any{"x", "y", "z"}, "mixed": "s"},
 		},
 
 		// --- text coercion -------------------------------------------------
