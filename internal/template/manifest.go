@@ -959,6 +959,123 @@ func parseManifestBody(manifestPath string, val *yaml.Node) (BodyRule, error) {
 	return b, nil
 }
 
+// parseManifestCellAttributes decodes the `cell_attributes` sequence of a
+// template's `body.tables` mapping (table-cell-attributes). Each entry is one
+// cell-attribute descriptor using the usual field descriptors
+// (domain.value.cell-attribute): a `name`, a `type` that must be the boolean
+// or enum field type (FieldBoolean or FieldEnum), and, for an enum, a
+// required, non-empty `variants` list of its accepted values. The reserved
+// name `br` is never declarable, and each name is declared at most once.
+//
+// Every problem is a positioned templates error (*LibraryError) naming the
+// offending template.yaml: a malformed entry, a missing, non-string or empty
+// `name`, the reserved `br`, a duplicate name or a duplicate variant within
+// one enum, an unknown descriptor key (with a closest-match suggestion over
+// the descriptor keys), a missing or unsupported `type`, `variants` on a
+// boolean attribute and a missing or empty enum `variants`. Once the whole set
+// is decoded, its short-hand names are checked for ambiguity by
+// checkCellAttributeAmbiguity (table-cell-attributes), so an ambiguous
+// declaration set is refused here at template load.
+func parseManifestCellAttributes(manifestPath string, val *yaml.Node) ([]CellAttribute, error) {
+	if val.Kind != yaml.SequenceNode {
+		return nil, libraryErrorf(manifestPath, nodeLineOr(val, 0), `key "cell_attributes": expected a sequence`)
+	}
+	attrs := make([]CellAttribute, 0, len(val.Content))
+	seen := make(map[string]bool, len(val.Content))
+	for _, item := range val.Content {
+		if item.Kind != yaml.MappingNode {
+			return nil, libraryErrorf(manifestPath, nodeLineOr(item, 0), "expected a mapping describing a cell attribute")
+		}
+		line := nodeLineOr(item, 0)
+		var a CellAttribute
+		var haveName, haveType, haveVariants bool
+		var typeStr string
+		var nameLine, typeLine, variantsLine int
+
+		for i := 0; i+1 < len(item.Content); i += 2 {
+			key := item.Content[i]
+			v := item.Content[i+1]
+			kl := nodeLineOr(key, line)
+
+			switch key.Value {
+			case "name":
+				s, err := scalarString(v, manifestPath, kl, "name")
+				if err != nil {
+					return nil, err
+				}
+				a.Name = s
+				haveName = true
+				nameLine = kl
+			case "type":
+				s, err := scalarString(v, manifestPath, kl, "type")
+				if err != nil {
+					return nil, err
+				}
+				typeStr = s
+				haveType = true
+				typeLine = kl
+			case "variants":
+				ss, err := scalarStringList(v, manifestPath, kl, "variants")
+				if err != nil {
+					return nil, err
+				}
+				a.Variants = ss
+				haveVariants = true
+				variantsLine = kl
+			default:
+				e := libraryErrorf(manifestPath, kl, "unknown key %q in a cell attribute", key.Value)
+				return nil, e.withSuggestion(key.Value, []string{"name", "type", "variants"})
+			}
+		}
+
+		if !haveName || a.Name == "" {
+			return nil, libraryErrorf(manifestPath, line, "cell attribute: missing required key %q", "name")
+		}
+		if a.Name == "br" {
+			return nil, libraryErrorf(manifestPath, nameLine, "cell attribute %q is reserved and cannot be declared", a.Name)
+		}
+		if seen[a.Name] {
+			return nil, libraryErrorf(manifestPath, nameLine, "cell attribute %q is declared more than once", a.Name)
+		}
+		seen[a.Name] = true
+
+		if !haveType {
+			return nil, libraryErrorf(manifestPath, line, "cell attribute %q: missing required key %q", a.Name, "type")
+		}
+		switch typeStr {
+		case string(FieldBoolean):
+			if haveVariants {
+				return nil, libraryErrorf(manifestPath, variantsLine, "cell attribute %q: key %q is only valid on an enum cell attribute", a.Name, "variants")
+			}
+			a.Kind = FieldBoolean
+		case string(FieldEnum):
+			if !haveVariants {
+				return nil, libraryErrorf(manifestPath, line, "cell attribute %q: missing required key %q", a.Name, "variants")
+			}
+			if len(a.Variants) == 0 {
+				return nil, libraryErrorf(manifestPath, variantsLine, "cell attribute %q: key %q must not be empty", a.Name, "variants")
+			}
+			seenVariant := make(map[string]bool, len(a.Variants))
+			for _, v := range a.Variants {
+				if seenVariant[v] {
+					return nil, libraryErrorf(manifestPath, variantsLine, "cell attribute %q: variant %q is declared more than once", a.Name, v)
+				}
+				seenVariant[v] = true
+			}
+			a.Kind = FieldEnum
+		default:
+			return nil, libraryErrorf(manifestPath, typeLine, "cell attribute %q: cell attribute type must be boolean or enum", a.Name)
+		}
+
+		attrs = append(attrs, a)
+	}
+
+	if err := checkCellAttributeAmbiguity(manifestPath, attrs); err != nil {
+		return nil, err
+	}
+	return attrs, nil
+}
+
 // checkCellAttributeAmbiguity rejects a decoded set of cell-attribute
 // declarations whose short-hand names would not resolve by mutex
 // (table-cell-attributes): a declared boolean attribute whose name is also a
