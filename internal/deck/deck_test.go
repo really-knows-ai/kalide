@@ -2,6 +2,7 @@ package deck
 
 import (
 	"errors"
+	"fmt"
 	"path"
 	"reflect"
 	"strings"
@@ -416,6 +417,92 @@ func testLoadConfig(t *testing.T) {
 	t.Run("malformed yaml reports the file", func(t *testing.T) {
 		_, err := LoadConfig(configFS("title: [\n"), ConfigFile, themes)
 		wantErr(t, err, ConfigFile)
+	})
+
+	t.Run("malformed yaml reports the offending source line", func(t *testing.T) {
+		// yaml-error-messages: a kalide.yaml that is not well-formed YAML is
+		// reported through yamlErrorWithLine with the offending source line in
+		// the same file:line: form as every other config error. The parse
+		// failure here is a flow sequence left open on line 3, so the error
+		// names that line even though the document starts validly.
+		_, err := LoadConfig(configFS(
+			"title: Deck\n"+
+				"author: Ada\n"+
+				"date: [\n"), ConfigFile, themes)
+		wantErr(t, err, fmt.Sprintf("%s:3: ", ConfigFile))
+	})
+
+	t.Run("malformed yaml plain scalar carries the quoting hint", func(t *testing.T) {
+		// yaml-error-messages: when the parse failure is the classic
+		// plain-scalar mis-read — a `:` inside a plain scalar, or a plain
+		// scalar whose first character is one of `*`/`&`/`%`/`@` that YAML
+		// reads as an alias, anchor, directive or reserved indicator — the
+		// positioned error additionally carries the quoting hint. yaml.v3
+		// reports a lineless error for a longer alias like `*foo`, so the
+		// plain-scalar-start cases use the one-character line-bearing form
+		// (as the template loader and slide parser tests do).
+		cases := []struct {
+			name    string
+			yaml    string
+			line    int
+			message string
+			hint    bool
+		}{
+			{
+				name:    "colon inside a plain scalar",
+				yaml:    "title: Deck\nauthor: Ada\ndate: Hello: world\n",
+				line:    3,
+				message: "mapping values are not allowed in this context",
+				hint:    true,
+			},
+			{
+				name:    "plain scalar beginning with an alias indicator",
+				yaml:    "title: Deck\nauthor: *\n",
+				line:    2,
+				message: "did not find expected alphabetic or numeric character",
+				hint:    true,
+			},
+			{
+				name:    "plain scalar beginning with an anchor indicator",
+				yaml:    "title: Deck\nauthor: &\n",
+				line:    2,
+				message: "did not find expected alphabetic or numeric character",
+				hint:    true,
+			},
+			{
+				name:    "plain scalar beginning with a directive indicator",
+				yaml:    "title: Deck\nauthor: %example.com\n",
+				line:    2,
+				message: "found character that cannot start any token",
+				hint:    true,
+			},
+			{
+				name:    "plain scalar beginning with a reserved indicator",
+				yaml:    "title: Deck\nauthor: @example.com\n",
+				line:    2,
+				message: "found character that cannot start any token",
+				hint:    true,
+			},
+			{
+				name:    "malformed YAML that is not a plain-scalar mis-read carries no hint",
+				yaml:    "title: Deck\nauthor: Ada\ndate: \"unterminated\n",
+				line:    3,
+				message: "found unexpected end of stream",
+				hint:    false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := LoadConfig(configFS(tc.yaml), ConfigFile, themes)
+				prefix := fmt.Sprintf("%s:%d: ", ConfigFile, tc.line)
+				wantErr(t, err, prefix+tc.message)
+				if tc.hint {
+					wantErr(t, err, "(quote the value as a string)")
+				} else if err != nil && strings.Contains(err.Error(), "quote the value as a string") {
+					t.Errorf("error = %q, want no quoting hint", err.Error())
+				}
+			})
+		}
 	})
 
 	t.Run("missing config file", func(t *testing.T) {
