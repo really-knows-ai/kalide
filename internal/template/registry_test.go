@@ -365,24 +365,75 @@ func TestRegistry(t *testing.T) {
 		}
 	})
 
-	t.Run("LookupSlideTemplate reports usage", func(t *testing.T) {
+	t.Run("LookupSlideTemplate reports usage and internal", func(t *testing.T) {
 		r := mustFixtureRegistry(t)
 		tests := []struct {
-			name      string
-			wantUsage string
-			wantOK    bool
+			name         string
+			wantUsage    string
+			wantInternal bool
+			wantOK       bool
 		}{
-			{"title", "slide", true},
-			{"content", "slide", true},
-			{"column", "section", true},
-			{"missing", "", false},
+			{"title", "slide", false, true},
+			{"content", "slide", false, true},
+			{"column", "section", false, true},
+			{"missing", "", false, false},
 		}
 		for _, tt := range tests {
-			usage, ok := r.LookupSlideTemplate(tt.name)
-			if usage != tt.wantUsage || ok != tt.wantOK {
-				t.Errorf("LookupSlideTemplate(%q) = (%q, %v), want (%q, %v)",
-					tt.name, usage, ok, tt.wantUsage, tt.wantOK)
+			usage, internal, ok := r.LookupSlideTemplate(tt.name)
+			if usage != tt.wantUsage || internal != tt.wantInternal || ok != tt.wantOK {
+				t.Errorf("LookupSlideTemplate(%q) = (%q, %v, %v), want (%q, %v, %v)",
+					tt.name, usage, internal, ok, tt.wantUsage, tt.wantInternal, tt.wantOK)
 			}
+		}
+	})
+
+	// internal-templates: an internal template (a manifest's `internal: true`)
+	// stays resolvable through the registry's Lookup and through the two
+	// resolution paths that do not consult the Catalogue surface — a
+	// `section`-helper call and a `section_template` field type — while
+	// LookupSlideTemplate reports the Internal flag beside usage and ok, so a
+	// caller can distinguish an internal template from an unknown name (which
+	// reports ("", false, false)). Refusing an internal template as a Markdown
+	// `template:` target is the slide parser's rule (internal/slide), not the
+	// registry's, so it is exercised there.
+	t.Run("internal templates stay resolvable but report internal", func(t *testing.T) {
+		hidden := mustParseManifest(t, "hidden", KindSection, "internal: true\n")
+		if !hidden.Internal {
+			t.Fatalf("hidden.Internal = false, want true from the `internal: true` manifest")
+		}
+
+		// A `section`-helper call to the internal template resolves at
+		// Validate, and a section_template field naming it resolves through
+		// checkFieldTypes: neither consults LookupSlideTemplate, so an internal
+		// template stays a valid section-helper target and field type.
+		helperHost := regLayout("helperhost", `{{ section "hidden" }}`)
+		fieldHost := regSlide("fieldhost", Field{Name: "block", Type: FieldSectionTemplate, SectionTemplate: "hidden"})
+
+		r := NewRegistry(nil)
+		for _, tmpl := range []*Template{hidden, helperHost, fieldHost} {
+			if err := r.Register(tmpl); err != nil {
+				t.Fatalf("Register(%q) error = %v, want nil", tmpl.Name, err)
+			}
+		}
+		if err := r.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want nil (an internal template stays resolvable)", err)
+		}
+
+		// Lookup still resolves the internal template.
+		if got, ok := r.Lookup("hidden"); !ok || got != hidden {
+			t.Errorf("Lookup(hidden) = (%v, %v), want the internal template and true", got, ok)
+		}
+
+		// The Catalogue surface carries the Internal flag beside usage and ok.
+		usage, internal, ok := r.LookupSlideTemplate("hidden")
+		if usage != string(UsageSection) || !internal || !ok {
+			t.Errorf("LookupSlideTemplate(hidden) = (%q, %v, %v), want (%q, true, true)", usage, internal, ok, UsageSection)
+		}
+
+		// An unknown name reports no usage, not internal, and not found.
+		usage, internal, ok = r.LookupSlideTemplate("missing")
+		if usage != "" || internal || ok {
+			t.Errorf(`LookupSlideTemplate(missing) = (%q, %v, %v), want ("", false, false)`, usage, internal, ok)
 		}
 	})
 
@@ -582,11 +633,11 @@ func TestRegistry(t *testing.T) {
 		if err := reg.Validate(); err != nil {
 			t.Fatalf("Validate() error = %v, want nil", err)
 		}
-		if usage, ok := reg.LookupSlideTemplate("deck"); !ok || usage != string(UsageSlide) {
-			t.Errorf("LookupSlideTemplate(deck) = (%q, %v), want (%q, true)", usage, ok, UsageSlide)
+		if usage, internal, ok := reg.LookupSlideTemplate("deck"); !ok || internal || usage != string(UsageSlide) {
+			t.Errorf("LookupSlideTemplate(deck) = (%q, %v, %v), want (%q, false, true)", usage, internal, ok, UsageSlide)
 		}
-		if usage, ok := reg.LookupSlideTemplate("column"); !ok || usage != string(UsageSection) {
-			t.Errorf("LookupSlideTemplate(column) = (%q, %v), want (%q, true)", usage, ok, UsageSection)
+		if usage, internal, ok := reg.LookupSlideTemplate("column"); !ok || internal || usage != string(UsageSection) {
+			t.Errorf("LookupSlideTemplate(column) = (%q, %v, %v), want (%q, false, true)", usage, internal, ok, UsageSection)
 		}
 		assertStringSlice(t, `SectionNames("deck")`, reg.SectionNames("deck"), []string{"columns"})
 
