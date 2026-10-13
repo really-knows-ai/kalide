@@ -437,6 +437,64 @@ depth is a section marker instead (see **Sections**), so no heading is a body
 subheading. `#` is always reserved for top-level sections and the reserved
 `# notes`.
 
+### Tables in the body
+
+A template may accept GFM tables in its body as an opt-in extension, declared
+by the `tables` key of its `body:` block:
+
+```yaml
+body:
+  mode: optional
+  tables:
+    min_tables: 0        # fewest tables in a body; 0 = no minimum
+    max_tables: 1        # most tables in a body; 0 = unbounded; default 1
+    min_columns: 1       # fewest columns in a table; default 1
+    max_columns: 6       # most columns in a table; 0 = unbounded
+    min_rows: 0          # fewest body rows, the header excluded
+    max_rows: 10         # most body rows, the header excluded; 0 = unbounded
+    cell_attributes:
+      - name: highlight  # an enum cell attribute
+        type: enum
+        variants: [none, green, amber]
+      - name: bold       # a boolean cell attribute
+        type: boolean
+```
+
+- An absent `tables` key (or `tables: false`) leaves the body without tables: a
+  table there is refused with guidance naming the `tables` option. A `tables:`
+  mapping opts the template in; a value that is neither a mapping nor `false`,
+  or an unknown sub-key, is an error naming the offending `template.yaml`.
+- `min_tables`/`max_tables` count the tables in one body, and the default
+  `max_tables: 1` admits exactly one table. `min_columns`/`max_columns` and
+  `min_rows`/`max_rows` bound one table: columns include the header row, rows
+  are the body rows only. An explicit `0` on a `max_*` key is unbounded (so
+  `max_tables: 0` admits many) and a `0` on a `min_*` key is no minimum. The
+  limits apply to every table in every body the template owns; a breach is a
+  validation error naming the limit and the actual count.
+- The accepted table is GFM's: a header row, a delimiter row of at least one
+  `-` per column (written `:---`, `---:` or `:---:` for left, right or centre
+  alignment), then the body rows. Leading and trailing `|` are optional and
+  every cell is trimmed; `\|` is a literal pipe inside a cell, even inside an
+  inline code span. Column counts are strict: a body row or a delimiter row
+  whose cell count differs from the header's is an error, never a paragraph.
+- A cell is inline Markdown plus two extensions. `{br}` is a line break and
+  renders as `<br>`. An attribute group `{…}` sits outside an inline code span
+  and outside a link's text and destination (by convention at the cell's end)
+  and sets one or more declared cell attributes: `{bold}` is `{bold:true}`,
+  `{highlight:green}` sets the enum, and `{highlight:green, bold}` sets both. A
+  `\{` is a literal brace, and a brace inside an inline code span or a link is
+  literal text that declares no attribute. A bare declared enum variant such as
+  `{green}` sets the one declared enum attribute carrying it; a bare name that
+  is both a declared boolean and an enum variant, or a variant of more than one
+  declared enum, is refused at load as ambiguous. An attribute the template does
+  not declare, or a value of the wrong type, is an error — the former with a
+  closest-match suggestion. `br` is reserved and is never a declared cell
+  attribute.
+- `cell_attributes` declares the attributes a cell may set, each with the usual
+  field descriptors: a `name` and a `type` of `boolean` or `enum` (an enum
+  carrying a non-empty `variants` list). Attributes apply to header cells
+  exactly as to body cells.
+
 ### example.md
 
 `example.md` is the template's validating example. For a slide template it is a
@@ -462,7 +520,7 @@ Values arrive in two forms:
 - Every **other field** is a typed value (number, date, boolean, enum string,
   list, image/link URL), and `html/template` auto-escapes string values.
 
-Five reserved context names are provided, as **data**, not helpers:
+Seven reserved context names are provided, as **data**, not helpers:
 
 - `.deck` — the deck-wide configuration: `.deck.title` (always present),
   `.deck.author` and `.deck.date` (empty strings when omitted), and
@@ -500,6 +558,21 @@ Five reserved context names are provided, as **data**, not helpers:
   inspect the same instances as source data. A section-helper call is a direct
   render call, not an authored instance, so it appends no entry to `.data` and
   no element to the rendered section list. `.data` is data, not a helper.
+- `.table` — the body's **first** parsed table, or nil when the body carries
+  none. A table is a map with `.table.headers` (the header cells in column
+  order), `.table.align` (the per-column alignments `"left"`, `"center"`,
+  `"right"` or `""` for none) and `.table.rows` (the body rows, each a list of
+  cells in column order). A cell is a map with `.html` — the cell's inline
+  Markdown rendered to HTML, `{br}` as `<br>` — and `.attrs` — a map keyed by
+  the template's declared cell-attribute names, holding each attribute's value,
+  or nil where the cell does not set it; read one with
+  `{{ index .attrs "highlight" }}`. `.tables` is every parsed table in source
+  order, an empty list when the body carries none. Both entries are always
+  present, so a layout reads them without a guard: `.table` is nil and
+  `.tables` empty in a template that does not declare `tables` and in any body
+  that carries no table. Each table appears **only** through these entries:
+  `.body` is the body's non-table content, so a table is omitted from
+  `{{ .body }}` and the layout places it.
 
 The layout **helper** set is exactly `media`, `section`, `dict`, `list`, `child`
 and `children`.
@@ -592,9 +665,10 @@ literal list-typed value.
 The built-in number and date format functions (`compact`, `exact`, `percent`,
 `long`, `short`) are also available to layouts for rendering.
 
-`deck`, `slide`, `item`, `raw` and `data` are reserved top-level names: a
-template may not declare a field or section named `deck`, `slide`, `item`,
-`raw` or `data`. `notes`, `body` and the `_format` suffix are reserved too.
+`deck`, `slide`, `item`, `raw`, `data`, `table` and `tables` are reserved
+top-level names: a template may not declare a field or section named `deck`,
+`slide`, `item`, `raw`, `data`, `table` or `tables`. `notes`, `body` and the
+`_format` suffix are reserved too.
 
 ### Composing layouts
 
