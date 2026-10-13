@@ -470,7 +470,7 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// tree, so its sectionHelper render contributes no entry to `.data` and no
 	// element to the rendered-HTML section list built above.
 	data["raw"] = template.RawContext(s.Frontmatter, tmpl, s.Body)
-	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil)
+	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil, nil)
 	return data, nil
 }
 
@@ -502,7 +502,7 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	// by the same shared builders the load-time example execution uses, so the
 	// two halves cannot drift (template-context).
 	secCtx.raw = template.RawContext(sec.Frontmatter, tmpl, sec.Body)
-	secCtx.data = template.DataContext(r.contextNodes(sec.Children), secCtx.raw)
+	secCtx.data = template.DataContext(r.contextNodes(sec.Children), nil, secCtx.raw)
 	return r.renderInstance(sec, tmpl, r.reg.LayerOf(tmpl.Name), secCtx)
 }
 
@@ -735,7 +735,7 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 	// The target's own `.data` view is built by the same shared builder the
 	// load-time example runner uses, over the neutral child-node tree, so the
 	// two views cannot drift (section-data-context).
-	data := template.DataContext(childNodes(children), secCtx.raw)
+	data := template.DataContext(childNodes(children), nil, secCtx.raw)
 
 	lists := make(map[string][]htmltmpl.HTML, len(children))
 	for _, child := range children {
@@ -775,7 +775,7 @@ func (r *renderer) renderChild(child *template.ResolvedChild, parent *sectionCtx
 		total:            parent.total,
 		item:             call.Item,
 		raw:              raw,
-		data:             template.DataContext(childNodes(child.Children), raw),
+		data:             template.DataContext(childNodes(child.Children), nil, raw),
 		resolvedChildren: child.Children,
 	}
 	sec := &slide.Section{
