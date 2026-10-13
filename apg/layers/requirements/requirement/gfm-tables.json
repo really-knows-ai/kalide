@@ -2,32 +2,12 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "gfm-tables",
-  "body": "A template may accept GFM tables in its body as an opt-in extension of the allowed Markdown body subset: the template's `body.tables` declares the option, the body's tables are parsed per GFM's table extension with strict column counts, bounded by the declared limits, and each parsed table is exposed to the template's layout. The construct is off unless a template opts in: a body that carries a table and whose enclosing template does not declare `tables` is the table rejection of markdown-disallowed-errors, with guidance that names the `tables` option. It decomposes into the `body.tables` option (table-opt-in), the accepted table syntax and its strict column counts (table-syntax), the per-table limits (table-limits), the cell extensions and declared cell attributes (table-cell-attributes), the layout context a parsed table is exposed under (table-layout-context), the error shape table violations carry (table-errors), and the author-guide/documentation obligation the option adds (table-guide-documentation). A table is part of the body, so it is not part of the body's pre-rendered `.body` HTML; the template's layout renders it from the table context (table-layout-context).\n\nAC: a slide or section whose template declares `body.tables` accepts a GFM table in its body, the layout reads the parsed table from its context, and the parsed table's cells carry inline-Markdown HTML and their declared attributes; a table in a body whose template does not declare `tables` is refused with guidance naming the `tables` option.",
+  "body": "A template may accept GFM tables in its body as an opt-in extension of the allowed Markdown body subset: the template's `body.tables` declares the option, the body's tables are parsed per GFM's table extension with strict column counts, bounded by the declared limits, and each parsed table is exposed to the template's layout. The construct is off unless a template opts in: a body that carries a table and whose enclosing template does not declare `tables` is the table rejection of markdown-disallowed-errors, with guidance that names the `tables` option. It decomposes into the `body.tables` option (table-opt-in), the accepted table syntax and its strict column counts (table-syntax), the per-table limits (table-limits), the cell extensions and declared cell attributes (table-cell-attributes), the layout context a parsed table is exposed under (table-layout-context), the error shape table violations carry (table-errors), and the author-guide/documentation obligation the option adds (table-guide-documentation). `.body` is the body's non-table content rendered to HTML: each table is omitted from `.body` and appears only under the layout's `.table`/`.tables` context, from which the template renders it (body-rules, table-layout-context).\n\nAC: a slide or section whose template declares `body.tables` accepts a GFM table in its body, the layout reads the parsed table from its context, and the parsed table's cells carry inline-Markdown HTML and their declared attributes; a table in a body whose template does not declare `tables` is refused with guidance naming the `tables` option.",
   "properties": {},
   "out": [
     {
       "kind": "contains",
-      "target": "requirements.requirement.table-opt-in",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.table-syntax",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.table-limits",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
       "target": "requirements.requirement.table-cell-attributes",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.table-layout-context",
       "properties": {}
     },
     {
@@ -38,6 +18,26 @@
     {
       "kind": "contains",
       "target": "requirements.requirement.table-guide-documentation",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.table-layout-context",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.table-limits",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.table-opt-in",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.table-syntax",
       "properties": {}
     },
     {
