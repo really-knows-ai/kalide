@@ -205,12 +205,15 @@ func TestCheckTableErrors(t *testing.T) {
 
 	// The first error of the fixed whole-deck-validation order: slide 1's
 	// strict column count, positioned at the offending body row and carrying
-	// the parser's fix.
+	// the parser's fix. The body row is named by its 0-based index over the
+	// body rows with the header excluded, so the first body row after the
+	// delimiter is rows[0]; the index renders once, on the path, and the
+	// message itself does not repeat it.
 	const (
-		wantFirstWhat = "rows[1]: 3 cells, header has 2"
+		wantFirstWhat = "3 cells, header has 2"
 		wantFirstFix  = "make every row have 2 cells to match the header"
 	)
-	wantFirstPrefix := filepath.FromSlash("slides/1-count.md") + ":8 › body › rows[1]: "
+	wantFirstPrefix := filepath.FromSlash("slides/1-count.md") + ":8 › body › rows[0]: "
 
 	// --- kalide check (fail-fast): exit 1, the single first table error. ---
 	stdout, stderr, code := h.Run("check")
@@ -317,8 +320,8 @@ func TestCheckTableErrors(t *testing.T) {
 	if first.Line != 8 {
 		t.Errorf("kalide check --json (table errors) line = %d, want 8", first.Line)
 	}
-	if len(first.Path) != 2 || first.Path[0] != "body" || first.Path[1] != "rows[1]" {
-		t.Errorf("kalide check --json (table errors) path = %v, want [body rows[1]]", first.Path)
+	if len(first.Path) != 2 || first.Path[0] != "body" || first.Path[1] != "rows[0]" {
+		t.Errorf("kalide check --json (table errors) path = %v, want [body rows[0]]", first.Path)
 	}
 	wantFirstMessage := wantFirstWhat + " — " + wantFirstFix
 	if first.Message != wantFirstMessage {
