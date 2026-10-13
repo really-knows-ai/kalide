@@ -441,7 +441,7 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 			cfg:   cfg,
 			meta:  meta,
 			total: total,
-			item:  itemContext(sec.Index, counts[sec.Name], sec.Name, sec.Template, nil),
+			item:  itemContext(sec.Index, counts[sec.Name], 0, sec.Name, sec.Template, nil),
 		}
 		rendered, err := r.renderSection(sec, secTmpl, secCtx)
 		if err != nil {
@@ -620,7 +620,7 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 				cfg:    secCtx.cfg,
 				meta:   secCtx.meta,
 				total:  secCtx.total,
-				item:   itemContext(child.Index, counts[child.Name], child.Name, child.Template, data),
+				item:   itemContext(child.Index, counts[child.Name], 0, child.Name, child.Template, data),
 				parent: data,
 			}
 			rendered, err := r.renderSection(child, childTmpl, childCtx)
@@ -1212,18 +1212,21 @@ func slideContext(s deck.Slide, total int) map[string]any {
 // itemContext builds the reserved `.item` descriptor a section instance is
 // executed with (item-context): the instance's zero-based `index` and one-based
 // `number` among the sibling instances of the same declared section name, the
-// `count` of those siblings, whether it is `first` or `last`, the declared
-// `section` name, the resolved `template` name, and `parent` — the enclosing
-// section instance's field values, or nil at the top level. A slide layout has
-// no sibling place, so no descriptor is built for it and its execution context
-// carries no `item` entry (template-context, section-template-context).
-func itemContext(index, count int, section, tmpl string, parent map[string]any) map[string]any {
+// `count` of those siblings, whether it is `first` or `last`, the instance's
+// self-nesting `depth` (the number of enclosing instances whose resolved
+// template is the same as this instance's), the declared `section` name, the
+// resolved `template` name, and `parent` — the enclosing section instance's
+// field values, or nil at the top level. A slide layout has no sibling place,
+// so no descriptor is built for it and its execution context carries no `item`
+// entry (template-context, section-template-context).
+func itemContext(index, count, depth int, section, tmpl string, parent map[string]any) map[string]any {
 	return map[string]any{
 		"index":    index,
 		"number":   index + 1,
 		"count":    count,
 		"first":    index == 0,
 		"last":     index == count-1,
+		"depth":    depth,
 		"section":  section,
 		"template": tmpl,
 		"parent":   parent,
