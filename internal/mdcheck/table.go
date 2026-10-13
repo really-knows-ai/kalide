@@ -698,9 +698,10 @@ const KindTable Kind = "table"
 // must have the header's cell count and every body row must have the header's
 // cell count exactly. A header/delimiter mismatch is one Issue positioned at
 // the delimiter row; a body row of the wrong width is one Issue positioned at
-// that row and naming it with its 1-based body-row index, for example
-// `rows[2]: 3 cells, header has 4`. A mismatch never demotes the table to a
-// paragraph.
+// that row and naming it with its 0-based body-row index over the body rows
+// with the header excluded, so the first body row after the delimiter is
+// rows[0], for example `rows[1]: 3 cells, header has 4`. A mismatch never
+// demotes the table to a paragraph.
 //
 // It returns the parsed Table (every cell's Line set from firstLine and its
 // Column from the row source), the Issues in source order — nil when the table
@@ -743,12 +744,13 @@ func parseTable(lines []string, start int, firstLine int) (Table, []Issue, int) 
 	}
 
 	i := start + 2
-	rowIndex := 0
 	for ; i < len(lines); i++ {
 		if tableBlockStart(lines[i]) {
 			break
 		}
-		rowIndex++
+		// The header is excluded, so the first body row after the delimiter
+		// row is rows[0]: the row index is the 0-based offset into the body.
+		rowIndex := i - (start + 2)
 		cells := splitTableRow(lines[i])
 		for j := range cells {
 			cells[j].Line = firstLine + i
