@@ -316,6 +316,13 @@ type BodyRule struct {
 	// Subheadings says whether `##`/`###` subheadings are allowed in the
 	// body.
 	Subheadings bool
+
+	// Tables is the template's optional GFM-table rule, declared as the
+	// `body.tables` mapping in its `template.yaml` (table-opt-in). A non-nil
+	// Tables opts the template in: every body it owns may contain GFM tables,
+	// bounded by the rule's limits and cell attributes. A nil Tables means the
+	// template has not opted in, so a body's table is refused.
+	Tables *TableRule
 }
 
 // TableRule is a template's optional GFM-table rule, declared as the
