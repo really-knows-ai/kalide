@@ -192,6 +192,79 @@ types:
 			t.Errorf("loadLibraryMeta Meta = %+v, want %+v", single.Meta, wantMeta)
 		}
 	})
+
+	// bounded-self-nesting (plan.phase-07.task-15): a section declaration's
+	// `max_depth: N` key is decoded into SectionDecl.MaxDepth, and a value that
+	// is not a positive integer is a step-4 templates error naming the
+	// offending template.yaml. A self-accepting declaration is a reference
+	// cycle unless a declaration on the cycle carries max_depth, so the valid
+	// fixture is a `loop` section template whose `loop` section accepts itself
+	// with max_depth: 1.
+	const loopManifest = `name: loop
+sections:
+  - name: loop
+    accepted: [loop]
+    max_depth: 1
+`
+
+	// loopLibraryFS is a valid library carrying the self-accepting `loop`
+	// section template. maxDepth, when non-empty, replaces the manifest's
+	// max_depth value so each case can break exactly that one key.
+	loopLibraryFS := func(maxDepth string) fstest.MapFS {
+		manifest := loopManifest
+		if maxDepth != "" {
+			manifest = strings.Replace(manifest, "max_depth: 1", "max_depth: "+maxDepth, 1)
+		}
+		fsys := baseLibraryFS()
+		fsys["sections/loop/template.yaml"] = &fstest.MapFile{Data: []byte(manifest)}
+		fsys["sections/loop/layout.html.tmpl"] = &fstest.MapFile{Data: []byte("<div>{{range .loop}}<span>{{.}}</span>{{end}}</div>")}
+		fsys["sections/loop/example.md"] = &fstest.MapFile{Data: []byte("# loop\n")}
+		return fsys
+	}
+
+	t.Run("a section declaration's valid max_depth loads and decodes", func(t *testing.T) {
+		lib, err := LoadLibrary(rootedFS(loopLibraryFS("")), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: max_depth: 1 bounds the self-accepting declaration", err)
+		}
+		loop, kind, ok := lib.TemplateByName("loop")
+		if !ok || kind != KindSection {
+			t.Fatalf("TemplateByName(loop) = (%v, %q, %v), want (non-nil, %q, true)", loop, kind, ok, KindSection)
+		}
+		if loop.Definition == nil {
+			t.Fatal("checkLibraryBuild left loop.Definition nil")
+		}
+		got := loop.Definition.Sections
+		if len(got) != 1 || got[0].Name != "loop" || len(got[0].Accepted) != 1 ||
+			got[0].Accepted[0] != "loop" || got[0].MaxDepth != 1 {
+			t.Errorf("loop.Sections = %+v, want one self-accepting %q section with MaxDepth=1", got, "loop")
+		}
+	})
+
+	t.Run("a max_depth that is not a positive integer is refused naming the template.yaml", func(t *testing.T) {
+		wantPath := displaypath.Display(TemplatesDir, path.Join(SectionsDir, "loop", ManifestFile))
+		const wantMsg = `key "max_depth": expected a positive integer`
+		for _, tt := range []struct {
+			name     string
+			maxDepth string
+		}{
+			{name: "zero", maxDepth: "0"},
+			{name: "negative", maxDepth: "-1"},
+			{name: "non-integer string", maxDepth: `"abc"`},
+			{name: "numeric string", maxDepth: `"1"`},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := LoadLibrary(rootedFS(loopLibraryFS(tt.maxDepth)), TemplatesDir)
+				libErr := asLibraryError(t, err)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want %q (the offending template.yaml)", libErr.Path, wantPath)
+				}
+				if !strings.Contains(libErr.Message, wantMsg) {
+					t.Errorf("Message = %q, want it to contain %q", libErr.Message, wantMsg)
+				}
+			})
+		}
+	})
 }
 
 // rootedFS nests every entry of fsys one level under TemplatesDir, so
