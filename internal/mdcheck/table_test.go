@@ -132,7 +132,8 @@ func TestParseTablesAlignment(t *testing.T) {
 // TestParseTablesStrictColumns covers the always-on strict column counts: every
 // body row must have exactly the header's cell count, and a header/delimiter
 // mismatch is an error rather than a fallback to a paragraph. The body-row
-// Issue names the 1-based body-row index and both counts.
+// Issue names the 0-based body-row index (the first body row after the
+// delimiter is rows[0]) and both counts.
 func TestParseTablesStrictColumns(t *testing.T) {
 	t.Run("body row too few cells", func(t *testing.T) {
 		body := "| h1 | h2 |\n| --- | --- |\n| a | b |\n| only |\n"
@@ -140,7 +141,7 @@ func TestParseTablesStrictColumns(t *testing.T) {
 		if len(tables) != 1 || len(tables[0].Rows) != 2 {
 			t.Fatalf("tables = %#v, want one table with two body rows", tables)
 		}
-		want := []Issue{tcount(4, 1, "rows[2]: 1 cells, header has 2")}
+		want := []Issue{tcount(4, 1, "rows[1]: 1 cells, header has 2")}
 		if !reflect.DeepEqual(issues, want) {
 			t.Fatalf("issues = %#v, want %#v", issues, want)
 		}
@@ -149,7 +150,7 @@ func TestParseTablesStrictColumns(t *testing.T) {
 	t.Run("body row too many cells", func(t *testing.T) {
 		body := "| h1 | h2 |\n| --- | --- |\n| a | b | c |\n"
 		_, issues := ParseTables(body, 1, TableOptions{})
-		want := []Issue{tcount(3, 1, "rows[1]: 3 cells, header has 2")}
+		want := []Issue{tcount(3, 1, "rows[0]: 3 cells, header has 2")}
 		if !reflect.DeepEqual(issues, want) {
 			t.Fatalf("issues = %#v, want %#v", issues, want)
 		}
@@ -195,7 +196,7 @@ func TestParseTablesPositions(t *testing.T) {
 	t.Run("body-row issue is positioned at the offending row", func(t *testing.T) {
 		body := "\n| a | b |\n| --- | --- |\n| only |\n"
 		_, issues := ParseTables(body, 10, TableOptions{})
-		want := []Issue{tcount(13, 1, "rows[1]: 1 cells, header has 2")}
+		want := []Issue{tcount(13, 1, "rows[0]: 1 cells, header has 2")}
 		if !reflect.DeepEqual(issues, want) {
 			t.Fatalf("issues = %#v, want %#v", issues, want)
 		}
