@@ -359,7 +359,10 @@ const sectionDepthLimit = 6
 // depth, so no composition chain of templates may exceed six levels.
 //
 // Path is the over-deep chain of template names from the root template to the
-// template that crosses the bound. Limit is that bound, in heading levels.
+// template that crosses the bound. Limit is that bound, in heading levels. The
+// chain may come from a declaration chain or from a bounded self-nesting walk
+// (walkBoundedSelfNesting) whose max_depth allowed more levels than the syntax;
+// MaxDepth carries the bound that produced the latter.
 type SectionDepthError struct {
 	// Path is the composition chain that exceeded the bound, the root
 	// template first and the template that crosses the limit last.
@@ -367,6 +370,14 @@ type SectionDepthError struct {
 
 	// Limit is the maximum permitted composition depth, in heading levels.
 	Limit int
+
+	// MaxDepth is the `max_depth` bound of the declaration that stopped the
+	// bounded self-nesting walk at this chain, or 0 when the over-deep chain
+	// was not bounded by a max_depth declaration (an ordinary declared-section
+	// chain). It is the bound the depth-limit error names
+	// (requirements.constraint.section-depth-limit); rendering it is
+	// plan.phase-07.task-5's scope — this field is the data that task consumes.
+	MaxDepth int
 }
 
 // Error renders the over-deep composition chain and the heading-level bound as
@@ -404,9 +415,20 @@ func (e *SectionDepthError) Error() string {
 //     the caller's heading level, so only its own declared sections add a
 //     level.
 //
-// A name already on the current descent path is a reference cycle and is
-// reported as *SectionCycleError (never an infinite loop); a name already
-// returned through another branch is included in the result once. A chain of
+// A name already on the current descent path is a reference cycle. A
+// declared-section self-nesting or cyclic acceptance whose own declarations
+// carry max_depth is a bounded self-nesting
+// (requirements.requirement.bounded-self-nesting), so it is accepted and
+// followed to the longest chain its bounds allow (walkBoundedSelfNesting)
+// instead of being reported; that full bounded chain is then measured against
+// the six-heading-level bound
+// (requirements.constraint.section-depth-limit), and an over-deep one is
+// reported as *SectionDepthError carrying the chain and the max_depth that
+// produced it. A cycle with no max_depth on it — including a helper- or
+// child-closed cycle, which carries no heading bound — is reported as
+// *SectionCycleError with the full chain (never an infinite loop)
+// (requirements.constraint.section-cycle-error-chain). A name already returned
+// through another branch is included in the result once. A chain of
 // declared-section edges deeper than six heading levels is reported as
 // *SectionDepthError with the over-deep chain. A referenced name the resolver
 // does not define is an error. Whether a section accepts a slide-usage
@@ -433,13 +455,62 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 
 	var walk func(t *Template, depth int, path []string) error
 
-	// descend follows one reference edge: reject a name already on the path
-	// as a cycle, resolve the target, record it once, then walk it. depth is
-	// the target's heading level, so a declared-section edge passes depth+1
-	// (it is a heading) while a helper edge passes depth unchanged (it is
-	// not).
-	descend := func(name string, depth int, path []string) error {
+	// descend follows one reference edge: resolve the target, record it once,
+	// then walk it — unless the name is already on the path (a reference
+	// cycle) and the edge is a declared-section acceptance on a bounded
+	// self-nesting, which is accepted to the longest chain its max_depth
+	// bounds allow instead of reported. depth is the target's heading level,
+	// so a declared-section edge passes depth+1 (it is a heading) while a
+	// helper edge passes depth unchanged (it is not). closing is the
+	// declaration whose accepted section this edge descends, or nil for a
+	// helper/child edge, which is not a heading and carries no max_depth.
+	descend := func(name string, depth int, path []string, closing *SectionDecl) error {
 		if onPath[name] {
+			if closing != nil {
+				// The acceptance recurs to a template already on the path: a
+				// declared-section reference cycle. When the declarations on
+				// the cycle carry max_depth it is a bounded self-nesting, so
+				// follow it to the longest chain its bounds allow rather than
+				// report the cycle; the returned chain is the full composition
+				// chain from the root through the bound, which is then measured
+				// against the six-heading-level bound.
+				//
+				// ancestors is the composition prefix above the repeated name,
+				// root first, excluding the repeated name itself — the shape
+				// walkBoundedSelfNesting expects.
+				idx := -1
+				for i := len(path) - 1; i >= 0; i-- {
+					if path[i] == name {
+						idx = i
+						break
+					}
+				}
+				var ancestors []string
+				if idx > 0 {
+					ancestors = path[:idx]
+				}
+				start, ok := s.resolve(name)
+				if !ok || start == nil {
+					return fmt.Errorf("section template %q is not defined", name)
+				}
+				chain, bounded, maxDepth, err := walkBoundedSelfNesting(s.resolve, start, ancestors, closing)
+				if err != nil {
+					return err
+				}
+				if bounded {
+					if len(chain) > sectionDepthLimit {
+						return &SectionDepthError{Path: chain, Limit: sectionDepthLimit, MaxDepth: maxDepth}
+					}
+					// Within the bound: the bounded walk already accounted for
+					// the depth, so do not recurse the cycle again. The target
+					// is reported once, like any other reachable template.
+					if !emitted[name] {
+						emitted[name] = true
+						out = append(out, start)
+					}
+					return nil
+				}
+			}
 			cycle := make([]string, len(path), len(path)+1)
 			copy(cycle, path)
 			return &SectionCycleError{Path: append(cycle, name)}
@@ -473,8 +544,9 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 
 		// Declared-section acceptances are headings: one level deeper.
 		for i := range t.Sections {
-			for _, name := range t.Sections[i].Accepted {
-				if err := descend(name, depth+1, path); err != nil {
+			d := &t.Sections[i]
+			for _, name := range d.Accepted {
+				if err := descend(name, depth+1, path, d); err != nil {
 					return err
 				}
 			}
@@ -486,7 +558,7 @@ func (s *Section) Walk(tmpl *Template) ([]*Template, error) {
 			return err
 		}
 		for _, name := range refs {
-			if err := descend(name, depth, path); err != nil {
+			if err := descend(name, depth, path, nil); err != nil {
 				return err
 			}
 		}
