@@ -695,3 +695,136 @@ func TestFieldRulesUndefaultedExampleInt(t *testing.T) {
 		t.Errorf("Message = %q, want a required error naming the field", libErr.Message)
 	}
 }
+
+// exampleImageRootManifest declares a slide template with three image fields
+// that together pin the load-time image-field existence rule
+// (image-field-roots): `cover` declares a media root, `hero` an assets root
+// and `plain` no roots at all.
+const exampleImageRootManifest = `name: gallery
+description: media-root image example
+fields:
+  - name: cover
+    type: image
+    roots:
+      - media
+  - name: hero
+    type: image
+    roots:
+      - assets
+  - name: plain
+    type: image
+body:
+  mode: optional
+`
+
+// exampleImageRootLayout reads each image field's authored value, so the
+// load-time example execution exercises the fields it validates.
+const exampleImageRootLayout = `<section class="gallery">` +
+	`<span class="cover">{{ .cover }}</span>` +
+	`<span class="hero">{{ .hero }}</span>` +
+	`<span class="plain">{{ .plain }}</span>` +
+	`</section>`
+
+// exampleImageRootExample builds the slide example naming cover (in the media
+// root) and, when withAssetsPaths is set, the assets-root and root-less fields
+// at nonexistent assets/ paths.
+func exampleImageRootExample(cover string, withAssetsPaths bool) string {
+	s := "---\n" +
+		"template: gallery\n" +
+		"cover: " + cover + "\n"
+	if withAssetsPaths {
+		s += "hero: assets/hero-missing.png\n" +
+			"plain: assets/plain-missing.png\n"
+	}
+	return s + "---\nA gallery.\n"
+}
+
+// writeExampleImageRootIntLibrary writes a real on-disk single-layer library
+// whose one slide template carries the image fields above and whose example is
+// the given text, alongside a media/bgs/right-8.jpg file the media root
+// resolves in. It returns the project root to pass to os.DirFS.
+func writeExampleImageRootIntLibrary(t *testing.T, example string) string {
+	t.Helper()
+	files := templateIntFiles(SlidesDir, "gallery", exampleImageRootManifest, exampleImageRootLayout, example)
+	files[MediaDir+"/bgs/right-8.jpg"] = "jpeg"
+	return writeSectionHelperIntLibrary(t, files)
+}
+
+// TestFieldRulesDefaultAppliedExampleImageRootInt proves the load-time example
+// site resolves an image field's media root against the owning layer's media/
+// tree (image-field-roots), the one root a library load can resolve because no
+// deck exists yet:
+//
+//  1. an example naming an existing media file loads;
+//  2. an example naming a missing media file fails LoadLibrary with the image
+//     error positioned at the example.md and carrying the closest-match
+//     candidate as its Suggestion (rendered `: did you mean "…"?`); and
+//  3. an assets-root or root-less image field naming a nonexistent assets/
+//     path still loads, because the load-time resolver has no deck assets tree
+//     and so leaves such a field existence-unchecked.
+//
+// It is a sibling of TestFieldRulesDefaultAppliedExampleInt (same example-site
+// fixture style: templateIntFiles + writeSectionHelperIntLibrary) rather than
+// a subtest of it, so its own media/ tree stays independent of that test's
+// default-materialisation fixture.
+func TestFieldRulesDefaultAppliedExampleImageRootInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	t.Run("an existing media-root file loads", func(t *testing.T) {
+		projectDir := writeExampleImageRootIntLibrary(t, exampleImageRootExample("bgs/right-8.jpg", false))
+		lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: a media-root image naming an existing file must load", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadLibrary() returned nil Library with nil error")
+		}
+	})
+
+	t.Run("a missing media-root file fails with the closest-match candidate", func(t *testing.T) {
+		projectDir := writeExampleImageRootIntLibrary(t, exampleImageRootExample("bgs/right-88.jpg", false))
+		lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err == nil {
+			t.Fatalf("LoadLibrary() = %+v, nil; want the missing media-root image to fail the example check", lib)
+		}
+		if lib != nil {
+			t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+		}
+		libErr := asLibraryError(t, err)
+		wantPath := filepath.Join(TemplatesDir, SlidesDir, "gallery", ExampleFile)
+		if libErr.Path != wantPath {
+			t.Errorf("Path = %q, want the example.md site %q", libErr.Path, wantPath)
+		}
+		if !strings.Contains(err.Error(), wantPath) {
+			t.Errorf("error = %v, want it to name the example path %q", err, wantPath)
+		}
+		if libErr.Line != 2 {
+			t.Errorf("Line = %d, want the example's frontmatter line 2", libErr.Line)
+		}
+		if want := `cover: image: "bgs/right-88.jpg" does not exist`; libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+		if libErr.Suggestion != "bgs/right-8.jpg" {
+			t.Errorf("Suggestion = %q, want the closest media-root candidate %q", libErr.Suggestion, "bgs/right-8.jpg")
+		}
+		if want := `: did you mean "bgs/right-8.jpg"?`; !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %v, want it to render %q", err, want)
+		}
+	})
+
+	t.Run("an assets-root and a root-less image are unchecked at load", func(t *testing.T) {
+		// Both name nonexistent assets/ paths; the load-time resolver has no
+		// deck assets filesystem, so neither is existence-checked and the
+		// library still loads.
+		projectDir := writeExampleImageRootIntLibrary(t, exampleImageRootExample("bgs/right-8.jpg", true))
+		lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: an assets-root or root-less image is not existence-checked at load", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadLibrary() returned nil Library with nil error")
+		}
+	})
+}
