@@ -605,7 +605,7 @@ func TestRegistry(t *testing.T) {
 			if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
 				t.Fatalf("yaml.Unmarshal(%q) error = %v", src, err)
 			}
-			return parseManifestField(manifestPath, libraryDocumentMapping(&doc), isItem)
+			return parseManifestField(manifestPath, libraryDocumentMapping(&doc), isItem, nil)
 		}
 
 		t.Run("nullable and coerce on a field", func(t *testing.T) {
