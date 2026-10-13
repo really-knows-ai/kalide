@@ -65,10 +65,17 @@ func manifestLibraryTemplate(name string, kind TemplateKind, manifestYAML string
 }
 
 // mustParseManifest parses manifestYAML for a template named name of kind
-// kind and fails the test on error.
-func mustParseManifest(t *testing.T, name string, kind TemplateKind, manifestYAML string) *Template {
+// kind and fails the test on error. An optional defs supplies the fixture's
+// parsed LibraryDefinitions, so the manifest's type:/include:/@group names
+// resolve against its owning layer; a caller whose fixture declares no
+// definitions omits it (nil).
+func mustParseManifest(t *testing.T, name string, kind TemplateKind, manifestYAML string, defs ...*LibraryDefinitions) *Template {
 	t.Helper()
-	def, err := parseManifest(manifestLibraryTemplate(name, kind, manifestYAML))
+	var defsArg *LibraryDefinitions
+	if len(defs) > 0 {
+		defsArg = defs[0]
+	}
+	def, err := parseManifest(manifestLibraryTemplate(name, kind, manifestYAML), defsArg)
 	if err != nil {
 		t.Fatalf("parseManifest(%s) error = %v, want nil", name, err)
 	}
