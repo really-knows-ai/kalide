@@ -106,7 +106,14 @@ func ManifestTopLevelKeys() []string {
 // reserved names, slide-as-field-type, …): those are Registry.Validate's job,
 // run once every manifest in the library has been parsed
 // (NewRegistryFromLibrary).
-func parseManifest(t *LibraryTemplate) (*Template, error) {
+//
+// defs is the named definitions of the library layer that owns t
+// (LibraryLayer.Definitions). It is threaded through to the field and section
+// parsers so a field's `type:`/`include:` or a section's `@group` name is
+// resolved against its own owning layer (named-library-definitions); a nil
+// defs holds no definitions. A top-level `internal:` boolean is decoded into
+// Template.Internal (internal-templates).
+func parseManifest(t *LibraryTemplate, defs *LibraryDefinitions) (*Template, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(t.ManifestBytes, &doc); err != nil {
 		return nil, libraryErrorf(t.ManifestPath, 0, "%s: %v", ManifestFile, err)
@@ -138,13 +145,13 @@ func parseManifest(t *LibraryTemplate) (*Template, error) {
 			}
 			def.Description = s
 		case "fields":
-			fields, err := parseManifestFields(t.ManifestPath, val)
+			fields, err := parseManifestFields(t.ManifestPath, val, defs)
 			if err != nil {
 				return nil, err
 			}
 			def.Fields = fields
 		case "sections":
-			sections, err := parseManifestSections(t.ManifestPath, val)
+			sections, err := parseManifestSections(t.ManifestPath, val, defs)
 			if err != nil {
 				return nil, err
 			}
@@ -156,8 +163,11 @@ func parseManifest(t *LibraryTemplate) (*Template, error) {
 			}
 			def.Body = body
 		case "internal":
-			// Accepted top-level flag (internal-templates); the decode into
-			// Template.Internal is added with the other manifest value keys.
+			b, err := scalarBool(val, t.ManifestPath, line, "internal")
+			if err != nil {
+				return nil, err
+			}
+			def.Internal = b
 		default:
 			e := libraryErrorf(t.ManifestPath, line, "unknown key %q", key.Value)
 			return nil, e.withSuggestion(key.Value, manifestTopLevelKeys)
@@ -185,14 +195,15 @@ func scalarString(val *yaml.Node, manifestPath string, line int, key string) (st
 	return val.Value, nil
 }
 
-// parseManifestFields decodes the `fields:` sequence.
-func parseManifestFields(manifestPath string, val *yaml.Node) ([]Field, error) {
+// parseManifestFields decodes the `fields:` sequence. defs is the owning
+// layer's named definitions (parseManifest), threaded to each field parser.
+func parseManifestFields(manifestPath string, val *yaml.Node, defs *LibraryDefinitions) ([]Field, error) {
 	if val.Kind != yaml.SequenceNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(val, 0), `key "fields": expected a sequence`)
 	}
 	fields := make([]Field, 0, len(val.Content))
 	for _, item := range val.Content {
-		f, err := parseManifestField(manifestPath, item, false)
+		f, err := parseManifestField(manifestPath, item, false, defs)
 		if err != nil {
 			return nil, err
 		}
@@ -206,8 +217,9 @@ func parseManifestFields(manifestPath string, val *yaml.Node) ([]Field, error) {
 // be the inline `record` form (`item: {type: record, fields: [...]}`), whose
 // `fields:` recurse through parseManifestFields (record-item-type). A record
 // item descriptor needs no `name`; a `record` anywhere else is rejected
-// (record-list-item-only).
-func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Field, error) {
+// (record-list-item-only). defs is the owning layer's named definitions
+// (parseManifest), threaded through the recursive `item:`/`fields:` decodes.
+func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs *LibraryDefinitions) (*Field, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a field")
 	}
@@ -360,13 +372,13 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 			}
 			f.SectionTemplate = s
 		case "item":
-			item, err := parseManifestField(manifestPath, val, true)
+			item, err := parseManifestField(manifestPath, val, true, defs)
 			if err != nil {
 				return nil, err
 			}
 			f.Item = item
 		case "fields":
-			fs, err := parseManifestFields(manifestPath, val)
+			fs, err := parseManifestFields(manifestPath, val, defs)
 			if err != nil {
 				return nil, err
 			}
@@ -546,14 +558,15 @@ func namedDefinitionCandidates(kind namedDefinitionKind, defs *LibraryDefinition
 	}
 }
 
-// parseManifestSections decodes the `sections:` sequence.
-func parseManifestSections(manifestPath string, val *yaml.Node) ([]SectionDecl, error) {
+// parseManifestSections decodes the `sections:` sequence. defs is the owning
+// layer's named definitions (parseManifest), threaded to each section parser.
+func parseManifestSections(manifestPath string, val *yaml.Node, defs *LibraryDefinitions) ([]SectionDecl, error) {
 	if val.Kind != yaml.SequenceNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(val, 0), `key "sections": expected a sequence`)
 	}
 	out := make([]SectionDecl, 0, len(val.Content))
 	for _, item := range val.Content {
-		d, err := parseManifestSection(manifestPath, item)
+		d, err := parseManifestSection(manifestPath, item, defs)
 		if err != nil {
 			return nil, err
 		}
@@ -562,8 +575,10 @@ func parseManifestSections(manifestPath string, val *yaml.Node) ([]SectionDecl, 
 	return out, nil
 }
 
-// parseManifestSection decodes one `sections:` entry.
-func parseManifestSection(manifestPath string, node *yaml.Node) (*SectionDecl, error) {
+// parseManifestSection decodes one `sections:` entry. defs is the owning
+// layer's named definitions (parseManifest), threaded through for the
+// section's `@group` accepted entries.
+func parseManifestSection(manifestPath string, node *yaml.Node, defs *LibraryDefinitions) (*SectionDecl, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a section")
 	}

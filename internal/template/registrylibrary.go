@@ -77,7 +77,7 @@ func NewRegistryFromLibrary(lib *Library) (*Registry, error) {
 // registerLibraryTemplate parses one LibraryTemplate's manifest and registers
 // the resulting definition, carrying its layout and example Markdown across.
 func registerLibraryTemplate(r *Registry, lt *LibraryTemplate) error {
-	def, err := parseManifest(lt)
+	def, err := parseManifest(lt, nil)
 	if err != nil {
 		return err
 	}

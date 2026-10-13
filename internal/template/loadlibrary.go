@@ -765,7 +765,7 @@ func loadLibraryDefinitions(metaPath string, doc *yaml.Node) (*LibraryDefinition
 				if err != nil {
 					return nil, err
 				}
-				fields, err := parseManifestFields(metaPath, val.Content[j+1])
+				fields, err := parseManifestFields(metaPath, val.Content[j+1], nil)
 				if err != nil {
 					return nil, err
 				}
@@ -785,7 +785,7 @@ func loadLibraryDefinitions(metaPath string, doc *yaml.Node) (*LibraryDefinition
 				if err != nil {
 					return nil, err
 				}
-				f, err := parseManifestField(metaPath, namedFieldDescriptor(val.Content[j+1], name), false)
+				f, err := parseManifestField(metaPath, namedFieldDescriptor(val.Content[j+1], name), false, nil)
 				if err != nil {
 					return nil, err
 				}
