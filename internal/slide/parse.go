@@ -739,6 +739,50 @@ func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name strin
 	return sectionDecl{accepted: accepted, min: minRep, max: maxRep, maxDepth: maxDepth, ok: true}, nil
 }
 
+// checkNestedDepth enforces a bounded section declaration's `max_depth` at the
+// one instance that declaration produces (bounded-self-nesting,
+// nested-section-validation). chain is the resolved template name of every
+// enclosing instance — the FULL containment chain parseSections has built,
+// top-level and nested, empty at the slide's top level — and resolved is the
+// instance's own resolved template name. The instance's self-nesting depth is
+// the number of instances in that chain whose resolved template equals resolved,
+// counted over the whole chain rather than from the immediate parent alone: on
+// the A→B→A→B chain the second b is depth 1 (its one enclosing b), not 0.
+//
+// decl is the declaration for the instance's section slot; maxDepth is its
+// bound (0 when unbounded) and name is the declared slot name the message
+// reports. An instance whose depth exceeds decl.maxDepth is refused with a
+// *ParseError path-qualified to the offending slide file with its containment
+// chain (path) and the message
+// `section "<declared name>": nesting deeper than max_depth N`; otherwise
+// checkNestedDepth returns nil. An unbounded declaration, an unset declaration
+// or an instance with no resolved template (not a template instance) yields nil.
+//
+// internal/slide cannot import internal/template, so the count is taken here by
+// resolved template name; it is the same rule as template.InstanceDepth, and an
+// integration test pins the two in agreement (task 11 threads chain into it
+// from parseSections; this function is not yet wired).
+func checkNestedDepth(file string, line int, path string, chain []string, resolved, name string, decl sectionDecl) *ParseError {
+	if !decl.ok || decl.maxDepth <= 0 || resolved == "" {
+		return nil
+	}
+	depth := 0
+	for _, ancestor := range chain {
+		if ancestor == resolved {
+			depth++
+		}
+	}
+	if depth <= decl.maxDepth {
+		return nil
+	}
+	return &ParseError{
+		File: file,
+		Line: line,
+		Path: path,
+		Msg:  fmt.Sprintf("section %q: nesting deeper than max_depth %d", name, decl.maxDepth),
+	}
+}
+
 // resolveSectionTemplate is the parent-level `template:` resolution entry
 // point. Given one section instance's frontmatter block (nil when the section
 // has none) and the parent-scoped sectionDecl d it must resolve against
