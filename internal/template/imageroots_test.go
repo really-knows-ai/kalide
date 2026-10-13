@@ -311,7 +311,7 @@ func TestCheckValuesImageRoots(t *testing.T) {
 			media: media,
 			want: []wantErr{we("image", "img", "bgs/notes.txt",
 				`image: "bgs/notes.txt" does not exist`,
-				"add the file under assets/ or fix the path")},
+				"add the file under the declared media/ root or fix the path")},
 		},
 		{
 			name:  "media dir filter excludes an out-of-dir file",
@@ -320,7 +320,7 @@ func TestCheckValuesImageRoots(t *testing.T) {
 			media: media,
 			want: []wantErr{we("image", "img", "outside/x.jpg",
 				`image: "outside/x.jpg" does not exist`,
-				"add the file under assets/ or fix the path")},
+				"add the file under the declared media/ root or fix the path")},
 		},
 		{
 			name: "media-only field is not existence-checked without a media fs",

@@ -1237,6 +1237,154 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 	})
 }
 
+// TestLoadDeckLibraryRegistryVariantsExpandedInt is the regression coverage for
+// NewRegistryFromLibrary expanding an enum field's `variants_from:` glob on the
+// runtime registry it returns (feedback-53). Before that fix the expansion
+// happened only on the throwaway registry checkLibraryBuild builds and
+// validates, so a runtime registry's own template — the one `kalide
+// templates <name>`, the render/example paths and the whole-deck validator
+// read through reg.Lookup — kept VariantsFrom set and Variants empty.
+//
+// It loads a real external + local two-layer deck whose two slides declare the
+// SAME layer-root-relative glob (`media/bgs/*.jpg`) over distinct per-layer
+// media files, builds the runtime registry, and pins that each registry
+// template's enum field carries the effective Variants — sorted, media-relative
+// and drawn from its OWN owning layer alone, never the other layer's or a merge
+// — with VariantsFrom cleared. It then drives CheckValues against that registry
+// template exactly as the whole-deck validator does: an expanded variant is
+// accepted and a non-member is rejected with the closest suggestion.
+//
+// Real filesystem I/O, so it is skipped under `go test -short`.
+func TestLoadDeckLibraryRegistryVariantsExpandedInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	// The shared schema: an image field cover with a media root (dir bgs, jpg
+	// extension) and an enum field effect whose closed value set comes from the
+	// same layer-root-relative glob in both layers.
+	const layerLayout = `<section class="layer">` +
+		`<span class="cover">{{ .cover }}</span>` +
+		`<span class="effect">{{ .effect }}</span>` +
+		`</section>`
+
+	// writeLayer writes a one-slide library at dir whose slide declares the
+	// image/enum schema above and whose media/ tree holds exactly mediaFiles
+	// under bgs/. Each layer is given a distinct set, so a glob expanded against
+	// the wrong layer is observable purely from the resulting Variants.
+	writeLayer := func(dir, name string, mediaFiles ...string) {
+		t.Helper()
+		manifest := "name: " + name + "\nfields:\n" +
+			"  - name: cover\n" +
+			"    type: image\n" +
+			"    roots:\n" +
+			"      - media\n" +
+			"    dir: bgs\n" +
+			"    extensions:\n" +
+			"      - jpg\n" +
+			"  - name: effect\n" +
+			"    type: enum\n" +
+			"    variants_from: media/bgs/*.jpg\n"
+		writeFile(t, filepath.Join(dir, LibraryFile), []byte("name: "+name+"\nformat: 1\n"))
+		writeFile(t, filepath.Join(dir, SlidesDir, name, ManifestFile), []byte(manifest))
+		writeFile(t, filepath.Join(dir, SlidesDir, name, LayoutFile), []byte(layerLayout))
+		writeFile(t, filepath.Join(dir, SlidesDir, name, ExampleFile),
+			[]byte("---\ntemplate: "+name+"\n---\nA "+name+".\n"))
+		for _, mf := range mediaFiles {
+			writeFile(t, filepath.Join(dir, MediaDir, "bgs", mf), []byte(mf))
+		}
+	}
+
+	// fieldNamed returns a registry template's field by name.
+	fieldNamed := func(t *testing.T, def *Template, name string) *Field {
+		t.Helper()
+		if def == nil {
+			t.Fatalf("registry template is nil, want one carrying field %q", name)
+		}
+		for i := range def.Fields {
+			if def.Fields[i].Name == name {
+				return &def.Fields[i]
+			}
+		}
+		t.Fatalf("field %q not found in the registry template (fields: %+v)", name, def.Fields)
+		return nil
+	}
+
+	deckRoot := t.TempDir()
+	localRoot := filepath.Join(deckRoot, TemplatesDir)
+	external := t.TempDir()
+	writeLayer(localRoot, "local-slide", "right-1.jpg", "right-9.jpg")
+	writeLayer(external, "ext-slide", "right-2.jpg", "right-8.jpg")
+
+	lib, err := LoadDeckLibrary(deckRoot, external)
+	if err != nil {
+		t.Fatalf("LoadDeckLibrary: %v", err)
+	}
+	reg, err := NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("NewRegistryFromLibrary: %v", err)
+	}
+
+	// The registry's own template (not the library's load-time definition)
+	// carries the expanded, sorted, media-relative variants, per owning layer,
+	// with VariantsFrom cleared.
+	t.Run("the runtime registry's enum variants are expanded per owning layer", func(t *testing.T) {
+		extTmpl, ok := reg.Lookup("ext-slide")
+		if !ok || extTmpl == nil {
+			t.Fatal(`reg.Lookup("ext-slide") not found`)
+		}
+		extEffect := fieldNamed(t, extTmpl, "effect")
+		if extEffect.VariantsFrom != "" {
+			t.Errorf("registry ext effect.VariantsFrom = %q, want cleared (expanded against the registry's owning layer)", extEffect.VariantsFrom)
+		}
+		if want := []string{"bgs/right-2.jpg", "bgs/right-8.jpg"}; !reflect.DeepEqual(extEffect.Variants, want) {
+			t.Errorf("registry ext effect.Variants = %#v, want %#v (sorted, media-relative, the external layer alone)", extEffect.Variants, want)
+		}
+
+		localTmpl, ok := reg.Lookup("local-slide")
+		if !ok || localTmpl == nil {
+			t.Fatal(`reg.Lookup("local-slide") not found`)
+		}
+		localEffect := fieldNamed(t, localTmpl, "effect")
+		if localEffect.VariantsFrom != "" {
+			t.Errorf("registry local effect.VariantsFrom = %q, want cleared", localEffect.VariantsFrom)
+		}
+		if want := []string{"bgs/right-1.jpg", "bgs/right-9.jpg"}; !reflect.DeepEqual(localEffect.Variants, want) {
+			t.Errorf("registry local effect.Variants = %#v, want %#v (the local layer alone, never merged with the external layer)", localEffect.Variants, want)
+		}
+	})
+
+	t.Run("CheckValues against the registry template accepts an expanded value", func(t *testing.T) {
+		extTmpl, ok := reg.Lookup("ext-slide")
+		if !ok || extTmpl == nil {
+			t.Fatal(`reg.Lookup("ext-slide") not found`)
+		}
+		got := CheckValues(map[string]any{"effect": "bgs/right-8.jpg"}, extTmpl, nil)
+		if len(got.Errors) != 0 {
+			t.Errorf("CheckValues(expanded variant) errors = %s, want none", renderErrors(got.Errors))
+		}
+	})
+
+	t.Run("CheckValues rejects a non-member with the closest suggestion", func(t *testing.T) {
+		extTmpl, ok := reg.Lookup("ext-slide")
+		if !ok || extTmpl == nil {
+			t.Fatal(`reg.Lookup("ext-slide") not found`)
+		}
+		got := CheckValues(map[string]any{"effect": "bgs/right-88.jpg"}, extTmpl, nil)
+		if len(got.Errors) != 1 {
+			t.Fatalf("CheckValues(non-member) errors = %s, want exactly 1", renderErrors(got.Errors))
+		}
+		e := got.Errors[0]
+		want := we("enum", "effect", "bgs/right-88.jpg",
+			`enum: "bgs/right-88.jpg" is not one of the allowed variants (bgs/right-2.jpg, bgs/right-8.jpg)`,
+			`did you mean "bgs/right-8.jpg"? use one of: bgs/right-2.jpg, bgs/right-8.jpg`)
+		if e.Rule != want.Rule || e.PathString() != want.Path || e.What != want.What || e.Fix != want.Fix {
+			t.Errorf("error = rule %q path %q what %q fix %q, want rule %q path %q what %q fix %q",
+				e.Rule, e.PathString(), e.What, e.Fix, want.Rule, want.Path, want.What, want.Fix)
+		}
+	})
+}
+
 // TestCheckLayoutReferencesRootSpellingStabilityInt proves layout-reference
 // containment is decided on the layer-relative path, not on how the root is
 // spelled: the same escaping reference (and the same contained reference)

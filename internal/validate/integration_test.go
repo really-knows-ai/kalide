@@ -119,6 +119,42 @@ func TestValidateIntegration(t *testing.T) {
 		}
 	})
 
+	// A whole-deck enum field whose variants come from a `variants_from:` glob:
+	// the registry Validate is handed already expanded the glob against the
+	// owning layer (NewRegistryFromLibrary, enum-variants-from, feedback-53
+	// regression), so a slide authoring an expanded media-relative variant
+	// validates while a non-member fails with the closest suggestion.
+	t.Run("expanded enum variant validates whole-deck", func(t *testing.T) {
+		files := variantsLibraryFiles()
+		files["kalide.yaml"] = "title: Variants Deck\ntheme: plain\n"
+		files["slides/1-bg.md"] = "---\ntemplate: bg\nbackground: bgs/right-8.jpg\neffect: bgs/right-9.jpg\n---\n\nBackground.\n"
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if invalid {
+			t.Fatalf("Validate() invalid = true with %q, want the expanded variant to validate", Format(verr))
+		}
+		if !reflect.DeepEqual(verr, ValidationError{}) {
+			t.Fatalf("Validate() error = %#v, want the zero ValidationError", verr)
+		}
+	})
+
+	t.Run("enum non-member fails whole-deck with the closest suggestion", func(t *testing.T) {
+		files := variantsLibraryFiles()
+		files["kalide.yaml"] = "title: Variants Deck\ntheme: plain\n"
+		files["slides/1-bg.md"] = "---\ntemplate: bg\nbackground: bgs/right-8.jpg\neffect: bgs/right-88.jpg\n---\n\nBackground.\n"
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatal("Validate() invalid = false, want the non-member enum to fail")
+		}
+		want := displayFile("slides/1-bg.md") + ` › effect: enum: "bgs/right-88.jpg" is not one of the allowed variants (bgs/right-8.jpg, bgs/right-9.jpg) — did you mean "bgs/right-8.jpg"? use one of: bgs/right-8.jpg, bgs/right-9.jpg`
+		if got := Format(verr); got != want {
+			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+
 	t.Run("demo library parses one heading level and validates", func(t *testing.T) {
 		demoDir := filepath.Join("..", "..", "examples", "demo")
 		if _, err := os.Stat(demoDir); err != nil {
@@ -638,6 +674,22 @@ func imageLibraryFiles() map[string]string {
 		"templates/media/bgs/right-8.jpg": "8",
 		"templates/media/bgs/right-9.jpg": "9",
 	}
+}
+
+// variantsLibraryFiles extends imageLibraryFiles' `bg` slide with an enum field
+// `effect` whose variants come from a `variants_from:` glob over the same media
+// tree, so a whole-deck validation can author an expanded media-relative variant
+// and prove the registry the validator is handed resolved the glob against the
+// owning layer (enum-variants-from, feedback-53 regression). The example names
+// an expanded variant, so the library's own example validation still passes.
+func variantsLibraryFiles() map[string]string {
+	files := imageLibraryFiles()
+	files["templates/slides/bg/template.yaml"] = "description: a background image slide\n" +
+		"fields:\n  - name: background\n    type: image\n    roots:\n      - media\n    dir: bgs\n    extensions:\n      - jpg\n" +
+		"  - name: effect\n    type: enum\n    variants_from: media/bgs/*.jpg\n" +
+		"body:\n  mode: optional\n"
+	files["templates/slides/bg/example.md"] = "---\ntemplate: bg\nbackground: bgs/right-8.jpg\neffect: bgs/right-8.jpg\n---\n\nA slide.\n"
+	return files
 }
 
 // writeNestedErrorDeck writes a deck whose templates/ is the nested fixture
