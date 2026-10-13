@@ -5,43 +5,29 @@ import (
 )
 
 // tableCellContext renders one parsed GFM table cell into the `{html, attrs}`
-// map a table render context exposes (gfm-tables): html is the cell's visible
-// content as inline HTML and attrs is the cell's decoded attribute set keyed by
-// the template's declared cell attributes.
+// map a table render context exposes (gfm-tables, table-cell-attributes): html
+// is the cell's visible content as inline HTML and attrs is the cell's decoded
+// attribute set keyed by the template's declared cell attributes.
 //
-// The cell's `{br}` and `{...}` extensions are decoded by mdcheck's
-// DecodeTableCell — the renderer never re-implements the extension stripping.
-// A `{br}` is a segment boundary, so the decoded cell's Lines are rendered
-// segment by segment through renderInline and joined with a literal `<br>`
-// (renderCellLines); a raw `<br>` handed to the inline renderer would be
-// escaped.
+// It is a thin adaptor over the shared mdcheck.TableCellContext, the ONE place a
+// parsed cell's `{br}`/`{...}` extensions are decoded and its `{html, attrs}`
+// map is built: renderInline is passed as the render-inline function the shared
+// builder calls, so the extension stripping, the `{br}`-segment rendering joined
+// with a literal `<br>` and the attrs map all live in mdcheck and render
+// re-implements no cell-map building. A raw `<br>` handed to the inline renderer
+// would be escaped, which is why the builder renders each segment separately.
 //
-// attrs is keyed by each cell attribute the enclosing template declares, with a
-// nil entry for every declared attribute the cell leaves unset (and no entry for
-// an undeclared name). specs is the template's declared cell attributes; when it
-// declares none, attrs is empty.
+// specs is the enclosing template's declared cell attributes; attrs is keyed by
+// each declared attribute, with a nil entry for one the cell leaves unset (and no
+// entry for an undeclared name). When specs declares none, attrs is empty.
 //
 // Validation guarantees a cell decodes without error at render time (the
 // decoder's unknown-attribute and wrong-type errors are reported by the table
-// check, not here). Should a decode still fail, the cell degrades gracefully:
-// its raw source is rendered with renderInline and every declared attribute is
-// left nil, so rendering never fails on a cell.
+// check, not here). Should a decode still fail, mdcheck.TableCellContext degrades
+// gracefully — it renders the cell's raw source through renderInline and leaves
+// every declared attribute nil — so rendering never fails on a cell.
 func tableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec) map[string]any {
-	decoded, err := mdcheck.DecodeTableCell(cell, specs)
-	if err != nil {
-		attrs := make(map[string]any, len(specs))
-		for _, spec := range specs {
-			attrs[spec.Name] = nil
-		}
-		return map[string]any{
-			"html":  renderInline(cell.Text),
-			"attrs": attrs,
-		}
-	}
-	return map[string]any{
-		"html":  renderCellLines(decoded.Lines),
-		"attrs": decoded.Attrs,
-	}
+	return mdcheck.TableCellContext(cell, specs, renderInline)
 }
 
 // tableContext parses one body's Markdown source for its GFM tables and returns
