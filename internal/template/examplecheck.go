@@ -651,7 +651,15 @@ type exampleSectionRunner struct {
 // section-data-context) and an unguarded
 // `{{ .data.<child> }}` (and a nested `children "<section>" .data.<section>`
 // forwarding its entries) executes at load exactly as at render time
-// (section-data-context, children-forwarding). Each resolved child is rendered
+// (section-data-context, children-forwarding). The reserved `.table`/`.tables`
+// entries are always present too (template-context, table-layout-context):
+// `.table` is the call body's first parsed GFM table (nil when it carries
+// none) and `.tables` is its source-ordered tables (an empty list when it
+// carries none), parsed against the target template's declared cell attributes
+// (exampleTableContext), so a target layout reading `.table.rows` or `.tables`
+// unguarded executes at load exactly as at render; the body's tables reach the
+// layout through these entries alone, and the `.body` entry stays free of
+// tables, exactly as renderBody omits them. Each resolved child is rendered
 // through this same method and its HTML appended to the target's rendered
 // child-section list keyed by its declared section name, the list a target
 // layout ranges over to splice child markup (template-language). The body is
@@ -668,7 +676,7 @@ type exampleSectionRunner struct {
 // (call.Layer.Media) when one is known (library-layer-references); a nil layer
 // falls back to lib.Media, the pre-layer behaviour.
 func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, error) {
-	ctx := make(map[string]any, len(call.Values)+len(call.Template.Fields)+6)
+	ctx := make(map[string]any, len(call.Values)+len(call.Template.Fields)+8)
 	for k, v := range call.Values {
 		ctx[k] = v
 	}
@@ -713,6 +721,22 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	if strings.TrimSpace(call.Body) != "" {
 		ctx["body"] = call.Body
 	}
+	// The target carries the reserved `.table`/`.tables` entries ALWAYS,
+	// mirroring the render-time section helper (template-context,
+	// table-layout-context): the call body's first parsed GFM table (nil when
+	// it carries none) and its source-ordered tables (an empty list when it
+	// carries none), parsed against the target template's declared cell
+	// attributes. The body's tables reach the target layout through these
+	// entries alone — `.body` stays free of tables, exactly as renderBody omits
+	// them — so a target layout reading `.table.rows` or `.tables` executes at
+	// load as it would at render.
+	var tableSpecs []mdcheck.CellAttributeSpec
+	if rule := call.Template.Body.Tables; rule != nil {
+		tableSpecs = mdcheckCellAttributeSpecs(rule.CellAttributes)
+	}
+	table, tables := exampleTableContext(call.Body, tableSpecs)
+	ctx["table"] = table
+	ctx["tables"] = tables
 	if err := ex.renderChildLists(ctx, call.Children); err != nil {
 		return "", err
 	}
