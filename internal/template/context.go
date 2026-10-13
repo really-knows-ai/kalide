@@ -160,26 +160,30 @@ func InstanceDepth(ancestors []string, resolved string) int {
 //   - `item`: the instance's sibling descriptor, matching the render side's
 //     itemContext shape — its zero-based `index` and one-based `number` among
 //     the same-name siblings, their `count`, `first`/`last`, the declared
-//     `section` name, the resolved `template` name, and `parent` — the
-//     enclosing instance's source field values, or a typed nil map at the top
-//     level, where the parent is the slide, not a section instance
-//     (item-context);
+//     `section` name, the resolved `template` name, its self-nesting `depth`
+//     (InstanceDepth of the enclosing ancestor chain, 0 at the top level), and
+//     `parent` — the enclosing instance's source field values, or a typed nil
+//     map at the top level, where the parent is the slide, not a section
+//     instance (item-context);
 //   - `data`: the instance's own child sections as data, keyed and shaped the
 //     same way (the recursion), with the instance's `raw` as the children's
 //     parent, so the whole authored tree is addressable as data.
 //
 // nodes is one parent's authored children in source order, each a neutral
 // ContextNode carrying its declared name, its sibling index, its resolved
-// template and its own children; parent is the enclosing instance's source
-// field values (the same map that instance exposes as its `.raw`), or nil at
-// the top level. A nil node template yields an empty `template` name and a
-// source view that copies no fields, leaving any body. A nil or empty nodes
-// slice yields a non-nil empty map.
+// template and its own children; ancestors is the enclosing instances' chain
+// of resolved template names above the parent (empty at the top level), so a
+// node's `depth` counts its enclosing same-template ancestors via InstanceDepth;
+// parent is the enclosing instance's source field values (the same map that
+// instance exposes as its `.raw`), or nil at the top level. A nil node
+// template yields an empty `template` name and a source view that copies no
+// fields, leaving any body. A nil or empty nodes slice yields a non-nil empty
+// map.
 //
 // Only authored instances appear: a section invoked by the `section` helper is
 // a direct call, never part of the parsed tree, so it is absent from `.data`
 // exactly as it is absent from the rendered-HTML list.
-func DataContext(nodes []ContextNode, parent map[string]any) map[string]any {
+func DataContext(nodes []ContextNode, ancestors []string, parent map[string]any) map[string]any {
 	out := make(map[string]any, len(nodes))
 	counts := make(map[string]int, len(nodes))
 	for i := range nodes {
@@ -192,6 +196,12 @@ func DataContext(nodes []ContextNode, parent map[string]any) map[string]any {
 		if node.Template != nil {
 			tmplName = node.Template.Name
 		}
+		// The child's own ancestor chain: the enclosing chain it inherited
+		// with this instance's resolved template appended, so each of its
+		// authored children computes its depth against the full chain.
+		childAncestors := make([]string, len(ancestors)+1)
+		copy(childAncestors, ancestors)
+		childAncestors[len(ancestors)] = tmplName
 		entry := map[string]any{
 			"raw": raw,
 			"item": map[string]any{
@@ -202,9 +212,10 @@ func DataContext(nodes []ContextNode, parent map[string]any) map[string]any {
 				"last":     node.Index == counts[node.Name]-1,
 				"section":  node.Name,
 				"template": tmplName,
+				"depth":    InstanceDepth(ancestors, tmplName),
 				"parent":   parent,
 			},
-			"data": DataContext(node.Children, raw),
+			"data": DataContext(node.Children, childAncestors, raw),
 		}
 		list, _ := out[node.Name].([]map[string]any)
 		out[node.Name] = append(list, entry)

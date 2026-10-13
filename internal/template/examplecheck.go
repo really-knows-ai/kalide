@@ -147,7 +147,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 			source[k] = v
 		}
 		ctx["raw"] = RawContext(source, def, block.Body)
-		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
+		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil, nil)
 
 		if lt.Kind == KindSection {
 			// A section template's own layout is a section instance, so its
@@ -551,7 +551,7 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	// data views agree (raw-source-context, section-data-context).
 	raw := RawContext(call.Source, call.Template, call.Body)
 	ctx["raw"] = raw
-	ctx["data"] = DataContext(exampleChildNodes(call.Children), raw)
+	ctx["data"] = DataContext(exampleChildNodes(call.Children), nil, raw)
 	if strings.TrimSpace(call.Body) != "" {
 		ctx["body"] = call.Body
 	}
