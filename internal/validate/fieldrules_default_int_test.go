@@ -326,7 +326,7 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 		},
 		{
 			name: "enum membership is enforced", tmpl: enumTmpl, data: map[string]any{"mode": "c"},
-			want: frontmatterWant("mode", `enum: "c" is not one of the allowed variants (a, b)`, "use one of: a, b"),
+			want: frontmatterWant("mode", `enum: "c" is not one of the allowed variants (a, b)`, `did you mean "a"? use one of: a, b`),
 		},
 		{
 			name: "image must be under assets", tmpl: imageTmpl, data: map[string]any{"img": "pic.png"},

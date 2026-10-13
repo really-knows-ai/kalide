@@ -478,7 +478,7 @@ func TestCheckValues(t *testing.T) {
 			tmpl: enumTmpl,
 			data: map[string]any{"mode": "c"},
 			want: []wantErr{we("enum", "mode", "c",
-				`enum: "c" is not one of the allowed variants (a, b)`, "use one of: a, b")},
+				`enum: "c" is not one of the allowed variants (a, b)`, `did you mean "a"? use one of: a, b`)},
 		},
 		{
 			name: "enum wrong type",
@@ -1071,7 +1071,7 @@ func TestCheckValues(t *testing.T) {
 				we("max", "items › [0] › date_max", "2026-01-01",
 					"max: 2026-01-01 exceeds the maximum 2025-12-31", "use a date on or before 2025-12-31"),
 				we("enum", "items › [0] › mode", "c",
-					`enum: "c" is not one of the allowed variants (a, b)`, "use one of: a, b"),
+					`enum: "c" is not one of the allowed variants (a, b)`, `did you mean "a"? use one of: a, b`),
 				we("image", "items › [0] › img", "pic.png",
 					`image: "pic.png" is not under assets/`,
 					"move the image into the deck's assets/ directory and reference it as assets/…"),
@@ -1539,7 +1539,7 @@ func TestCheckValuesFormats(t *testing.T) {
 				"use one of: compact, exact"),
 			we("enum", "mode", "c",
 				`enum: "c" is not one of the allowed variants (a, b)`,
-				"use one of: a, b"),
+				`did you mean "a"? use one of: a, b`),
 			we("min_items", "tags", []any{},
 				"min_items: 0 item(s) is below the minimum 1", "add at least 1 item(s)"),
 		}
