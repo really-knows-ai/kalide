@@ -213,7 +213,7 @@ func CheckValues(data map[string]any, tmpl *Template, resolve func(name string) 
 		return Result{}
 	}
 	c := &checker{cfg: cfg, resolve: resolve}
-	c.mapValues(nil, tmpl, data, 0)
+	c.mapValues(nil, tmpl, data, 0, true)
 	return Result{Errors: c.errors, Links: c.links}
 }
 
@@ -226,15 +226,44 @@ type checker struct {
 	resolve func(name string) (*Template, bool)
 	errors  []ValueError
 	links   []LinkRef
+
+	// rootFields and rootData are the enclosing template's declared fields and
+	// its data mapping: the scope a leading `/name` cross-field reference
+	// (max_items_from/min_items_from) resolves against. mapValues sets them
+	// when it enters a template scope (a top-level template or a nested
+	// section template) and leaves them untouched for an inline record, so a
+	// `/name` written inside a record still names the record's enclosing
+	// template's top-level field while a bare name names a record sibling
+	// (cross-field-list-constraints).
+	rootFields []Field
+	rootData   map[string]any
 }
 
 // mapValues checks one mapping against tmpl's declared fields: unknown keys
 // first (sorted, deterministic), then each declared field in declaration
 // order. It recurses into section-template values.
-func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]any, depth int) {
+//
+// templateScope says whether tmpl is a full template scope — a top-level
+// template or a nested section template, whose mapping is the scope a leading
+// `/name` cross-field reference resolves against — rather than an inline
+// record's synthetic field set. At a template scope it publishes tmpl's fields
+// and data as the checker's root scope for the duration of the call; an inline
+// record inherits the enclosing template's root scope, so a `/name` written
+// inside a record still names the enclosing template's top-level field. A bare
+// cross-field name always resolves against tmpl.Fields and data — the current
+// scope — so a record's bare name names a record sibling and a template's bare
+// name names a top-level field.
+func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]any, depth int, templateScope bool) {
 	if depth > maxDepth {
 		c.add(path, "section-template", data, "section-template nesting is too deep", "check the template for a reference cycle")
 		return
+	}
+	if templateScope {
+		prevFields, prevData := c.rootFields, c.rootData
+		c.rootFields, c.rootData = tmpl.Fields, data
+		defer func() {
+			c.rootFields, c.rootData = prevFields, prevData
+		}()
 	}
 
 	declared := make(map[string]struct{}, len(tmpl.Fields))
@@ -288,6 +317,37 @@ func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]
 			continue
 		}
 		c.validateValue(fieldPath, f, value, depth)
+
+		// cross-field-list-constraints: enforce each declared
+		// max_items_from/min_items_from against its peer list's length. A
+		// leading `/name` names a top-level field of the enclosing template
+		// (c.rootFields/c.rootData); a bare name names a sibling in this
+		// mapping's own scope (tmpl.Fields/data). checkDefinition already
+		// resolved the reference at load, so a valid schema always finds its
+		// peer; checkCrossFieldListConstraints skips a missing or non-list
+		// peer, and a non-list value carries no length to compare.
+		for _, ref := range []struct{ rule, target string }{
+			{"max_items_from", f.MaxItemsFrom},
+			{"min_items_from", f.MinItemsFrom},
+		} {
+			if ref.target == "" {
+				continue
+			}
+			name := ref.target
+			lookup, peerData := tmpl.Fields, data
+			if strings.HasPrefix(name, "/") {
+				name = strings.TrimPrefix(name, "/")
+				lookup, peerData = c.rootFields, c.rootData
+			}
+			var peer *Field
+			for j := range lookup {
+				if lookup[j].Name == name {
+					peer = &lookup[j]
+					break
+				}
+			}
+			checkCrossFieldListConstraints(c, fieldPath, f, ref.rule, value, peer, peerData[name])
+		}
 	}
 }
 
@@ -369,7 +429,7 @@ func checkRecordValue(c *checker, path []PathSegment, f *Field, value any, depth
 		return
 	}
 	record := &Template{Fields: f.Fields}
-	c.mapValues(path, record, m, depth)
+	c.mapValues(path, record, m, depth, false)
 }
 
 // checkCrossFieldListConstraints enforces one list field's cross-field bound
@@ -757,7 +817,7 @@ func (c *checker) validateSection(path []PathSegment, f *Field, value any, depth
 			"check the template name against the built-in templates")
 		return
 	}
-	c.mapValues(path, nested, m, depth+1)
+	c.mapValues(path, nested, m, depth+1, true)
 }
 
 // unknownKey reports an unknown key, with guidance for the reserved effect and
