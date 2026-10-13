@@ -121,8 +121,8 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 		ordered = append(ordered, stack.Slide)
 		ordered = append(ordered, stack.Vertical...)
 		for _, s := range ordered {
-			if verr, invalid := validateSlide(fsys, s, reg); invalid {
-				return verr, true
+			if errs := validateSlide(fsys, s, reg); len(errs) > 0 {
+				return errs[0], true
 			}
 		}
 	}
@@ -138,13 +138,15 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 // validateSlide validates one slide file in top-to-bottom order: parse the
 // frontmatter and section structure, then the slide frontmatter's fields, then
 // the slide body, then each section's frontmatter fields followed by its body,
-// then the notes body. It returns the first error and whether one was found.
-func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (ValidationError, bool) {
+// then the notes body. It returns every error of the slide in that order,
+// rather than only the first; a read or parse failure is the one prerequisite
+// error of the slide and the per-slide checks below it cannot run without it.
+func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) []ValidationError {
 	src, err := fs.ReadFile(fsys, s.Path)
 	if err != nil {
-		return New(s.Path, 0, nil,
+		return []ValidationError{New(s.Path, 0, nil,
 			fmt.Sprintf("cannot read slide: %v", err),
-			"check that the slide file exists and is readable"), true
+			"check that the slide file exists and is readable")}
 	}
 
 	// The parser validates the frontmatter structure, the slide template, the
@@ -152,21 +154,22 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// prerequisite for every later check.
 	ps, err := slide.Parse(s.Path, src, reg)
 	if err != nil {
-		return adaptParseError(err), true
+		return []ValidationError{adaptParseError(err)}
 	}
 	tmpl, ok := reg.Lookup(ps.Template)
 	if !ok || tmpl == nil {
 		// slide.Parse already reported an unknown slide template, so this is
 		// unreachable; kept as a guard rather than a nil dereference.
-		return New(s.Path, ps.TemplateLine, nil,
+		return []ValidationError{New(s.Path, ps.TemplateLine, nil,
 			fmt.Sprintf("unknown slide template %q", ps.Template),
-			"use one of the built-in templates"), true
+			"use one of the built-in templates")}
 	}
 
 	// Slide frontmatter fields, top of the file. The reserved `template:`
 	// selector is not a field value and is removed before schema checking.
-	if verr, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg); invalid {
-		return verr, true
+	var errs []ValidationError
+	if ve, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg); invalid {
+		errs = append(errs, ve)
 	}
 
 	// Slide body Markdown, then the slide template's implied body rule. The
@@ -176,11 +179,9 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// slide template declares child sections, so a heading at any depth is a
 	// section marker there and deeper headings stay subheadings otherwise
 	// (markdown-allowed-subset).
-	if errs := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil); len(errs) > 0 {
-		return errs[0], true
-	}
-	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
-		return verr, true
+	errs = append(errs, checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil)...)
+	if ve, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
+		errs = append(errs, ve)
 	}
 
 	// Sections in source order, each one's frontmatter fields then its body,
@@ -188,20 +189,16 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// instance's template declares its own body rule and its own
 	// child-section state, so each body is checked against its own enclosing
 	// template.
-	if errs := checkSections(fsys, s.Path, ps.Sections, nil, reg); len(errs) > 0 {
-		return errs[0], true
-	}
+	errs = append(errs, checkSections(fsys, s.Path, ps.Sections, nil, reg)...)
 
 	// The reserved notes section is a body too and, being last, is checked
 	// last. `# notes` is top-level only, and a deeper heading never starts
 	// notes, so the notes body carries the slide body's subheading gate.
 	if ps.Notes != nil {
-		if errs := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil); len(errs) > 0 {
-			return errs[0], true
-		}
+		errs = append(errs, checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil)...)
 	}
 
-	return ValidationError{}, false
+	return errs
 }
 
 // checkSections validates a slice of section instances in source order: each
