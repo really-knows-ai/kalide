@@ -209,6 +209,7 @@ func TestParse(t *testing.T) {
 	t.Run("internal template", testParseInternalTemplate)
 	t.Run("structure", testParseStructure)
 	t.Run("nested sections", testParseNestedSections)
+	t.Run("nested depth bound", testParseNestedDepth)
 	t.Run("sections", testParseSections)
 	t.Run("repeats", testParseRepeats)
 	t.Run("section fence", testParseSectionFence)
@@ -912,6 +913,155 @@ func testParseNestedSections(t *testing.T) {
 		if slide.Notes == nil || slide.Notes.HeadingLine != 12 || slide.Notes.Body != "note body" {
 			t.Fatalf("Notes = %+v, want the top-level section at line 12 body %q", slide.Notes, "note body")
 		}
+	})
+}
+
+// testParseNestedDepth covers the parse-time per-instance depth bound
+// (bounded-self-nesting, nested-section-validation): a section declaration that
+// accepts its own template — directly or through a cycle — may carry a positive
+// max_depth, and parseSections hands checkNestedDepth the resolved template of
+// every enclosing instance it has built, so an instance whose self-nesting
+// depth exceeds its declaration's bound is refused with the path-qualified
+// slide error `section "<declared name>": nesting deeper than max_depth N`. The
+// depth is counted over the FULL containment chain, not from the immediate
+// parent alone, so on the A→B→A→B cycle the second b (one enclosing b) is depth
+// 1 and accepted. The authored heading-depth syntax is unchanged.
+func testParseNestedDepth(t *testing.T) {
+	cat := testCatalogue()
+	// Bounded self-nesting fixtures, local to this test (the shared catalogue
+	// carries no max_depth declaration).
+	//
+	// "T" is a slide template that declares an "events" section accepting T and
+	// a "loop" section accepting T again, bounded at max_depth 1 — the
+	// one-template self-accepting case. Both `# events` and the nested `loop`
+	// instances resolve T, so the first `loop` (one enclosing T) is depth 1 and
+	// a `loop` nested inside it (two enclosing Ts) would be depth 2.
+	cat["T"] = fakeTemplate{
+		usage:    "slide",
+		sections: []string{"events", "loop"},
+		accepted: map[string][]string{"events": {"T"}, "loop": {"T"}},
+		maxDepth: map[string]int{"loop": 1},
+	}
+	// A declared-section cycle: template "A" declares a "b" section accepting
+	// "B" with max_depth 1; template "B" declares an "a" section accepting "A"
+	// with no bound. "B" is the slide template, so its "a" section makes the top
+	// `# a` resolve "A". The depth rule counts each template's own enclosing
+	// same-template ancestors, so the first `b` is depth 0, the inner `a` depth
+	// 1, and the second `b` depth 1 — accepted — while a third `b` is depth 2.
+	cat["A"] = fakeTemplate{
+		usage:    "section",
+		sections: []string{"b"},
+		accepted: map[string][]string{"b": {"B"}},
+		maxDepth: map[string]int{"b": 1},
+	}
+	cat["B"] = fakeTemplate{
+		usage:    "slide",
+		sections: []string{"a"},
+		accepted: map[string][]string{"a": {"A"}},
+	}
+
+	const file = "slides/1-loop.md"
+
+	t.Run("self-accepting declaration at its bound parses", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: T",
+			"---",
+			"",
+			"# events",
+			"## loop",
+		), cat)
+
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		events := slide.Sections[0]
+		if events.Name != "events" || events.Template != "T" {
+			t.Fatalf("Sections[0] = %q template %q, want %q template %q", events.Name, events.Template, "events", "T")
+		}
+		if len(events.Children) != 1 {
+			t.Fatalf("len(events.Children) = %d, want 1 (the nested loop)", len(events.Children))
+		}
+		loop := events.Children[0]
+		if loop.Name != "loop" || loop.Level != 2 || loop.Index != 0 || loop.Template != "T" {
+			t.Errorf("loop = %q level %d index %d template %q, want %q level 2 index 0 template %q",
+				loop.Name, loop.Level, loop.Index, loop.Template, "loop", "T")
+		}
+	})
+
+	t.Run("self-nesting past the bound carries the instance path", func(t *testing.T) {
+		// The second loop's enclosing chain is [T (events), T (loop)], so its
+		// self-nesting depth is 2, past the loop declaration's max_depth 1. The
+		// error names the bounded declaration's slot ("loop") and is qualified
+		// to the offending slide file with the instance's containment chain.
+		_, err := Parse(file, src(
+			"---",
+			"template: T",
+			"---",
+			"",
+			"# events",
+			"## loop",
+			"### loop",
+		), cat)
+		wantParseErrorPath(t, err, file, 7, "events[0] › loop[0] › loop[0]",
+			`section "loop": nesting deeper than max_depth 1`)
+	})
+
+	t.Run("cycle instance at its bound parses", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: B",
+			"---",
+			"",
+			"# a",
+			"## b",
+			"### a",
+			"#### b",
+		), cat)
+
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		a := slide.Sections[0]
+		if a.Name != "a" || a.Level != 1 || a.Template != "A" {
+			t.Fatalf("Sections[0] = %q level %d template %q, want %q level 1 template %q", a.Name, a.Level, a.Template, "a", "A")
+		}
+		if len(a.Children) != 1 || a.Children[0].Name != "b" {
+			t.Fatalf("a.Children = %+v, want the single %q child", a.Children, "b")
+		}
+		innerA := a.Children[0].Children
+		if len(innerA) != 1 || innerA[0].Name != "a" {
+			t.Fatalf("b.Children = %+v, want the single %q child", innerA, "a")
+		}
+		secondB := innerA[0].Children
+		if len(secondB) != 1 {
+			t.Fatalf("inner a.Children = %+v, want the single second %q child", secondB, "b")
+		}
+		if got := secondB[0]; got.Name != "b" || got.Level != 4 || got.Index != 0 || got.Template != "B" {
+			t.Errorf("second b = %q level %d index %d template %q, want %q level 4 index 0 template %q",
+				got.Name, got.Level, got.Index, got.Template, "b", "B")
+		}
+	})
+
+	t.Run("cycle continuation past the bound names the bounded declaration", func(t *testing.T) {
+		// The third b's enclosing chain is [A, B, A, B, A] — two enclosing B
+		// instances — so its self-nesting depth is 2, past the b declaration's
+		// max_depth 1. The error names the bounded declaration's slot ("b"), not
+		// the instance's template or the unbounded a declaration.
+		_, err := Parse(file, src(
+			"---",
+			"template: B",
+			"---",
+			"",
+			"# a",
+			"## b",
+			"### a",
+			"#### b",
+			"##### a",
+			"###### b",
+		), cat)
+		wantParseErrorPath(t, err, file, 10, "a[0] › b[0] › a[0] › b[0] › a[0] › b[0]",
+			`section "b": nesting deeper than max_depth 1`)
 	})
 }
 
