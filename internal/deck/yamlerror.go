@@ -30,6 +30,12 @@ var yamlErrorLinePattern = regexp.MustCompile(`\bline (\d+):`)
 // file and line itself, so keeping the prefix would render the line twice.
 var yamlErrorPrefixPattern = regexp.MustCompile(`^(?:yaml: )?line \d+: `)
 
+// yamlUnknownAnchorPattern extracts the anchor name a yaml.v3 undefined-alias
+// error names ("yaml: unknown anchor 'foo' referenced"). Unlike a scanner error
+// this text carries no "line N:", so the offending line cannot be read off the
+// error and is recovered from the source instead (see unknownAnchorLine).
+var yamlUnknownAnchorPattern = regexp.MustCompile(`unknown anchor '([^']*)'`)
+
 // yamlPlainForbiddenStart holds the characters that make YAML read a plain
 // scalar as something other than the literal text the author wrote — an alias
 // (`*`), an anchor (`&`), a directive (`%`) or a reserved indicator (`@`). A
@@ -50,8 +56,11 @@ const yamlQuotingHint = "quote the value as a string"
 // err is the error yaml.Unmarshal returned.
 //
 // It resolves the offending source line from err's "line N:" text (line 0 when
-// yaml.v3 names none). When the line at that position contains a plain scalar
-// YAML mis-read, it additionally attaches yamlQuotingHint:
+// yaml.v3 names none). When yaml.v3 names none but the failure is an undefined
+// alias ("unknown anchor 'name' referenced"), it recovers the line from source
+// via unknownAnchorLine, so the plain-value `*name` case is still positioned.
+// When the line at that position contains a plain scalar YAML mis-read, it
+// additionally attaches yamlQuotingHint:
 //
 //   - a `:` inside a plain scalar, the shape yaml.v3 rejects as "mapping values
 //     are not allowed in this context" (for example `title: Hello: world`,
@@ -74,6 +83,9 @@ func yamlErrorWithLine(file string, source []byte, err error) error {
 		if n, convErr := strconv.Atoi(m[1]); convErr == nil {
 			line = n
 		}
+	}
+	if line == 0 {
+		line = unknownAnchorLine(source, text)
 	}
 	msg := yamlErrorMessage(text)
 	if line > 0 && plainScalarNeedsQuoting(lineAt(source, line)) {
@@ -104,6 +116,35 @@ func lineAt(source []byte, line int) string {
 		return ""
 	}
 	return strings.TrimSuffix(lines[line-1], "\r")
+}
+
+// unknownAnchorLine returns the 1-based line of the first non-comment source
+// line whose first value token is the alias `*<name>`, where name is the
+// undefined anchor errText names ("unknown anchor '<name>' referenced"), or 0
+// when errText is not an undefined-alias error or no such line exists.
+//
+// yaml.v3 reports an undefined alias (`description: *foo`) as the lineless
+// "yaml: unknown anchor 'foo' referenced", so the line cannot be read off the
+// error and is recovered from the source instead. A value is matched by its
+// `*`+name prefix rather than exact equality because the error names only the
+// anchor token: `title: *foo bar` reports `unknown anchor 'foo'` while the
+// line's value token is `*foo bar`.
+func unknownAnchorLine(source []byte, errText string) int {
+	m := yamlUnknownAnchorPattern.FindStringSubmatch(errText)
+	if m == nil || m[1] == "" {
+		return 0
+	}
+	alias := "*" + m[1]
+	for i, raw := range strings.Split(string(source), "\n") {
+		line := strings.TrimSuffix(raw, "\r")
+		if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
+			continue
+		}
+		if strings.HasPrefix(yamlValueText(line), alias) {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // plainScalarNeedsQuoting reports whether line contains a plain scalar YAML
