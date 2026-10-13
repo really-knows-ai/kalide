@@ -176,8 +176,8 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// slide template declares child sections, so a heading at any depth is a
 	// section marker there and deeper headings stay subheadings otherwise
 	// (markdown-allowed-subset).
-	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil); invalid {
-		return verr, true
+	if errs := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil); len(errs) > 0 {
+		return errs[0], true
 	}
 	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
 		return verr, true
@@ -196,8 +196,8 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// last. `# notes` is top-level only, and a deeper heading never starts
 	// notes, so the notes body carries the slide body's subheading gate.
 	if ps.Notes != nil {
-		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil); invalid {
-			return verr, true
+		if errs := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil); len(errs) > 0 {
+			return errs[0], true
 		}
 	}
 
@@ -237,8 +237,8 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
 			return verr, true
 		}
-		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix); invalid {
-			return verr, true
+		if errs := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix); len(errs) > 0 {
+			return errs[0], true
 		}
 		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
 			return verr, true
@@ -302,20 +302,23 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 // non-empty, is the enclosing section instance's containment chain and becomes
 // the issue's path, so a nested Markdown-subset issue reads
 // `columns[0] › blocks[0]` (nested-section-validation); the slide and notes
-// bodies pass nil. It returns the first issue and whether one was found.
-func checkBody(file, body string, startLine int, declaresChildSections bool, prefix []string) (ValidationError, bool) {
+// bodies pass nil. It returns every issue mdcheck.Check reports, positioned and
+// path-qualified, in issue order (collect-all), so one body contributes all of
+// its errors rather than only the first.
+func checkBody(file, body string, startLine int, declaresChildSections bool, prefix []string) []ValidationError {
 	if body == "" {
-		return ValidationError{}, false
+		return nil
 	}
 	issues := mdcheck.Check(file, []byte(body), mdcheck.Options{
 		Mode:                          mdcheck.BodyMode,
 		StartLine:                     startLine,
 		TemplateDeclaresChildSections: declaresChildSections,
 	})
-	if len(issues) == 0 {
-		return ValidationError{}, false
+	errs := make([]ValidationError, 0, len(issues))
+	for _, iss := range issues {
+		errs = append(errs, adaptIssue(iss, prefix))
 	}
-	return adaptIssue(issues[0], prefix), true
+	return errs
 }
 
 // checkBodyRule checks one Markdown body against its template's implied `body`
