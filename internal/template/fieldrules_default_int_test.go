@@ -162,7 +162,7 @@ func executeStep7ExampleInt(t *testing.T, lib *Library, name string, mutate func
 	if err != nil {
 		t.Fatalf("parseExampleBlock(%s): %v", name, err)
 	}
-	if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, ctx); err != nil {
+	if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, nil, ctx); err != nil {
 		t.Fatalf("validateExampleBlock(%s): %v", name, err)
 	}
 
@@ -563,7 +563,7 @@ func TestFieldRulesDefaultAppliedExampleInt(t *testing.T) {
 				ctx := map[string]any{}
 				err := validateExampleBlock(exampleFieldSitePath, tt.def,
 					&exampleBlock{Frontmatter: tt.frontmatter, FrontmatterLine: exampleFieldSiteLine},
-					tt.resolve, ctx)
+					tt.resolve, nil, ctx)
 
 				if tt.valid {
 					if err != nil {
@@ -612,7 +612,7 @@ func TestFieldRulesDefaultAppliedExampleInt(t *testing.T) {
 		}
 
 		err := validateExampleBlock(exampleFieldSitePath, tmpl,
-			&exampleBlock{Frontmatter: data, FrontmatterLine: exampleFieldSiteLine}, nil, map[string]any{})
+			&exampleBlock{Frontmatter: data, FrontmatterLine: exampleFieldSiteLine}, nil, nil, map[string]any{})
 		libErr := asLibraryError(t, err)
 		want := res.Errors[0].PathString() + ": " + res.Errors[0].What
 		if libErr.Message != want {
@@ -648,7 +648,7 @@ func TestFieldRulesDefaultAppliedExampleInt(t *testing.T) {
 			}},
 		}
 
-		err := validateExampleBlock(exampleFieldSitePath, container, block, resolve, map[string]any{})
+		err := validateExampleBlock(exampleFieldSitePath, container, block, resolve, nil, map[string]any{})
 		libErr := asLibraryError(t, err)
 		if libErr.Path != exampleFieldSitePath {
 			t.Errorf("error Path = %q, want the example.md site %q", libErr.Path, exampleFieldSitePath)

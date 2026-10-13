@@ -210,7 +210,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 		// does at render time.
 		block := &exampleBlock{Frontmatter: map[string]any{}}
 		ctx := map[string]any{}
-		if err := validateExampleBlockAt("example.md", tmpl, block, resolveSectionCallResolver(tmpl), ctx, ""); err != nil {
+		if err := validateExampleBlockAt("example.md", tmpl, block, resolveSectionCallResolver(tmpl), nil, ctx, ""); err != nil {
 			t.Fatalf("validateExampleBlockAt() error = %v, want nil", err)
 		}
 		if got, present := ctx["extra"]; !present || got != nil {
