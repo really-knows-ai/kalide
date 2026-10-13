@@ -723,16 +723,23 @@ func (c *checker) validateEnum(path []PathSegment, f *Field, value any) {
 		"use one of: "+strings.Join(f.Variants, ", "))
 }
 
-// validateImage checks that an image path is under assets/ and, when the
-// caller supplied an existence callback, that it exists.
+// validateImage checks an image field's authored path against the field's
+// declared roots and, when the caller supplied an existence callback, that it
+// names an existing file (image-field-roots).
 //
 // f carries the field's declared path options (Roots, Dir and Extensions),
 // handed to the WithImageExists callback so the caller can resolve the path
-// against them (image-field-roots). Resolving against the declared roots in
-// written order and using the callback's candidate set for a closest-match
-// suggestion is checkImageRoots/validateImage's later change (tasks 4-5);
-// until then this keeps the pre-existing assets/-only behaviour, checking only
-// that the file exists.
+// against them in written order and report whether it names an existing file
+// together with the candidate files the field accepts. A path the callback
+// reports missing is the image error, carrying the offending path and, when one
+// of the accepted candidates is close enough, a closest-match suggestion.
+//
+// The assets/ prefix is enforced only when the field's roots do not admit a
+// media/ path: with an empty or assets-only root set a bare path is the
+// pre-existing "not under assets/" error, while a media-capable field accepts a
+// media-relative path and hands it to the callback. Without a callback there is
+// nothing to resolve a declared root against, so a media-capable field is left
+// unexistence-checked rather than falsely rejected.
 func (c *checker) validateImage(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
 	if !ok {
@@ -741,19 +748,38 @@ func (c *checker) validateImage(path []PathSegment, f *Field, value any) {
 			"write the path as a string")
 		return
 	}
-	if !strings.HasPrefix(s, "assets/") {
+	if !imageFieldAllowsMedia(f) && !strings.HasPrefix(s, "assets/") {
 		c.add(path, "image", value,
 			fmt.Sprintf("image: %s is not under assets/", strconv.Quote(s)),
 			"move the image into the deck's assets/ directory and reference it as assets/…")
 		return
 	}
-	if c.cfg.imageExists != nil {
-		if exists, _ := c.cfg.imageExists(f, s); !exists {
-			c.add(path, "image", value,
-				fmt.Sprintf("image: %s does not exist", strconv.Quote(s)),
-				"add the file under assets/ or fix the path")
+	if c.cfg.imageExists == nil {
+		return
+	}
+	if exists, candidates := c.cfg.imageExists(f, s); !exists {
+		what := fmt.Sprintf("image: %s does not exist", strconv.Quote(s))
+		fix := "add the file under assets/ or fix the path"
+		if closest := suggest.Closest(s, candidates); closest != "" {
+			fix = fmt.Sprintf("did you mean %q?", closest)
+		}
+		c.add(path, "image", value, what, fix)
+	}
+}
+
+// imageFieldAllowsMedia reports whether f's declared roots admit a media/ path.
+// When they do, a path without the assets/ prefix is a legal media-relative path
+// and the assets/ prefix check cannot apply.
+func imageFieldAllowsMedia(f *Field) bool {
+	if f == nil {
+		return false
+	}
+	for _, root := range f.Roots {
+		if root == imageRootMedia {
+			return true
 		}
 	}
+	return false
 }
 
 // validateLink checks that a link field is a `#label` anchor or an http(s)
