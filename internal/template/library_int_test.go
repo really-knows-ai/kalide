@@ -316,6 +316,167 @@ fields:
 			}
 		})
 	})
+
+	// A library whose slide template declares list fields carrying a
+	// cross-field bound (max_items_from/min_items_from) loads and validates end
+	// to end: step 4 resolves each reference against a declared list field, and
+	// step 7 enforces the bound against the example's own peer list, so an
+	// example within both bounds loads cleanly while an out-of-bounds one fails
+	// the load with the single two-field error naming both fields and both
+	// lengths (cross-field-list-constraints).
+	t.Run("cross-field list bounds validate end to end", func(t *testing.T) {
+		// Two bound directions against one shared peer list: `capped` is bounded
+		// above by `/peer` and `floored` below by `/peer`, so one example can
+		// satisfy both and a single-authored violation exercises either.
+		const crossFieldManifest = `name: crossfield
+fields:
+  - name: capped
+    type: list
+    max_items_from: /peer
+    item:
+      name: entry
+      type: text
+  - name: floored
+    type: list
+    min_items_from: /peer
+    item:
+      name: entry
+      type: text
+  - name: peer
+    type: list
+    item:
+      name: entry
+      type: text
+`
+		// The `len` reads make the converted lists observable: the very context
+		// the bound was checked against is the one the layout executes.
+		const crossFieldLayout = `<div class="crossfield">` +
+			`<span class="capped-count">{{ len .capped }}</span>` +
+			`<span class="floored-count">{{ len .floored }}</span>` +
+			`<span class="peer-count">{{ len .peer }}</span>` +
+			`</div>`
+
+		// writeCrossField writes the four required files of a full on-disk
+		// library whose only template is the bounded-list slide above, with the
+		// given example.md, and returns the project root for os.DirFS. The
+		// manifest and layout are fixed; only the example varies, so the positive
+		// and negative cases differ solely in the authored list lengths.
+		writeCrossField := func(t *testing.T, example string) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+			writeFile(t, filepath.Join(root, SlidesDir, "crossfield", ManifestFile), []byte(crossFieldManifest))
+			writeFile(t, filepath.Join(root, SlidesDir, "crossfield", LayoutFile), []byte(crossFieldLayout))
+			writeFile(t, filepath.Join(root, SlidesDir, "crossfield", ExampleFile), []byte(example))
+			return projectDir
+		}
+
+		t.Run("an example within both bounds loads", func(t *testing.T) {
+			// peer has 3 items, so capped (2) satisfies max_items_from and
+			// floored (4) satisfies min_items_from.
+			projectDir := writeCrossField(t,
+				"---\n"+
+					"template: crossfield\n"+
+					"peer:\n"+
+					"  - p\n"+
+					"  - q\n"+
+					"  - r\n"+
+					"capped:\n"+
+					"  - a\n"+
+					"  - b\n"+
+					"floored:\n"+
+					"  - a\n"+
+					"  - b\n"+
+					"  - c\n"+
+					"  - d\n"+
+					"---\n"+
+					"A cross-field example.\n")
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: an example within both bounds must load", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+			if _, _, ok := lib.TemplateByName("crossfield"); !ok {
+				t.Error("slide template crossfield not loaded")
+			}
+		})
+
+		// The negative half: each bound direction is enforced at the example
+		// site and reported as ONE error naming both fields and both lengths.
+		cases := []struct {
+			name      string
+			example   string
+			wantField string
+			wantRule  string
+			wantMsg   string
+		}{
+			{
+				name: "a list over its max_items_from peer fails the load",
+				example: "---\n" +
+					"template: crossfield\n" +
+					"peer:\n" +
+					"  - p\n" +
+					"  - q\n" +
+					"  - r\n" +
+					"capped:\n" +
+					"  - a\n" +
+					"  - b\n" +
+					"  - c\n" +
+					"  - d\n" +
+					"floored:\n" +
+					"  - a\n" +
+					"  - b\n" +
+					"  - c\n" +
+					"---\n",
+				wantField: "capped",
+				wantRule:  "max_items_from",
+				wantMsg:   `max_items_from: field "capped" has 4 item(s), more than field "peer" has 3`,
+			},
+			{
+				name: "a list under its min_items_from peer fails the load",
+				example: "---\n" +
+					"template: crossfield\n" +
+					"peer:\n" +
+					"  - p\n" +
+					"  - q\n" +
+					"  - r\n" +
+					"capped:\n" +
+					"  - a\n" +
+					"  - b\n" +
+					"floored:\n" +
+					"  - a\n" +
+					"---\n",
+				wantField: "floored",
+				wantRule:  "min_items_from",
+				wantMsg:   `min_items_from: field "floored" has 1 item(s), fewer than field "peer" has 3`,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				projectDir := writeCrossField(t, tc.example)
+				lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+				if err == nil {
+					t.Fatalf("LoadLibrary() = %+v, nil; want the out-of-bounds example to fail the load", lib)
+				}
+				if lib != nil {
+					t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+				}
+				libErr := asLibraryError(t, err)
+				if want := filepath.Join(TemplatesDir, SlidesDir, "crossfield", ExampleFile); libErr.Path != want {
+					t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
+				}
+				if !strings.Contains(libErr.Message, tc.wantField) || !strings.Contains(libErr.Message, tc.wantRule) {
+					t.Errorf("Message = %q, want a path-qualified %s error naming the field %q", libErr.Message, tc.wantRule, tc.wantField)
+				}
+				if !strings.Contains(libErr.Message, tc.wantMsg) {
+					t.Errorf("Message = %q, want the two-field error %q", libErr.Message, tc.wantMsg)
+				}
+			})
+		}
+	})
 }
 
 // TestLoadDeckLibraryMergedThemeAndMediaLayers covers LoadDeckLibrary's merged
