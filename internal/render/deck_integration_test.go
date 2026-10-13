@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -376,6 +377,162 @@ func TestRenderDeckNestedSections(t *testing.T) {
 			t.Errorf("page carries a section data map rather than rendered section markup:\n%s", page)
 		}
 	})
+
+	// plan.phase-07.task-21 (bounded-self-nesting,
+	// requirements.note.self-nesting-depth): a real deck nesting the
+	// two-template A→B→A→B chain — section template a's `b` declaration
+	// accepts b bounded at max_depth: 1, section template b's `a` declaration
+	// accepts a with no max_depth — is parsed and rendered, and EVERY
+	// instance's render-time `.item.depth` equals the parse-time count of its
+	// enclosing same-template ancestors computed INDEPENDENTLY here from the
+	// parsed Section tree (counting same-template ancestors along the tree,
+	// not hard-coded only). The second a and the second b are each depth 1
+	// (their one enclosing same-template ancestor); the first a and first b are
+	// depth 0. The 4-level deck is fully accepted, so the refuse case needs its
+	// OWN deck: adding `##### a` › `###### b` makes a third b instance with two
+	// enclosing b ancestors (depth 2), which the parser refuses as
+	// `section "b": nesting deeper than max_depth 1`, path-qualified to the
+	// slide file with its containment chain. Together the two halves pin
+	// slide.checkNestedDepth's count and the render side's
+	// (template.InstanceDepth) value so they cannot drift.
+	t.Run("parse-time and render-time depth agree on the a/b cycle", func(t *testing.T) {
+		dir := writeAbCycleDeck(t, abCycleDeckFiles)
+		fsys := os.DirFS(dir)
+
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
+			t.Fatalf("template.LoadLibrary: %v", err)
+		}
+		reg, err := template.NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+		}
+		themeReg, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
+		if err != nil {
+			t.Fatalf("theme.LoadDir: %v", err)
+		}
+		funcMap := template.LayoutFuncMap(lib.Media, "/assets/templates/media")
+
+		if verr, invalid := validate.Validate(fsys, reg, themeReg); invalid {
+			t.Fatalf("validate.Validate rejected the a/b cycle deck: %s", validate.Format(verr))
+		}
+
+		cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
+		if err != nil {
+			t.Fatalf("deck.LoadConfig: %v", err)
+		}
+		d, err := deck.LoadSlides(fsys, deck.SlidesDir)
+		if err != nil {
+			t.Fatalf("deck.LoadSlides: %v", err)
+		}
+		parsed := parsePipelineSlides(t, fsys, d, reg)
+		if len(parsed) != 1 {
+			t.Fatalf("parsed %d slides, want 1 (the a/b cycle slide)", len(parsed))
+		}
+
+		pageHTML, err := RenderDeck(cfg, d, parsed, reg, themeReg, funcMap)
+		if err != nil {
+			t.Fatalf("RenderDeck: %v", err)
+		}
+		page := string(pageHTML)
+
+		// Independent parse-time depth: walk the parsed Section tree in
+		// pre-order and count each instance's enclosing same-template ancestors
+		// (ancestors whose resolved template equals its own). This never calls
+		// slide.checkNestedDepth or template.InstanceDepth — it re-derives the
+		// depth rule from the tree — so it is an independent witness for both
+		// halves. The documented sequence for `# a` › `## b` › `### a` ›
+		// `#### b` is first a 0, first b 0, second a 1, second b 1.
+		type abSample struct {
+			template string
+			depth    int
+		}
+		wantDepths := []abSample{{"a", 0}, {"b", 0}, {"a", 1}, {"b", 1}}
+		var parseDepths []abSample
+		var walk func(secs []slide.Section, ancestors []string)
+		walk = func(secs []slide.Section, ancestors []string) {
+			for i := range secs {
+				sec := secs[i]
+				depth := 0
+				for _, ancestor := range ancestors {
+					if ancestor == sec.Template {
+						depth++
+					}
+				}
+				parseDepths = append(parseDepths, abSample{sec.Template, depth})
+				childAncestors := append(append([]string{}, ancestors...), sec.Template)
+				walk(sec.Children, childAncestors)
+			}
+		}
+		walk(parsed[0].Sections, nil)
+
+		if len(parseDepths) != len(wantDepths) {
+			t.Fatalf("parsed %d instances, want %d (a › b › a › b): %+v", len(parseDepths), len(wantDepths), parseDepths)
+		}
+		for i, want := range wantDepths {
+			if parseDepths[i] != want {
+				t.Errorf("parse-time instance %d = %+v, want %+v (the a/b cycle's documented per-template depths)", i, parseDepths[i], want)
+			}
+		}
+
+		// Render-time depth: each instance's layout prints its own resolved
+		// template and `.item.depth`, so the page carries the instances in
+		// document (pre-)order. The printed sequence must equal the parse-time
+		// sequence instance for instance.
+		var renderDepths []abSample
+		for _, m := range abDepthSampleRE.FindAllStringSubmatch(page, -1) {
+			depth, err := strconv.Atoi(m[2])
+			if err != nil {
+				t.Fatalf("render-time depth %q is not an integer: %v", m[2], err)
+			}
+			renderDepths = append(renderDepths, abSample{m[1], depth})
+		}
+		if len(renderDepths) != len(parseDepths) {
+			t.Fatalf("page printed %d instance depths, want %d (a › b › a › b):\n%s", len(renderDepths), len(parseDepths), page)
+		}
+		for i := range parseDepths {
+			if renderDepths[i] != parseDepths[i] {
+				t.Errorf("instance %d render-time (template, depth) = %+v, want the parse-time %+v: slide.checkNestedDepth and the render side's template.InstanceDepth drifted", i, renderDepths[i], parseDepths[i])
+			}
+		}
+
+		// The 4-level deck is fully accepted, so the refusal needs its own
+		// deck: `##### a` › `###### b` makes a third b instance whose enclosing
+		// chain holds two b ancestors (depth 2), past a's `b` declaration's
+		// max_depth: 1. The parser refuses it path-qualified to the slide file
+		// with the containment chain, while accepting the second b at the
+		// bound in the deck above.
+		overflowDir := writeAbCycleDeck(t, abCycleOverflowDeckFiles)
+		const overflowName = "slides/1-overflow.md"
+		src, err := fs.ReadFile(os.DirFS(overflowDir), overflowName)
+		if err != nil {
+			t.Fatalf("read %s: %v", overflowName, err)
+		}
+		_, perr := slide.Parse(overflowName, src, reg)
+		if perr == nil {
+			t.Fatal("slide.Parse accepted a `##### a` › `###### b` continuation past max_depth: 1, want the depth refusal")
+		}
+		parseErr, ok := perr.(*slide.ParseError)
+		if !ok {
+			t.Fatalf("slide.Parse error = %T (%v), want *slide.ParseError", perr, perr)
+		}
+		const wantChain = "a[0] › b[0] › a[0] › b[0] › a[0] › b[0]"
+		if parseErr.File != overflowName {
+			t.Errorf("refusal File = %q, want %q", parseErr.File, overflowName)
+		}
+		if parseErr.Line != 25 {
+			t.Errorf("refusal Line = %d, want 25 (the `###### b` heading)", parseErr.Line)
+		}
+		if parseErr.Path != wantChain {
+			t.Errorf("refusal Path = %q, want the containment chain %q", parseErr.Path, wantChain)
+		}
+		if want := `section "b": nesting deeper than max_depth 1`; parseErr.Msg != want {
+			t.Errorf("refusal Msg = %q, want %q", parseErr.Msg, want)
+		}
+		if !strings.Contains(parseErr.Error(), wantChain) {
+			t.Errorf("refusal Error() = %q, want the containment chain %q rendered in it", parseErr.Error(), wantChain)
+		}
+	})
 }
 
 // writeNestedPipelineDeck writes nestedPipelineDeckFiles to a fresh
@@ -492,6 +649,147 @@ func writeBoundedSelfNestingDeck(t *testing.T) string {
 	copyTemplatesDir(t, filepath.Join(fixtureLibraryDir, "templates"), filepath.Join(dir, "templates"))
 	writeProbeTemplate(t, dir, "slides", "bstevents", boundedSelfNestingSlideTemplateYAML, boundedSelfNestingSlideLayout, boundedSelfNestingSlideExample)
 	writeProbeTemplate(t, dir, "sections", "bstloop", boundedSelfNestingLoopTemplateYAML, boundedSelfNestingLoopLayout, boundedSelfNestingLoopExample)
+	return dir
+}
+
+// The a/b-cycle probe library is the two-template declared-section cycle of
+// requirements.requirement.bounded-self-nesting: section template `a` declares
+// a `b` section accepting template `b` with max_depth: 1 (the one declaration
+// that bounds the cycle), and section template `b` declares an `a` section
+// accepting template `a` with no max_depth (so it bounds nothing; the a
+// instances are limited only by a's `b` bound). The slide template `abhost` has
+// a top section slot `a` accepting template `a`, so a deck can author `# a`
+// (an instance of template a) › `## b` › `### a` › `#### b` at four heading
+// levels. Every layout is a single compact line printing its own reserved
+// `.item.template` and `.item.depth`, so the page carries one exactly
+// assertable fragment per instance and the render-time depths can be compared
+// with the independently computed parse-time depths instance for instance.
+const (
+	abCycleHostTemplateYAML = `description: slide hosting the a/b bounded cycle
+sections:
+  - name: a
+    accepted:
+      - a
+body:
+  mode: optional
+`
+
+	abCycleHostLayout = `<section class="ab-slide">{{range .a}}{{.}}{{end}}</section>`
+
+	abCycleHostExample = "---\ntemplate: abhost\n---\n"
+
+	abCycleATemplateYAML = `description: a/b cycle template a, bounding its b section at depth 1
+fields:
+  - name: name
+    type: text
+sections:
+  - name: b
+    accepted:
+      - b
+    max_depth: 1
+body:
+  mode: disallowed
+`
+
+	abCycleALayout = `<div class="ab-a" data-name="{{.name}}" data-template="{{.item.template}}" data-depth="{{.item.depth}}">{{range .b}}{{.}}{{end}}</div>`
+
+	// Template a's example authors the one `b` instance its declaration
+	// accepts at depth 0, so load-time example validation exercises the bound.
+	abCycleAExample = "```\nname: A0\n```\n# b\n```\nname: B0\n```\n"
+
+	abCycleBTemplateYAML = `description: a/b cycle template b, accepting a unbounded
+fields:
+  - name: name
+    type: text
+sections:
+  - name: a
+    accepted:
+      - a
+body:
+  mode: disallowed
+`
+
+	abCycleBLayout = `<div class="ab-b" data-name="{{.name}}" data-template="{{.item.template}}" data-depth="{{.item.depth}}">{{range .a}}{{.}}{{end}}</div>`
+
+	abCycleBExample = "```\nname: B0\n```\n# a\n```\nname: A0\n```\n"
+)
+
+// abDepthSampleRE captures each rendered a/b-cycle instance's resolved template
+// and printed self-nesting depth (`data-template` immediately followed by
+// `data-depth`, both emitted by the a and b layouts). FindAllStringSubmatch
+// returns the instances in document (pre-)order, matching the parse-time walk.
+var abDepthSampleRE = regexp.MustCompile(`data-template="([^"]*)"\s+data-depth="(\d+)"`)
+
+// abCycleDeckFiles is the accepted a/b-cycle deck: `# a` (template a) › `## b`
+// (template b) › `### a` (template a) › `#### b` (template b). The second b,
+// with one enclosing b ancestor (self-nesting depth 1), sits exactly at a's
+// `b` declaration's max_depth: 1 and is accepted.
+var abCycleDeckFiles = map[string]string{
+	"kalide.yaml": "title: A/B Cycle Deck\n" +
+		"theme: plain\n",
+	"slides/1-cycle.md": `---
+template: abhost
+---
+
+# a
+` + "```\nname: A1\n```" + `
+## b
+` + "```\nname: B1\n```" + `
+### a
+` + "```\nname: A2\n```" + `
+#### b
+` + "```\nname: B2\n```" + `
+`,
+}
+
+// abCycleOverflowDeckFiles is the a/b-cycle deck that runs past the bound: it
+// adds `##### a` › `###### b`, so the third b instance has two enclosing b
+// ancestors (self-nesting depth 2) and the parser refuses it with
+// `section "b": nesting deeper than max_depth 1`. It is a deck of its own
+// because the 4-level deck above is fully accepted and a slide.Parse failure
+// cannot share a deck with it.
+var abCycleOverflowDeckFiles = map[string]string{
+	"kalide.yaml": "title: A/B Cycle Overflow Deck\n" +
+		"theme: plain\n",
+	"slides/1-overflow.md": `---
+template: abhost
+---
+
+# a
+` + "```\nname: A1\n```" + `
+## b
+` + "```\nname: B1\n```" + `
+### a
+` + "```\nname: A2\n```" + `
+#### b
+` + "```\nname: B2\n```" + `
+##### a
+` + "```\nname: A3\n```" + `
+###### b
+` + "```\nname: B3\n```" + `
+`,
+}
+
+// writeAbCycleDeck writes files to a fresh t.TempDir(), copies the fixture
+// templates/ library, and writes the a/b-cycle probe templates (the abhost
+// slide template and the a and b section templates) into that copied library,
+// returning the directory.
+func writeAbCycleDeck(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, data := range files {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(p), err)
+		}
+		if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+			t.Fatalf("write %s: %v", p, err)
+		}
+	}
+	copyTemplatesDir(t, filepath.Join(fixtureLibraryDir, "templates"), filepath.Join(dir, "templates"))
+	writeProbeTemplate(t, dir, "slides", "abhost", abCycleHostTemplateYAML, abCycleHostLayout, abCycleHostExample)
+	writeProbeTemplate(t, dir, "sections", "a", abCycleATemplateYAML, abCycleALayout, abCycleAExample)
+	writeProbeTemplate(t, dir, "sections", "b", abCycleBTemplateYAML, abCycleBLayout, abCycleBExample)
 	return dir
 }
 
