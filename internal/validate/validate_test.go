@@ -192,7 +192,8 @@ func testOrdering(t *testing.T) {
 }
 
 // testDeterminism asserts repeated runs over the same invalid deck yield the
-// same single error.
+// same single error fail-fast, and the same ordered list of Format-ed errors
+// collect-all.
 func testDeterminism(t *testing.T) {
 	reg := mustBuiltins(t)
 	files := deckFiles("kalide.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: content\n---\n\n# columns\n\nA\n\n# columns\n\nB\n")
@@ -212,6 +213,27 @@ func testDeterminism(t *testing.T) {
 			first = got
 		} else if got != first {
 			t.Fatalf("run %d: error = %q, previous = %q", i, got, first)
+		}
+	}
+
+	// Collect-all determinism: the same multi-fault deck yields the identical
+	// ordered list of Format-ed errors on every run.
+	multi := deckFiles(
+		"kalide.yaml", "navigation: diagonal\n",
+		"slides/1-a.md", "---\ntemplate: content\n---\n\nSee [x](#nope).\n",
+	)
+	var firstAll []string
+	for i := 0; i < 5; i++ {
+		got := formatAll(ValidateAll(mapDeck(multi), reg, exampleThemeRegistry()))
+		if len(got) == 0 {
+			t.Fatalf("run %d: ValidateAll() returned no errors, want a non-empty list", i)
+		}
+		if i == 0 {
+			firstAll = got
+			continue
+		}
+		if !reflect.DeepEqual(got, firstAll) {
+			t.Fatalf("run %d: ValidateAll() errors =\n  %q\nprevious\n  %q", i, got, firstAll)
 		}
 	}
 }
