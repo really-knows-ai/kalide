@@ -959,6 +959,163 @@ func parseManifestBody(manifestPath string, val *yaml.Node) (BodyRule, error) {
 	return b, nil
 }
 
+// parseManifestTables decodes the `tables` value of a template's `body`
+// mapping into its optional *TableRule (table-opt-in). A nil node (the key
+// absent) and the scalar `false` (the explicit opt-out) are equivalent: each
+// returns (nil, nil), leaving the template without tables so a body that
+// carries one is refused. Any other value must be a mapping, which opts the
+// template in and declares the rule's sub-keys — the numeric limits
+// `min_tables`, `max_tables`, `min_columns`, `max_columns`, `min_rows` and
+// `max_rows` (table-limits) and the `cell_attributes` descriptor list
+// (table-cell-attributes), decoded by parseManifestCellAttributes.
+//
+// Every numeric sub-key takes a non-negative integer. The declared defaults
+// are min_tables 0, max_tables 1, min_columns 1, max_columns 0 (unbounded),
+// min_rows 0 and max_rows 0 (unbounded); an explicit `0` on a `max_*` key is
+// unbounded and an explicit `0` on a `min_*` key is no minimum (table-limits).
+// The two keys whose default is non-zero — max_tables and min_columns — are
+// therefore tracked as present or absent, so an explicit `0` is not
+// overwritten by the default. A `min_*` bound above its bounded `max_*` (a
+// `max_*` of 0 is unbounded, so not bounded) is refused as unsatisfiable.
+//
+// Every problem is a positioned templates error (*LibraryError) naming the
+// offending template.yaml: a value that is neither a mapping nor `false`, an
+// unknown sub-key (with a closest-match suggestion over the sub-key names), a
+// non-integer or negative bound, and a `min_*` bound above its bounded
+// `max_*`.
+func parseManifestTables(manifestPath string, val *yaml.Node) (*TableRule, error) {
+	// The scalar `false` is the explicit opt-out, equivalent to the key being
+	// absent (table-opt-in); any other scalar — including `true` — is an
+	// error, as is any non-scalar that is not a mapping.
+	if val == nil {
+		return nil, nil
+	}
+	if val.Kind == yaml.ScalarNode && val.ShortTag() == "!!bool" {
+		var b bool
+		if err := val.Decode(&b); err == nil && !b {
+			return nil, nil
+		}
+	}
+	if val.Kind != yaml.MappingNode {
+		return nil, libraryErrorf(manifestPath, nodeLineOr(val, 0), `key "tables": expected a mapping or false`)
+	}
+
+	line := nodeLineOr(val, 0)
+	tr := &TableRule{}
+	// hasMaxTables/hasMinColumns distinguish an absent key (whose declared
+	// default is non-zero) from an explicit 0 (unbounded / no minimum).
+	var hasMaxTables, hasMinColumns bool
+	// maxTablesLine/maxColumnsLine/maxRowsLine position a min-above-max error
+	// at the max bound it names.
+	var maxTablesLine, maxColumnsLine, maxRowsLine int
+
+	// bound decodes one numeric sub-key as a non-negative integer: a missing
+	// or malformed value (scalarInt) and a negative one are each a positioned
+	// templates error naming the key.
+	bound := func(key string, v *yaml.Node, kl int) (int, error) {
+		n, err := scalarInt(v, manifestPath, kl, key)
+		if err != nil {
+			return 0, err
+		}
+		if n < 0 {
+			return 0, libraryErrorf(manifestPath, kl, "key %q: expected a non-negative integer", key)
+		}
+		return n, nil
+	}
+
+	for i := 0; i+1 < len(val.Content); i += 2 {
+		key := val.Content[i]
+		v := val.Content[i+1]
+		kl := nodeLineOr(key, line)
+
+		switch key.Value {
+		case "min_tables":
+			n, err := bound(key.Value, v, kl)
+			if err != nil {
+				return nil, err
+			}
+			tr.MinTables = n
+		case "max_tables":
+			n, err := bound(key.Value, v, kl)
+			if err != nil {
+				return nil, err
+			}
+			tr.MaxTables = n
+			hasMaxTables = true
+			maxTablesLine = kl
+		case "min_columns":
+			n, err := bound(key.Value, v, kl)
+			if err != nil {
+				return nil, err
+			}
+			tr.MinColumns = n
+			hasMinColumns = true
+		case "max_columns":
+			n, err := bound(key.Value, v, kl)
+			if err != nil {
+				return nil, err
+			}
+			tr.MaxColumns = n
+			maxColumnsLine = kl
+		case "min_rows":
+			n, err := bound(key.Value, v, kl)
+			if err != nil {
+				return nil, err
+			}
+			tr.MinRows = n
+		case "max_rows":
+			n, err := bound(key.Value, v, kl)
+			if err != nil {
+				return nil, err
+			}
+			tr.MaxRows = n
+			maxRowsLine = kl
+		case "cell_attributes":
+			attrs, err := parseManifestCellAttributes(manifestPath, v)
+			if err != nil {
+				return nil, err
+			}
+			tr.CellAttributes = attrs
+		default:
+			e := libraryErrorf(manifestPath, kl, "unknown key %q in the tables rule", key.Value)
+			return nil, e.withSuggestion(key.Value, []string{
+				"min_tables", "max_tables", "min_columns", "max_columns",
+				"min_rows", "max_rows", "cell_attributes",
+			})
+		}
+	}
+
+	// The declared non-zero defaults apply only when the key is absent: an
+	// explicit `max_tables: 0` (unbounded) or `min_columns: 0` (no minimum)
+	// stands (table-limits).
+	if !hasMaxTables {
+		tr.MaxTables = 1
+	}
+	if !hasMinColumns {
+		tr.MinColumns = 1
+	}
+
+	// A min_* bound above its max_* bound would make the rule unsatisfiable.
+	// A max_* of 0 is unbounded, so it is not a bound to compare against.
+	if tr.MaxTables > 0 && tr.MinTables > tr.MaxTables {
+		pos := maxTablesLine
+		if pos == 0 {
+			// max_tables is absent and its default of 1 is what min_tables
+			// exceeds; position at the mapping.
+			pos = line
+		}
+		return nil, libraryErrorf(manifestPath, pos, "tables: min_tables %d is above max_tables %d", tr.MinTables, tr.MaxTables)
+	}
+	if tr.MaxColumns > 0 && tr.MinColumns > tr.MaxColumns {
+		return nil, libraryErrorf(manifestPath, maxColumnsLine, "tables: min_columns %d is above max_columns %d", tr.MinColumns, tr.MaxColumns)
+	}
+	if tr.MaxRows > 0 && tr.MinRows > tr.MaxRows {
+		return nil, libraryErrorf(manifestPath, maxRowsLine, "tables: min_rows %d is above max_rows %d", tr.MinRows, tr.MaxRows)
+	}
+
+	return tr, nil
+}
+
 // parseManifestCellAttributes decodes the `cell_attributes` sequence of a
 // template's `body.tables` mapping (table-cell-attributes). Each entry is one
 // cell-attribute descriptor using the usual field descriptors
