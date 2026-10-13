@@ -9,6 +9,7 @@ import (
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -943,5 +944,254 @@ func TestRenderSlideSectionHelperChildParity(t *testing.T) {
 	callerHTML := renderSlideString(t, caller, "parity", cfg, meta, 1, reg, funcMap)
 	if want := `<div class="parity-wrapper" data-index="0" data-number="1" data-count="1" data-section="paritywrapper" data-template="paritywrapper" data-parent="yes" data-parent-heading="Caller H">`; !strings.Contains(callerHTML, want) {
 		t.Errorf("section helper target invoked from a section does not carry the caller's fields as .item.parent:\nwant %q\ngot  %s", want, callerHTML)
+	}
+}
+
+// cellContextHTML extracts the rendered html of one tableContext /
+// tableCellContext cell map ({html, attrs}), failing if the shape is wrong.
+func cellContextHTML(t *testing.T, cell any) string {
+	t.Helper()
+	m, ok := cell.(map[string]any)
+	if !ok {
+		t.Fatalf("cell = %T, want map[string]any", cell)
+	}
+	html, ok := m["html"].(htmltmpl.HTML)
+	if !ok {
+		t.Fatalf("cell html = %T, want html/template.HTML", m["html"])
+	}
+	return string(html)
+}
+
+// cellContextAttrs extracts the attrs map of one tableContext /
+// tableCellContext cell map ({html, attrs}), failing if the shape is wrong.
+func cellContextAttrs(t *testing.T, cell any) map[string]any {
+	t.Helper()
+	m, ok := cell.(map[string]any)
+	if !ok {
+		t.Fatalf("cell = %T, want map[string]any", cell)
+	}
+	attrs, ok := m["attrs"].(map[string]any)
+	if !ok {
+		t.Fatalf("cell attrs = %T, want map[string]any", m["attrs"])
+	}
+	return attrs
+}
+
+// TestTableContextColumnsInOrder pins tableContext's table map shape
+// (table-layout-context, gfm-tables): headers, align and every body row carry one
+// entry per column, in column order, and the returned .table is the body's first
+// table — the same map .tables carries at index 0.
+func TestTableContextColumnsInOrder(t *testing.T) {
+	src := "| H1 | H2 | H3 |\n| :--- | :---: | ---: |\n| a | b | c |\n| d | e | f |"
+	table, tables := tableContext(src, nil)
+
+	if len(tables) != 1 {
+		t.Fatalf("tableContext tables = %d entries, want 1", len(tables))
+	}
+	tm, ok := table.(map[string]any)
+	if !ok {
+		t.Fatalf("tableContext table = %T, want map[string]any", table)
+	}
+
+	headers, ok := tm["headers"].([]any)
+	if !ok {
+		t.Fatalf("table headers = %T, want []any", tm["headers"])
+	}
+	wantHeaders := []string{"H1", "H2", "H3"}
+	if len(headers) != len(wantHeaders) {
+		t.Fatalf("table headers = %d entries, want %d", len(headers), len(wantHeaders))
+	}
+	for i, want := range wantHeaders {
+		if got := cellContextHTML(t, headers[i]); got != want {
+			t.Errorf("header[%d] html = %q, want %q", i, got, want)
+		}
+	}
+
+	align, ok := tm["align"].([]string)
+	if !ok {
+		t.Fatalf("table align = %T, want []string", tm["align"])
+	}
+	wantAlign := []string{"left", "center", "right"}
+	if len(align) != len(wantAlign) {
+		t.Fatalf("table align = %v, want %v", align, wantAlign)
+	}
+	for i, want := range wantAlign {
+		if align[i] != want {
+			t.Errorf("align[%d] = %q, want %q", i, align[i], want)
+		}
+	}
+
+	rows, ok := tm["rows"].([]any)
+	if !ok {
+		t.Fatalf("table rows = %T, want []any", tm["rows"])
+	}
+	wantRows := [][]string{{"a", "b", "c"}, {"d", "e", "f"}}
+	if len(rows) != len(wantRows) {
+		t.Fatalf("table rows = %d entries, want %d", len(rows), len(wantRows))
+	}
+	for r, wantRow := range wantRows {
+		cells, ok := rows[r].([]any)
+		if !ok {
+			t.Fatalf("row[%d] = %T, want []any", r, rows[r])
+		}
+		if len(cells) != len(wantRow) {
+			t.Fatalf("row[%d] = %d cells, want %d", r, len(cells), len(wantRow))
+		}
+		for c, want := range wantRow {
+			if got := cellContextHTML(t, cells[c]); got != want {
+				t.Errorf("row[%d] cell[%d] html = %q, want %q", r, c, got, want)
+			}
+		}
+	}
+
+	// .table is the body's first table, i.e. the same map .tables[0] holds.
+	if first, ok := tables[0].(map[string]any); !ok {
+		t.Fatalf("tables[0] = %T, want map[string]any", tables[0])
+	} else if got := cellContextHTML(t, first["headers"].([]any)[0]); got != "H1" {
+		t.Errorf("tables[0] first header = %q, want the same first table .table exposes", got)
+	}
+}
+
+// TestTableContextNoTable pins the always-present no-table shape in the render
+// package's unit surface (table-layout-context, gfm-tables): without a table,
+// .table is a TYPED nil map (map[string]any(nil)) — falsy but safe to range — and
+// .tables is a non-nil, empty list.
+func TestTableContextNoTable(t *testing.T) {
+	table, tables := tableContext("A paragraph, and no table at all.\n", nil)
+
+	tm, ok := table.(map[string]any)
+	if !ok {
+		t.Fatalf("tableContext table = %T, want map[string]any", table)
+	}
+	if tm != nil {
+		t.Errorf("tableContext table = %#v, want a typed nil map", tm)
+	}
+	if tables == nil {
+		t.Error("tableContext tables = nil, want a non-nil empty list")
+	} else if len(tables) != 0 {
+		t.Errorf("tableContext tables = %v, want an empty list", tables)
+	}
+}
+
+// TestTableCellContext pins tableCellContext (table-cell-attributes,
+// table-layout-context): a declared but unset attribute is present with a nil
+// value; a set attribute carries its typed value and the `{...}` group is
+// stripped from the html; a `{br}` joins its rendered segments with a literal
+// `<br>`; and an unknown attribute degrades to the cell's raw inline html with
+// every declared attribute left nil and no entry for the undeclared name.
+func TestTableCellContext(t *testing.T) {
+	specs := []mdcheck.CellAttributeSpec{
+		{Name: "bold", Kind: mdcheck.CellAttributeBoolean},
+		{Name: "highlight", Kind: mdcheck.CellAttributeEnum, Variants: []string{"green", "red"}},
+	}
+
+	t.Run("declared attributes are present with nil values", func(t *testing.T) {
+		m := tableCellContext(mdcheck.TableCell{Text: "plain"}, specs)
+		attrs := cellContextAttrs(t, m)
+		if len(attrs) != 2 {
+			t.Fatalf("attrs = %v, want the two declared attributes", attrs)
+		}
+		for _, name := range []string{"bold", "highlight"} {
+			v, ok := attrs[name]
+			if !ok {
+				t.Errorf("attrs[%q] is absent, want present with a nil value", name)
+			} else if v != nil {
+				t.Errorf("attrs[%q] = %v, want nil", name, v)
+			}
+		}
+	})
+
+	t.Run("set attributes carry their typed values and strip the group", func(t *testing.T) {
+		m := tableCellContext(mdcheck.TableCell{Text: "x{bold} y{highlight:green}"}, specs)
+		if got := string(m["html"].(htmltmpl.HTML)); got != "x y" {
+			t.Errorf("html = %q, want %q (the groups stripped)", got, "x y")
+		}
+		attrs := cellContextAttrs(t, m)
+		if attrs["bold"] != true {
+			t.Errorf("attrs[bold] = %v, want true", attrs["bold"])
+		}
+		if attrs["highlight"] != "green" {
+			t.Errorf("attrs[highlight] = %v, want %q", attrs["highlight"], "green")
+		}
+	})
+
+	t.Run("{br} joins the rendered segments with a literal <br>", func(t *testing.T) {
+		m := tableCellContext(mdcheck.TableCell{Text: "a{br}**b**"}, specs)
+		if got := string(m["html"].(htmltmpl.HTML)); got != "a<br><strong>b</strong>" {
+			t.Errorf("html = %q, want %q", got, "a<br><strong>b</strong>")
+		}
+	})
+
+	t.Run("an unknown attribute degrades to raw html with nil attrs", func(t *testing.T) {
+		m := tableCellContext(mdcheck.TableCell{Text: "plain {hilight}"}, specs)
+		if got := string(m["html"].(htmltmpl.HTML)); got != "plain {hilight}" {
+			t.Errorf("html = %q, want the raw %q on a decode error", got, "plain {hilight}")
+		}
+		attrs := cellContextAttrs(t, m)
+		if len(attrs) != 2 {
+			t.Fatalf("attrs = %v, want only the two declared attributes", attrs)
+		}
+		for _, name := range []string{"bold", "highlight"} {
+			if v := attrs[name]; v != nil {
+				t.Errorf("attrs[%q] = %v, want nil on a decode error", name, v)
+			}
+		}
+		if _, ok := attrs["hilight"]; ok {
+			t.Errorf("attrs carries the undeclared name %q, want no entry", "hilight")
+		}
+	})
+}
+
+// TestRenderCellLines pins renderCellLines (table-layout-context): each decoded
+// segment is rendered through renderInline and the rendered segments are joined
+// with a literal `<br>`, so a `{br}` break survives an inline renderer that would
+// escape a raw `<br>`.
+func TestRenderCellLines(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		want  string
+	}{
+		{"no lines", nil, ""},
+		{"single segment", []string{"a"}, "a"},
+		{"two segments joined", []string{"a", "b"}, "a<br>b"},
+		{"each segment rendered inline", []string{"**a**", "`b`"}, "<strong>a</strong><br><code>b</code>"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := string(renderCellLines(tc.lines)); got != tc.want {
+				t.Errorf("renderCellLines(%q) = %q, want %q", tc.lines, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderBodyOmitsTables pins renderBody's table omission
+// (table-layout-context, gfm-tables): a body's GFM table reaches the output only
+// through the reserved .table/.tables context, so renderBody renders the
+// surrounding content and drops the table block entirely.
+func TestRenderBodyOmitsTables(t *testing.T) {
+	src := "before\n\n| A | B |\n| --- | --- |\n| a | b |\n\nafter"
+	html, err := renderBody(src)
+	if err != nil {
+		t.Fatalf("renderBody() error = %v, want nil", err)
+	}
+	if got, want := string(html), "<p>before</p>\n<p>after</p>\n"; got != want {
+		t.Errorf("renderBody() = %q, want %q (the table omitted, other content kept)", got, want)
+	}
+}
+
+// TestRenderBodyWithoutTablesByteIdentical pins that renderBody leaves a body
+// with no table untouched (table-layout-context): it renders exactly as goldmark
+// renders the source, with none of the table-blanking applied.
+func TestRenderBodyWithoutTablesByteIdentical(t *testing.T) {
+	src := "# Heading\n\nA paragraph with **bold** and `code`.\n"
+	html, err := renderBody(src)
+	if err != nil {
+		t.Fatalf("renderBody() error = %v, want nil", err)
+	}
+	want := "<h1>Heading</h1>\n<p>A paragraph with <strong>bold</strong> and <code>code</code>.</p>\n"
+	if got := string(html); got != want {
+		t.Errorf("renderBody() = %q, want %q", got, want)
 	}
 }
