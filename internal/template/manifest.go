@@ -52,7 +52,7 @@ var manifestBodyModes = map[string]BodyMode{
 // keys parseManifest decodes and dispatches (template-manifest), in
 // declaration order. It deliberately excludes the tolerated-and-ignored `name`
 // key: a template's name is always its directory name, never a manifest value.
-var manifestTopLevelKeys = []string{"description", "fields", "sections", "body"}
+var manifestTopLevelKeys = []string{"description", "fields", "sections", "body", "internal"}
 
 // ManifestFieldTypes returns the sorted field-type names a template.yaml
 // `type:` may take — the keys of manifestFieldTypes (field-types). It is the
@@ -83,8 +83,8 @@ func BodyModes() []string {
 }
 
 // ManifestTopLevelKeys returns the sorted accepted top-level template.yaml
-// schema keys parseManifest decodes and dispatches — body, description, fields
-// and sections (template-manifest). It does not include the
+// schema keys parseManifest decodes and dispatches — body, description, fields,
+// internal and sections (template-manifest). It does not include the
 // tolerated-and-ignored `name` key: a template's name is always its directory
 // name, never a manifest value. It is the single source of truth for the
 // template.yaml top-level key vocabulary. The returned slice is a fresh
@@ -155,6 +155,9 @@ func parseManifest(t *LibraryTemplate) (*Template, error) {
 				return nil, err
 			}
 			def.Body = body
+		case "internal":
+			// Accepted top-level flag (internal-templates); the decode into
+			// Template.Internal is added with the other manifest value keys.
 		default:
 			e := libraryErrorf(t.ManifestPath, line, "unknown key %q", key.Value)
 			return nil, e.withSuggestion(key.Value, manifestTopLevelKeys)
