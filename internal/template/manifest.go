@@ -242,6 +242,14 @@ func parseManifestFields(manifestPath string, val *yaml.Node, defs *LibraryDefin
 // item descriptor needs no `name`; a `record` anywhere else is rejected
 // (record-list-item-only). defs is the owning layer's named definitions
 // (parseManifest), threaded through the recursive `item:`/`fields:` decodes.
+//
+// A `type:` that is not a built-in type name may instead name a type in defs
+// (named-library-definitions): the named descriptor is expanded into this
+// field, the referencing field's own sibling keys (description, required,
+// default, …) overriding the named definition's and its Name being the
+// referencing field's. A name no definition carries is a templates error
+// carrying a closest-match suggestion that includes the built-in types
+// (resolveNamedDefinition).
 func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs *LibraryDefinitions) (*Field, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a field")
@@ -250,6 +258,15 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 	f := &Field{}
 	var haveName, haveType bool
 	var typeStr string
+	// present records the keys this descriptor itself declares, so that when
+	// its `type:` names a definition the named descriptor can be expanded
+	// underneath it: the referencing field's declared keys override the named
+	// definition's, while the keys it omits keep the named definition's values
+	// (named-library-definitions).
+	present := make(map[string]bool, len(node.Content)/2)
+	// typeLine positions a `type:` key, so an unresolvable named type is
+	// reported at its reference rather than at the descriptor's first key.
+	var typeLine int
 	// A cross-field list bound is decoded into a local until the field's type
 	// is known, so it can be rejected on a non-list field (list-only).
 	var maxItemsFrom, minItemsFrom string
@@ -260,6 +277,7 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 		key := node.Content[i]
 		val := node.Content[i+1]
 		kl := nodeLineOr(key, line)
+		present[key.Value] = true
 
 		switch key.Value {
 		case "name":
@@ -276,6 +294,7 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 			}
 			typeStr = s
 			haveType = true
+			typeLine = kl
 		case "nullable":
 			b, err := scalarBool(val, manifestPath, kl, "nullable")
 			if err != nil {
@@ -422,15 +441,15 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 	// list field and so is meaningful only on a list field; on any other type
 	// the key is rejected, just as `fields` is rejected on a non-record
 	// (cross-field-list-constraints).
-	checkListOnlyKeys := func(ft FieldType) error {
+	checkListOnlyKeys := func(ft FieldType, name string) error {
 		if ft == FieldList {
 			return nil
 		}
 		if haveMaxItemsFrom {
-			return libraryErrorf(manifestPath, maxItemsFromLine, "field %q: key %q is only valid on a list field", f.Name, "max_items_from")
+			return libraryErrorf(manifestPath, maxItemsFromLine, "field %q: key %q is only valid on a list field", name, "max_items_from")
 		}
 		if haveMinItemsFrom {
-			return libraryErrorf(manifestPath, minItemsFromLine, "field %q: key %q is only valid on a list field", f.Name, "min_items_from")
+			return libraryErrorf(manifestPath, minItemsFromLine, "field %q: key %q is only valid on a list field", name, "min_items_from")
 		}
 		return nil
 	}
@@ -453,31 +472,124 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 		if f.Fields == nil {
 			return nil, libraryErrorf(manifestPath, line, "field %q: type %q requires key %q", f.Name, typeStr, "fields")
 		}
-		if err := checkListOnlyKeys(FieldRecord); err != nil {
+		if err := checkListOnlyKeys(FieldRecord, f.Name); err != nil {
 			return nil, err
 		}
 		f.Type = FieldRecord
 		return f, nil
 	}
-	ft, ok := manifestFieldTypes[typeStr]
-	if !ok {
-		valid := make([]string, 0, len(manifestFieldTypes))
-		for name := range manifestFieldTypes {
-			valid = append(valid, name)
+	if ft, ok := manifestFieldTypes[typeStr]; ok {
+		if f.Fields != nil {
+			return nil, libraryErrorf(manifestPath, line, "field %q: key %q is only valid on a record item descriptor", f.Name, "fields")
 		}
-		e := libraryErrorf(manifestPath, line, "field %q: unknown type %q", f.Name, typeStr)
-		return nil, e.withSuggestion(typeStr, valid)
+		if err := checkListOnlyKeys(ft, f.Name); err != nil {
+			return nil, err
+		}
+		f.MaxItemsFrom = maxItemsFrom
+		f.MinItemsFrom = minItemsFrom
+		f.Type = ft
+		return f, nil
+	}
+
+	// Not a built-in type name: a field's `type: <name>` may name a type in
+	// the owning layer's definitions (named-library-definitions), whose
+	// descriptor is expanded into this field. resolveNamedDefinition reports a
+	// name no definition carries as a templates error with a closest-match
+	// suggestion over the built-in types and the declared named types.
+	named, err := resolveNamedDefinition(namedDefinitionType, typeStr, defs, manifestPath, typeLine)
+	if err != nil {
+		return nil, err
 	}
 	if f.Fields != nil {
 		return nil, libraryErrorf(manifestPath, line, "field %q: key %q is only valid on a record item descriptor", f.Name, "fields")
 	}
-	if err := checkListOnlyKeys(ft); err != nil {
+	if haveMaxItemsFrom {
+		f.MaxItemsFrom = maxItemsFrom
+	}
+	if haveMinItemsFrom {
+		f.MinItemsFrom = minItemsFrom
+	}
+	merged := mergeNamedTypeField(named.(Field), *f, present)
+	if err := checkListOnlyKeys(merged.Type, merged.Name); err != nil {
 		return nil, err
 	}
-	f.MaxItemsFrom = maxItemsFrom
-	f.MinItemsFrom = minItemsFrom
-	f.Type = ft
-	return f, nil
+	return &merged, nil
+}
+
+// mergeNamedTypeField expands base, a named type's descriptor, into f, the
+// field that referenced it as `type: <base's name>` (named-library-definitions):
+// the expanded descriptor keeps the referencing field's Name, every sibling key
+// the referencing field itself declared (tracked in present) overrides base's,
+// and every key the referencing field omitted keeps base's value. The `type:`
+// key is the reference itself, so the expanded descriptor's Type is always
+// base's, never the referencing field's type name.
+func mergeNamedTypeField(base, f Field, present map[string]bool) Field {
+	out := base
+	out.Name = f.Name
+	if present["nullable"] {
+		out.Nullable = f.Nullable
+	}
+	if present["coerce"] {
+		out.Coerce = f.Coerce
+	}
+	if present["plain"] {
+		out.Plain = f.Plain
+	}
+	if present["required"] {
+		out.Required = f.Required
+	}
+	if present["default"] {
+		out.Default = f.Default
+	}
+	if present["description"] {
+		out.Description = f.Description
+	}
+	if present["max_length"] {
+		out.MaxLength = f.MaxLength
+	}
+	if present["min_items"] {
+		out.MinItems = f.MinItems
+	}
+	if present["max_items"] {
+		out.MaxItems = f.MaxItems
+	}
+	if present["max_items_from"] {
+		out.MaxItemsFrom = f.MaxItemsFrom
+	}
+	if present["min_items_from"] {
+		out.MinItemsFrom = f.MinItemsFrom
+	}
+	if present["min"] {
+		out.Min = f.Min
+	}
+	if present["max"] {
+		out.Max = f.Max
+	}
+	if present["min_date"] {
+		out.MinDate = f.MinDate
+	}
+	if present["max_date"] {
+		out.MaxDate = f.MaxDate
+	}
+	if present["variants"] {
+		out.Variants = f.Variants
+	}
+	if present["formats"] {
+		out.Formats = f.Formats
+	}
+	if present["default_format"] {
+		out.DefaultFormat = f.DefaultFormat
+	}
+	if present["section_template"] {
+		out.SectionTemplate = f.SectionTemplate
+	}
+	if present["item"] {
+		out.Item = f.Item
+	}
+	if present["fields"] {
+		out.Fields = f.Fields
+	}
+	return out
 }
 
 // namedDefinitionKind identifies which of the three named-definition sections
