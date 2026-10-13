@@ -48,6 +48,7 @@ import (
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
 	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 )
@@ -2148,9 +2149,32 @@ func writeNodeText(b *strings.Builder, n ast.Node, src []byte) {
 // renderBody renders a body — a slide body, a section body or the notes body —
 // as the accepted Markdown subset to block HTML, using goldmark's CommonMark
 // core with no extensions, exactly as internal/mdcheck validated it.
+//
+// Every GFM table the body contains is omitted, so a table reaches the output
+// only through the reserved `.table`/`.tables` render context and never also as
+// ordinary body Markdown. The tables are located with mdcheck.ParseTables — the
+// same parser validation uses, over the body alone (startLine 1) with no limit
+// bounds — and the lines each table occupies are blanked before goldmark sees
+// the source. A body with no table is rendered from its source unchanged,
+// byte for byte.
 func renderBody(src string) (htmltmpl.HTML, error) {
 	if strings.TrimSpace(src) == "" {
 		return "", nil
+	}
+	tables, _ := mdcheck.ParseTables(src, 1, mdcheck.TableOptions{})
+	if len(tables) > 0 {
+		lines := strings.Split(src, "\n")
+		for _, t := range tables {
+			// A table occupies its header row (Line), its delimiter row and
+			// one line per body row: parseTable consumes exactly those lines,
+			// so the last line is Line+1+len(Rows) within the body.
+			for n := t.Line; n <= t.Line+1+len(t.Rows); n++ {
+				if n >= 1 && n <= len(lines) {
+					lines[n-1] = ""
+				}
+			}
+		}
+		src = strings.Join(lines, "\n")
 	}
 	var buf bytes.Buffer
 	if err := goldmark.New().Convert([]byte(src), &buf); err != nil {
