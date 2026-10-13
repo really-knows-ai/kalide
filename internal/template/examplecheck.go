@@ -100,7 +100,10 @@ func checkLibraryExamples(lib *Library) error {
 // resolves against, so a template contributed by a non-primary layer resolves
 // its own `{{ media … }}` reference in that layer's media rather than the
 // merged Library's primary media (library-layer-references); a nil layer falls
-// back to lib.Media, the pre-layer behaviour.
+// back to lib.Media, the pre-layer behaviour. The same layer's media (and the
+// lib.Media fallback) is the tree the load-time image-field existence resolver
+// closes over — with a nil assets filesystem, since no deck exists yet — so only
+// a media-root image field is existence-checked at step 7 (image-field-roots).
 func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer) error {
 	if lt == nil || lt.Definition == nil {
 		return nil
@@ -145,7 +148,19 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 		if err != nil {
 			return withPath(err, lt.ExamplePath)
 		}
-		if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, ctx); err != nil {
+		// The load-time image-field existence resolver (image-field-roots):
+		// no deck exists yet, so the assets filesystem is nil and only the
+		// owning layer's media/ tree is resolvable — the same lib.Media
+		// fallback the layout's `media` helper uses below. A media-root image
+		// field is existence-checked against that tree; an assets/no-roots
+		// field has no resolvable root and so stays unchecked, exactly as
+		// before (checkImageRoots reports "not checkable").
+		mediaFS := lib.Media
+		if layer != nil {
+			mediaFS = layer.Media
+		}
+		imageExists := ImageExistsFunc(nil, mediaFS)
+		if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, imageExists, ctx); err != nil {
 			return err
 		}
 
