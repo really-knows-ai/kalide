@@ -383,6 +383,16 @@ func (r *Registry) Templates() []*Template {
 	return out
 }
 
+// checkInternalTemplate is the single internal-template rule (internal-templates):
+// it reports whether t is hidden from the default listing by its manifest's
+// `internal: true` (Template.Internal). It is the one answer the registry's
+// Catalogue surface and the slide parser's Markdown-template-target checks
+// consult, so the rule cannot drift between them. The read is nil-safe: a nil
+// *Template is not internal, matching an unknown name.
+func checkInternalTemplate(t *Template) bool {
+	return t != nil && t.Internal
+}
+
 // LookupSlideTemplate reports how the named template may be used and whether it
 // exists at all: usage is "slide" or "section", and ok is false when no
 // template has that name. It is part of the slide.Catalogue contract.
