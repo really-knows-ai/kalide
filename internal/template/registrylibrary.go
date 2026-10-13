@@ -45,6 +45,15 @@ import (
 // through LayerOf. Registration and validation behaviour are otherwise
 // unchanged.
 //
+// Each template's owning-layer named definitions are threaded through
+// registerLibraryTemplate into parseManifest, so a template's `type:`,
+// `include:` and `@group` references resolve in its OWN layer's definitions
+// (named-library-definitions). The definitions come from the owning layer
+// (LibraryLayer.Definitions) when the layer is identified; a Library with no
+// Layers — the single-layer *Library the loader body builds for step 4 —
+// carries them on its unexported definitions carrier instead, so that is the
+// fallback. A nil defs holds no definitions.
+//
 // single-binary (requirements.requirement.single-binary): the library is
 // resolved locally and offline — it works purely on the in-memory Library
 // LoadLibrary already built (which reads only the project's templates/
@@ -59,25 +68,38 @@ func NewRegistryFromLibrary(lib *Library) (*Registry, error) {
 	}
 
 	for _, name := range sortedLibraryTemplateNames(lib.Sections) {
-		if err := registerLibraryTemplate(r, lib.Sections[name]); err != nil {
+		_, layer, _ := resolveMergedSectionTarget(lib, name)
+		defs := lib.definitions
+		if layer != nil {
+			defs = layer.Definitions
+		}
+		if err := registerLibraryTemplate(r, lib.Sections[name], defs); err != nil {
 			return nil, err
 		}
-		_, layer, _ := resolveMergedSectionTarget(lib, name)
 		r.setLayer(name, layer)
 	}
 	for _, name := range sortedLibraryTemplateNames(lib.Slides) {
-		if err := registerLibraryTemplate(r, lib.Slides[name]); err != nil {
+		layer := resolveMergedSlideLayer(lib, name)
+		defs := lib.definitions
+		if layer != nil {
+			defs = layer.Definitions
+		}
+		if err := registerLibraryTemplate(r, lib.Slides[name], defs); err != nil {
 			return nil, err
 		}
-		r.setLayer(name, resolveMergedSlideLayer(lib, name))
+		r.setLayer(name, layer)
 	}
 	return r, nil
 }
 
 // registerLibraryTemplate parses one LibraryTemplate's manifest and registers
 // the resulting definition, carrying its layout and example Markdown across.
-func registerLibraryTemplate(r *Registry, lt *LibraryTemplate) error {
-	def, err := parseManifest(lt, nil)
+// defs is the named definitions of the layer that owns lt (LibraryLayer.
+// Definitions, or the loading *Library's carrier on the single-layer path),
+// threaded through to parseManifest so lt's `type:`/`include:`/`@group`
+// references resolve in its own layer (named-library-definitions).
+func registerLibraryTemplate(r *Registry, lt *LibraryTemplate, defs *LibraryDefinitions) error {
+	def, err := parseManifest(lt, defs)
 	if err != nil {
 		return err
 	}
