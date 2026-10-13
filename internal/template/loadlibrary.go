@@ -560,6 +560,11 @@ func LibraryMetaKeys() []string {
 // match the library naming convention, description is optional, and format
 // is a required integer whose only currently accepted value is 1.
 //
+// A malformed YAML document is reported through parseLibraryErrorLine as the
+// step-1 templates error, carrying the offending source line and, for an
+// offending plain scalar, the quoting hint
+// (requirements.requirement.yaml-error-messages).
+//
 // It also accepts the optional named-definition sections — groups:,
 // field_sets: and types: (named-library-definitions) — and parses them
 // through loadLibraryDefinitions into lib's load-time definitions carrier.
@@ -579,7 +584,7 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return libraryErrorf(metaPath, 0, "%s: %v", LibraryFile, err)
+		return parseLibraryErrorLine(metaPath, data, err)
 	}
 	mapping := libraryDocumentMapping(&doc)
 	if mapping == nil || mapping.Kind != yaml.MappingNode {
