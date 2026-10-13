@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/mdcheck"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -99,8 +100,12 @@ func mdcheckCellAttributeSpecs(attrs []template.CellAttribute) []mdcheck.CellAtt
 //   - the within-body path: `body` for a whole-table limit or the
 //     header/delimiter mismatch, `body › rows[i]` for a body row whose cell
 //     count differs from the header's, and `body › cell` for a cell-attribute
-//     violation (the enclosing instance chain, when any, prepends these);
-//   - the issue's message as What; and
+//     violation (the enclosing instance chain, when any, prepends these). A
+//     body row's row index is 0-based over the body rows with the header
+//     excluded, so the first body row after the delimiter is rows[0];
+//   - the issue's message as What, except that a strict-column-count issue's
+//     redundant leading `rows[i]: ` segment — the row index the path already
+//     carries — is dropped, so the index renders exactly once; and
 //   - the fix as Fix. A limit and a cell-attribute issue carry mdcheck's own
 //     guidance; the strict-column-count issues the parser raises carry none, so
 //     checkTables supplies one naming the cell count to match the header.
@@ -136,9 +141,10 @@ func checkTables(file, body string, startLine int, rule *template.TableRule, pre
 }
 
 // tableRow is one of a body's table body rows, located within its table: index
-// is the row's 1-based position among its table's body rows (matching the index
-// mdcheck's strict-column-count message names), and headerCount is that table's
-// header cell count, the cell count the row must match.
+// is the row's 0-based position among its table's body rows, the header
+// excluded, so the first body row after the delimiter is index 0 (matching the
+// index mdcheck's strict-column-count message names), and headerCount is that
+// table's header cell count, the cell count the row must match.
 type tableRow struct {
 	index       int
 	headerCount int
@@ -147,10 +153,12 @@ type tableRow struct {
 // tableStructure indexes a body's parsed tables by source line so a table issue
 // can be given its within-body path and, for a strict-column-count issue with
 // no fix of its own, the header count its message would name. rows maps each
-// body row's line to that row's tableRow; delimiters maps each table's
-// delimiter-row line to its header cell count. The body is parsed with zero
-// TableOptions — the limits do not affect what parses — and only the parsed
-// tables are used, never the issues that parse also yields.
+// body row's line to that row's tableRow, whose index is 0-based over the body
+// rows with the header excluded (the first body row after the delimiter is
+// rows[0]); delimiters maps each table's delimiter-row line to its header cell
+// count. The body is parsed with zero TableOptions — the limits do not affect
+// what parses — and only the parsed tables are used, never the issues that
+// parse also yields.
 func tableStructure(body string, startLine int) (rows map[int]tableRow, delimiters map[int]int) {
 	tables, _ := mdcheck.ParseTables(body, startLine, mdcheck.TableOptions{})
 	rows = make(map[int]tableRow)
@@ -163,19 +171,42 @@ func tableStructure(body string, startLine int) (rows map[int]tableRow, delimite
 			if len(row) == 0 {
 				continue
 			}
-			rows[row[0].Line] = tableRow{index: i + 1, headerCount: len(t.Headers)}
+			rows[row[0].Line] = tableRow{index: i, headerCount: len(t.Headers)}
 		}
 	}
 	return rows, delimiters
 }
 
 // adaptTableIssue adapts one KindTable mdcheck.Issue into a ValidationError: the
-// file, line and message carry across; tableIssuePath derives the within-body
-// path and tableIssueFix supplies the fix (the issue's own guidance, or one
-// checkTables supplies for a strict-column-count issue that carries none).
+// file and line carry across, tableIssuePath derives the within-body path,
+// tableIssueWhat supplies the author-facing message and tableIssueFix supplies
+// the fix (the issue's own guidance, or one checkTables supplies for a
+// strict-column-count issue that carries none).
 func adaptTableIssue(iss mdcheck.Issue, rows map[int]tableRow, delimiters map[int]int, prefix []string) ValidationError {
-	return New(iss.File, iss.Line, tableIssuePath(iss, rows, prefix), iss.Message,
+	return New(iss.File, iss.Line, tableIssuePath(iss, rows, prefix), tableIssueWhat(iss, rows),
 		tableIssueFix(iss, rows, delimiters))
+}
+
+// tableIssueWhat returns the author-facing message for a KindTable issue. It is
+// the issue's own message, except for a strict-column-count body-row issue:
+// mdcheck names the offending row with a leading `rows[i]: ` segment, and
+// tableIssuePath already carries that same row as the error's last path
+// segment, so keeping both would render the index twice — `rows[0]: rows[0]: 3
+// cells, header has 4`. The redundant leading segment is dropped, leaving the
+// index to render exactly once, as the path's `rows[0]` followed by the count;
+// the path and the message therefore agree. The row is looked up by the issue's
+// line, exactly as in tableIssuePath, and a strict-column-count issue that is
+// not a body row (the header/delimiter mismatch, positioned on the delimiter
+// row) carries no such segment and is returned unchanged.
+func tableIssueWhat(iss mdcheck.Issue, rows map[int]tableRow) string {
+	if iss.Guidance != "" {
+		return iss.Message
+	}
+	row, ok := rows[iss.Line]
+	if !ok {
+		return iss.Message
+	}
+	return strings.TrimPrefix(iss.Message, fmt.Sprintf("rows[%d]: ", row.index))
 }
 
 // tableIssuePath returns the within-body path of a KindTable issue: the
@@ -186,9 +217,11 @@ func adaptTableIssue(iss mdcheck.Issue, rows map[int]tableRow, delimiters map[in
 // carry only `body`: mdcheck raises both without a row position, a limit issue
 // with column 0 and the mismatch on the delimiter row. A body row whose cell
 // count differs from the header's is a row violation and carries `rows[i]`, the
-// 1-based row index from the parsed table (which matches the index the issue's
-// own message names). A cell-attribute issue is positioned at the offending
-// cell and carries `cell`.
+// 0-based row index over the body rows with the header excluded, so the first
+// body row after the delimiter is rows[0] (matching the index mdcheck's
+// message names; tableIssueWhat then drops that index from the message so it
+// renders once, on the path). A cell-attribute issue is positioned at the
+// offending cell and carries `cell`.
 //
 // The classification keys on mdcheck's own issue shape: a strict-column-count
 // issue is the one the parser raises without guidance (Guidance == ""), while
