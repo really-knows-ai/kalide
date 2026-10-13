@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -101,7 +103,11 @@ func containsHint(hint string) bool {
 // that exercises a nullable null, a coerce number and list-of-record values, so
 // a full load both validates the record schema end to end and converts the
 // example into the step-7 execution context (nullable-fields, record-item-type,
-// text-coercion).
+// text-coercion). An image-field-roots / enum-variants-from subtest adds a
+// template whose image field declares media-root path options and whose enum
+// field takes its variants from a `variants_from:` glob, so its media tree
+// resolves the image value at load and its effective variants are the sorted
+// media-relative glob matches, identical across repeated loads.
 func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -791,6 +797,177 @@ sections:
 		}
 		if !strings.Contains(got, `<article class="fieldhost">Card</article>`) {
 			t.Errorf("step-7 rendered fieldhost layout does not contain the section_template field value:\n%s", got)
+		}
+	})
+
+	// A full on-disk library carrying an image field with declared path options
+	// (roots/dir/extensions) and an enum field whose variants come from a
+	// `variants_from:` glob loads through os.DirFS. The image value resolves in
+	// the declared media root — a missing one fails with the closest accepted
+	// candidate — the enum's effective variants are the glob's matches written
+	// relative to the owning layer's media/ and sorted, and two fresh loads
+	// expand identical media-relative Variants (image-field-roots,
+	// enum-variants-from).
+	t.Run("an image field's roots/dir/extensions and an enum variants_from resolve on disk", func(t *testing.T) {
+		// cover declares the media root with a bgs/ dir filter and a jpg
+		// extension filter; effect takes its closed value set from the
+		// layer-root-relative glob media/bgs/*.jpg, so its effective variants
+		// are the media-relative bgs/*.jpg paths.
+		const galleryManifest = `name: gallery
+fields:
+  - name: cover
+    type: image
+    roots:
+      - media
+    dir: bgs
+    extensions:
+      - jpg
+  - name: effect
+    type: enum
+    variants_from: media/bgs/*.jpg
+`
+		const galleryLayout = `<section class="gallery">` +
+			`<span class="gallery-cover">{{ .cover }}</span>` +
+			`<span class="gallery-effect">{{ .effect }}</span>` +
+			`</section>`
+		// The example names a media-relative file that exists under bgs/ with a
+		// jpg extension and is one of the expanded variants, so the load
+		// exercises both the image existence check and the enum membership
+		// check against the on-disk media tree.
+		const galleryExample = "---\n" +
+			"template: gallery\n" +
+			"cover: bgs/right-8.jpg\n" +
+			"effect: bgs/right-8.jpg\n" +
+			"---\n" +
+			"A gallery.\n"
+
+		// The glob's matched set, written media-relative (the media/ prefix
+		// dropped) and sorted. right-10 sorts before right-8 lexicographically,
+		// so the order is observable; the directory media/bgs/sub and the
+		// non-jpg notes.txt are present but excluded — the glob does not recurse
+		// into sub and matches only *.jpg.
+		wantVariants := []string{"bgs/right-10.jpg", "bgs/right-8.jpg", "bgs/right-9.jpg"}
+
+		// writeGallery writes a fresh on-disk library whose only template is
+		// the image/enum slide above, with the media/ tree the image root and
+		// the variants_from glob resolve in, and returns the project root for
+		// os.DirFS. Each call is an independent load input, so two calls prove
+		// the expansion is stable across loads.
+		writeGallery := func(t *testing.T) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+			writeFile(t, filepath.Join(root, SlidesDir, "gallery", ManifestFile), []byte(galleryManifest))
+			writeFile(t, filepath.Join(root, SlidesDir, "gallery", LayoutFile), []byte(galleryLayout))
+			writeFile(t, filepath.Join(root, SlidesDir, "gallery", ExampleFile), []byte(galleryExample))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "right-8.jpg"), []byte("8"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "right-9.jpg"), []byte("9"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "right-10.jpg"), []byte("10"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "notes.txt"), []byte("n"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "sub", "deep.jpg"), []byte("d"))
+			writeFile(t, filepath.Join(root, MediaDir, "logo.png"), []byte("l"))
+			return projectDir
+		}
+
+		// fieldNamed returns the loaded definition's field by name.
+		fieldNamed := func(t *testing.T, def *Template, name string) *Field {
+			t.Helper()
+			if def == nil {
+				t.Fatalf("loaded definition is nil, want one carrying field %q", name)
+			}
+			for i := range def.Fields {
+				if def.Fields[i].Name == name {
+					return &def.Fields[i]
+				}
+			}
+			t.Fatalf("field %q not found in the loaded definition (fields: %+v)", name, def.Fields)
+			return nil
+		}
+
+		// loadGallery loads a fresh library and returns it along with its
+		// gallery definition, so the single-layer library's media/ tree is
+		// available as lib.Media.
+		loadGallery := func(t *testing.T) (*Library, *Template) {
+			t.Helper()
+			projectDir := writeGallery(t)
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: the image root and the variants_from glob must resolve on disk", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+			gallery, kind, ok := lib.TemplateByName("gallery")
+			if !ok || kind != KindSlide {
+				t.Fatalf("TemplateByName(gallery) = (%v, %q, %v), want (non-nil, %q, true)", gallery, kind, ok, KindSlide)
+			}
+			if gallery.Definition == nil {
+				t.Fatal("checkLibraryBuild left gallery.Definition nil")
+			}
+			return lib, gallery.Definition
+		}
+
+		lib, def := loadGallery(t)
+
+		// The image field's declared path options reached the loaded schema:
+		// the media root, the bgs/ dir and the jpg extension filter.
+		cover := fieldNamed(t, def, "cover")
+		if !reflect.DeepEqual(cover.Roots, []string{"media"}) {
+			t.Errorf("cover.Roots = %#v, want [media]", cover.Roots)
+		}
+		if cover.Dir != "bgs" {
+			t.Errorf("cover.Dir = %q, want %q", cover.Dir, "bgs")
+		}
+		if !reflect.DeepEqual(cover.Extensions, []string{"jpg"}) {
+			t.Errorf("cover.Extensions = %#v, want [jpg]", cover.Extensions)
+		}
+
+		// The enum's effective variants are the glob's matches, written
+		// media-relative (the media/ prefix dropped) and sorted; the glob is
+		// cleared once expanded.
+		effect := fieldNamed(t, def, "effect")
+		if effect.Type != FieldEnum {
+			t.Fatalf("effect.Type = %q, want %q", effect.Type, FieldEnum)
+		}
+		if effect.VariantsFrom != "" {
+			t.Errorf("effect.VariantsFrom = %q after load, want cleared", effect.VariantsFrom)
+		}
+		if !reflect.DeepEqual(effect.Variants, wantVariants) {
+			t.Errorf("effect.Variants = %#v, want the sorted media-relative %#v", effect.Variants, wantVariants)
+		}
+		if !sort.StringsAreSorted(effect.Variants) {
+			t.Errorf("effect.Variants = %#v, want sorted", effect.Variants)
+		}
+
+		// CheckValues with the owning layer's media root closed over by
+		// ImageExistsFunc resolves the image value: an existing media-relative
+		// file passes with no error...
+		imgExists := WithImageExists(ImageExistsFunc(nil, lib.Media))
+		got := CheckValues(map[string]any{"cover": "bgs/right-8.jpg"}, def, nil, imgExists)
+		if len(got.Errors) != 0 {
+			t.Fatalf("CheckValues(existing image) errors = %s, want none", renderErrors(got.Errors))
+		}
+
+		// ...while a missing file fails with the image error naming the path
+		// and the closest accepted candidate.
+		got = CheckValues(map[string]any{"cover": "bgs/right-7.jpg"}, def, nil, imgExists)
+		if len(got.Errors) != 1 {
+			t.Fatalf("CheckValues(missing image) errors = %s, want exactly 1", renderErrors(got.Errors))
+		}
+		if e := got.Errors[0]; e.Rule != "image" || e.PathString() != "cover" ||
+			e.What != `image: "bgs/right-7.jpg" does not exist` ||
+			e.Fix != `did you mean "bgs/right-8.jpg"?` {
+			t.Errorf("missing-image error = rule %q path %q what %q fix %q, want the image error suggesting bgs/right-8.jpg",
+				e.Rule, e.PathString(), e.What, e.Fix)
+		}
+
+		// A second, independent load expands the identical media-relative
+		// Variants: the expansion is deterministic across loads.
+		_, def2 := loadGallery(t)
+		effect2 := fieldNamed(t, def2, "effect")
+		if !reflect.DeepEqual(effect2.Variants, effect.Variants) {
+			t.Errorf("repeated load effect.Variants = %#v, want the first load's %#v", effect2.Variants, effect.Variants)
 		}
 	})
 }
