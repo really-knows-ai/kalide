@@ -92,12 +92,12 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 			Usage:  template.UsageSection,
 			Fields: []template.Field{{Name: "title", Type: template.FieldText, Required: true, Default: "Untitled"}},
 		}
-		verr, invalid := checkFields(emptyFS, slideFrontmatterSite, map[string]any{}, tmpl, nil, emptyReg)
-		if invalid {
-			t.Fatalf("checkFields() invalid = true (%s), want false: the required field carries a default", Format(verr))
+		errs := checkFields(emptyFS, slideFrontmatterSite, map[string]any{}, tmpl, nil, emptyReg)
+		if len(errs) > 0 {
+			t.Fatalf("checkFields() invalid = true (%s), want false: the required field carries a default", Format(errs[0]))
 		}
-		if !isZeroValidationError(verr) {
-			t.Errorf("checkFields() error = %#v, want the zero ValidationError", verr)
+		if len(errs) != 0 {
+			t.Errorf("checkFields() errors = %#v, want none", errs)
 		}
 	})
 
@@ -107,11 +107,11 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 			Usage:  template.UsageSection,
 			Fields: []template.Field{{Name: "title", Type: template.FieldText, Required: true}},
 		}
-		verr, invalid := checkFields(emptyFS, slideFrontmatterSite, map[string]any{}, tmpl, nil, emptyReg)
-		if !invalid {
+		errs := checkFields(emptyFS, slideFrontmatterSite, map[string]any{}, tmpl, nil, emptyReg)
+		if len(errs) == 0 {
 			t.Fatal("checkFields() invalid = false, want the required error")
 		}
-		got := Format(verr)
+		got := Format(errs[0])
 		for _, want := range []string{slideFrontmatterSite, "title", "required"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("checkFields() error = %q, want it to contain %q", got, want)
@@ -134,13 +134,13 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 			t.Fatal("CheckValues() reported no error for the offending data")
 		}
 
-		verr, invalid := checkFields(emptyFS, slideFrontmatterSite, data, tmpl, nil, emptyReg)
-		if !invalid {
+		errs := checkFields(emptyFS, slideFrontmatterSite, data, tmpl, nil, emptyReg)
+		if len(errs) == 0 {
 			t.Fatal("checkFields() invalid = false, want the engine's first error")
 		}
 		want := New(slideFrontmatterSite, res.Errors[0].Line, valuePath(res.Errors[0].Path), res.Errors[0].What, res.Errors[0].Fix)
-		if !reflect.DeepEqual(verr, want) {
-			t.Errorf("checkFields() error = %#v, want the adapted shared-engine error %#v", verr, want)
+		if !reflect.DeepEqual(errs[0], want) {
+			t.Errorf("checkFields() error = %#v, want the adapted shared-engine error %#v", errs[0], want)
 		}
 	})
 
@@ -153,21 +153,21 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 		tmpl := slideSiteTmpl(template.Field{Name: "label", Type: template.FieldText})
 		prefix := []string{"columns[2]", "blocks[1]"}
 
-		verr, invalid := checkFields(emptyFS, slideFrontmatterSite, map[string]any{"lable": "x"}, tmpl, prefix, emptyReg)
-		if !invalid {
+		errs := checkFields(emptyFS, slideFrontmatterSite, map[string]any{"lable": "x"}, tmpl, prefix, emptyReg)
+		if len(errs) == 0 {
 			t.Fatal("checkFields() invalid = false, want the nested unknown-field error")
 		}
 		want := displayFile(slideFrontmatterSite) +
 			` › columns[2] › blocks[1] › lable: unknown field "lable" — did you mean "label"?`
-		if got := Format(verr); got != want {
+		if got := Format(errs[0]); got != want {
 			t.Errorf("checkFields() error =\n  %q\nwant\n  %q", got, want)
 		}
-		if verr.File != slideFrontmatterSite {
-			t.Errorf("error File = %q, want %q", verr.File, slideFrontmatterSite)
+		if errs[0].File != slideFrontmatterSite {
+			t.Errorf("error File = %q, want %q", errs[0].File, slideFrontmatterSite)
 		}
 		wantPath := []string{"columns[2]", "blocks[1]", "lable"}
-		if !reflect.DeepEqual(verr.Path, wantPath) {
-			t.Errorf("error Path = %v, want %v", verr.Path, wantPath)
+		if !reflect.DeepEqual(errs[0].Path, wantPath) {
+			t.Errorf("error Path = %v, want %v", errs[0].Path, wantPath)
 		}
 	})
 
@@ -415,27 +415,27 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 				caseFS = emptyFS
 			}
 
-			verr, invalid := checkFields(caseFS, slideFrontmatterSite, tt.data, tt.tmpl, nil, caseReg)
+			errs := checkFields(caseFS, slideFrontmatterSite, tt.data, tt.tmpl, nil, caseReg)
 
 			if tt.valid {
-				if invalid {
-					t.Fatalf("checkFields() invalid = true (%s), want false: the value is valid for its type and rules", Format(verr))
+				if len(errs) > 0 {
+					t.Fatalf("checkFields() invalid = true (%s), want false: the value is valid for its type and rules", Format(errs[0]))
 				}
-				if !isZeroValidationError(verr) {
-					t.Errorf("checkFields() error = %#v, want the zero ValidationError", verr)
+				if len(errs) != 0 {
+					t.Errorf("checkFields() errors = %#v, want none", errs)
 				}
 			} else {
-				if !invalid {
+				if len(errs) == 0 {
 					t.Fatalf("checkFields() invalid = false, want the error %q", tt.want)
 				}
-				if got := Format(verr); got != tt.want {
+				if got := Format(errs[0]); got != tt.want {
 					t.Errorf("checkFields() error =\n  %q\nwant\n  %q", got, tt.want)
 				}
 				// Positioned in the slide file: the slide-frontmatter call
 				// attaches no line source, so the location is the file alone and
 				// the path carries the field chain.
-				if verr.File != slideFrontmatterSite {
-					t.Errorf("error File = %q, want %q", verr.File, slideFrontmatterSite)
+				if errs[0].File != slideFrontmatterSite {
+					t.Errorf("error File = %q, want %q", errs[0].File, slideFrontmatterSite)
 				}
 			}
 
@@ -445,23 +445,23 @@ func TestFieldRulesDefaultCheckFieldsInt(t *testing.T) {
 			// verdict and the same first error at every nesting depth, only with
 			// the chain prepended to the value path (nested-section-validation).
 			for _, prefix := range sectionInstancePrefixes {
-				instVerr, instInvalid := checkFields(caseFS, slideFrontmatterSite, tt.data, tt.tmpl, prefix, caseReg)
-				if instInvalid != invalid {
-					t.Fatalf("checkFields(prefix %v) invalid = %v, want %v: the shared engine decides both sites", prefix, instInvalid, invalid)
+				instErrs := checkFields(caseFS, slideFrontmatterSite, tt.data, tt.tmpl, prefix, caseReg)
+				if (len(instErrs) > 0) != (len(errs) > 0) {
+					t.Fatalf("checkFields(prefix %v) invalid = %v, want %v: the shared engine decides both sites", prefix, len(instErrs) > 0, len(errs) > 0)
 				}
-				if !invalid {
+				if len(errs) == 0 {
 					continue
 				}
-				if instVerr.File != slideFrontmatterSite {
-					t.Errorf("checkFields(prefix %v) File = %q, want %q", prefix, instVerr.File, slideFrontmatterSite)
+				if instErrs[0].File != slideFrontmatterSite {
+					t.Errorf("checkFields(prefix %v) File = %q, want %q", prefix, instErrs[0].File, slideFrontmatterSite)
 				}
-				if instVerr.What != verr.What || instVerr.Fix != verr.Fix {
+				if instErrs[0].What != errs[0].What || instErrs[0].Fix != errs[0].Fix {
 					t.Errorf("checkFields(prefix %v) = (%q, %q), want the slide site's (%q, %q)",
-						prefix, instVerr.What, instVerr.Fix, verr.What, verr.Fix)
+						prefix, instErrs[0].What, instErrs[0].Fix, errs[0].What, errs[0].Fix)
 				}
-				wantPath := append(append([]string(nil), prefix...), verr.Path...)
-				if !reflect.DeepEqual(instVerr.Path, wantPath) {
-					t.Errorf("checkFields(prefix %v) Path = %v, want %v", prefix, instVerr.Path, wantPath)
+				wantPath := append(append([]string(nil), prefix...), errs[0].Path...)
+				if !reflect.DeepEqual(instErrs[0].Path, wantPath) {
+					t.Errorf("checkFields(prefix %v) Path = %v, want %v", prefix, instErrs[0].Path, wantPath)
 				}
 			}
 		})
