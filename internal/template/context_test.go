@@ -40,6 +40,11 @@ import (
 // when non-empty, treats an explicitly present nil as an authored value, copies
 // no fields under a nil template, and never mutates its source map. The
 // LoadLibrary-driven reading of the same contract is in examplecontext_test.go.
+//
+// In particular it pins the raw-source-context null contract: because the copy
+// is keyed on key PRESENCE, an explicitly null declared field is present as a
+// nil `.raw` entry while an omitted declared field is absent, so `.raw`
+// distinguishes an explicit null from an absent optional field.
 func TestRawContextSourceView(t *testing.T) {
 	def := &Template{
 		Name:  "sourceview",
@@ -84,6 +89,30 @@ func TestRawContextSourceView(t *testing.T) {
 		}
 		if v != nil {
 			t.Errorf(`raw["title"] = %v, want nil`, v)
+		}
+	})
+
+	t.Run("an explicit null is a present nil entry while an omitted field is absent", func(t *testing.T) {
+		// The same declared, optional field: `count` (no default) supplied as
+		// an explicit null versus omitted entirely.
+		nulled := RawContext(map[string]any{"count": nil}, def, "")
+		v, has := nulled["count"]
+		if !has {
+			t.Fatalf("RawContext() = %v, want the explicit null count present as a nil entry", nulled)
+		}
+		if v != nil {
+			t.Errorf(`raw["count"] = %v, want nil for an explicit null`, v)
+		}
+
+		omitted := RawContext(map[string]any{}, def, "")
+		if _, has := omitted["count"]; has {
+			t.Errorf("RawContext() = %v, want an omitted count absent from raw", omitted)
+		}
+		// The distinction holds even when the other declared field is supplied,
+		// so `count`'s absence is not merely an empty source map.
+		partial := RawContext(map[string]any{"title": "Authored"}, def, "")
+		if _, has := partial["count"]; has {
+			t.Errorf("RawContext() = %v, want an omitted count absent from raw", partial)
 		}
 	})
 
