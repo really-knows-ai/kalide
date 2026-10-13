@@ -294,6 +294,14 @@ type ResolvedChild struct {
 // parent instance's field values, carried out as `.item.parent` (nil from a
 // slide layout, where the parent is the slide, not a section instance).
 //
+// ancestors is the enclosing instances' chain of resolved template names above
+// the child — empty at the top level, the same convention DataContext and
+// ResolveSectionCallLayered take. The `.item` descriptor's `depth` is
+// InstanceDepth(ancestors, tmplName), the instantiated template's name: the
+// number of enclosing same-template ancestors along the chain, 0 for an ordinary
+// child and +1 per enclosing instance whose resolved template is the
+// instantiated template (item-context, bounded-self-nesting).
+//
 // Resolution mirrors an authored section instance of the named declaration:
 //
 //   - req.Section must be a section parent declares; an undeclared name is an
@@ -334,7 +342,7 @@ type ResolvedChild struct {
 // forwarding's entries — belongs to ResolveChildren, which the `section` helper
 // entry points call for the whole child-argument set. It adds no data access of
 // its own.
-func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, req *ChildRequest, index, count int, parentFields map[string]any) (*SectionCall, error) {
+func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(name string) *LibraryLayer, parent *Template, req *ChildRequest, index, count int, ancestors []string, parentFields map[string]any) (*SectionCall, error) {
 	if req == nil {
 		return nil, fmt.Errorf("child: request must not be nil")
 	}
@@ -434,6 +442,7 @@ func ResolveChildCall(lookup func(name string) (*Template, bool), layerOf func(n
 			"last":     index == count-1,
 			"section":  req.Section,
 			"template": tmplName,
+			"depth":    InstanceDepth(ancestors, tmplName),
 			"parent":   parentFields,
 		},
 	}
@@ -562,7 +571,10 @@ func ResolveChildren(lookup func(name string) (*Template, bool), layerOf func(na
 		index := seen[ec.section]
 		seen[ec.section] = index + 1
 
-		call, err := ResolveChildCall(lookup, layerOf, parent, ec.req, index, counts[ec.section], parentFields)
+		// The enclosing instance's ancestor chain is threaded by ResolveChildren
+		// (task-23); a call site without one passes nil, so the child's depth
+		// is 0.
+		call, err := ResolveChildCall(lookup, layerOf, parent, ec.req, index, counts[ec.section], nil, parentFields)
 		if err != nil {
 			return nil, err
 		}
