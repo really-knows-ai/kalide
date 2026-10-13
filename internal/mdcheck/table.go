@@ -58,3 +58,33 @@ type TableOptions struct {
 	MinRows int
 	MaxRows int
 }
+
+// TableCell is one cell of a parsed GFM table: the cell's trimmed
+// inline-Markdown source together with the 1-based position at which that text
+// begins in the body the table was parsed from.
+//
+// Text holds exactly the source between the cell's separators, with the
+// surrounding spaces trimmed — it is *inline* Markdown, not a rendered
+// fragment, so a later layer renders it (and decodes any cell extensions)
+// rather than this parser. One piece of table syntax is resolved here: a
+// backslash-escaped pipe, `\|`, is stored as a plain `|`, because the backslash
+// belongs to the table grammar — it stops the pipe from separating two cells —
+// and not to the cell's own Markdown. Every other backslash escape is left
+// untouched for the inline renderer.
+//
+// Line and Column are 1-based and point at the first character of Text within
+// the body, so a violation can be positioned at the offending cell rather than
+// at the table or its row. Column counts bytes from the start of Line. A cell
+// whose position could not be derived carries zero.
+type TableCell struct {
+	// Text is the cell's trimmed inline-Markdown source. A table-syntax `\|`
+	// has already been turned into a literal `|`; every other escape is
+	// preserved for the inline renderer.
+	Text string
+
+	// Line is the 1-based line in the body at which Text begins.
+	Line int
+
+	// Column is the 1-based byte column within Line at which Text begins.
+	Column int
+}
