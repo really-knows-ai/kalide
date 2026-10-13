@@ -892,12 +892,17 @@ type SectionCall struct {
 // target's owning layer is carried out on SectionCall.Layer
 // (library-layer-references).
 //
-// ResolveSectionCall likewise passes a nil ancestor chain, so the one-item
-// descriptor's depth is 0 (item-context); a caller that knows the enclosing
-// instances' resolved template names calls ResolveSectionCallLayered directly
-// to have the depth computed through the shared InstanceDepth helper.
-func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
-	return ResolveSectionCallLayered(resolve, nil, name, fields, body, nil, parent, children...)
+// ancestors is the enclosing instances' chain of resolved template names above
+// the calling instance, forwarded unchanged to ResolveSectionCallLayered: the
+// one-item descriptor's `depth` is InstanceDepth(ancestors, name), so a call
+// from a slide layout, or any call whose ancestors carry no template equal to
+// the target name, has depth 0, while a call from a section instance whose
+// enclosing chain repeats the target name counts it (item-context,
+// bounded-self-nesting). It is the same ancestor convention
+// ResolveSectionCallLayered and DataContext take; a caller without a chain
+// passes nil.
+func ResolveSectionCall(resolve func(name string) (*Template, bool), name string, fields map[string]any, body string, ancestors []string, parent map[string]any, children ...*ChildRequest) (*SectionCall, error) {
+	return ResolveSectionCallLayered(resolve, nil, name, fields, body, ancestors, parent, children...)
 }
 
 // ResolveSectionCallLayered is ResolveSectionCall plus layer provenance: it
