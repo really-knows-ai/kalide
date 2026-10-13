@@ -81,6 +81,24 @@ type Options struct {
 	// are refused in subheading position. `#` is always reserved for section
 	// markers (markdown-allowed-subset).
 	TemplateDeclaresChildSections bool
+
+	// Tables is the enclosing template's declared table option, converted
+	// to mdcheck's own plain limits type so mdcheck imports no schema
+	// package: the effective min/max tables, columns and rows for this body
+	// (table-opt-in, table-limits). A nil Tables means the template does not
+	// opt in, and a GFM table in the body is refused (the opt-out refusal).
+	// The caller — validate or template — converts a template's TableRule
+	// into it.
+	Tables *TableOptions
+
+	// CellAttributes is the enclosing template's declared cell attributes,
+	// mdcheck's own plain descriptors: the closed set of attributes a
+	// table-cell `{...}` group may set (table-cell-attributes). The caller —
+	// validate or template — converts a template's CellAttribute
+	// declarations into it. It is consulted only when Tables is non-nil, so
+	// an absent option and an empty attribute set both mean no attribute is
+	// declarable.
+	CellAttributes []CellAttributeSpec
 }
 
 // Check parses src as the Markdown subset and returns every Issue it finds, in
