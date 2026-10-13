@@ -717,6 +717,10 @@ func parseManifestSections(manifestPath string, val *yaml.Node, defs *LibraryDef
 // literal section-template names, while an unknown group name is a positioned
 // templates error carrying a closest-match suggestion
 // (named-library-definitions, closest-match-suggestions).
+//
+// A `max_depth: N` key is the positive-integer bound a self-nesting/cyclic
+// acceptance carries (bounded-self-nesting); a value that is not a positive
+// integer is a positioned templates error naming the offending template.yaml.
 func parseManifestSection(manifestPath string, node *yaml.Node, defs *LibraryDefinitions) (*SectionDecl, error) {
 	if node.Kind != yaml.MappingNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(node, 0), "expected a mapping describing a section")
@@ -778,9 +782,20 @@ func parseManifestSection(manifestPath string, node *yaml.Node, defs *LibraryDef
 				return nil, err
 			}
 			d.Max = n
+		case "max_depth":
+			// The bound a self-nesting/cyclic acceptance carries
+			// (bounded-self-nesting). It must be a positive integer; a
+			// non-integer, zero or a negative value is a templates error
+			// positioned at this key's line and naming the offending
+			// template.yaml.
+			n, err := scalarInt(val, manifestPath, kl, "max_depth")
+			if err != nil || n <= 0 {
+				return nil, libraryErrorf(manifestPath, kl, "key %q: expected a positive integer", "max_depth")
+			}
+			d.MaxDepth = n
 		default:
 			e := libraryErrorf(manifestPath, kl, "unknown key %q in a section", key.Value)
-			return nil, e.withSuggestion(key.Value, []string{"name", "accepted", "min", "max"})
+			return nil, e.withSuggestion(key.Value, []string{"name", "accepted", "min", "max", "max_depth"})
 		}
 	}
 
