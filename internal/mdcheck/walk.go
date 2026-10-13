@@ -557,16 +557,22 @@ func isSetextHeading(src []byte, h *ast.Heading) bool {
 // The per-line test is isTableDelimiterRow, the parser's own delimiter-row
 // recognition (table.go), which splits a row with splitTableRow — so a
 // backslash-escaped `\|` is a literal pipe rather than a separator, exactly as
-// parseTable reads a table's rows. Both the opt-in gate in checkDisallowed and
-// the whole-body table pass (checkTables) reach their verdict through it, so
-// detection and validation agree on what a table is. The offset is returned so
-// a caller can position a table-level issue at the delimiter row.
+// parseTable reads a table's rows. A delimiter row is only a table's when a
+// header row precedes it in the same paragraph, so the scan starts at the
+// paragraph's second line: a paragraph that is just a delimiter row (the line
+// an ATX heading, list item or block quote leaves behind, which GFM reads as
+// that other block, not a table) is not refused. This mirrors ParseTables,
+// which only reads a header candidate that has a following delimiter row. Both
+// the opt-in gate in checkDisallowed and the whole-body table pass
+// (checkTables) reach their verdict through it, so detection and validation
+// agree on what a table is. The offset is returned so a caller can position a
+// table-level issue at the delimiter row.
 func hasTableDelimiterRow(src []byte, b lineBlock) (offset int, ok bool) {
 	segs := b.Lines()
 	if segs == nil {
 		return 0, false
 	}
-	for i := 0; i < segs.Len(); i++ {
+	for i := 1; i < segs.Len(); i++ {
 		seg := segs.At(i)
 		if seg.Start < 0 || seg.Stop > len(src) || seg.Start > seg.Stop {
 			continue

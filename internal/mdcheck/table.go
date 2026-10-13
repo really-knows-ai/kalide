@@ -816,6 +816,10 @@ func tableDelimiterAlign(cell string) string {
 // a block quote, a fenced code block, a list item, a thematic break or an HTML
 // block. Leading spaces and tabs are ignored, so an indented block still ends
 // the table.
+//
+// `<` begins an HTML block only when it is a real CommonMark HTML-block start
+// (tableHTMLBlockStart), so a body row such as `< 5 | x` stays a table row
+// rather than silently ending the table.
 func tableBlockStart(line string) bool {
 	s := strings.TrimLeft(line, " \t")
 	if s == "" {
@@ -830,11 +834,31 @@ func tableBlockStart(line string) bool {
 		return true
 	case tableListMarkerAt(s) >= 0: // list item
 		return true
-	case strings.HasPrefix(s, "<"): // HTML block
+	case tableHTMLBlockStart(s): // HTML block
 		return true
 	}
 	_, ok := thematicBreakMarker([]byte(line))
 	return ok
+}
+
+// tableHTMLBlockStart reports whether s — already known to begin with `<` —
+// begins a CommonMark HTML block: the `<` is immediately followed by a tag-name
+// letter, `/`, `!` or `?` (the CommonMark HTML-block start conditions). A `<`
+// followed by anything else, such as a space, a digit or the end of the line,
+// is ordinary paragraph text, so a table row like `< 5 | x` is not an HTML
+// block and does not end the table.
+func tableHTMLBlockStart(s string) bool {
+	if len(s) < 2 || s[0] != '<' {
+		return false
+	}
+	c := s[1]
+	return isASCIILetter(c) || c == '/' || c == '!' || c == '?'
+}
+
+// isASCIILetter reports whether c is an ASCII letter, the start of a CommonMark
+// tag name.
+func isASCIILetter(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // tableListMarkerAt reports whether s begins a CommonMark list item — a bullet
@@ -883,13 +907,16 @@ func tableListMarkerAt(s string) int {
 // run of the same character at least as long as the opener) and indented code
 // (a line indented four spaces or a tab), so a table-shaped pair of lines
 // inside a code block is never read as a table. Outside code, a table is
-// detected wherever a non-blank line is immediately followed by a delimiter row
-// (isTableDelimiterRow): the non-blank line is the header row and the next line
-// the delimiter row. parseTable then parses the table in full — header,
-// delimiter and body rows — ending it at the first blank line or other block's
-// start (table-syntax), and the scan resumes past it. A line that merely looks
-// like a header but has no delimiter row after it is left to the ordinary
-// Markdown walk.
+// detected wherever a non-blank line that does not itself begin another block
+// (tableBlockStart — so a heading, block quote, list item, fence, thematic
+// break or HTML block is never a header row) is immediately followed by a
+// delimiter row (isTableDelimiterRow): that line is the header row and the next
+// line the delimiter row. GFM reads such a construct as the other block, so the
+// header candidate is skipped and the ordinary Markdown walk owns it.
+// parseTable then parses the table in full — header, delimiter and body rows —
+// ending it at the first blank line or other block's start (table-syntax), and
+// the scan resumes past it. A line that merely looks like a header but has no
+// delimiter row after it is left to the ordinary Markdown walk.
 //
 // The effective limits are carried by opts (table-limits). Zero imposes no
 // bound: a Min* field of 0 is no minimum and a Max* field of 0 is unbounded.
@@ -924,6 +951,7 @@ func ParseTables(body string, startLine int, opts TableOptions) ([]Table, []Issu
 			continue
 		}
 		if strings.TrimSpace(lines[i]) != "" &&
+			!tableBlockStart(lines[i]) &&
 			i+1 < len(lines) && isTableDelimiterRow(lines[i+1]) {
 			table, tableIssues, next := parseTable(lines, i, startLine)
 			tables = append(tables, table)
