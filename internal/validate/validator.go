@@ -439,8 +439,13 @@ func checkBody(file, body string, startLine int, tmpl *template.Template, prefix
 // instance's containment chain and is prepended to that value path, so a nested
 // body-rule violation reads `columns[0] › blocks[0] › body`
 // (nested-section-validation); the slide body passes nil.
+//
+// The call passes template.WithoutTableCheck(): its sibling checkBody owns the
+// deck's slide/section/notes table errors through checkTables, so CheckBody's
+// own table pass must not re-emit them and each deck table error is emitted
+// exactly once, with no duplicate row under collect-all.
 func checkBodyRule(file string, rule template.BodyRule, body string, startLine int, prefix []string) (ValidationError, bool) {
-	ve, invalid := template.CheckBody(rule, body, template.WithBodyLine(startLine))
+	ve, invalid := template.CheckBody(rule, body, template.WithBodyLine(startLine), template.WithoutTableCheck())
 	if !invalid {
 		return ValidationError{}, false
 	}
