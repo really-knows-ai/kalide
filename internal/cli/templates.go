@@ -47,12 +47,14 @@ import (
 	"github.com/really-knows-ai/kalide/internal/template"
 )
 
-// runTemplates implements `kalide templates [name]`.
+// runTemplates implements `kalide templates [--all] [name]`.
 //
-// With no arguments it lists every template in the project's merged, layered
-// template library (every layer the deck draws from). With exactly one
-// argument it shows that template's full documentation. It returns the
-// process status code: 0 on success; 1 when
+// With no name it lists every template in the project's merged, layered
+// template library (every layer the deck draws from); the optional `--all`
+// flag additionally lists every template whose manifest declares
+// `internal: true`, which the default listing omits (internal-templates). With
+// exactly one name it shows that template's full documentation, whatever its
+// internal flag. It returns the process status code: 0 on success; 1 when
 // the project's template library cannot be resolved, when the name is
 // unknown (the error names the available templates and suggests the
 // closest), or when the loaded library cannot be built into a registry,
@@ -102,12 +104,27 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	if len(args) == 0 {
-		printTemplateList(stdout, registry, false)
+	// `--all` is the listing mode, never a template name: it includes every
+	// template whose manifest declares `internal: true`, which the default
+	// listing omits (internal-templates). It is parsed here so the flag is
+	// never mistaken for a name; the named form still shows one template by
+	// name (an internal template is resolvable by name in every mode).
+	all := false
+	names := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--all" {
+			all = true
+			continue
+		}
+		names = append(names, arg)
+	}
+
+	if len(names) == 0 {
+		printTemplateList(stdout, registry, all)
 		return 0
 	}
 
-	name := args[0]
+	name := names[0]
 	t, ok := registry.Lookup(name)
 	if !ok {
 		fmt.Fprintln(stderr, templateUnknownMessage(name, registry.TemplateNames()))
