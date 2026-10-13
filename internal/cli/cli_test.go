@@ -394,19 +394,63 @@ func TestRunRoutesCommands(t *testing.T) {
 }
 
 func TestRunTemplatesRejectsExtraArgs(t *testing.T) {
-	code, stdout, stderr := runCLI("templates", "a", "b")
-	if code != 2 {
-		t.Fatalf("Run(templates a b) exit = %d, want 2", code)
-	}
-	if !strings.Contains(stderr, "at most one") {
-		t.Fatalf("Run(templates a b) stderr = %q, want an argument-count error", stderr)
-	}
-	if !strings.Contains(stderr, "Usage:") {
-		t.Fatalf("Run(templates a b) stderr = %q, want usage text", stderr)
-	}
-	if stdout != "" {
-		t.Fatalf("Run(templates a b) stdout = %q, want empty", stdout)
-	}
+	t.Run("two names is an argument-count usage error", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates", "a", "b")
+		if code != 2 {
+			t.Fatalf("Run(templates a b) exit = %d, want 2", code)
+		}
+		if !strings.Contains(stderr, "at most one") {
+			t.Fatalf("Run(templates a b) stderr = %q, want an argument-count error", stderr)
+		}
+		if !strings.Contains(stderr, "Usage:") {
+			t.Fatalf("Run(templates a b) stderr = %q, want usage text", stderr)
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates a b) stdout = %q, want empty", stdout)
+		}
+	})
+
+	t.Run("--all is accepted beside at most one name", func(t *testing.T) {
+		// `--all` is a listing flag, not a template name: Run's relaxed guard
+		// must not count it, so `templates --all` reaches runTemplates and
+		// lists every template (including internal ones) rather than failing
+		// as an argument-count usage error.
+		chdirFixtureLibrary(t)
+
+		for _, args := range [][]string{
+			{"templates", "--all"},
+			{"templates", "--all", "hello"},
+		} {
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				code, stdout, stderr := runCLI(args...)
+				if code != 0 {
+					t.Fatalf("Run(%q) exit = %d, want 0 (stderr = %q)", args, code, stderr)
+				}
+				if strings.Contains(stderr, "at most one") {
+					t.Fatalf("Run(%q) stderr = %q, want --all accepted, not an argument-count error", args, stderr)
+				}
+				if stdout == "" {
+					t.Errorf("Run(%q) stdout = \"\", want output", args)
+				}
+			})
+		}
+	})
+
+	t.Run("--all beside two names is still an argument-count usage error", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates", "--all", "a", "b")
+		if code != 2 {
+			t.Fatalf("Run(templates --all a b) exit = %d, want 2", code)
+		}
+		if !strings.Contains(stderr, "at most one") {
+			t.Fatalf("Run(templates --all a b) stderr = %q, want an argument-count error", stderr)
+		}
+		if !strings.Contains(stderr, "Usage:") {
+			t.Fatalf("Run(templates --all a b) stderr = %q, want usage text", stderr)
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates --all a b) stdout = %q, want empty", stdout)
+		}
+	})
 }
 
 func TestRunUnknownCommand(t *testing.T) {
