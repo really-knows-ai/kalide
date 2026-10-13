@@ -74,6 +74,51 @@ func TestValidateIntegration(t *testing.T) {
 		}
 	})
 
+	// A whole-deck image-field existence failure: the `bg` slide template's
+	// `background` field declares a `media` root (dir bgs, jpg extension), so
+	// validate.checkFields resolves the authored path against the media/ tree
+	// of the library layer that owns the field's template. A path naming no
+	// file under that tree fails in the error-reporting format carrying the
+	// offending path and the closest accepted candidate, while an existing
+	// path validates (image-field-roots).
+	t.Run("missing background image fails with the closest media candidate", func(t *testing.T) {
+		files := imageLibraryFiles()
+		files["kalide.yaml"] = "title: Image Deck\ntheme: plain\n"
+		files["slides/1-bg.md"] = "---\ntemplate: bg\nbackground: bgs/right-88.jpg\n---\n\nBackground.\n"
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatal("Validate() invalid = false, want the missing background image to fail")
+		}
+		got := Format(verr)
+		if !strings.Contains(got, "bgs/right-88.jpg") {
+			t.Errorf("Validate() error = %q, want it to carry the offending path %q", got, "bgs/right-88.jpg")
+		}
+		if !strings.Contains(got, `did you mean "bgs/right-8.jpg"?`) {
+			t.Errorf("Validate() error = %q, want the closest-match suggestion %q", got, `did you mean "bgs/right-8.jpg"?`)
+		}
+		want := displayFile("slides/1-bg.md") + ` › background: image: "bgs/right-88.jpg" does not exist — did you mean "bgs/right-8.jpg"?`
+		if got != want {
+			t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
+		}
+	})
+
+	t.Run("existing background image validates", func(t *testing.T) {
+		files := imageLibraryFiles()
+		files["kalide.yaml"] = "title: Image Deck\ntheme: plain\n"
+		files["slides/1-bg.md"] = "---\ntemplate: bg\nbackground: bgs/right-8.jpg\n---\n\nBackground.\n"
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if invalid {
+			t.Fatalf("Validate() invalid = true with %q, want a valid deck", Format(verr))
+		}
+		if !reflect.DeepEqual(verr, ValidationError{}) {
+			t.Fatalf("Validate() error = %#v, want the zero ValidationError", verr)
+		}
+	})
+
 	t.Run("demo library parses one heading level and validates", func(t *testing.T) {
 		demoDir := filepath.Join("..", "..", "examples", "demo")
 		if _, err := os.Stat(demoDir); err != nil {
@@ -570,6 +615,28 @@ func nestedLibraryFiles() map[string]string {
 		"templates/sections/block/template.yaml":    "description: a leaf block\nfields:\n  - name: label\n    type: text\nbody:\n  mode: optional\n  max_paragraphs: 1\n",
 		"templates/sections/block/layout.html.tmpl": "<span class=\"block\">{{.label}}</span>",
 		"templates/sections/block/example.md":       "```\nlabel: first\n```\n",
+	}
+}
+
+// imageLibraryFiles returns an on-disk templates/ library whose `bg` slide
+// template declares an image field `background` with a `media` root, a `bgs/`
+// dir filter and a `jpg` extension filter, plus the media/ tree those options
+// resolve in (image-field-roots). Its example names an existing media-relative
+// file, so the library loads; a deck slide can then author either an existing
+// or a missing background path through the whole-deck validator.
+func imageLibraryFiles() map[string]string {
+	return map[string]string{
+		"templates/library.yaml":           "name: image-fixture\nformat: 1\n",
+		"templates/themes/plain/theme.css": "body { margin: 0; }\n",
+
+		"templates/slides/bg/template.yaml": "description: a background image slide\n" +
+			"fields:\n  - name: background\n    type: image\n    roots:\n      - media\n    dir: bgs\n    extensions:\n      - jpg\n" +
+			"body:\n  mode: optional\n",
+		"templates/slides/bg/layout.html.tmpl": `<section style="background-image: url({{ .background }})"></section>`,
+		"templates/slides/bg/example.md":       "---\ntemplate: bg\nbackground: bgs/right-8.jpg\n---\n\nA slide.\n",
+
+		"templates/media/bgs/right-8.jpg": "8",
+		"templates/media/bgs/right-9.jpg": "9",
 	}
 }
 
