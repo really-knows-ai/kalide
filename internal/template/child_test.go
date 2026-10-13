@@ -465,8 +465,12 @@ func TestResolveChildCallDefaultsAndSource(t *testing.T) {
 
 // TestResolveChildCallItemDescriptor proves the child's own `.item` descriptor:
 // the sibling position the caller passes (index/number/count/first/last), the
-// named declared section and the instantiated template, and `parent` the
-// parent instance's fields.
+// named declared section and the instantiated template, `parent` the parent
+// instance's fields, and `depth` the shared InstanceDepth of the enclosing
+// ancestor chain against the child's resolved template — 0 for an ordinary
+// child and 1 for a declared self-nesting child whose resolved template is the
+// parent declaration's own, resolved inside a parent instance of the same
+// template.
 func TestResolveChildCallItemDescriptor(t *testing.T) {
 	target := &Template{Name: "column", Usage: UsageSection}
 	parent := &Template{
@@ -511,6 +515,38 @@ func TestResolveChildCallItemDescriptor(t *testing.T) {
 	if last.Item["first"] != false || last.Item["last"] != true {
 		t.Errorf("last.Item first/last = %v/%v, want false/true", last.Item["first"], last.Item["last"])
 	}
+
+	// A declared self-nesting child: the parent template's own section accepts
+	// the parent's own template, so a child resolving to that template, inside a
+	// parent instance of the same template, counts the one enclosing
+	// same-template ancestor the caller threads in — depth 1, beside its sibling
+	// position, section and parent.
+	t.Run("a self-nesting child counts its enclosing same-template ancestor", func(t *testing.T) {
+		self := &Template{
+			Name:     "column",
+			Usage:    UsageSection,
+			Sections: []SectionDecl{{Name: "column", Accepted: []string{"column"}}},
+		}
+		selfResolve := resolveSectionCallResolver(self)
+		nested, err := ResolveChildCall(selfResolve, nil, self, &ChildRequest{Section: "column"}, 0, 1, []string{"column"}, parentFields)
+		if err != nil {
+			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
+		}
+		wantNested := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "column",
+			"template": "column",
+			"depth":    1, // one enclosing same-template ancestor: the parent instance
+			"parent":   parentFields,
+		}
+		if !reflect.DeepEqual(nested.Item, wantNested) {
+			t.Errorf("nested.Item = %v, want %v", nested.Item, wantNested)
+		}
+	})
 }
 
 // TestResolveChildCallTemplateSelector proves the reserved `template` selector:
