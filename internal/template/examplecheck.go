@@ -1104,6 +1104,12 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 // unchanged into every recursive nested-instance call, so an image field at any
 // composition depth is resolved identically. A nil resolver leaves image
 // existence unchecked.
+//
+// When the first schema violation carries a closest-match suggestion — its Fix
+// is the engine's `did you mean "X"?` hint, as an image or enum violation
+// emits — X is carried onto the returned LibraryError's Suggestion so the
+// example-site message names the candidate. Every other Fix (a default
+// remediation, or none) is discarded, so those messages are unchanged.
 func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), imageExists func(f *Field, path string) (exists bool, candidates []string), ctx map[string]any, container string) error {
 	fm := block.Frontmatter
 	if fm == nil {
@@ -1119,7 +1125,30 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 
 	if res := CheckValues(fields, def, resolve, WithImageExists(imageExists)); len(res.Errors) > 0 {
 		e := res.Errors[0]
-		return exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
+		err := exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
+		// The engine's Fix is dropped for most violations, because its default
+		// remediation ("add the file under assets/ or fix the path", "use one
+		// of: …") is a slide-site hint, not part of the example-site message,
+		// so those example errors stay byte-identical. The one part the
+		// example site keeps is a genuine closest-match suggestion, which
+		// validateImage and validateEnum emit as the hint `did you mean "X"?`
+		// (validateEnum following it with ` use one of: …` for its variants).
+		// When Fix has that shape, carry X onto the LibraryError, whose own
+		// rendering supplies the `: did you mean %q?` suffix, so a missing
+		// media-root image (image-field-roots) reports the candidate without
+		// the engine's default remediation leaking through.
+		if fix := e.Fix; strings.HasPrefix(fix, `did you mean "`) {
+			var closest string
+			if n, _ := fmt.Sscanf(fix, `did you mean %q`, &closest); n == 1 {
+				rest := strings.TrimPrefix(fix, fmt.Sprintf(`did you mean %q`, closest))
+				if rest == "?" || strings.HasPrefix(rest, "? use one of: ") {
+					if le, ok := err.(*LibraryError); ok {
+						le.Suggestion = closest
+					}
+				}
+			}
+		}
+		return err
 	}
 	// applyFieldDefaults is the same default-filling idiom ResolveSectionCall
 	// uses for a section-helper call and renderer.values mirrors at render time:
