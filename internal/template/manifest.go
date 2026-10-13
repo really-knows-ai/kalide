@@ -243,6 +243,14 @@ func parseManifestFields(manifestPath string, val *yaml.Node, defs *LibraryDefin
 // (record-list-item-only). defs is the owning layer's named definitions
 // (parseManifest), threaded through the recursive `item:`/`fields:` decodes.
 //
+// An image field's path options `roots:`/`dir:`/`extensions:` decode into
+// Roots/Dir/Extensions and an enum field's `variants_from:` into VariantsFrom
+// (image-field-roots, enum-variants-from). Each is meaningful only on its own
+// type: the path options on an image field and the variant source on an enum
+// field, rejected on any other type just as max_items_from is on a non-list
+// field. A `roots:` entry must name `assets` or `media`; an unrecognised entry
+// is a templates error carrying a closest-match suggestion over those two.
+//
 // A `type:` that is not a built-in type name may instead name a type in defs
 // (named-library-definitions): the named descriptor is expanded into this
 // field, the referencing field's own sibling keys (description, required,
@@ -272,6 +280,12 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 	var maxItemsFrom, minItemsFrom string
 	var haveMaxItemsFrom, haveMinItemsFrom bool
 	var maxItemsFromLine, minItemsFromLine int
+	// The image path options (roots/dir/extensions) and the enum variant
+	// source (variants_from) are likewise decoded with their key lines, so
+	// each can be rejected on the wrong field type once the type is known
+	// (image-field-roots, enum-variants-from).
+	var rootsLine, dirLine, extensionsLine, variantsFromLine int
+	var haveRoots, haveDir, haveExtensions, haveVariantsFrom bool
 
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i]
@@ -395,6 +409,14 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 				return nil, err
 			}
 			f.Variants = ss
+		case "variants_from":
+			s, err := scalarString(val, manifestPath, kl, "variants_from")
+			if err != nil {
+				return nil, err
+			}
+			f.VariantsFrom = s
+			variantsFromLine = kl
+			haveVariantsFrom = true
 		case "formats":
 			ss, err := scalarStringList(val, manifestPath, kl, "formats")
 			if err != nil {
@@ -413,6 +435,30 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 				return nil, err
 			}
 			f.SectionTemplate = s
+		case "roots":
+			ss, err := scalarStringList(val, manifestPath, kl, "roots")
+			if err != nil {
+				return nil, err
+			}
+			f.Roots = ss
+			rootsLine = kl
+			haveRoots = true
+		case "dir":
+			s, err := scalarString(val, manifestPath, kl, "dir")
+			if err != nil {
+				return nil, err
+			}
+			f.Dir = s
+			dirLine = kl
+			haveDir = true
+		case "extensions":
+			ss, err := scalarStringList(val, manifestPath, kl, "extensions")
+			if err != nil {
+				return nil, err
+			}
+			f.Extensions = ss
+			extensionsLine = kl
+			haveExtensions = true
 		case "item":
 			item, err := parseManifestField(manifestPath, val, true, defs)
 			if err != nil {
@@ -431,8 +477,10 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 				"name", "type", "nullable", "coerce", "plain", "required",
 				"default", "description", "max_length", "min_items", "max_items",
 				"max_items_from", "min_items_from",
-				"min", "max", "min_date", "max_date", "variants", "formats",
-				"default_format", "section_template", "item", "fields",
+				"min", "max", "min_date", "max_date", "variants", "variants_from",
+				"formats", "default_format", "section_template",
+				"roots", "dir", "extensions",
+				"item", "fields",
 			})
 		}
 	}
@@ -440,16 +488,42 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 	// A cross-field list bound (max_items_from/min_items_from) names another
 	// list field and so is meaningful only on a list field; on any other type
 	// the key is rejected, just as `fields` is rejected on a non-record
-	// (cross-field-list-constraints).
-	checkListOnlyKeys := func(ft FieldType, name string) error {
-		if ft == FieldList {
-			return nil
+	// (cross-field-list-constraints). Likewise an image field's path options
+	// (roots/dir/extensions) are meaningful only on an image field and an enum
+	// field's variant source (variants_from) only on an enum field
+	// (image-field-roots, enum-variants-from). A `roots:` entry, when the field
+	// is an image field, must name one of the two known roots; an unrecognised
+	// entry is a templates error carrying a closest-match suggestion over them.
+	checkTypeOnlyKeys := func(ft FieldType, name string) error {
+		if ft != FieldList {
+			if haveMaxItemsFrom {
+				return libraryErrorf(manifestPath, maxItemsFromLine, "field %q: key %q is only valid on a list field", name, "max_items_from")
+			}
+			if haveMinItemsFrom {
+				return libraryErrorf(manifestPath, minItemsFromLine, "field %q: key %q is only valid on a list field", name, "min_items_from")
+			}
 		}
-		if haveMaxItemsFrom {
-			return libraryErrorf(manifestPath, maxItemsFromLine, "field %q: key %q is only valid on a list field", name, "max_items_from")
+		if ft != FieldImage {
+			if haveRoots {
+				return libraryErrorf(manifestPath, rootsLine, "field %q: key %q is only valid on an image field", name, "roots")
+			}
+			if haveDir {
+				return libraryErrorf(manifestPath, dirLine, "field %q: key %q is only valid on an image field", name, "dir")
+			}
+			if haveExtensions {
+				return libraryErrorf(manifestPath, extensionsLine, "field %q: key %q is only valid on an image field", name, "extensions")
+			}
+		} else if haveRoots {
+			for _, r := range f.Roots {
+				if r == "assets" || r == "media" {
+					continue
+				}
+				e := libraryErrorf(manifestPath, rootsLine, "field %q: unknown root %q", name, r)
+				return e.withSuggestion(r, []string{"assets", "media"})
+			}
 		}
-		if haveMinItemsFrom {
-			return libraryErrorf(manifestPath, minItemsFromLine, "field %q: key %q is only valid on a list field", name, "min_items_from")
+		if ft != FieldEnum && haveVariantsFrom {
+			return libraryErrorf(manifestPath, variantsFromLine, "field %q: key %q is only valid on an enum field", name, "variants_from")
 		}
 		return nil
 	}
@@ -472,7 +546,7 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 		if f.Fields == nil {
 			return nil, libraryErrorf(manifestPath, line, "field %q: type %q requires key %q", f.Name, typeStr, "fields")
 		}
-		if err := checkListOnlyKeys(FieldRecord, f.Name); err != nil {
+		if err := checkTypeOnlyKeys(FieldRecord, f.Name); err != nil {
 			return nil, err
 		}
 		f.Type = FieldRecord
@@ -482,7 +556,7 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 		if f.Fields != nil {
 			return nil, libraryErrorf(manifestPath, line, "field %q: key %q is only valid on a record item descriptor", f.Name, "fields")
 		}
-		if err := checkListOnlyKeys(ft, f.Name); err != nil {
+		if err := checkTypeOnlyKeys(ft, f.Name); err != nil {
 			return nil, err
 		}
 		f.MaxItemsFrom = maxItemsFrom
@@ -510,7 +584,7 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool, defs 
 		f.MinItemsFrom = minItemsFrom
 	}
 	merged := mergeNamedTypeField(named.(Field), *f, present)
-	if err := checkListOnlyKeys(merged.Type, merged.Name); err != nil {
+	if err := checkTypeOnlyKeys(merged.Type, merged.Name); err != nil {
 		return nil, err
 	}
 	return &merged, nil
@@ -574,6 +648,9 @@ func mergeNamedTypeField(base, f Field, present map[string]bool) Field {
 	if present["variants"] {
 		out.Variants = f.Variants
 	}
+	if present["variants_from"] {
+		out.VariantsFrom = f.VariantsFrom
+	}
 	if present["formats"] {
 		out.Formats = f.Formats
 	}
@@ -582,6 +659,15 @@ func mergeNamedTypeField(base, f Field, present map[string]bool) Field {
 	}
 	if present["section_template"] {
 		out.SectionTemplate = f.SectionTemplate
+	}
+	if present["roots"] {
+		out.Roots = f.Roots
+	}
+	if present["dir"] {
+		out.Dir = f.Dir
+	}
+	if present["extensions"] {
+		out.Extensions = f.Extensions
 	}
 	if present["item"] {
 		out.Item = f.Item
