@@ -111,6 +111,37 @@ func RawContext(source map[string]any, t *Template, body string) map[string]any 
 	return out
 }
 
+// InstanceDepth returns a section instance's self-nesting depth (item-context,
+// bounded-self-nesting): the number of enclosing instances in ancestors — the
+// FULL chain of resolved template names above the instance — whose resolved
+// template is the same as resolved, the instance's own resolved template name.
+// It is 0 at the outermost instance of that template in the containment chain
+// and +1 at each later same-template ancestor, so the count covers every
+// earlier same-template ancestor rather than only the immediate parent: on the
+// A→B→A→B chain the first b is 0, the inner a is 1 (its one enclosing a) and
+// the second b is 1 (its one enclosing b).
+//
+// This is the single shared computation of `.item.depth` both halves use — the
+// render-time item descriptors (internal/render) and the load-time example
+// descriptors (ResolveChildCall, ResolveSectionCallLayered, DataContext) — so
+// the two views of an instance's depth cannot drift (template-context).
+//
+// ancestors is the enclosing chain of resolved template names, empty at the
+// top level; resolved is the instance's own resolved template name. A resolved
+// name that is empty is not a template, so a nil or empty resolved yields 0.
+func InstanceDepth(ancestors []string, resolved string) int {
+	if resolved == "" {
+		return 0
+	}
+	depth := 0
+	for _, name := range ancestors {
+		if name == resolved {
+			depth++
+		}
+	}
+	return depth
+}
+
 // DataContext builds the reserved `.data` execution-context entry for a parent
 // instance's authored child sections (section-data-context): the same authored
 // instances the rendered-HTML list groups under each declared section name,
