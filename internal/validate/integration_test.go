@@ -365,6 +365,90 @@ func TestValidateIntegration(t *testing.T) {
 			}
 		})
 	}
+
+	// Collect-all end to end over a real on-disk multi-error deck. The fixed
+	// order is config -> slide filenames -> slides top-to-bottom -> inter-slide
+	// links. A deck cannot carry both a filename fault and slide faults —
+	// deck.LoadSlides yields no deck on a malformed filename, so the slide and
+	// link passes have nothing to walk (the unit testOrdering covers that pair) —
+	// so this deck pairs a config fault with slide faults. Within the slide step
+	// the errors read top-to-bottom (slide 1's three frontmatter-field errors
+	// before slide 2's body rule), and the `#label` link error is last, after
+	// every slide.
+	//
+	// Every error is asserted twice: its exact struct fields (File deck-relative
+	// forward-slash identity, Line, Path, What, Fix) and its validate.Format text
+	// (native display path). The suggestion lives only in Fix, the sole
+	// "did you mean" carrier — there is no structured suggestion field.
+	t.Run("collect-all over a multi-error deck", func(t *testing.T) {
+		files := multiErrorLibraryFiles()
+		files["kalide.yaml"] = "title: Multi Error Deck\ntheme: plain\nnavigation: diagonal\n"
+		files["slides/1-bg.md"] = "---\ntemplate: bg\nbackground: bgs/right-88.jpg\neffect: bgs/right-88.jpg\n---\n\nA simple body.\n"
+		files["slides/2-body.md"] = "---\ntemplate: bg\nheading: Two\nbackground: bgs/right-8.jpg\neffect: bgs/right-9.jpg\n---\n\nFirst paragraph with [x](#zzz).\n\nSecond paragraph.\n"
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+
+		want := []ValidationError{
+			New("kalide.yaml", 3, nil,
+				`key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`, ""),
+			New("slides/1-bg.md", 0, []string{"heading"},
+				`required: field "heading" is required but missing`, "add a heading: value"),
+			New("slides/1-bg.md", 0, []string{"background"},
+				`image: "bgs/right-88.jpg" does not exist`, `did you mean "bgs/right-8.jpg"?`),
+			New("slides/1-bg.md", 0, []string{"effect"},
+				`enum: "bgs/right-88.jpg" is not one of the allowed variants (bgs/right-8.jpg, bgs/right-9.jpg)`,
+				`did you mean "bgs/right-8.jpg"? use one of: bgs/right-8.jpg, bgs/right-9.jpg`),
+			New("slides/2-body.md", 7, []string{"body"},
+				`max_paragraphs: the body has 2 paragraphs, maximum is 1`, `shorten the body to at most 1 paragraphs`),
+			New("slides/2-body.md", 8, nil,
+				`unknown link label "zzz"`, `use the label of one of the deck's slides`),
+		}
+
+		all := ValidateAll(os.DirFS(dir), reg, themes)
+		if len(all) != len(want) {
+			t.Fatalf("ValidateAll() returned %d error(s), want %d:\n  %q", len(all), len(want), formatAll(all))
+		}
+		for i, e := range all {
+			if !reflect.DeepEqual(e, want[i]) {
+				t.Errorf("ValidateAll()[%d] =\n  %#v\nwant\n  %#v", i, e, want[i])
+			}
+			if got, w := Format(e), Format(want[i]); got != w {
+				t.Errorf("ValidateAll()[%d] Format =\n  %q\nwant\n  %q", i, got, w)
+			}
+			// The stored File is the deck-relative forward-slash identity, never
+			// the host OS's native spelling (native-display-paths).
+			if filepath.IsAbs(e.File) {
+				t.Errorf("ValidateAll()[%d].File = %q, want a deck-relative path", i, e.File)
+			}
+		}
+
+		// The fail-fast entry reports exactly the first error of that order.
+		verr, invalid := Validate(os.DirFS(dir), reg, themes)
+		if !invalid {
+			t.Fatalf("Validate() invalid = false, want the earliest error %q", Format(want[0]))
+		}
+		if !reflect.DeepEqual(verr, all[0]) {
+			t.Fatalf("Validate() error =\n  %#v\nwant ValidateAll()[0]\n  %#v", verr, all[0])
+		}
+	})
+
+	// The collect-all entry returns no errors for a sound on-disk deck carrying
+	// the same multi-error library, including a valid inter-slide `#label` link.
+	t.Run("collect-all valid deck returns no errors", func(t *testing.T) {
+		files := multiErrorLibraryFiles()
+		files["kalide.yaml"] = "title: Valid Deck\ntheme: plain\n"
+		files["slides/1-bg.md"] = "---\ntemplate: bg\nheading: One\nbackground: bgs/right-8.jpg\neffect: bgs/right-8.jpg\n---\n\nA simple body.\n"
+		files["slides/2-more.md"] = "---\ntemplate: bg\nheading: Two\nbackground: bgs/right-9.jpg\neffect: bgs/right-9.jpg\n---\n\nBack to [one](#bg).\n"
+		dir := writeDeck(t, files)
+		reg, themes := loadFixtureLibrary(t, dir)
+
+		if all := ValidateAll(os.DirFS(dir), reg, themes); len(all) != 0 {
+			t.Fatalf("ValidateAll() = %q, want no errors for a valid deck", formatAll(all))
+		}
+		if verr, invalid := Validate(os.DirFS(dir), reg, themes); invalid {
+			t.Fatalf("Validate() invalid = true with %q, want a valid deck", Format(verr))
+		}
+	})
 }
 
 // builtinTitleExample mirrors mustBuiltins' fixture title example.md: a
@@ -689,6 +773,25 @@ func variantsLibraryFiles() map[string]string {
 		"  - name: effect\n    type: enum\n    variants_from: media/bgs/*.jpg\n" +
 		"body:\n  mode: optional\n"
 	files["templates/slides/bg/example.md"] = "---\ntemplate: bg\nbackground: bgs/right-8.jpg\neffect: bgs/right-8.jpg\n---\n\nA slide.\n"
+	return files
+}
+
+// multiErrorLibraryFiles extends variantsLibraryFiles' `bg` slide template with a
+// required `heading` text field and a `max_paragraphs: 1` body rule, so one deck
+// can exercise the whole collect-all error set at once: a required field missing,
+// a missing media-root image with a closest-match fix, an expanded
+// `variants_from:` enum non-member with a closest-match fix, and a body-rule
+// violation. Its example names an existing media file, an expanded variant and a
+// single-paragraph body, so the library itself still loads.
+func multiErrorLibraryFiles() map[string]string {
+	files := variantsLibraryFiles()
+	files["templates/slides/bg/template.yaml"] = "description: a slide with a required heading, an image and an enum\n" +
+		"fields:\n" +
+		"  - name: heading\n    type: text\n    required: true\n" +
+		"  - name: background\n    type: image\n    roots:\n      - media\n    dir: bgs\n    extensions:\n      - jpg\n" +
+		"  - name: effect\n    type: enum\n    variants_from: media/bgs/*.jpg\n" +
+		"body:\n  mode: optional\n  max_paragraphs: 1\n"
+	files["templates/slides/bg/example.md"] = "---\ntemplate: bg\nheading: Example\nbackground: bgs/right-8.jpg\neffect: bgs/right-8.jpg\n---\n\nAn example slide.\n"
 	return files
 }
 
