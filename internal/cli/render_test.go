@@ -46,6 +46,27 @@ func precedenceRenderDeck() map[string]string {
 	}
 }
 
+// chdirNumberedRenderDeck copies the fixture library (chdirFixtureDeck) and
+// adds a `numbered` slide template whose layout prints the reserved
+// .slide.number/.slide.total, then a three-slide deck using it. The fixture
+// library's own layouts (hello) do not print the reserved slide values, so the
+// whole-deck numbering is pinned on this layout; the deck's three slides make
+// the whole-deck total 3, so a one-slide projection would print "1" and fail.
+func chdirNumberedRenderDeck(t *testing.T) string {
+	t.Helper()
+	dir := chdirFixtureDeck(t, map[string]string{
+		"kalide.yaml":       "title: Numbered Deck\ntheme: plain\n",
+		"slides/1-one.md":   "---\ntemplate: numbered\n---\n",
+		"slides/2-two.md":   "---\ntemplate: numbered\n---\n",
+		"slides/3-three.md": "---\ntemplate: numbered\n---\n",
+	})
+	base := filepath.Join(dir, "templates", "slides", "numbered")
+	writeCLIFile(t, filepath.Join(base, "template.yaml"), []byte("description: a slide printing its deck position and the deck total\nbody:\n  mode: optional\n"))
+	writeCLIFile(t, filepath.Join(base, "layout.html.tmpl"), []byte(`<section class="numbered">slide {{.slide.number}} of {{.slide.total}}</section>`))
+	writeCLIFile(t, filepath.Join(base, "example.md"), []byte("---\ntemplate: numbered\n---\nA numbered slide.\n"))
+	return dir
+}
+
 func TestRunRender(t *testing.T) {
 	t.Run("renders the selected slide by position label to stdout", func(t *testing.T) {
 		chdirFixtureDeck(t, renderDeck())
@@ -226,6 +247,55 @@ func TestRunRender(t *testing.T) {
 		}
 		if !strings.Contains(full, fragment) {
 			t.Errorf("full page does not embed its own fragment:\n  full:     %q\n  fragment: %q", full, fragment)
+		}
+	})
+
+	t.Run("--full embeds the --fragment output with whole-deck numbering", func(t *testing.T) {
+		chdirNumberedRenderDeck(t)
+
+		// The three whole-deck position labels; each selected slide must print
+		// its own and none of the other two, whatever page it is rendered into.
+		numberings := []string{"slide 1 of 3", "slide 2 of 3", "slide 3 of 3"}
+
+		for i, sel := range []string{"1", "2", "3"} {
+			t.Run("slide "+sel, func(t *testing.T) {
+				want := numberings[i]
+
+				code, fragment, stderr := runCLI("render", sel, "--fragment")
+				if code != 0 {
+					t.Fatalf("Run(render %s --fragment) exit = %d, want 0 (stderr = %q)", sel, code, stderr)
+				}
+				if !strings.HasPrefix(fragment, "<section") {
+					t.Errorf("fragment for slide %s = %q, want the slide's <section> markup", sel, fragment)
+				}
+				if !strings.Contains(fragment, want) {
+					t.Errorf("fragment for slide %s = %q, want whole-deck numbering %q (not a one-slide total)", sel, fragment, want)
+				}
+
+				code, full, stderr := runCLI("render", sel, "--full")
+				if code != 0 {
+					t.Fatalf("Run(render %s --full) exit = %d, want 0 (stderr = %q)", sel, code, stderr)
+				}
+				if !strings.Contains(full, "<!DOCTYPE") {
+					t.Errorf("full page for slide %s is not a complete page:\n%s", sel, full)
+				}
+				if !strings.Contains(full, fragment) {
+					t.Errorf("full page for slide %s does not embed its --fragment output:\n  full:     %q\n  fragment: %q", sel, full, fragment)
+				}
+				// The full page holds only the selected slide's <section>, so
+				// the selected numbering is the only one it prints.
+				if n := strings.Count(full, "<section"); n != 1 {
+					t.Errorf("full page for slide %s holds %d <section> elements, want only the selected slide's 1:\n%s", sel, n, full)
+				}
+				for j, other := range numberings {
+					if j == i {
+						continue
+					}
+					if strings.Contains(full, other) {
+						t.Errorf("full page for slide %s also prints %q:\n%s", sel, other, full)
+					}
+				}
+			})
 		}
 	})
 
