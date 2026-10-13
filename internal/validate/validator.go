@@ -268,14 +268,16 @@ func declaresChildSections(tmpl *template.Template) bool {
 // instance chain, e.g. `columns[2] › blocks[1] › lable`
 // (nested-section-validation). The slide frontmatter call passes nil.
 //
-// Image fields are checked against fsys: template.CheckValues enforces the
-// assets/ prefix itself and the WithImageExists callback verifies the file
-// exists in the deck.
+// Image fields carry the field descriptor and the authored path to the
+// WithImageExists callback; against the deck's assets/ root the callback
+// checks the file exists in fsys. The roots-aware resolution against the
+// field's declared roots (image-field-roots) is task 10's wiring; here the
+// callback keeps the pre-existing assets/-only behaviour.
 func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) (ValidationError, bool) {
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
-		template.WithImageExists(func(p string) bool {
+		template.WithImageExists(func(_ *template.Field, p string) (bool, []string) {
 			_, err := fs.Stat(fsys, p)
-			return err == nil
+			return err == nil, nil
 		}))
 	if len(res.Errors) == 0 {
 		return ValidationError{}, false

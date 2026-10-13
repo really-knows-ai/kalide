@@ -162,8 +162,18 @@ type Result struct {
 
 // checkConfig holds the optional callbacks an Option supplies.
 type checkConfig struct {
-	lineFor     func(path []PathSegment) int
-	imageExists func(path string) bool
+	lineFor func(path []PathSegment) int
+
+	// imageExists resolves and existence-checks one image field's value
+	// (image-field-roots). It receives the field whose schema declares the
+	// path options (Roots, Dir and Extensions) and the path exactly as the
+	// author wrote it, and reports whether the path names an existing file in
+	// one of the field's declared roots together with the candidate files the
+	// field accepts, so a missing file can carry a closest-match suggestion.
+	// The caller closes over the filesystems the field's roots resolve
+	// against: the deck's assets/ tree for an assets root and the owning
+	// library layer's media/ tree for a media root.
+	imageExists func(f *Field, path string) (exists bool, candidates []string)
 }
 
 // Option configures a CheckValues call.
@@ -176,11 +186,21 @@ func WithLineSource(fn func(path []PathSegment) int) Option {
 	return func(c *checkConfig) { c.lineFor = fn }
 }
 
-// WithImageExists supplies the existence check for image fields. It receives
-// the path exactly as the author wrote it (always already under assets/). When
-// no callback is passed, CheckValues still enforces the assets/ prefix but
-// does not check that the file exists.
-func WithImageExists(fn func(path string) bool) Option {
+// WithImageExists supplies the resolution and existence check for image
+// fields. fn receives the field whose schema declares the image's path options
+// (Roots, Dir and Extensions) and the path exactly as the author wrote it, and
+// returns whether the path names an existing file in one of the field's
+// declared roots, in written order, plus the candidate files the field accepts
+// so a missing file can carry a closest-match suggestion (image-field-roots).
+//
+// The caller closes over the filesystems the field's roots resolve against:
+// "assets" resolves against the deck's assets/ tree and "media" against the
+// media/ tree of the library layer that owns the field's template; with no
+// roots declared the path resolves under the deck's assets/.
+//
+// When no callback is passed, CheckValues still enforces the assets/ prefix
+// but does not check that the file exists.
+func WithImageExists(fn func(f *Field, path string) (exists bool, candidates []string)) Option {
 	return func(c *checkConfig) { c.imageExists = fn }
 }
 
@@ -503,7 +523,7 @@ func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth i
 	case FieldEnum:
 		c.validateEnum(path, f, value)
 	case FieldImage:
-		c.validateImage(path, value)
+		c.validateImage(path, f, value)
 	case FieldLink:
 		c.validateLink(path, value)
 	case FieldList:
@@ -705,7 +725,15 @@ func (c *checker) validateEnum(path []PathSegment, f *Field, value any) {
 
 // validateImage checks that an image path is under assets/ and, when the
 // caller supplied an existence callback, that it exists.
-func (c *checker) validateImage(path []PathSegment, value any) {
+//
+// f carries the field's declared path options (Roots, Dir and Extensions),
+// handed to the WithImageExists callback so the caller can resolve the path
+// against them (image-field-roots). Resolving against the declared roots in
+// written order and using the callback's candidate set for a closest-match
+// suggestion is checkImageRoots/validateImage's later change (tasks 4-5);
+// until then this keeps the pre-existing assets/-only behaviour, checking only
+// that the file exists.
+func (c *checker) validateImage(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
 	if !ok {
 		c.add(path, "type", value,
@@ -719,10 +747,12 @@ func (c *checker) validateImage(path []PathSegment, value any) {
 			"move the image into the deck's assets/ directory and reference it as assets/…")
 		return
 	}
-	if c.cfg.imageExists != nil && !c.cfg.imageExists(s) {
-		c.add(path, "image", value,
-			fmt.Sprintf("image: %s does not exist", strconv.Quote(s)),
-			"add the file under assets/ or fix the path")
+	if c.cfg.imageExists != nil {
+		if exists, _ := c.cfg.imageExists(f, s); !exists {
+			c.add(path, "image", value,
+				fmt.Sprintf("image: %s does not exist", strconv.Quote(s)),
+				"add the file under assets/ or fix the path")
+		}
 	}
 }
 
