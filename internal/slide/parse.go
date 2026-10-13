@@ -415,7 +415,7 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				return nil, nil, unknownName(file, headingLine, "", "section", name, sortedCopy(cat.SectionNames(slideTemplate)))
 			}
 			topCounts[name]++
-			accepted, minRep, maxRep, _ := cat.SectionDecl(slideTemplate, name)
+			accepted, minRep, maxRep, _, _ := cat.SectionDecl(slideTemplate, name)
 			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}
 			if d.max > 0 && topCounts[name] > d.max {
 				return nil, nil, parseError(file, headingLine,
@@ -569,7 +569,7 @@ func checkTopMin(file string, names []string, cat Catalogue, slideTemplate strin
 		if name == NotesSection {
 			continue
 		}
-		accepted, minRep, _, ok := cat.SectionDecl(slideTemplate, name)
+		accepted, minRep, _, _, ok := cat.SectionDecl(slideTemplate, name)
 		_ = accepted
 		if !ok || minRep <= 0 {
 			continue
@@ -630,7 +630,7 @@ func declsFor(cat Catalogue, tmpl string) map[string]sectionDecl {
 	names := cat.SectionNames(tmpl)
 	out := make(map[string]sectionDecl, len(names))
 	for _, n := range names {
-		a, mn, mx, ok := cat.SectionDecl(tmpl, n)
+		a, mn, mx, _, ok := cat.SectionDecl(tmpl, n)
 		out[n] = sectionDecl{accepted: a, min: mn, max: mx, ok: ok}
 	}
 	return out
@@ -730,7 +730,7 @@ type sectionDecl struct {
 // validation only; it never resolves the instance's `template:` value.
 func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name string, line int, path string) (sectionDecl, error) {
 	names := cat.SectionNames(parentTemplate)
-	accepted, minRep, maxRep, ok := cat.SectionDecl(parentTemplate, name)
+	accepted, minRep, maxRep, _, ok := cat.SectionDecl(parentTemplate, name)
 	if !ok {
 		return sectionDecl{}, unknownName(file, line, path, "section", name, names)
 	}
