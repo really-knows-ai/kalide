@@ -486,7 +486,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("SectionDecl returns accepted, min, max and a fresh copy", func(t *testing.T) {
 		r := mustFixtureRegistry(t)
 
-		accepted, min, max, ok := r.SectionDecl("content", "columns")
+		accepted, min, max, maxDepth, ok := r.SectionDecl("content", "columns")
 		if !ok {
 			t.Fatal(`SectionDecl("content", "columns") ok = false, want true`)
 		}
@@ -494,11 +494,14 @@ func TestRegistry(t *testing.T) {
 		if min != 2 || max != 4 {
 			t.Errorf("SectionDecl min/max = %d/%d, want 2/4", min, max)
 		}
+		if maxDepth != 0 {
+			t.Errorf("SectionDecl maxDepth = %d, want 0 (unbounded)", maxDepth)
+		}
 
 		// The accepted slice is a fresh copy: mutating it does not corrupt
 		// the registry.
 		accepted[0] = "mutated"
-		again, _, _, _ := r.SectionDecl("content", "columns")
+		again, _, _, _, _ := r.SectionDecl("content", "columns")
 		assertStringSlice(t, "SectionDecl accepted after mutation", again, []string{"column"})
 
 		for _, tt := range []struct {
@@ -507,7 +510,7 @@ func TestRegistry(t *testing.T) {
 			{"content", "missing"},
 			{"missing", "columns"},
 		} {
-			if _, _, _, ok := r.SectionDecl(tt.tmpl, tt.section); ok {
+			if _, _, _, _, ok := r.SectionDecl(tt.tmpl, tt.section); ok {
 				t.Errorf("SectionDecl(%q, %q) ok = true, want false", tt.tmpl, tt.section)
 			}
 		}
