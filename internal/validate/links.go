@@ -93,8 +93,8 @@ func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, label
 	if verr, invalid := checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates); invalid {
 		return verr, true
 	}
-	if verr, invalid := checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates); invalid {
-		return verr, true
+	if errs := checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates); len(errs) > 0 {
+		return errs[0], true
 	}
 
 	if verr, invalid := checkSectionLinks(file, ps.Sections, reg, labels, candidates); invalid {
@@ -102,8 +102,8 @@ func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, label
 	}
 
 	if ps.Notes != nil {
-		if verr, invalid := checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates); invalid {
-			return verr, true
+		if errs := checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates); len(errs) > 0 {
+			return errs[0], true
 		}
 	}
 	return ValidationError{}, false
@@ -122,8 +122,8 @@ func checkSectionLinks(file string, sections []slide.Section, reg *template.Regi
 		if verr, invalid := checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates); invalid {
 			return verr, true
 		}
-		if verr, invalid := checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates); invalid {
-			return verr, true
+		if errs := checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates); len(errs) > 0 {
+			return errs[0], true
 		}
 		if verr, invalid := checkSectionLinks(file, sec.Children, reg, labels, candidates); invalid {
 			return verr, true
@@ -163,26 +163,30 @@ func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, 
 // mdcheck.ExtractLinks reports two streams: the links themselves (a bad-scheme
 // link is still a Link, with an empty Label) and a positioned Issue for every
 // destination that is neither `#label` nor http(s). The two are merged by
-// source position so the first offender is chosen deterministically; an Issue
-// is the scheme error for its link and is checked first at the same position.
-// It returns the first error and whether one was found.
-func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// source position so the errors are reported in document order; an Issue is the
+// scheme error for its Link and is reported first at the same position, and the
+// co-located Link is then skipped because the Issue already is its error. Every
+// offending link of the body is returned, in merged source order, rather than
+// only the first.
+func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}, candidates []string) []ValidationError {
 	if body == "" {
-		return ValidationError{}, false
+		return nil
 	}
 	links, issues := mdcheck.ExtractLinks(file, []byte(body), mdcheck.Options{
 		Mode:      mdcheck.BodyMode,
 		StartLine: startLine,
 	})
+	var errs []ValidationError
 	for _, ev := range mergeLinkEvents(links, issues) {
 		if ev.issue != nil {
-			return adaptIssue(*ev.issue, nil), true
+			errs = append(errs, adaptIssue(*ev.issue, nil))
+			continue
 		}
 		if verr, invalid := checkLabelRef(file, ev.link.Label, ev.link.Destination, nil, ev.link.Line, labels, candidates); invalid {
-			return verr, true
+			errs = append(errs, verr)
 		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // linkEvent is one link or link-scheme Issue from a body, placed by source
