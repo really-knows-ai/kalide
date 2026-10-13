@@ -90,8 +90,8 @@ func TestCheckTables(t *testing.T) {
 			body:      wideRow,
 			startLine: 1,
 			rule:      &template.TableRule{},
-			want: []ValidationError{New(file, 3, []string{"body", "rows[1]"},
-				"rows[1]: 3 cells, header has 2",
+			want: []ValidationError{New(file, 3, []string{"body", "rows[0]"},
+				"3 cells, header has 2",
 				"make every row have 2 cells to match the header")},
 		},
 		{
@@ -127,8 +127,8 @@ func TestCheckTables(t *testing.T) {
 			startLine: 1,
 			rule:      &template.TableRule{},
 			prefix:    []string{"columns[0]", "blocks[0]"},
-			want: []ValidationError{New(file, 3, []string{"columns[0]", "blocks[0]", "body", "rows[1]"},
-				"rows[1]: 3 cells, header has 2",
+			want: []ValidationError{New(file, 3, []string{"columns[0]", "blocks[0]", "body", "rows[0]"},
+				"3 cells, header has 2",
 				"make every row have 2 cells to match the header")},
 		},
 		{
@@ -136,8 +136,8 @@ func TestCheckTables(t *testing.T) {
 			body:      wideRow,
 			startLine: 10,
 			rule:      &template.TableRule{},
-			want: []ValidationError{New(file, 12, []string{"body", "rows[1]"},
-				"rows[1]: 3 cells, header has 2",
+			want: []ValidationError{New(file, 12, []string{"body", "rows[0]"},
+				"3 cells, header has 2",
 				"make every row have 2 cells to match the header")},
 		},
 	}
@@ -250,7 +250,7 @@ func TestTableValidationInt(t *testing.T) {
 				name:  "strict column count is positioned at the offending row",
 				slide: tableSlideGridStrictCount,
 				want: displayFile("slides/1-a.md") + ":8" + segmentSeparator + "body" + segmentSeparator +
-					"rows[1]: rows[1]: 3 cells, header has 2" + fixSeparator + "make every row have 2 cells to match the header",
+					"rows[0]: 3 cells, header has 2" + fixSeparator + "make every row have 2 cells to match the header",
 			},
 		}
 		for _, tt := range tests {
@@ -285,8 +285,8 @@ func TestTableValidationInt(t *testing.T) {
 			New("slides/1-a.md", 6, []string{"body", "cell"},
 				`unknown cell attribute "hilight": did you mean "highlight"?`,
 				"use one of the template's declared cell attributes, or remove the {…} group"),
-			New("slides/1-a.md", 8, []string{"body", "rows[1]"},
-				"rows[1]: 3 cells, header has 4", "make every row have 4 cells to match the header"),
+			New("slides/1-a.md", 8, []string{"body", "rows[0]"},
+				"3 cells, header has 4", "make every row have 4 cells to match the header"),
 			New("slides/2-b.md", 7, nil, optOutWhat, optOutFix),
 			New("slides/3-c.md", 13, []string{"panels[0]"}, optOutWhat, optOutFix),
 		}
