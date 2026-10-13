@@ -103,7 +103,7 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if len(args) == 0 {
-		printTemplateList(stdout, registry)
+		printTemplateList(stdout, registry, false)
 		return 0
 	}
 
@@ -136,12 +136,20 @@ func templateUnknownMessage(name string, names []string) string {
 // printTemplateList writes the one-line-per-template list: name, usage and
 // description, in the registry's sorted name order. The name and usage columns
 // are padded so the descriptions line up.
-func printTemplateList(w io.Writer, registry *template.Registry) {
+//
+// A template whose manifest declares `internal: true` (Template.Internal) is
+// omitted from the default listing and included only when all is true — the
+// `--all` listing mode (internal-templates). An internal template is still
+// listed exactly once, with its name, usage and description, when it is shown.
+func printTemplateList(w io.Writer, registry *template.Registry, all bool) {
 	templates := registry.Templates()
 
 	nameWidth := 0
 	for _, t := range templates {
-		if t != nil && len(t.Name) > nameWidth {
+		if t == nil || (!all && t.Internal) {
+			continue
+		}
+		if len(t.Name) > nameWidth {
 			nameWidth = len(t.Name)
 		}
 	}
@@ -149,7 +157,7 @@ func printTemplateList(w io.Writer, registry *template.Registry) {
 	fmt.Fprintln(w, "Templates:")
 	fmt.Fprintln(w)
 	for _, t := range templates {
-		if t == nil {
+		if t == nil || (!all && t.Internal) {
 			continue
 		}
 		fmt.Fprintf(w, "  %-*s  %-7s  %s\n", nameWidth, t.Name, string(t.Usage), t.Description)
