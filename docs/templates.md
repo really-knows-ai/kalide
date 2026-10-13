@@ -62,7 +62,9 @@ local layer (see [docs/layered-libraries.md](layered-libraries.md)).
 
 ## library.yaml
 
-`library.yaml` is required at the library root and accepts exactly three keys:
+`library.yaml` is required at the library root. It accepts the metadata keys
+`name`, `description` and `format`, plus the optional named-definition sections
+`groups:`, `field_sets:` and `types:`:
 
 ```yaml
 name: hello
@@ -73,15 +75,54 @@ format: 1
 - `name` (required) — the library's own name, matching `[a-z0-9][a-z0-9-]*`.
 - `description` (optional) — one line.
 - `format` (required) — the layout and manifest format version. Exactly `1` is
-  accepted; anything else is an error.
+  accepted; anything else is an error. The named-definition sections are
+  additive to format `1`: declaring them never changes the `format` value.
 
 Any other key is an error.
+
+### Named definitions
+
+`groups:`, `field_sets:` and `types:` declare reusable, named definitions a
+template in the same layer references by name. Each is a mapping from a
+definition name to its value:
+
+```yaml
+name: shared
+format: 1
+groups:                   # named accept-lists, referenced as `@name`
+  callouts: [note, warning]
+field_sets:               # named field groups, referenced as `- include: name`
+  meta:
+    - name: subtitle
+      type: text
+      nullable: true
+types:                    # named field types, referenced as `type: name`
+  colour:
+    type: enum
+    variants: [red, green, blue]
+```
+
+- `groups:` maps a name to a list of section-template names. A section's
+  `accepted:` entry `@<name>` expands that list in place and is combinable with
+  literal template names, for example `accepted: [@callouts, person]`.
+- `field_sets:` maps a name to a list of field descriptors written with the same
+  field keys as a `template.yaml` field. A `fields:` entry `- include: <name>`
+  expands the named set's fields in place.
+- `types:` maps a name to a single field descriptor, referenced from a field as
+  `type: <name>` (for example the `colour` enum above). The descriptor may set
+  any field key except its name, which is the `type:` name; a field's own
+  sibling keys override the named definition's.
+- A definition resolves in the layer of the library that owns the template that
+  references it, so a name declared in one layer is not visible to a template in
+  the other (see [docs/layered-libraries.md](layered-libraries.md)).
+- An unknown `@name`, `include:` or `type:` name is an error with a
+  closest-match suggestion.
 
 ## template.yaml
 
 `template.yaml` declares a template's schema as data. An empty manifest is
-valid. Accepted top-level keys are `description`, `fields`, `sections` and
-`body`; `name` is accepted but ignored, because the name is always the
+valid. Accepted top-level keys are `description`, `fields`, `sections`, `body`
+and `internal`; `name` is accepted but ignored, because the name is always the
 directory name; any other key is an error with a suggestion.
 
 ```yaml
@@ -105,28 +146,49 @@ body:
 
 An optional one-line summary of the template.
 
+### `internal`
+
+An optional boolean. `internal: true` hides a template from the default
+`kalide templates` listing — it is shown only with `kalide templates --all` —
+while leaving it usable as a `section`-helper target and as a
+`section-template` field type. An internal template cannot be named as a
+slide's or a section instance's `template:`.
+
 ### `fields`
 
 `fields` is a sequence of field entries. Each entry requires `name` and
-`type`, and may set the common keys `required`, `default` and `description`
-plus the limits for its type:
+`type`, and may set the common keys `required`, `default`, `description` and
+`nullable` plus the rules for its type. A `fields:` entry may instead be a
+named-field-set reference, `- include: <name>`, which expands a `field_sets:`
+definition from the owning layer's `library.yaml` in place; a field's `type:`
+may likewise name a `types:` definition there (see
+[library.yaml](#named-definitions)).
 
 | `type` | value the author writes | type-specific keys |
 |---|---|---|
-| `text` | inline Markdown (bold, italic, inline code, `[]()` links, hard breaks) | `max_length`, `plain` |
+| `text` | inline Markdown (bold, italic, inline code, `[]()` links, hard breaks) | `max_length`, `plain`, `coerce` |
 | `number` | a plain YAML number; a quoted value is a type error | `min`, `max`, `formats`, `default_format` |
 | `date` | `YYYY-MM-DD` | `min_date`, `max_date`, `formats`, `default_format` |
 | `boolean` | `true` or `false` | — |
-| `enum` | one of the declared variants | `variants` (required) |
-| `image` | a path under the deck's `assets/`, existence checked | — |
+| `enum` | one of the declared variants | `variants` (required unless `variants_from` expands the set), `variants_from` |
+| `image` | a path resolved under the declared `roots`, existence checked | `roots`, `dir`, `extensions` |
 | `link` | a `#label` anchor (must exist) or an `http(s)` URL | — |
-| `list` | a YAML sequence; every element has the single item type | `item`, `min_items`, `max_items` |
+| `list` | a YAML sequence; every element has the single item type | `item` (one nested field descriptor, which may be an inline `record`), `min_items`, `max_items`, `max_items_from`, `min_items_from` |
 | `section-template` | structured YAML data shaped by another section template | `section_template` |
 
 - `required: true` — the field must be supplied. A field that declares a
   `default` is satisfied when omitted and takes that value instead.
-- `default` — the value applied when the author omits the field.
+- `default` — the value applied when the author omits the field. An explicit
+  `null` never triggers the default (see `nullable`).
 - `description` — the field's author-facing help text.
+- `nullable: true` — the field accepts an explicit YAML `null` whatever its
+  type, or a null list entry on a record item descriptor. A null value skips
+  every bound, format and membership check. Null is **distinct from absent**: a
+  `required` nullable field's key must still be present (it may be null), and an
+  explicit null never triggers the field's `default`.
+- `coerce: true`, on a `text` field — accepts a YAML number or boolean where a
+  string is expected and converts it to its string form (for example `42` →
+  `"42"`, `true` → `"true"`). A mapping or list is still a type error.
 - `max_length` — the maximum character count of a `text` value, measured
   after Markdown is stripped; `0` is no limit. `plain: true` turns off the
   inline-Markdown checks for a `text` field.
@@ -134,13 +196,45 @@ plus the limits for its type:
 - `min_date` / `max_date` — inclusive `YYYY-MM-DD` bounds for a `date` field.
 - `min_items` / `max_items` — length bounds for a `list` field; `0` is no
   bound.
+- `max_items_from` / `min_items_from` — for a `list` field, bound its length
+  against another list field's item count: at most (respectively at least) the
+  named list's count. A leading `/name` names a top-level field of the template;
+  a bare name names a sibling field within the same inline record. The named
+  peer must itself be a `list` field, and the keys are valid only on a `list`.
 - `variants` — the complete, required set of allowed values for an `enum`
   field. A declared `default` must be one of the variants. An enum field's
   variants are also a template's only layout-variant mechanism.
+- `variants_from` — for an `enum` field, a glob that expands the value set at
+  library load instead of an inline `variants` set (see below).
 - `item` — the `list` field's single item descriptor, written with the same
   field keys (so a list of `number`s, a list of `section-template`s, and so on).
+  When the descriptor declares `type: record` with its own `fields:`, the list
+  is a list of **inline records**, validated recursively:
+  `item: {type: record, fields: [...]}`. A record's fields use the same
+  descriptors as a template's top-level fields (including `nullable`, `coerce`
+  and a nested `list`/`record`), so a record field may itself be a list of
+  records. A record is never a field's own `type:` — it appears only as a list's
+  `item:` descriptor.
 - `section_template` — names the section template a `section-template` field's
-  value is shaped by; the value is data only, with no separate record types.
+  value is shaped by; the value is data only, with no separate named record
+  type.
+- `roots` — for an `image` field, the trees the authored path is resolved
+  against, in the written order. A root is `assets`, the deck's `assets/` tree
+  (the path is written with its `assets/` prefix), or `media`, the `media/` tree
+  of the library layer that owns the field's template (the path is written
+  media-relative, with no `media/` prefix). With no `roots` the path resolves
+  under `assets/`. A missing file is an error carrying a closest-match
+  suggestion.
+- `dir` — for an `image` field, optionally restricts the accepted path to a
+  subdirectory within a root.
+- `extensions` — for an `image` field, optionally restricts the accepted path
+  to a set of file-name extensions (for example `[jpg, png]`).
+- `variants_from` — for an `enum` field, a glob written relative to the root of
+  the library layer that owns the field's template, naming files under that
+  layer's `media/` tree (for example `media/bgs/*.jpg`). The field's valid values
+  are the matching files, each written media-relative (for example
+  `bgs/right-8.jpg`), in sorted order. Declaring `variants` and `variants_from`
+  together, or a glob that matches no file, is an error.
 - `formats` / `default_format` — for `number` and `date` fields, the named
   display formats the field accepts and the one used when the author writes no
   selection. Number formats are `compact`, `exact` and `percent`; date formats
@@ -154,22 +248,35 @@ plus the limits for its type:
 ```yaml
 sections:
   - name: people
-    accepted: [person]     # section-usage template names
-    min: 0                 # 0 = no minimum
-    max: 4                 # 0 or less = unbounded
+    accepted: [person]      # section-usage template names, or `@group` references
+    min: 0                  # 0 = no minimum
+    max: 4                  # 0 or less = unbounded
 ```
 
 - `name` (required) — the declared section name.
 - `accepted` (required, non-empty) — the section templates the section accepts.
-  A section accepts only section-usage templates, never slide templates.
+  A section accepts only section-usage templates, never slide templates. An
+  entry may also be `@<name>`, a named accept-list (`groups:`) from the owning
+  layer's `library.yaml`, expanded in place and combinable with literal names,
+  for example `accepted: [@callouts, person]`.
 - `min` — the minimum number of instances; `0` means no minimum.
 - `max` — the maximum number of instances; `0` or less means unbounded.
+- `max_depth` — the positive-integer bound a **self-nesting** or **cyclic**
+  acceptance carries: the most times the declaration's section may recur in one
+  containment chain. An acceptance that resolves to its own template — directly,
+  or through a cycle of declarations — with no `max_depth` is refused at load as
+  a reference cycle, and a `max_depth` that is not a positive integer is an error
+  naming the offending `template.yaml`.
 
 A section instance's `template:` key is required only when the section accepts
 more than one template. **Any** template may declare `sections:` — a slide
 template, and equally a section template, whose instances then accept nested
 child sections. The child instances are authored as headings; see
-`example.md` below.
+`example.md` below. A section template that accepts its own template (or a cycle
+of them) is a **bounded self-nesting** declaration: an instance it produces has
+at most `max_depth` enclosing instances that resolve to its own template, and
+each instance of the chain reads that count as `.item.depth` (see
+[Reserved contexts](#reserved-contexts)).
 
 ### `body`
 
@@ -222,11 +329,15 @@ Five names are reserved as execution-context **data**, not helpers:
 - `.item` — present only inside a **section** instance, never in a slide
   layout. It describes the instance among its same-name siblings:
   `.item.index` (zero-based), `.item.number` (one-based), `.item.count`,
-  `.item.first` and `.item.last` (booleans), `.item.section` (the declared
-  section name), `.item.template` (the resolved section template name) and
-  `.item.parent` (the enclosing section instance's field values, or nil at the
-  top level). A slide layout and a `section-template`-typed field value carry
-  no `item` entry.
+  `.item.first` and `.item.last` (booleans), `.item.depth` (the instance's
+  self-nesting depth: how many enclosing instances resolved to the same section
+  template, `0` at the outermost instance of that template), `.item.section`
+  (the declared section name), `.item.template` (the resolved section template
+  name) and `.item.parent` (the enclosing section instance's field values, or
+  nil at the top level). A slide layout and a `section-template`-typed field
+  value carry no `item` entry. A bounded self-nesting declaration reads
+  `.item.depth` at every level, and the same `depth` is on each
+  `.data.<section>` entry's `.item`.
 - `.raw` — the author's **original source** values, before rendering:
   `.raw.<field>` is a text field's source Markdown exactly as authored, and
   `.raw.body` is the original body source. A declared default is not a source
@@ -425,3 +536,32 @@ the open sections back to its parent. Where the enclosing template declares no
 child sections, a deeper heading stays in the enclosing body as an ordinary
 Markdown subheading — allowed `##`/`###` only where that template's body rule
 permits subheadings.
+
+## Commands
+
+These are the commands a template author uses to inspect a library and check a
+deck built against it.
+
+- `kalide check [--all] [--json]` validates the whole deck — its resolved
+  library, its theme and every slide — **without serving it**: it loads exactly
+  what `kalide start` loads and reports the same first error, or every error
+  with `--all` in the fixed validation order, exiting 0 when the deck is valid
+  and 1 otherwise. A library or theme that cannot be loaded is reported as the
+  single check error; with `--all` the report still ends there, because there is
+  no registry to collect further errors from.
+- `kalide render [slide] [-o dir] [--full|--fragment]` writes a slide's rendered
+  HTML without serving it: name a slide by its position label (`3`, `3a`) or its
+  deck-unique label to print it to stdout, or pass `-o <dir>` with no slide to
+  write one `<number>[letter]-<label>.html` file per slide into that directory,
+  in deck order. `--full` (the default) writes the complete standalone page,
+  whose embedded `<section>` is byte-identical to the `--fragment` output;
+  `--fragment` writes only the slide's `<section>` markup. The two flags are
+  mutually exclusive. Output is deterministic, and `.slide.number` /
+  `.slide.total` count across the whole deck.
+- `kalide templates [--all] [name]` lists the templates in the merged library
+  (both layers); `--all` additionally lists the templates whose manifest
+  declares `internal: true`, which the default listing omits. `kalide templates
+  <name>` documents one template whatever its `internal` flag: its fields — with
+  every nullable field marked `nullable`, an enum field's variants listed on
+  their own line beneath the field, and an inline record's fields nested under
+  their list — its sections, body rules and example.
