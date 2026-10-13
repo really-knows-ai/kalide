@@ -10,11 +10,12 @@ import (
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
-// fakeTemplate is one fake catalogue entry: a template's usage and, for
-// slide templates, its declared sections with their accepted section templates
-// and repeat bounds.
+// fakeTemplate is one fake catalogue entry: a template's usage, whether it is
+// internal (`internal: true`), and, for slide templates, its declared sections
+// with their accepted section templates and repeat bounds.
 type fakeTemplate struct {
 	usage    string
+	internal bool
 	sections []string
 	accepted map[string][]string
 	min      map[string]int
@@ -27,12 +28,12 @@ type fakeTemplate struct {
 // parser reads SectionDecl (a positive max is a hard limit).
 type fakeCatalogue map[string]fakeTemplate
 
-func (c fakeCatalogue) LookupSlideTemplate(name string) (string, bool) {
+func (c fakeCatalogue) LookupSlideTemplate(name string) (string, bool, bool) {
 	t, ok := c[name]
 	if !ok {
-		return "", false
+		return "", false, false
 	}
-	return t.usage, true
+	return t.usage, t.internal, true
 }
 
 func (c fakeCatalogue) TemplateNames() []string {
