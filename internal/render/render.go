@@ -305,10 +305,13 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 // helper — bound once into the shared layout namespace — can resolve a
 // `{{ section … }}` call made while some layout executes: the calling
 // instance's field values, which the target reads as `.item.parent`
-// (item-context), and the deck/slide context the helper-rendered target
-// template executes with (template-context). The slide layout has no section
-// parent, so callerFields is nil there; callerCtx is set for the slide too,
-// carrying its deck/slide context.
+// (item-context), the calling instance's own chain of resolved template names,
+// which the target reads as its enclosing ancestors so its `.item.depth` is
+// computed through the shared InstanceDepth helper (item-context), and the
+// deck/slide context the helper-rendered target template executes with
+// (template-context). The slide layout has no section parent, so callerFields
+// and callerChain are nil there; callerCtx is set for the slide too, carrying
+// its deck/slide context.
 type renderer struct {
 	reg     *template.Registry
 	formats *template.Format
@@ -340,6 +343,20 @@ type renderer struct {
 	// for the slide layout as well (with a nil parent), so a call from a slide
 	// carries the slide's context.
 	callerCtx *sectionCtx
+
+	// callerChain is the calling instance's own chain of resolved template
+	// names — the resolved templates enclosing the instance whose layout is
+	// currently executing, with that instance's own resolved template name
+	// appended (its sectionCtx.ancestors plus its own template name). It is the
+	// ancestor identity a `{{ section … }}` call made there passes to
+	// template.ResolveSectionCallLayered, so the resolved target's one-item
+	// `.item.depth` counts its enclosing same-template ancestors through the
+	// shared template.InstanceDepth helper identically to the load-time example
+	// side's exampleSectionHelper (item-context, bounded-self-nesting,
+	// section-helper). It is nil while the slide layout executes, whose
+	// instance is the slide, not a section, so a call made from a slide layout
+	// passes no caller chain and its target's depth is 0.
+	callerChain []string
 
 	// funcMap is the caller's layout func map — the helpers `media`/`section`/
 	// `dict`/`list` plus the number/date format functions
@@ -563,10 +580,13 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 // the top level the parent is the slide, so the descriptor carries nil.
 //
 // The instance's field values are also published as the renderer's caller
-// context for the duration of its layout execution and restored afterwards, so
-// a `{{ section … }}` call the layout makes resolves its target's `.item.parent`
-// from this instance and inherits its deck/slide context (item-context,
-// template-context). A call made from a slide layout sees a nil parent, since
+// context — together with the instance's own chain of resolved template names —
+// for the duration of its layout execution and restored afterwards, so a
+// `{{ section … }}` call the layout makes resolves its target's `.item.parent`
+// from this instance, computes the target's `.item.depth` against this
+// instance's own chain through the shared InstanceDepth helper, and inherits its
+// deck/slide context (item-context, bounded-self-nesting, template-context). A
+// call made from a slide layout sees a nil parent and no caller chain, since
 // RenderSlide publishes the slide context with no calling instance.
 //
 // The instance's layout executes with the `media` helper bound to layer when
@@ -602,6 +622,21 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 	// each child's resolved descriptor. The two are mutually exclusive, so an
 	// authored instance and its equivalent helper instance each render through
 	// the same instance path with the child lists assembled the same way.
+	//
+	// This instance's own ancestor chain: the enclosing chain it inherited with
+	// its own resolved template appended. Each authored child's depth counts
+	// this instance among its enclosing same-template ancestors, and the child
+	// context carries the same chain as the enclosing chain it passes on, so a
+	// bounded self-nested authored chain reads `item.depth` at every level
+	// (item-context, bounded-self-nesting). The child's `item.section` and
+	// `item.parent` stay as before; only depth is computed here rather than
+	// mechanically 0. The same chain is published as the renderer's caller
+	// chain for the duration of this instance's layout execution, so a
+	// `{{ section … }}` call the layout makes passes it as the target's
+	// enclosing chain and the target's `.item.depth` counts this instance (and
+	// any same-template ancestor) through the shared InstanceDepth helper
+	// exactly as the load-time example side does (section-helper).
+	instanceAncestors := append(append([]string{}, secCtx.ancestors...), tmpl.Name)
 	if secCtx != nil && len(secCtx.resolvedChildren) > 0 {
 		lists, _, err := r.renderChildren(secCtx.resolvedChildren, secCtx)
 		if err != nil {
@@ -619,15 +654,6 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 		for i := range sec.Children {
 			counts[sec.Children[i].Name]++
 		}
-		// This instance's own ancestor chain: the enclosing chain it inherited
-		// with its own resolved template appended. Each authored child's depth
-		// counts this instance among its enclosing same-template ancestors, and
-		// the child context carries the same chain as the enclosing chain it
-		// passes on, so a bounded self-nested authored chain reads `item.depth`
-		// at every level (item-context, bounded-self-nesting). The child's
-		// `item.section` and `item.parent` stay as before; only depth is
-		// computed here rather than mechanically 0.
-		instanceAncestors := append(append([]string{}, secCtx.ancestors...), tmpl.Name)
 		for i := range sec.Children {
 			child := &sec.Children[i]
 			if child.Template == "" {
@@ -656,16 +682,20 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 
 	// Publish this instance as the caller context for the duration of its
 	// layout execution: a nested `{{ section … }}` call the layout makes reads
-	// these field values as its target's `.item.parent` and inherits this
-	// instance's deck/slide context (item-context, template-context). The
-	// previous context is restored once the layout returns, so an enclosing
-	// layout keeps resolving against itself.
-	prevFields, prevCtx := r.callerFields, r.callerCtx
+	// these field values as its target's `.item.parent`, computes the target's
+	// `.item.depth` against this instance's own chain (instanceAncestors)
+	// through the shared InstanceDepth helper, and inherits this instance's
+	// deck/slide context (item-context, bounded-self-nesting,
+	// template-context). The previous context is restored once the layout
+	// returns, so an enclosing layout keeps resolving against itself.
+	prevFields, prevCtx, prevChain := r.callerFields, r.callerCtx, r.callerChain
 	r.callerFields = data
 	r.callerCtx = secCtx
+	r.callerChain = instanceAncestors
 	defer func() {
 		r.callerFields = prevFields
 		r.callerCtx = prevCtx
+		r.callerChain = prevChain
 	}()
 
 	var buf bytes.Buffer
@@ -907,7 +937,14 @@ func childIndex(call *template.SectionCall) int {
 // values (renderer.callerFields) are passed as the call's parent, so the
 // target's one-item `.item.parent` is the calling instance's fields; it is nil
 // when the call is made from a slide layout, whose parent is the slide
-// (item-context). A `children "<section>" .data.<section>` argument forwards the
+// (item-context). The caller's own chain of resolved template names
+// (renderer.callerChain) is passed as the call's ancestors, so the target's
+// one-item `.item.depth` counts its enclosing same-template ancestors through
+// the shared template.InstanceDepth helper identically to the load-time example
+// side's exampleSectionHelper; it is nil when the call is made from a slide
+// layout, which is not an instance of any template, so the target's depth is 0
+// (item-context, bounded-self-nesting, section-helper). A
+// `children "<section>" .data.<section>` argument forwards the
 // caller's authored `.data` entries for that section, which ResolveChildren
 // expands into child instances keeping each entry's own template, raw fields,
 // raw body and nested data (children-forwarding).
@@ -983,10 +1020,14 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 	// target's body rule, resolves the child arguments with ResolveChildren
 	// against the target's declared sections (defaults-first, accepted-template
 	// and min/max, recursively), builds the one-item .item descriptor whose
-	// parent is the calling instance's fields (nil from a slide layout), and
-	// records the target's owning layer (via r.reg.LayerOf) so its layout
-	// executes with that layer's media helper (library-layer-references).
-	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, nil, r.callerFields, children...)
+	// parent is the calling instance's fields (nil from a slide layout) and
+	// whose depth counts the target's enclosing same-template ancestors along
+	// the calling instance's own chain (r.callerChain, nil from a slide layout)
+	// through the shared InstanceDepth helper, and records the target's owning
+	// layer (via r.reg.LayerOf) so its layout executes with that layer's media
+	// helper (item-context, bounded-self-nesting, section-helper,
+	// library-layer-references).
+	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, r.callerChain, r.callerFields, children...)
 	if err != nil {
 		return "", fmt.Errorf("section helper %q: %w", name, err)
 	}
@@ -1058,14 +1099,24 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 
 	// A nested {{ section … }} call in the target's layout reads this
 	// instance's field values as its .item.parent and inherits the same
-	// deck/slide context. Restore the previous context once it returns, so
-	// the caller's own layout keeps resolving against itself.
-	prevFields, prevCtx := r.callerFields, r.callerCtx
+	// deck/slide context. The target is also the calling instance for such a
+	// nested call, so its own chain of resolved template names — the calling
+	// instance's chain this call was resolved with, with the target's resolved
+	// name appended — is published as the caller chain, letting the nested
+	// call's target `.item.depth` count the target (and any same-template
+	// ancestor) through the shared InstanceDepth helper exactly as the
+	// load-time example runner does (item-context, bounded-self-nesting). The
+	// previous context is restored once the layout returns, so the caller's own
+	// layout keeps resolving against itself.
+	targetChain := append(append([]string{}, r.callerChain...), call.Template.Name)
+	prevFields, prevCtx, prevChain := r.callerFields, r.callerCtx, r.callerChain
 	r.callerFields = call.Values
 	r.callerCtx = secCtx
+	r.callerChain = targetChain
 	defer func() {
 		r.callerFields = prevFields
 		r.callerCtx = prevCtx
+		r.callerChain = prevChain
 	}()
 
 	var buf bytes.Buffer
