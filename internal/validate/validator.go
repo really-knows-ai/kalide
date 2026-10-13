@@ -38,7 +38,9 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 // Validate validates the whole deck rooted at fsys — ConfigFile (kalide.yaml)
 // and the SlidesDir (slides/) directly beneath it — and returns exactly the
 // first failure in the fixed deterministic order defined by
-// whole-deck-validation:
+// whole-deck-validation. It is the fail-fast entry: it runs collectErrors
+// (validator.go) in fail-fast mode and returns that walk's first error, so the
+// order below is the order collectErrors runs:
 //
 //  1. kalide.yaml, through deck.LoadConfig, with the config's theme resolved
 //     through themeReg (internal/deck + internal/theme);
@@ -84,52 +86,7 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 // (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64,
 // linux/arm64), so the same deck yields the same result on each.
 func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (ValidationError, bool) {
-	if fsys == nil {
-		return New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS"), true
-	}
-	if reg == nil {
-		return New(deck.ConfigFile, 0, nil, "no template registry given", "pass a populated template registry"), true
-	}
-	if themeReg == nil {
-		return New(deck.ConfigFile, 0, nil, "no theme registry given", "pass the project's theme registry"), true
-	}
-
-	// Step 1: kalide.yaml, including the deck-wide theme, through internal/deck
-	// and internal/theme.
-	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
-	if err != nil {
-		return adaptDeckError(err), true
-	}
-	// deck.LoadConfig has already resolved cfg.Theme against themeReg, so this
-	// is a defensive re-check rather than the primary enforcement point.
-	if !themeResolves(themeReg, cfg.Theme) {
-		return New(deck.ConfigFile, 0, nil,
-			fmt.Sprintf("unknown theme %q", cfg.Theme),
-			"use one of the registered themes"), true
-	}
-
-	// Step 2: slide filenames, numbering, letters and label uniqueness.
-	d, err := deck.LoadSlides(fsys, deck.SlidesDir)
-	if err != nil {
-		return adaptDeckError(err), true
-	}
-
-	// Step 3: each slide in number/letter order, a horizontal slide before the
-	// vertical slides beneath it.
-	for _, stack := range d.Stacks {
-		ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
-		ordered = append(ordered, stack.Slide)
-		ordered = append(ordered, stack.Vertical...)
-		for _, s := range ordered {
-			if errs := validateSlide(fsys, s, reg); len(errs) > 0 {
-				return errs[0], true
-			}
-		}
-	}
-
-	// Step 4: inter-slide #label links, last, now that every slide in the deck
-	// has passed steps 1–3 and every slide label is therefore known.
-	if errs := checkLinks(fsys, d, reg); len(errs) > 0 {
+	if errs := collectErrors(fsys, reg, themeReg, false); len(errs) > 0 {
 		return errs[0], true
 	}
 	return ValidationError{}, false
