@@ -66,17 +66,16 @@ func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) []ValidationEr
 		for _, s := range ordered {
 			src, err := fs.ReadFile(fsys, s.Path)
 			if err != nil {
-				errs = append(errs, New(s.Path, 0, nil,
-					fmt.Sprintf("cannot read slide: %v", err),
-					"check that the slide file exists and is readable"))
+				// Step 3 already reported the unreadable slide, and its links
+				// cannot be collected; skip it rather than duplicate the error
+				// under collect-all. The link pass runs only from collectErrors,
+				// after step 3 has walked every slide.
 				continue
 			}
-			// Step 3 already parsed every slide successfully, so a parse error
-			// here is unreachable; the guard keeps the pass from
-			// dereferencing a nil slide and lets the next slide still run.
 			ps, err := slide.Parse(s.Path, src, reg)
 			if err != nil {
-				errs = append(errs, adaptParseError(err))
+				// Likewise, a slide that does not parse was already reported by
+				// step 3; there are no links to collect from it.
 				continue
 			}
 			errs = append(errs, checkSlideLinks(s.Path, ps, reg, labels, candidates)...)
