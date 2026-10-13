@@ -567,7 +567,10 @@ func checkDefinition(t *Template) error {
 
 // checkFieldVariants rejects an enum field with no declared variants, and a
 // Default that is not one of them (template-variants), recursing into a
-// list's single item type.
+// list's single item type and into an inline record item's fields. An enum
+// field's variants are the only variant mechanism at every nesting depth, so
+// the same two errors fire for an enum field declared inside a record item
+// (record-item-type), however deeply the record is nested.
 func checkFieldVariants(tmpl string, f *Field) error {
 	if f.Type == FieldEnum {
 		if len(f.Variants) == 0 {
@@ -578,8 +581,17 @@ func checkFieldVariants(tmpl string, f *Field) error {
 				tmpl, f.Name, def, strings.Join(f.Variants, ", "))
 		}
 	}
-	if f.Type == FieldList && f.Item != nil {
-		return checkFieldVariants(tmpl, f.Item)
+	switch f.Type {
+	case FieldList:
+		if f.Item != nil {
+			return checkFieldVariants(tmpl, f.Item)
+		}
+	case FieldRecord:
+		for i := range f.Fields {
+			if err := checkFieldVariants(tmpl, &f.Fields[i]); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
