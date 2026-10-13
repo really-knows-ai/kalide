@@ -621,6 +621,147 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	return nil
 }
 
+// loadLibraryDefinitions parses the optional named-definition sections of a
+// library.yaml document — `groups:`, `field_sets:` and `types:`
+// (named-library-definitions) — from doc, the already-unmarshalled YAML
+// document (or its top-level mapping), and returns them as a
+// *LibraryDefinitions. It reads only those three keys and ignores the rest, so
+// a caller may hand it the same document it parsed the metadata from; every
+// other key (name, description, format, and any unknown key) is the caller's
+// concern. A document with none of the three sections yields a nil
+// *LibraryDefinitions — a nil LibraryDefinitions holds no definitions.
+//
+// The three sections are additive to library.yaml format 1: a library that
+// declares them still declares `format: 1`, and this function never inspects
+// the format key (domain.constraint.library-manifest-format-stable). Each
+// section maps a definition name to its value:
+//
+//   - groups maps a name to a sequence of accepted section-template names
+//     (the named accept-lists a section declaration references as `@<name>`);
+//   - field_sets maps a name to a sequence of field descriptors, decoded by
+//     the manifest field parser parseManifestFields (a template references the
+//     set from its `fields:` as `- include: <name>`);
+//   - types maps a name to a single field descriptor, decoded by
+//     parseManifestField. The map key — not any `name:` the descriptor carries —
+//     is the type name, so a descriptor without a `name:` is given its map key
+//     as the name before parsing.
+//
+// A malformed section (not a mapping of named entries, or an entry whose value
+// has the wrong shape) is a positioned *LibraryError at the offending
+// library.yaml line.
+func loadLibraryDefinitions(metaPath string, doc *yaml.Node) (*LibraryDefinitions, error) {
+	mapping := libraryDocumentMapping(doc)
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+
+	// definitionName validates a definition's mapping key: a non-empty string.
+	definitionName := func(section string, node *yaml.Node) (string, error) {
+		if node.Kind != yaml.ScalarNode || node.ShortTag() != "!!str" || node.Value == "" {
+			return "", libraryErrorf(metaPath, nodeLineOr(node, 0), "%s: expected a non-empty name", section)
+		}
+		return node.Value, nil
+	}
+
+	// namedFieldDescriptor returns node with the definition key prepended as a
+	// `name:` entry when it does not already declare one. A `types:` descriptor
+	// is a field descriptor and is decoded by parseManifestField, which requires
+	// a name; the map key supplies that name. node is copied, never mutated.
+	namedFieldDescriptor := func(node *yaml.Node, name string) *yaml.Node {
+		if node == nil || node.Kind != yaml.MappingNode {
+			return node
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == "name" {
+				return node
+			}
+		}
+		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "name", Line: node.Line}
+		val := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: name, Line: node.Line}
+		out := *node
+		out.Content = append([]*yaml.Node{key, val}, node.Content...)
+		return &out
+	}
+
+	var defs *LibraryDefinitions
+	ensure := func() {
+		if defs == nil {
+			defs = &LibraryDefinitions{}
+		}
+	}
+
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		key := mapping.Content[i]
+		val := mapping.Content[i+1]
+		sectionLine := nodeLineOr(val, nodeLineOr(key, 1))
+
+		switch key.Value {
+		case "groups":
+			if val.Kind != yaml.MappingNode {
+				return nil, libraryErrorf(metaPath, sectionLine,
+					`key "groups": expected a mapping of named accept-lists`)
+			}
+			groups := make(map[string][]string, len(val.Content)/2)
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				name, err := definitionName("group", val.Content[j])
+				if err != nil {
+					return nil, err
+				}
+				names, err := scalarStringList(val.Content[j+1], metaPath, nodeLineOr(val.Content[j], sectionLine), name)
+				if err != nil {
+					return nil, err
+				}
+				groups[name] = names
+			}
+			ensure()
+			defs.Groups = groups
+
+		case "field_sets":
+			if val.Kind != yaml.MappingNode {
+				return nil, libraryErrorf(metaPath, sectionLine,
+					`key "field_sets": expected a mapping of named field groups`)
+			}
+			sets := make(map[string][]Field, len(val.Content)/2)
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				name, err := definitionName("field_set", val.Content[j])
+				if err != nil {
+					return nil, err
+				}
+				fields, err := parseManifestFields(metaPath, val.Content[j+1])
+				if err != nil {
+					return nil, err
+				}
+				sets[name] = fields
+			}
+			ensure()
+			defs.FieldSets = sets
+
+		case "types":
+			if val.Kind != yaml.MappingNode {
+				return nil, libraryErrorf(metaPath, sectionLine,
+					`key "types": expected a mapping of named field types`)
+			}
+			types := make(map[string]Field, len(val.Content)/2)
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				name, err := definitionName("type", val.Content[j])
+				if err != nil {
+					return nil, err
+				}
+				f, err := parseManifestField(metaPath, namedFieldDescriptor(val.Content[j+1], name), false)
+				if err != nil {
+					return nil, err
+				}
+				// The map key, not any descriptor Name, is the type name.
+				f.Name = name
+				types[name] = *f
+			}
+			ensure()
+			defs.Types = types
+		}
+	}
+	return defs, nil
+}
+
 // templateDirNames lists the directory names directly under root/kindDir,
 // sorted. kindDir is absent entirely for an optional directory (themes/,
 // sections/, media/ are all optional at the library level, though every
