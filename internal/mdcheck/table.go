@@ -7,9 +7,9 @@
 // optional leading and trailing pipes and every cell trimmed of surrounding
 // spaces. The delimiter row fixes each column's alignment: `---`, `:---` and
 // `---:` select none, left and right, and `:---:` centres the column. A
-// backslash-escaped `\|` is a literal pipe character, never a cell separator,
-// and is kept literal even inside an inline code span (where an unescaped `|`
-// is likewise not a separator).
+// backslash-escaped `\|` is a literal pipe character, never a cell separator;
+// an *unescaped* `|` separates cells even inside an inline code span, so a pipe
+// written in a code span must be escaped to stay literal.
 //
 // The parser is strict about column counts. Every body row must have exactly as
 // many cells as the header row, and the delimiter row must agree with the
@@ -30,6 +30,8 @@
 // the offending row or cell rather than at the start of the table.
 
 package mdcheck
+
+import "strings"
 
 // TableOptions carries the effective GFM-table limits for a body: the fewest
 // and most tables it may contain, and the fewest and most columns and rows one
@@ -115,4 +117,113 @@ type Table struct {
 
 	// Line is the 1-based line in the body at which the header row begins.
 	Line int
+}
+
+// splitTableRow splits one table row into its cells under the GFM table row
+// grammar: an optional leading pipe and an optional trailing pipe are dropped,
+// cells are separated by unescaped pipes, and each cell's surrounding spaces
+// and tabs are trimmed. A backslash-escaped pipe, `\|`, is a literal `|` inside
+// a cell rather than a separator, and — per GFM — an *unescaped* pipe separates
+// cells even inside an inline code span, so a pipe in a code span must be
+// escaped to stay literal. Every other backslash escape is left untouched for
+// the inline renderer.
+//
+// Empty cells are kept: `a || b` is three cells with an empty one in the middle.
+// The optional leading and trailing pipes add no empty cell, so `| a | b |` is
+// two cells, not four.
+//
+// Text is the cell's trimmed inline-Markdown source with each table-syntax `\|`
+// already turned into a plain `|`. Column is the 1-based byte column within
+// line of the first non-space byte of that trimmed text, so a violation can be
+// positioned at the cell. Line is left zero: the caller knows which line the row
+// came from and sets it on the returned cells.
+//
+// splitTableRow performs no validation — it neither checks the delimiter row's
+// alignment grammar nor enforces the strict per-column count. It is the
+// syntactic splitter the table parser builds on.
+func splitTableRow(line string) []TableCell {
+	n := len(line)
+
+	// A leading pipe is optional and adds no empty first cell.
+	start := 0
+	i := 0
+	for i < n && (line[i] == ' ' || line[i] == '\t') {
+		i++
+	}
+	if i < n && line[i] == '|' {
+		start = i + 1
+	}
+
+	// A trailing pipe is optional and adds no empty last cell. Trailing
+	// spaces and tabs sit outside it, so scan back over them first.
+	end := n
+	j := n - 1
+	for j >= start && (line[j] == ' ' || line[j] == '\t') {
+		j--
+	}
+	if j >= start && line[j] == '|' && !pipeEscapedAt(line, j) {
+		end = j
+	}
+
+	var cells []TableCell
+	cellStart := start
+	for k := start; k < end; k++ {
+		if line[k] == '|' && !pipeEscapedAt(line, k) {
+			cells = append(cells, tableRowCell(line, cellStart, k))
+			cellStart = k + 1
+		}
+	}
+	cells = append(cells, tableRowCell(line, cellStart, end))
+	return cells
+}
+
+// tableRowCell builds the TableCell for the source line[from:to]: it trims the
+// segment's surrounding spaces and tabs, resolves every table-syntax `\|` to a
+// literal `|`, and records the 1-based byte column of the trimmed text. An
+// empty cell records the column just past its (empty) trimmed span.
+func tableRowCell(line string, from, to int) TableCell {
+	for from < to && (line[from] == ' ' || line[from] == '\t') {
+		from++
+	}
+	for to > from && (line[to-1] == ' ' || line[to-1] == '\t') {
+		to--
+	}
+	return TableCell{Text: unescapeTablePipes(line[from:to]), Column: from + 1}
+}
+
+// pipeEscapedAt reports whether the pipe at index i in line is escaped by a
+// preceding backslash. A pipe is escaped when the run of backslashes
+// immediately before it has odd length: `\|` and `\\\|` are literal pipes,
+// while in `\\|` the second backslash is itself escaped and the pipe separates
+// cells.
+func pipeEscapedAt(line string, i int) bool {
+	if i < 0 || i >= len(line) || line[i] != '|' {
+		return false
+	}
+	backslashes := 0
+	for k := i - 1; k >= 0 && line[k] == '\\'; k-- {
+		backslashes++
+	}
+	return backslashes%2 == 1
+}
+
+// unescapeTablePipes turns every table-syntax `\|` in a cell's source into a
+// literal `|`, leaving every other backslash escape untouched for the inline
+// renderer. Only a backslash immediately preceding a pipe is consumed; a pair
+// of backslashes stays as written.
+func unescapeTablePipes(s string) string {
+	if !strings.Contains(s, `\|`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && s[i+1] == '|' {
+			b.WriteByte('|')
+			i++
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
