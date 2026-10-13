@@ -14,8 +14,8 @@ import (
 //     new `raw` and `data` namespaces (requirements.constraint.reserved-template-names).
 //   - The registry's reserved-name check (checkDeclaredName, reached through
 //     Register -> checkDefinition) rejects a template that declares a field or a
-//     section named `raw` or `data`, just as it always rejected body/notes/deck/
-//     slide/item and the `_format` suffix.
+//     section named `raw`, `data`, `table` or `tables`, just as it always
+//     rejected body/notes/deck/slide/item and the `_format` suffix.
 //   - ContextKeys() enumerates the reserved render-context vocabulary and
 //     includes the dotted `.raw` and `.data` namespaces (raw-source-context,
 //     section-data-context); they are read as `.raw`/`.data` by design, and the
@@ -35,12 +35,12 @@ import (
 func TestReservedNames(t *testing.T) {
 	got := ReservedNames()
 
-	want := []string{"_format", "body", "data", "deck", "item", "notes", "raw", "slide"}
+	want := []string{"_format", "body", "data", "deck", "item", "notes", "raw", "slide", "table", "tables"}
 	assertStringSlice(t, "ReservedNames()", got, want)
 
-	// The two source-context namespaces this change adds must be present under
-	// their exact declared-name spellings.
-	for _, name := range []string{"raw", "data"} {
+	// The reserved declared names must be present under their exact
+	// spellings, including the `table`/`tables` template-context names.
+	for _, name := range []string{"raw", "data", "table", "tables"} {
 		if !containsString(got, name) {
 			t.Errorf("ReservedNames() = %v, want it to contain %q", got, name)
 		}
@@ -57,7 +57,8 @@ func TestReservedNames(t *testing.T) {
 // section named `raw` or `data`, the names this change adds to the reserved
 // vocabulary, with the same "reserved and cannot be declared" error it reports
 // for body/notes/deck/slide/item. Registration (Register -> checkDefinition ->
-// checkDeclaredName) is the failing step.
+// checkDeclaredName) is the failing step. The `table`/`tables`
+// template-context names are rejected the same way.
 func TestReservedDeclaredNamesRejected(t *testing.T) {
 	tests := []struct {
 		name string
@@ -91,6 +92,34 @@ func TestReservedDeclaredNamesRejected(t *testing.T) {
 				return tmpl
 			}(),
 			want: `template "resvdatasec": section name "data" is reserved and cannot be declared`,
+		},
+		{
+			name: "reserved field name table",
+			tmpl: regSlide("resvtable", Field{Name: "table", Type: FieldText}),
+			want: `template "resvtable": field name "table" is reserved and cannot be declared`,
+		},
+		{
+			name: "reserved field name tables",
+			tmpl: regSlide("resvtables", Field{Name: "tables", Type: FieldText}),
+			want: `template "resvtables": field name "tables" is reserved and cannot be declared`,
+		},
+		{
+			name: "reserved section name table",
+			tmpl: func() *Template {
+				tmpl := regSlide("resvtablesec")
+				tmpl.Sections = []SectionDecl{{Name: "table", Accepted: []string{"col"}}}
+				return tmpl
+			}(),
+			want: `template "resvtablesec": section name "table" is reserved and cannot be declared`,
+		},
+		{
+			name: "reserved section name tables",
+			tmpl: func() *Template {
+				tmpl := regSlide("resvtablessec")
+				tmpl.Sections = []SectionDecl{{Name: "tables", Accepted: []string{"col"}}}
+				return tmpl
+			}(),
+			want: `template "resvtablessec": section name "tables" is reserved and cannot be declared`,
 		},
 	}
 
