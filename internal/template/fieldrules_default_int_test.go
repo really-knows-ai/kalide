@@ -177,7 +177,7 @@ func executeStep7ExampleInt(t *testing.T, lib *Library, name string, mutate func
 		source[k] = v
 	}
 	ctx["raw"] = RawContext(source, def, block.Body)
-	ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
+	ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil, nil)
 
 	if mutate != nil {
 		mutate(ctx)

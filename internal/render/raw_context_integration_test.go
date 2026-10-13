@@ -630,7 +630,7 @@ func TestRenderChildForwardRawDataAgreement(t *testing.T) {
 	// uses, over the neutral ContextNode tree the test's own adapter builds from
 	// the parsed deck slide (the exact authored tree both halves see, since the
 	// example bytes are the slide bytes).
-	loadData := template.DataContext(agreementNodes(reg, parsed[0].Sections), nil)
+	loadData := template.DataContext(agreementNodes(reg, parsed[0].Sections), nil, nil)
 	authCards, ok := loadData["cards"].([]map[string]any)
 	if !ok || len(authCards) != 2 {
 		t.Fatalf("load-time-equivalent .data.cards = %#v (%T), want two authored entries", loadData["cards"], loadData["cards"])
@@ -662,7 +662,7 @@ func TestRenderChildForwardRawDataAgreement(t *testing.T) {
 		if !reflect.DeepEqual(raw, entry["raw"]) {
 			t.Errorf("forwarded child %d .raw =\n  %#v\nwant the authored source entry raw\n  %#v", i, raw, entry["raw"])
 		}
-		gotData := template.DataContext(childNodes(child.Children), raw)
+		gotData := template.DataContext(childNodes(child.Children), nil, raw)
 		if !reflect.DeepEqual(gotData, entry["data"]) {
 			t.Errorf("forwarded child %d .data =\n  %#v\nwant the authored source entry data\n  %#v", i, gotData, entry["data"])
 		}
@@ -698,7 +698,7 @@ func TestRenderChildForwardRawDataAgreement(t *testing.T) {
 	}
 	wrapperCtx["item"] = call.Item
 	wrapperCtx["raw"] = callRaw
-	wrapperCtx["data"] = template.DataContext(childNodes(call.Children), callRaw)
+	wrapperCtx["data"] = template.DataContext(childNodes(call.Children), nil, callRaw)
 	wrapperHTML := executeStandalone(t, "rawchildwrapper", wrapper.LayoutText, template.LayoutFuncMap(nil, ""), wrapperCtx)
 	if !strings.Contains(page, wrapperHTML) {
 		t.Errorf("render-time page does not embed the load-time-equivalent forwarded-child fragment:\nwant:\n%s\npage:\n%s", wrapperHTML, page)

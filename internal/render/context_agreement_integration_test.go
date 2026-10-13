@@ -291,7 +291,7 @@ func TestLoadAndRenderRawDataContextAgree(t *testing.T) {
 	}
 	hostDef, _ := reg.Lookup("agreehost")
 	loadRaw := template.RawContext(exampleSlide.Frontmatter, hostDef, exampleSlide.Body)
-	loadData := template.DataContext(agreementNodes(reg, exampleSlide.Sections), nil)
+	loadData := template.DataContext(agreementNodes(reg, exampleSlide.Sections), nil, nil)
 
 	// The CONVERTED field values the load-time example context carries, built
 	// here as the load-time EQUIVALENT: validateExampleBlockAt is unexported and

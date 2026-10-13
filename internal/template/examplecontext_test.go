@@ -187,7 +187,7 @@ func TestUnguardedExampleRawAndDataContextValues(t *testing.T) {
 		t.Errorf(`raw["body"] = %q, want the example's source body %q`, got, "Main source body.")
 	}
 
-	data := DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
+	data := DataContext(exampleContextNodes(block.Sections, def, resolve), nil, nil)
 	blocks := contextEntryList(t, data["blocks"], `data["blocks"]`)
 	if len(blocks) != 2 {
 		t.Fatalf(`len(data["blocks"]) = %d, want 2 authored instances`, len(blocks))
@@ -394,7 +394,7 @@ func TestDataContext(t *testing.T) {
 			{Name: "widgets", Index: 0, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"template": "widget", "name": "W"}}},
 			{Name: "blocks", Index: 1, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"text": "B"}}},
 		}
-		got := DataContext(exampleContextNodes(sections, hostTmpl, resolve), nil)
+		got := DataContext(exampleContextNodes(sections, hostTmpl, resolve), nil, nil)
 		if len(got) != 2 {
 			t.Fatalf("DataContext() keys = %v, want exactly blocks and widgets", contextKeys(got))
 		}
@@ -411,14 +411,14 @@ func TestDataContext(t *testing.T) {
 		}
 		wantBlock0Item := map[string]any{
 			"index": 0, "number": 1, "count": 2, "first": true, "last": false,
-			"section": "blocks", "template": "block", "parent": map[string]any(nil),
+			"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 		}
 		if !reflect.DeepEqual(blocks[0]["item"], wantBlock0Item) {
 			t.Errorf("data[blocks][0].item = %v, want %v", blocks[0]["item"], wantBlock0Item)
 		}
 		wantBlock1Item := map[string]any{
 			"index": 1, "number": 2, "count": 2, "first": false, "last": true,
-			"section": "blocks", "template": "block", "parent": map[string]any(nil),
+			"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 		}
 		if !reflect.DeepEqual(blocks[1]["item"], wantBlock1Item) {
 			t.Errorf("data[blocks][1].item = %v, want %v", blocks[1]["item"], wantBlock1Item)
@@ -436,7 +436,7 @@ func TestDataContext(t *testing.T) {
 		}
 		wantWidgetItem := map[string]any{
 			"index": 0, "number": 1, "count": 1, "first": true, "last": true,
-			"section": "widgets", "template": "widget", "parent": map[string]any(nil),
+			"section": "widgets", "template": "widget", "depth": 0, "parent": map[string]any(nil),
 		}
 		if !reflect.DeepEqual(widgets[0]["item"], wantWidgetItem) {
 			t.Errorf("data[widgets][0].item = %v, want %v", widgets[0]["item"], wantWidgetItem)
@@ -458,7 +458,7 @@ func TestDataContext(t *testing.T) {
 				Sections:    []exampleSection{child},
 			},
 		}
-		got := DataContext(exampleContextNodes([]exampleSection{column}, hostTmpl, resolve), nil)
+		got := DataContext(exampleContextNodes([]exampleSection{column}, hostTmpl, resolve), nil, nil)
 		entries := contextEntryList(t, got["columns"], `data["columns"]`)
 		if len(entries) != 1 {
 			t.Fatalf(`len(data["columns"]) = %d, want 1`, len(entries))
@@ -492,7 +492,7 @@ func TestDataContext(t *testing.T) {
 		sections := []exampleSection{
 			{Name: "blocks", Index: 0, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"text": "A"}}},
 		}
-		got := DataContext(exampleContextNodes(sections, hostTmpl, nil), nil)
+		got := DataContext(exampleContextNodes(sections, hostTmpl, nil), nil, nil)
 		entries := contextEntryList(t, got["blocks"], `data["blocks"]`)
 		if len(entries) != 1 {
 			t.Fatalf(`len(data["blocks"]) = %d, want 1`, len(entries))

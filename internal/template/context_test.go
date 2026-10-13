@@ -136,7 +136,7 @@ func TestDataContextLiteralNodes(t *testing.T) {
 		{Name: "blocks", Index: 1, Template: block, Source: map[string]any{"text": "B"}},
 	}
 
-	got := DataContext(nodes, nil)
+	got := DataContext(nodes, nil, nil)
 	if len(got) != 2 {
 		t.Fatalf("DataContext() keys = %v, want exactly blocks and widgets", contextKeys(got))
 	}
@@ -154,14 +154,14 @@ func TestDataContextLiteralNodes(t *testing.T) {
 
 	wantBlock0 := map[string]any{
 		"index": 0, "number": 1, "count": 2, "first": true, "last": false,
-		"section": "blocks", "template": "block", "parent": map[string]any(nil),
+		"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 	}
 	if !reflect.DeepEqual(blocks[0]["item"], wantBlock0) {
 		t.Errorf("data[blocks][0].item = %v, want %v", blocks[0]["item"], wantBlock0)
 	}
 	wantBlock1 := map[string]any{
 		"index": 1, "number": 2, "count": 2, "first": false, "last": true,
-		"section": "blocks", "template": "block", "parent": map[string]any(nil),
+		"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 	}
 	if !reflect.DeepEqual(blocks[1]["item"], wantBlock1) {
 		t.Errorf("data[blocks][1].item = %v, want %v", blocks[1]["item"], wantBlock1)
@@ -192,18 +192,18 @@ func TestDataContextLiteralNodes(t *testing.T) {
 	}
 	wantWidget := map[string]any{
 		"index": 0, "number": 1, "count": 1, "first": true, "last": true,
-		"section": "widgets", "template": "", "parent": map[string]any(nil),
+		"section": "widgets", "template": "", "depth": 0, "parent": map[string]any(nil),
 	}
 	if !reflect.DeepEqual(widgets[0]["item"], wantWidget) {
 		t.Errorf("data[widgets][0].item = %v, want %v", widgets[0]["item"], wantWidget)
 	}
 
 	t.Run("nil and empty nodes yield a non-nil empty map", func(t *testing.T) {
-		if got := DataContext(nil, nil); got == nil || len(got) != 0 {
-			t.Errorf("DataContext(nil, nil) = %v, want a non-nil empty map", got)
+		if got := DataContext(nil, nil, nil); got == nil || len(got) != 0 {
+			t.Errorf("DataContext(nil, nil, nil) = %v, want a non-nil empty map", got)
 		}
-		if got := DataContext([]ContextNode{}, nil); got == nil || len(got) != 0 {
-			t.Errorf("DataContext([], nil) = %v, want a non-nil empty map", got)
+		if got := DataContext([]ContextNode{}, nil, nil); got == nil || len(got) != 0 {
+			t.Errorf("DataContext([], nil, nil) = %v, want a non-nil empty map", got)
 		}
 	})
 }
@@ -292,7 +292,7 @@ func TestExampleContextNodesAdapter(t *testing.T) {
 		}
 		// DataContext then produces the `.raw` source view: the declared field
 		// only, never the reserved `template:` selector.
-		data := DataContext(nodes, nil)
+		data := DataContext(nodes, nil, nil)
 		widgets := contextEntryList(t, data["widgets"], `data["widgets"]`)
 		if want := map[string]any{"name": "W"}; !reflect.DeepEqual(widgets[0]["raw"], want) {
 			t.Errorf("data[widgets][0].raw = %v, want %v (selector excluded)", widgets[0]["raw"], want)
@@ -315,7 +315,7 @@ func TestExampleContextNodesAdapter(t *testing.T) {
 		if nodes[0].Template.Name != "ghost" || len(nodes[0].Template.Fields) != 0 {
 			t.Errorf("node.Template = %+v, want a name-only %q template", nodes[0].Template, "ghost")
 		}
-		data := DataContext(nodes, nil)
+		data := DataContext(nodes, nil, nil)
 		widgets := contextEntryList(t, data["widgets"], `data["widgets"]`)
 		if raw := contextMap(t, widgets[0]["raw"], "widgets raw"); len(raw) != 0 {
 			t.Errorf("data[widgets][0].raw = %v, want empty for a name-only template", raw)
