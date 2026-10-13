@@ -883,7 +883,7 @@ func TestRegistryRejections(t *testing.T) {
 	// a positioned *LibraryError instead of a plain Registry error.
 
 	t.Run("malformed manifest is positioned", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields: [\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields: [\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Path == "" {
 			t.Error("Path is empty, want the offending template.yaml")
@@ -891,7 +891,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("unknown top-level manifest key suggests a valid one", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "descriptoin: x\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "descriptoin: x\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "description" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "description")
@@ -900,7 +900,7 @@ func TestRegistryRejections(t *testing.T) {
 
 	t.Run("unknown field type suggests a valid one", func(t *testing.T) {
 		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide,
-			"fields:\n  - name: title\n    type: txet\n"))
+			"fields:\n  - name: title\n    type: txet\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "text" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "text")
@@ -911,7 +911,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("field missing required name", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - type: text\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - type: text\n"), nil)
 		libErr := asLibraryError(t, err)
 		if !strings.Contains(libErr.Message, `missing required key "name"`) {
 			t.Errorf("Message = %q, want it to say name is missing", libErr.Message)
@@ -919,7 +919,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("field missing required type", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - name: title\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - name: title\n"), nil)
 		libErr := asLibraryError(t, err)
 		if !strings.Contains(libErr.Message, `missing required key "type"`) {
 			t.Errorf("Message = %q, want it to say type is missing", libErr.Message)
@@ -927,7 +927,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("unknown body mode suggests a valid one", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "body:\n  mode: requird\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "body:\n  mode: requird\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "required" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "required")
