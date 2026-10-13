@@ -133,14 +133,19 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 		// The reserved `.table`/`.tables` entries are ALWAYS present in the
 		// slide-level example context, mirroring render.slideData
 		// (template-context, table-layout-context): the example body's first
-		// parsed GFM table (nil when it carries none) and its source-ordered
-		// tables (an empty list when it carries none), so a layout reads them
-		// at step 7 as it would at render. A schema-free template's example
-		// body is not shape-checked (see the file comment), so its entries stay
-		// nil/empty; a template whose example block is parsed below replaces
-		// them with the body's own parsed tables (mirroring render's per-body
-		// context) when the example body actually carries any.
-		"table":  nil,
+		// parsed GFM table (a TYPED nil map, map[string]any(nil), when it
+		// carries none) and its source-ordered tables (an empty list when it
+		// carries none), so a layout reads them at step 7 as it would at
+		// render. The typed nil map — not a bare nil interface — keeps
+		// `{{ if .table }}` falsy while `{{ range .table.rows }}` stays a
+		// no-op instead of failing with "nil pointer evaluating
+		// interface {}.rows", matching render.tableContext and
+		// exampleTableContext. A schema-free template's example body is not
+		// shape-checked (see the file comment), so its entries stay a typed
+		// nil map/empty list; a template whose example block is parsed below
+		// replaces them with the body's own parsed tables (mirroring render's
+		// per-body context) when the example body actually carries any.
+		"table":  map[string]any(nil),
 		"tables": []any{},
 	}
 
