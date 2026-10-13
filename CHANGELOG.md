@@ -82,6 +82,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `render --full <slide>` embeds exactly the `--fragment` output and
   `.slide.number` / `.slide.total` count across the whole deck. The two flags
   are mutually exclusive. Output is deterministic.
+- GFM tables in a body, an opt-in extension declared by the `tables` key of a
+  template's `body:` block. The mapping carries the per-body table counts
+  (`min_tables`/`max_tables`, the latter defaulting to `1`), the per-table
+  column bounds (`min_columns`/`max_columns`, the header row included,
+  `min_columns` defaulting to `1`) and body-row bounds (`min_rows`/`max_rows`,
+  the header row excluded), and a `cell_attributes` list describing the cell
+  attributes a cell may set, each a `boolean` or an `enum` with its `variants`.
+  A `0` on a `max_*` key is unbounded and a `0` on a `min_*` key is no minimum.
+  An absent `tables` key or `tables: false` leaves the body without tables; a
+  `tables:` value that is neither a mapping nor `false`, an unknown sub-key or a
+  malformed value is a load-time error naming the offending `template.yaml`. The
+  accepted table is GFM's — a header row, a delimiter row (`:---`, `---:`,
+  `:---:` for left, right or centre alignment) and the body rows, with leading
+  and trailing pipes optional, every cell trimmed, `\|` a literal pipe and
+  strict column counts. A header/delimiter or body-row cell count that differs
+  from the header's, a `min_*`/`max_*` breach, an undeclared cell attribute or a
+  wrong-typed attribute value is a validation error naming the limit and the
+  actual count, or carrying a closest-match suggestion.
+- Cell extensions in a GFM-table cell. `{br}` is a line break, rendered as
+  `<br>`; an attribute group `{…}` — outside an inline code span and a link's
+  text and destination, by convention at the cell's end — sets one or more
+  declared cell attributes and is stripped from the cell's visible content:
+  `{bold}` is `{bold:true}`, `{highlight:green}` sets the enum,
+  `{highlight:green, bold}` sets both, and a bare `{green}` sets the one
+  declared enum whose `variants` carry it. `\{` is a literal brace, and a brace
+  inside an inline code span or a link is literal text. An attribute the
+  template does not declare — or a value of the wrong type — is an error, the
+  former with a closest-match suggestion; a declared set in which one bare name
+  is both a boolean and an enum variant, or a variant of more than one enum, is
+  refused at template load as ambiguous. Attributes apply to header cells
+  exactly as to body cells, and `br` is reserved and is never a declared
+  attribute.
+- The reserved **`.table`**/**`.tables`** layout context, always present in a
+  slide and a section instance. `.table` is the body's **first** parsed table,
+  or nil when the body carries none, and `.tables` is every parsed table in
+  source order, an empty list when there are none; both entries are always
+  present, so a layout reads them without a guard. A table is a map with
+  `.table.headers` (the header cells in column order), `.table.align` (the
+  per-column alignments `"left"`, `"center"`, `"right"` or `""` for none) and
+  `.table.rows` (the body rows, each a list of cells in column order); a cell is
+  a map with `.html` — its inline Markdown rendered, `{br}` as `<br>` — and
+  `.attrs` — keyed by the template's declared attribute names, holding each
+  value, or nil where the cell does not set it. A body's table appears **only**
+  through these entries: `{{ .body }}` is the body's non-table content, so the
+  layout places the table. `table` and `tables` are now reserved declared names
+  and cannot be used as a field or a section name.
 
 ### Changed
 
@@ -89,6 +135,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their own line beneath the field rather than inline among the field's other
   attributes, and marks **every** nullable field `nullable`, top-level fields
   included. An inline record field's own fields are nested under their list.
+- A GFM table in the body of a template that has not opted in is now refused
+  with guidance naming the `tables` option — "opt in to tables with the `tables`
+  option in the template's body rule, or use a list instead" — where the
+  refusal previously said "use a section template or a list instead of a
+  Markdown table".
 
 ### Fixed
 
