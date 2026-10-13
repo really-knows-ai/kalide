@@ -204,12 +204,22 @@ func TestSectionHelperChildTargetResolution(t *testing.T) {
 }
 
 // TestSectionHelperChildItemDescriptor proves the resolved child's own `.item`
-// descriptor carries the declared section it fills and the template its
-// declaration instantiated, reached through ResolveSectionCallLayered's child
-// resolution — the same path the load-time example helper and the renderer
-// reuse. The two are asserted to be distinct when a multi-template declaration's
-// `template` selector picks a template whose name differs from the section's, so
-// neither is mistaken for the other (item-context).
+// descriptor carries the declared section it fills, the template its
+// declaration instantiated, and its self-nesting `depth`, reached through
+// ResolveSectionCallLayered's child resolution — the same path the load-time
+// example helper and the renderer reuse. The section and template are asserted
+// to be distinct when a multi-template declaration's `template` selector picks a
+// template whose name differs from the section's, so neither is mistaken for the
+// other (item-context).
+//
+// The depth is the shared InstanceDepth of the child's full enclosing chain
+// against its resolved template: 0 for an ordinary child (no enclosing instance
+// resolves to its template) and the non-zero count for a self-nested child whose
+// resolved template is the parent declaration's own. It is pinned at every
+// level — the target instance at the top level, and a call made from inside a
+// same-template instance one level deeper — because a helper-passed child must
+// expose the same per-level `item.depth` the render side builds
+// (item-context, bounded-self-nesting).
 func TestSectionHelperChildItemDescriptor(t *testing.T) {
 	t.Run("names the declared section and the single instantiated template", func(t *testing.T) {
 		target, accepted := childSectionTarget("footer", "widgets", 0)
@@ -228,6 +238,11 @@ func TestSectionHelperChildItemDescriptor(t *testing.T) {
 		}
 		if got := item["template"]; got != "widgets-tpl" {
 			t.Errorf("child .item.template = %v, want the instantiated template %q", got, "widgets-tpl")
+		}
+		// An ordinary child: no enclosing instance resolves to its template
+		// (widgets-tpl), so its depth is 0.
+		if got := item["depth"]; got != 0 {
+			t.Errorf("child .item.depth = %v, want 0: no enclosing instance resolves to the child's template", got)
 		}
 	})
 
@@ -255,6 +270,74 @@ func TestSectionHelperChildItemDescriptor(t *testing.T) {
 		}
 		if got := item["template"]; got != "company" {
 			t.Errorf("child .item.template = %v, want the selected template %q", got, "company")
+		}
+		// The selected template (company) is not an enclosing instance, so
+		// the child is an ordinary one: depth 0.
+		if got := item["depth"]; got != 0 {
+			t.Errorf("child .item.depth = %v, want 0: no enclosing instance resolves to the selected template", got)
+		}
+	})
+
+	t.Run("a self-nested child counts the calling instance as its same-template ancestor", func(t *testing.T) {
+		// Self-nesting cannot load until phase 7, so the target is built
+		// directly and resolved through ResolveSectionCallLayered, never
+		// through Registry.Validate: the declaration accepts the target's
+		// own template, so a child passed to a `section "loop"` call resolves
+		// back to "loop" — the parent declaration's own template.
+		loop := &Template{
+			Name:     "loop",
+			Usage:    UsageSection,
+			Sections: []SectionDecl{{Name: "loop", Accepted: []string{"loop"}}},
+		}
+		resolve := resolveSectionCallResolver(loop)
+
+		call, err := ResolveSectionCallLayered(resolve, nil, "loop", nil, "", nil, nil, &ChildRequest{Section: "loop"})
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		// The calling slide is not an instance of any template, so the helper
+		// call itself is the outermost "loop" instance: depth 0.
+		if got := call.Item["depth"]; got != 0 {
+			t.Errorf("call.Item.depth = %v, want 0: the slide is not an instance of the target", got)
+		}
+		if len(call.Children) != 1 {
+			t.Fatalf("len(call.Children) = %d, want the one resolved child", len(call.Children))
+		}
+		item := call.Children[0].Call.Item
+		if got := item["section"]; got != "loop" {
+			t.Errorf("child .item.section = %v, want the declared section %q", got, "loop")
+		}
+		if got := item["template"]; got != "loop" {
+			t.Errorf("child .item.template = %v, want the parent declaration's own template %q", got, "loop")
+		}
+		// The target instance is the child's one enclosing same-template
+		// ancestor, so the shared InstanceDepth rule gives the child depth 1.
+		if got, want := item["depth"], InstanceDepth([]string{"loop"}, "loop"); got != want {
+			t.Errorf("child .item.depth = %v, want the shared InstanceDepth value %d", got, want)
+		}
+		if item["depth"] != 1 {
+			t.Errorf("child .item.depth = %v, want 1: the target instance is its one same-template ancestor", item["depth"])
+		}
+
+		// One level deeper: a call made from inside a "loop" instance is
+		// itself depth 1, and the child it passes is depth 2 — helper-passed
+		// child depth is pinned at every level, not only the first.
+		nested, err := ResolveSectionCallLayered(resolve, nil, "loop", nil, "", []string{"loop"}, nil, &ChildRequest{Section: "loop"})
+		if err != nil {
+			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
+		}
+		if got := nested.Item["depth"]; got != 1 {
+			t.Errorf("nested call.Item.depth = %v, want 1: the calling instance is a same-template ancestor", got)
+		}
+		if len(nested.Children) != 1 {
+			t.Fatalf("len(nested.Children) = %d, want the one resolved child", len(nested.Children))
+		}
+		nestedItem := nested.Children[0].Call.Item
+		if got, want := nestedItem["depth"], InstanceDepth([]string{"loop", "loop"}, "loop"); got != want {
+			t.Errorf("nested child .item.depth = %v, want the shared InstanceDepth value %d", got, want)
+		}
+		if nestedItem["depth"] != 2 {
+			t.Errorf("nested child .item.depth = %v, want 2: the calling instance plus the target instance", nestedItem["depth"])
 		}
 	})
 }
