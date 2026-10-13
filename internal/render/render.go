@@ -423,7 +423,10 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// (template-language). Each instance executes with the reserved
 	// `.deck`/`.slide`/`.item` context (template-context,
 	// section-template-context, item-context); a top-level instance's
-	// `.item.parent` is nil, since its parent is the slide, not a section.
+	// `.item.parent` is nil, since its parent is the slide, not a section, and
+	// its `.item.depth` is 0, since the slide is not an instance of any
+	// template and so contributes no enclosing same-template ancestor
+	// (item-context).
 	counts := make(map[string]int, len(s.Sections))
 	for i := range s.Sections {
 		counts[s.Sections[i].Name]++
@@ -465,10 +468,12 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// values and rendered body the same map already carries under its own
 	// names; the reserved `.data` entry is the slide's authored top-level
 	// sections as data, one entry per authored instance, parented on the slide
-	// (nil) (section-data-context). Both reflect AUTHORED instances only: a
-	// `{{ section … }}` call is a direct render call, never part of the parsed
-	// tree, so its sectionHelper render contributes no entry to `.data` and no
-	// element to the rendered-HTML section list built above.
+	// (nil) with an empty enclosing-ancestors chain — the slide is not an
+	// instance of any template, so each entry's `item.depth` is 0
+	// (section-data-context, item-context). Both reflect AUTHORED instances
+	// only: a `{{ section … }}` call is a direct render call, never part of the
+	// parsed tree, so its sectionHelper render contributes no entry to `.data`
+	// and no element to the rendered-HTML section list built above.
 	data["raw"] = template.RawContext(s.Frontmatter, tmpl, s.Body)
 	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil, nil)
 	return data, nil
