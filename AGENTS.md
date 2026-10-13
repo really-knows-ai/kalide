@@ -45,5 +45,14 @@ is 0. Plan files are transient and gitignored, so this changes no commit.
 - A leftover `apg session` blocks the next one. If `apg_session start` reports
   a live session and no agent owns it, the coordinator aborts it
   (`apg_session action=abort`).
+- Stale graph: scan from the worktree ROOT (`apg_scan directory=<worktree>`),
+  never from inside its `apg/` subdirectory (that scopes the scan to
+  `<worktree>/apg`, has no Go frontend, and fails with `spec drift: code FQN …
+  is gone`). If planned nodes stay "not realized" although the code exists
+  (empty `path` on a Function in the graph, `apg_plan_verify` blocked), a splice
+  scan will not repair it: delete the worktree's `apg/.trans/db.lbug` and run a
+  full `apg_scan` from the worktree root. Check with
+  `MATCH (f:Function) WHERE f.path = '' RETURN f.fqn`; only nodes of unbuilt
+  `creates` tasks should remain.
 - Never push, tag or release from an agent. Merge only with `apg project merge`
   from the main checkout, after the human gate.
