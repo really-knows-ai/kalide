@@ -16,17 +16,19 @@ import (
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
-// This file implements Validate, the fail-fast whole-deck validator. It drives
-// the phase-2/3/4 loaders and checkers in the fixed deterministic order the
-// specification requires and turns their first error into the single
-// author-facing ValidationError defined in validate.go.
+// This file implements collectErrors, the fixed-order whole-deck walk, plus its
+// two entries: Validate (fail-fast, returning the first error in that order)
+// and ValidateAll (collect-all, returning every error). It drives the
+// phase-2/3/4 loaders and checkers in the fixed deterministic order the
+// specification requires and turns their errors into the author-facing
+// ValidationError defined in validate.go.
 //
-// Validate owns no rules of its own: kalide.yaml is checked by internal/deck
+// The validator owns no rules of its own: kalide.yaml is checked by internal/deck
 // (which resolves the theme through internal/theme), slide filenames and
 // ordering by internal/deck, slide structure by internal/slide.Parse, Markdown
 // bodies and inline text by internal/mdcheck, and field values by
-// internal/template.CheckValues. Validate's whole job is the order, the
-// recursion boundaries and the error adaptation.
+// internal/template.CheckValues. Its whole job is the order, the recursion
+// boundaries and the error adaptation.
 //
 // The compile-time assertion below pins the structural conformance between the
 // phase-4 template registry and the phase-2 slide catalogue: internal/template
@@ -246,9 +248,7 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) []Validatio
 	// Slide frontmatter fields, top of the file. The reserved `template:`
 	// selector is not a field value and is removed before schema checking.
 	var errs []ValidationError
-	if ve, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg); invalid {
-		errs = append(errs, ve)
-	}
+	errs = append(errs, checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg)...)
 
 	// Slide body Markdown, then the slide template's implied body rule. The
 	// Markdown-subset check runs first because it is the body's well-formedness
@@ -308,9 +308,7 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 			errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 			continue
 		}
-		if ve, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
-			errs = append(errs, ve)
-		}
+		errs = append(errs, checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg)...)
 		errs = append(errs, checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix)...)
 		if ve, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
 			errs = append(errs, ve)
@@ -330,7 +328,8 @@ func declaresChildSections(tmpl *template.Template) bool {
 // checkFields checks one frontmatter/section data map against tmpl's field
 // schema through template.CheckValues, which recurses through
 // section-template-as-type values and list items at every depth with full path
-// tracking. It returns the first error and whether one was found.
+// tracking. It returns every error CheckValues reports, in the schema checker's
+// order, rather than only the first.
 //
 // prefix is the enclosing section instance's containment chain (for example
 // []string{"columns[2]", "blocks[1]"}); when non-empty it is prepended to the
@@ -349,7 +348,7 @@ func declaresChildSections(tmpl *template.Template) bool {
 // owning layer its media is nil, so a media root is not existence-checked ("not
 // checkable") rather than falsely reported missing. A missing file carries the
 // field's accepted candidate files so the error can suggest the closest match.
-func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) (ValidationError, bool) {
+func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) []ValidationError {
 	var media fs.FS
 	if tmpl != nil {
 		if layer := reg.LayerOf(tmpl.Name); layer != nil {
@@ -358,10 +357,11 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 	}
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
 		template.WithImageExists(template.ImageExistsFunc(fsys, media)))
-	if len(res.Errors) == 0 {
-		return ValidationError{}, false
+	errs := make([]ValidationError, 0, len(res.Errors))
+	for _, ve := range res.Errors {
+		errs = append(errs, adaptValueError(file, ve, prefix))
 	}
-	return adaptValueError(file, res.Errors[0], prefix), true
+	return errs
 }
 
 // checkBody checks one Markdown body (a slide body, a section body or the notes
