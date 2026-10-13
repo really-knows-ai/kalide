@@ -638,20 +638,21 @@ func TestDataContext(t *testing.T) {
 // the entries' exact values are asserted directly (exampleTableContext) and the
 // section-helper target's HTML is observed through exampleSectionHelper.
 //
-// `.table` is a BARE nil (not a typed nil map), so an unguarded
-// `{{ .table.rows }}` in a body that carries no table fails to execute ("nil
-// pointer evaluating interface {}.rows"). A layout therefore tests `.table`
-// with `{{ if .table }}` before dereferencing it, while `.tables` is always a
-// non-nil list and is read (ranged or measured) unguarded. The table-bearing
-// case is covered by TestLoadLibraryTableContextOptInBody.
+// `.table` is a TYPED nil map (map[string]any(nil)), so a layout reads the
+// documented AC shape `{{ range .table.rows }}` UNGUARDED in a body that carries
+// no table: the absent-key lookup ranges as a no-op with no error, instead of
+// failing with "nil pointer evaluating interface {}.rows" as a bare nil
+// interface would. `.tables` is always a non-nil list and is read (measured)
+// unguarded too. The table-bearing case is covered by
+// TestLoadLibraryTableContextOptInBody.
 func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
 	fsys := fstest.MapFS{
 		"library.yaml": {Data: []byte("name: demo\nformat: 1\n")},
 
 		// The slide declares a field, so its example block is parsed and the
-		// explicit nil/empty table entries are published. Its layout tests
-		// `{{ if .table }}` and reads `.tables` unguarded, and calls the
-		// section-helper target with a table-less body.
+		// explicit nil/empty table entries are published. Its layout reads the
+		// AC shape `{{ range .table.rows }}` and `.tables` UNGUARDED, and calls
+		// the section-helper target with a table-less body.
 		"slides/main/template.yaml": {Data: []byte(
 			"name: main\n" +
 				"fields:\n" +
@@ -659,7 +660,7 @@ func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
 				"body:\n  mode: optional\n")},
 		"slides/main/layout.html.tmpl": {Data: []byte(
 			`<section class="main">` +
-				`<span class="main-table">{{ if .table }}table{{ else }}none{{ end }}</span>` +
+				`<span class="main-table">{{ range .table.rows }}<span class="main-row">{{ range . }}{{ .html }}{{ end }}</span>{{ end }}</span>` +
 				`<span class="main-tables">{{ len .tables }}</span>` +
 				`<span class="main-section">{{ section "target" nil "Target body." }}</span>` +
 				`</section>`)},
@@ -670,14 +671,20 @@ func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
 				"---\n" +
 				"Main body.\n")},
 
-		// The section-helper target reads the same entries; its own schema-free
-		// example is not shape-checked, so its layout also executes against the
-		// default nil/empty entries.
-		"sections/target/template.yaml": {Data: []byte("name: target\nbody:\n  mode: optional\n")},
+		// The section-helper target declares a field and carries a table-less,
+		// heading-free example body, so its OWN example block is parsed and the
+		// explicit nil/empty table entries are published for its layout too,
+		// which reads them unguarded exactly as it does when invoked as a
+		// helper.
+		"sections/target/template.yaml": {Data: []byte(
+			"name: target\n" +
+				"fields:\n" +
+				"  - name: label\n    type: text\n" +
+				"body:\n  mode: optional\n")},
 		"sections/target/layout.html.tmpl": {Data: []byte(
-			`<span class="target-table">{{ if .table }}table{{ else }}none{{ end }}</span>` +
+			`<span class="target-table">{{ range .table.rows }}<span class="target-row">{{ range . }}{{ .html }}{{ end }}</span>{{ end }}</span>` +
 				`<span class="target-tables">{{ len .tables }}</span>`)},
-		"sections/target/example.md": {Data: []byte("# target\n")},
+		"sections/target/example.md": {Data: []byte("Target example body.\n")},
 	}
 
 	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
@@ -694,11 +701,16 @@ func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
 		}
 	}
 
-	// A body with no table gives a nil `.table` and a NON-NIL empty `.tables`
-	// list, so `.tables` can be read without a guard.
+	// A body with no table gives a TYPED nil `.table` (map[string]any(nil)) and
+	// a NON-NIL empty `.tables` list, so both can be read without a guard.
 	table, tables := exampleTableContext("Main body.", nil)
-	if table != nil {
-		t.Errorf("exampleTableContext(no-table body) table = %v, want nil", table)
+	tm, ok := table.(map[string]any)
+	if !ok {
+		t.Errorf("exampleTableContext(no-table body) table = %T, want map[string]any", table)
+	} else if tm != nil {
+		t.Errorf("exampleTableContext(no-table body) table = %v, want a typed nil map", tm)
+	} else if len(tm) != 0 {
+		t.Errorf("exampleTableContext(no-table body) len(table) = %d, want 0", len(tm))
 	}
 	if tables == nil {
 		t.Error("exampleTableContext(no-table body) tables = nil, want a non-nil empty list")
@@ -706,20 +718,19 @@ func TestLoadLibraryTableContextAlwaysPresent(t *testing.T) {
 		t.Errorf("exampleTableContext(no-table body) tables = %v, want an empty list", tables)
 	}
 
-	// A section-helper target executes with the same entries through
-	// exampleSectionRunner.render; observe its rendered HTML directly.
+	// A section-helper target executes the unguarded `{{ range .table.rows }}`
+	// through exampleSectionRunner.render; observe its rendered HTML directly.
+	// The range is a no-op on the typed nil table, so it emits no target-row.
 	helper := exampleSectionHelper(lib, nil)
 	got, err := helper("target", nil, "Target body.")
 	if err != nil {
 		t.Fatalf(`helper("target") error = %v, want nil`, err)
 	}
-	for _, want := range []string{
-		`<span class="target-table">none</span>`,
-		`<span class="target-tables">0</span>`,
-	} {
-		if !strings.Contains(string(got), want) {
-			t.Errorf(`helper("target") = %q, want it to contain %q`, string(got), want)
-		}
+	if want := `<span class="target-tables">0</span>`; !strings.Contains(string(got), want) {
+		t.Errorf(`helper("target") = %q, want it to contain %q`, string(got), want)
+	}
+	if strings.Contains(string(got), "target-row") {
+		t.Errorf(`helper("target") = %q, want the unguarded {{ range .table.rows }} to emit no row`, string(got))
 	}
 }
 
