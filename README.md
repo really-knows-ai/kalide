@@ -587,7 +587,11 @@ templates/
   `max_length`, `min`/`max`, `variants`, `formats`), a list of `sections`
   (each naming which section templates it `accepted`s and a `min`/`max`
   count), and a `body` rule (`mode: required|optional|disallowed`, plus
-  limits like `max_words`, `max_paragraphs` and `max_list_items`).
+  limits like `max_words`, `max_paragraphs` and `max_list_items`). A `body`
+  rule may also opt in to GFM tables with a `tables` mapping — its own limits
+  and declared `cell_attributes` — which exposes the body's parsed tables as
+  the `.table`/`.tables` context (see
+  [`docs/templates.md`](docs/templates.md#tables-in-the-body)).
 - **`layout.html.tmpl`** is the standard Go `html/template` layout that turns a
   filled-in slide (its fields and any nested sections) into the slide's HTML.
   There is no Markdown helper and no third-party template engine.
@@ -650,8 +654,9 @@ For the full two-layer how-to, see
 
 Every slide layout, and every section instance nested inside it at any
 depth, is executed with reserved, read-only names alongside its own fields:
-`.deck`, `.slide`, `.item`, `.raw` and `.data`. None is authored — they are
-supplied by `kalide` at render time — and all five are **data**, not helpers.
+`.deck`, `.slide`, `.item`, `.raw`, `.data` and `.table`/`.tables`. None is
+authored — they are supplied by `kalide` at render time — and all seven are
+**data**, not helpers.
 
 - **`.deck`** carries the deck-wide settings from `kalide.yaml`:
   - `.deck.title` — always present.
@@ -702,6 +707,17 @@ supplied by `kalide` at render time — and all five are **data**, not helpers.
   section-helper call is a direct render call, not an authored instance, so
   it appends no entry to `.data` and no element to the rendered section
   list.
+- **`.table`** and **`.tables`** are the body's parsed GFM tables, for a
+  template whose `body` rule opts in with `tables` (see
+  [`docs/templates.md`](docs/templates.md#tables-in-the-body)). `.table` is
+  the body's **first** table — `.table.headers`, `.table.align` (the
+  per-column alignment) and `.table.rows` — or nil when the body carries
+  none; each cell is a map with `.html` and `.attrs`. `.tables` is every
+  parsed table in source order, an empty list when there is none. Both are
+  always present, so a layout reads them without a guard: `.table` is nil and
+  `.tables` empty in a template that does not opt in and in any body with no
+  table. A table appears **only** through these entries — `{{ .body }}` is
+  the body's non-table content.
 
 `.deck` and `.slide` are available identically in a slide layout and in
 every section template instance it nests, at every level of composition —
@@ -715,9 +731,10 @@ which renders `2a / 12` on the second vertical slide of a twelve-slide
 deck, regardless of how deeply the footer section is nested inside other
 sections.
 
-`deck`, `slide`, `item`, `raw` and `data` are **reserved names**: a template
-may not declare a field or section named `deck`, `slide`, `item`, `raw` or
-`data`. `notes`, `body` and the `_format` suffix are reserved too.
+`deck`, `slide`, `item`, `raw`, `data`, `table` and `tables` are **reserved
+names**: a template may not declare a field or section named `deck`, `slide`,
+`item`, `raw`, `data`, `table` or `tables`. `notes`, `body` and the `_format`
+suffix are reserved too.
 
 ### Layout helpers
 
