@@ -5,6 +5,7 @@ import (
 	htmltemplate "html/template"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -1067,6 +1068,19 @@ func TestLoadLibraryAtExternalStandaloneInt(t *testing.T) {
 // and an external-internal cycle, caught at the external layer's own full load
 // — plus a local declared-section chain deeper than the six-heading-level limit,
 // likewise caught by the merged pass.
+//
+// plan.phase-07.task-19 extends it with the bounded-self-nesting half
+// (requirements.requirement.bounded-self-nesting,
+// requirements.constraint.section-depth-limit). A declared-section cycle whose
+// declarations carry max_depth is a finite walk the merge accepts rather than
+// the reference cycle its unbounded form reports: the A→B→A cycle with a's
+// acceptance of b bounded by max_depth: 1 loads at the merged pass, and a
+// local self-accepting `loop` chain at max_depth: 5 (six heading levels, the
+// syntax bound) loads. One heading level past the bound — a self-accepting
+// chain at max_depth: 6 (seven heading levels) — is refused at the merged pass
+// with the depth-limit templates error naming the over-deep chain and the
+// max_depth that produced it, and the same A→B→A cycle with no max_depth keeps
+// its `section template reference cycle: sections/…` chain error.
 func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -1150,6 +1164,126 @@ func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 			t.Errorf("Message = %q, want it to name the six-heading-level limit", libErr.Message)
 		}
 	})
+
+	t.Run("a local declared A→B→A cycle bounded by max_depth: 1 loads at the merged pass", func(t *testing.T) {
+		// a declares a `b` section accepting b at max_depth: 1; b declares an
+		// `a` section accepting a with no bound. A declaration on the cycle
+		// carries max_depth, so the declared-section acceptance is a finite,
+		// bounded walk the merged pass accepts instead of the reference cycle
+		// the unbounded form reports
+		// (requirements.requirement.bounded-self-nesting). The local layer's
+		// own per-layer load defers step 4, so this is the merged pass's
+		// verdict. Each example authors the nested instance its declaration
+		// accepts, so step 7 validates them too.
+		const aManifest = "name: a\nsections:\n  - name: b\n    accepted: [b]\n    max_depth: 1\n"
+		const bManifest = "name: b\nsections:\n  - name: a\n    accepted: [a]\n"
+		localFiles := mergeIntFiles(
+			templateIntFiles(SectionsDir, "a", aManifest, "<div></div>", "# b\n"),
+			templateIntFiles(SectionsDir, "b", bManifest, "<div></div>", "# a\n"),
+		)
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t, localFiles,
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary() error = %v, want nil: a declaration on the cycle carries max_depth: 1, bounding it into a finite walk", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadDeckLibrary() returned nil Library with nil error")
+		}
+		for _, name := range []string{"a", "b", "ext-section"} {
+			if _, _, ok := lib.TemplateByName(name); !ok {
+				t.Errorf("merged library is missing template %q", name)
+			}
+		}
+	})
+
+	t.Run("a local declared A→B→A cycle without max_depth keeps its chain error at the merged pass", func(t *testing.T) {
+		// The same A→B→A declared-section cycle with no max_depth on either
+		// declaration is an unbounded reference cycle, so the merged pass keeps
+		// the requirements.constraint.section-cycle-error-chain chain error,
+		// path-qualified to the cycle root's manifest.
+		const aManifest = "name: a\nsections:\n  - name: b\n    accepted: [b]\n"
+		const bManifest = "name: b\nsections:\n  - name: a\n    accepted: [a]\n"
+		localFiles := mergeIntFiles(
+			templateIntFiles(SectionsDir, "a", aManifest, "<div></div>", "# b\n"),
+			templateIntFiles(SectionsDir, "b", bManifest, "<div></div>", "# a\n"),
+		)
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t, localFiles,
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if lib != nil {
+			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
+		}
+		libErr := asLibraryError(t, err)
+		if wantPath := filepath.Join(localRoot, SectionsDir, "a", ManifestFile); libErr.Path != wantPath {
+			t.Errorf("Path = %q, want the local cycle root's manifest %q", libErr.Path, wantPath)
+		}
+		const want = `template "a": section template reference cycle: sections/a → sections/b → sections/a`
+		if libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
+	t.Run("a local self-accepting chain at max_depth: 5 loads at the merged pass", func(t *testing.T) {
+		// A self-accepting `loop` declaration bounded at max_depth: 5 produces
+		// six heading levels (the root plus five bounded levels), exactly the
+		// six-heading-level syntax bound, so the merged pass accepts it.
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t,
+			selfAcceptingLoopIntFiles(5),
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary() error = %v, want nil: max_depth: 5 produces six heading levels, within the six-level bound", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadDeckLibrary() returned nil Library with nil error")
+		}
+		if _, _, ok := lib.TemplateByName("loop"); !ok {
+			t.Error(`merged library is missing template "loop"`)
+		}
+	})
+
+	t.Run("a local self-accepting chain at max_depth: 6 is refused with the depth-limit error at the merged pass", func(t *testing.T) {
+		// One heading level past the bound: max_depth: 6 asks for seven heading
+		// levels, so the merged pass refuses the walk with the depth-limit
+		// templates error naming the over-deep chain and the max_depth that
+		// produced it (requirements.constraint.section-depth-limit).
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t,
+			selfAcceptingLoopIntFiles(6),
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if lib != nil {
+			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
+		}
+		libErr := asLibraryError(t, err)
+		if wantPath := filepath.Join(localRoot, SectionsDir, "loop", ManifestFile); libErr.Path != wantPath {
+			t.Errorf("Path = %q, want the local over-deep chain's manifest %q", libErr.Path, wantPath)
+		}
+		wantMsg := `template "loop": section template composition is 7 levels deep, exceeding the 6-heading-level limit: ` +
+			`sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop ` +
+			`— the bounded self-nesting declaration max_depth: 6 produces this chain; lower max_depth or flatten the composition`
+		if libErr.Message != wantMsg {
+			t.Errorf("Message = %q, want %q", libErr.Message, wantMsg)
+		}
+	})
+}
+
+// selfAcceptingLoopIntFiles returns the on-disk files of a `loop` section
+// template whose single `loop` section accepts itself at max_depth. A positive
+// bound makes the declared-section self-acceptance a finite, accepted walk:
+// max_depth: 5 stays within the six-heading-level syntax bound while max_depth:
+// 6 crosses it (requirements.requirement.bounded-self-nesting,
+// requirements.constraint.section-depth-limit). The example authors one nested
+// `loop` instance, the section the declaration accepts.
+func selfAcceptingLoopIntFiles(maxDepth int) map[string]string {
+	manifest := "name: loop\nsections:\n  - name: loop\n    accepted: [loop]\n    max_depth: " + strconv.Itoa(maxDepth) + "\n"
+	return templateIntFiles(SectionsDir, "loop", manifest, "<div></div>", "# loop\n")
 }
 
 // ---------------------------------------------------------------------------
