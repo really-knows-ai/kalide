@@ -1,12 +1,14 @@
 package template
 
 import (
+	"bytes"
 	"fmt"
 	htmltemplate "html/template"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/mdcheck"
@@ -91,7 +93,15 @@ func checkLibraryExamples(lib *Library) error {
 // at step 7 instead of failing LoadLibrary. A section template's own layout is
 // itself a section instance, so it additionally gets the one-item `.item`
 // descriptor mirroring a section-helper invocation; a slide template's item
-// stays absent.
+// stays absent. The reserved `.table`/`.tables` entries are always present too
+// (template-context, table-layout-context): `.table` is the example body's
+// first parsed GFM table (nil when it carries none) and `.tables` is its
+// source-ordered tables (an empty list when it carries none), parsed against
+// the template's declared cell attributes to mirror render's per-body table
+// context exactly (exampleTableContext), so a table-bearing example whose
+// layout reads `.table.rows` unguarded executes at step 7 as it would at
+// render. The example body's tables reach the layout through these entries
+// alone; `.body` stays free of tables, exactly as renderBody omits them.
 //
 // layer is lt's own owning *LibraryLayer when the merged Library records one
 // (checkLibraryExamples resolves it by identity over lib.Layers), and nil for a
@@ -120,6 +130,18 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	ctx := map[string]any{
 		"deck":  emptyExampleDeckContext(),
 		"slide": emptyExampleSlideContext(),
+		// The reserved `.table`/`.tables` entries are ALWAYS present in the
+		// slide-level example context, mirroring render.slideData
+		// (template-context, table-layout-context): the example body's first
+		// parsed GFM table (nil when it carries none) and its source-ordered
+		// tables (an empty list when it carries none), so a layout reads them
+		// at step 7 as it would at render. A schema-free template's example
+		// body is not shape-checked (see the file comment), so its entries stay
+		// nil/empty; a template whose example block is parsed below replaces
+		// them with the body's own parsed tables (mirroring render's per-body
+		// context) when the example body actually carries any.
+		"table":  nil,
+		"tables": []any{},
 	}
 
 	// A section template's layout is itself a section instance, so a
@@ -180,6 +202,24 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 			callerChain = []string{lt.Name}
 		}
 		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), callerChain, nil)
+
+		// The example body's own parsed tables, mirroring render's per-body
+		// table context exactly (table-layout-context): `.table` is the body's
+		// first parsed table as the table map or nil, and `.tables` is every
+		// parsed table in source order (a non-nil but empty list when the body
+		// carries none). The body's tables are parsed against the template's
+		// declared cell attributes, so a cell's `{...}` groups decode exactly
+		// as at render — a table-bearing example whose layout reads
+		// `.table.rows` unguarded therefore executes at step 7 as it would at
+		// render, instead of failing load. The example body is the body
+		// renderBody renders, so `.body` stays free of tables.
+		var tableSpecs []mdcheck.CellAttributeSpec
+		if def.Body.Tables != nil {
+			tableSpecs = mdcheckCellAttributeSpecs(def.Body.Tables.CellAttributes)
+		}
+		table, tables := exampleTableContext(block.Body, tableSpecs)
+		ctx["table"] = table
+		ctx["tables"] = tables
 
 		if lt.Kind == KindSection {
 			// A section template's own layout is a section instance, so its
@@ -1414,6 +1454,126 @@ func emptyExampleSlideContext() map[string]any {
 		"number": "",
 		"total":  0,
 	}
+}
+
+// exampleTableContext parses body's GFM tables and returns the two reserved
+// table context entries a layout exposes, mirroring internal/render's
+// tableContext exactly (table-layout-context): table is body's FIRST parsed
+// table as the table map, or nil when body carries no table, and tables is
+// every parsed table in source order, as a non-nil but empty list when body
+// carries none. internal/template cannot import internal/render (it would
+// create an import cycle, as emptyExampleDeckContext notes), so the shape is
+// mirrored here intentionally.
+//
+// specs are the enclosing template's declared cell attributes, the set each
+// cell's `{...}` groups are decoded against (table-cell-attributes). The pair
+// is returned rather than a single map so checkLibraryExample can set the two
+// reserved entries directly and keep the always-present shape explicit.
+//
+// Each table is a map with headers (the header cells in column order), align
+// (the per-column alignments, "" for none) and rows (the body rows, each a
+// list of cells in column order); each cell is an exampleTableCellContext map
+// ({html, attrs}).
+//
+// The parse is permissive — startLine 1 and the zero mdcheck.TableOptions (no
+// limit bounds) — because by the time the example layout executes the example
+// body has already been validated (validateExampleBlockAt, whose
+// checkExampleBodySubheadings is the body's single table-error source), so an
+// accepted body yields no issues and any issues returned here are ignored.
+func exampleTableContext(body string, specs []mdcheck.CellAttributeSpec) (table any, tables []any) {
+	parsed, _ := mdcheck.ParseTables(body, 1, mdcheck.TableOptions{})
+
+	tables = make([]any, len(parsed))
+	for i, t := range parsed {
+		headers := make([]any, len(t.Headers))
+		for j, cell := range t.Headers {
+			headers[j] = exampleTableCellContext(cell, specs)
+		}
+		rows := make([]any, len(t.Rows))
+		for r, row := range t.Rows {
+			cells := make([]any, len(row))
+			for c, cell := range row {
+				cells[c] = exampleTableCellContext(cell, specs)
+			}
+			rows[r] = cells
+		}
+		align := make([]string, len(t.Align))
+		copy(align, t.Align)
+		tables[i] = map[string]any{
+			"headers": headers,
+			"align":   align,
+			"rows":    rows,
+		}
+	}
+
+	if len(parsed) > 0 {
+		table = tables[0]
+	}
+	return table, tables
+}
+
+// exampleTableCellContext renders one parsed GFM table cell into the
+// `{html, attrs}` map a table context exposes, mirroring internal/render's
+// tableCellContext (table-layout-context, table-cell-attributes): html is the
+// cell's visible content as inline HTML (its `{br}` segments rendered and
+// joined with a literal `<br>`) and attrs is its decoded attribute set keyed by
+// the template's declared cell attributes, with a nil entry for every declared
+// attribute the cell leaves unset.
+//
+// The cell's `{br}` and `{...}` extensions are decoded by mdcheck's
+// DecodeTableCell, the exported seam internal/render also consumes, so the
+// load-time context never re-implements the extension stripping. Validation
+// guarantees a cell decodes without error here; should a decode still fail, the
+// cell degrades gracefully — its raw source is rendered inline and every
+// declared attribute is left nil — so a load-time execute never fails on a
+// cell.
+func exampleTableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec) map[string]any {
+	decoded, err := mdcheck.DecodeTableCell(cell, specs)
+	if err != nil {
+		attrs := make(map[string]any, len(specs))
+		for _, spec := range specs {
+			attrs[spec.Name] = nil
+		}
+		return map[string]any{
+			"html":  exampleRenderInline(cell.Text),
+			"attrs": attrs,
+		}
+	}
+	segments := make([]string, len(decoded.Lines))
+	for i, seg := range decoded.Lines {
+		segments[i] = string(exampleRenderInline(seg))
+	}
+	return map[string]any{
+		"html":  htmltemplate.HTML(strings.Join(segments, "<br>")),
+		"attrs": decoded.Attrs,
+	}
+}
+
+// exampleRenderInline renders one inline-Markdown string to HTML without the
+// paragraph wrapper goldmark adds around a block, mirroring internal/render's
+// renderInline (table-layout-context). A text field's single paragraph is the
+// parser's wrapper, not author content, so the `<p>…</p>\n` pair is stripped.
+// goldmark escapes text and code spans and the accepted subset admits no raw
+// HTML, so the result is trusted exactly as renderInline trusts it.
+// internal/template cannot import internal/render, so the helper is mirrored
+// here.
+func exampleRenderInline(src string) htmltemplate.HTML {
+	if src == "" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := goldmark.New().Convert([]byte(src), &buf); err != nil {
+		// Convert only fails when the destination writer fails; a bytes.Buffer
+		// never does, so this is unreachable and the raw source is a safe
+		// fallback for html/template to escape.
+		return htmltemplate.HTML(src)
+	}
+	const open, close = "<p>", "</p>\n"
+	out := buf.String()
+	if strings.HasPrefix(out, open) && strings.HasSuffix(out, close) {
+		out = out[len(open) : len(out)-len(close)]
+	}
+	return htmltemplate.HTML(out)
 }
 
 // ContextKeys returns the sorted reserved render-context keys a library example
