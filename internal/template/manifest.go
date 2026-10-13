@@ -195,14 +195,37 @@ func scalarString(val *yaml.Node, manifestPath string, line int, key string) (st
 	return val.Value, nil
 }
 
-// parseManifestFields decodes the `fields:` sequence. defs is the owning
-// layer's named definitions (parseManifest), threaded to each field parser.
+// parseManifestFields decodes the `fields:` sequence. An entry may be the
+// named-field-set reference `- include: <name>`, which expands in place to the
+// named field set's fields from the owning layer's definitions
+// (named-library-definitions); every other entry is one field descriptor
+// (parseManifestField). defs is the owning layer's named definitions
+// (parseManifest), threaded to each field parser and used to resolve an
+// `include:` name. A name no field set carries, or a malformed reference, is a
+// positioned templates error; an unknown name carries a closest-match
+// suggestion (closest-match-suggestions).
 func parseManifestFields(manifestPath string, val *yaml.Node, defs *LibraryDefinitions) ([]Field, error) {
 	if val.Kind != yaml.SequenceNode {
 		return nil, libraryErrorf(manifestPath, nodeLineOr(val, 0), `key "fields": expected a sequence`)
 	}
 	fields := make([]Field, 0, len(val.Content))
 	for _, item := range val.Content {
+		// An `- include: <name>` entry is a mapping whose sole key is
+		// `include`. It references a named field set, which expands to its
+		// fields in place; the reference's line positions any error.
+		if item.Kind == yaml.MappingNode && len(item.Content) == 2 && item.Content[0].Value == "include" {
+			kl := nodeLineOr(item.Content[0], nodeLineOr(item, 0))
+			name, err := scalarString(item.Content[1], manifestPath, kl, "include")
+			if err != nil {
+				return nil, err
+			}
+			def, err := resolveNamedDefinition(namedDefinitionFieldSet, name, defs, manifestPath, kl)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, def.([]Field)...)
+			continue
+		}
 		f, err := parseManifestField(manifestPath, item, false, defs)
 		if err != nil {
 			return nil, err
