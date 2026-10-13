@@ -99,7 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strict column counts. A header/delimiter or body-row cell count that differs
   from the header's, a `min_*`/`max_*` breach, an undeclared cell attribute or a
   wrong-typed attribute value is a validation error naming the limit and the
-  actual count, or carrying a closest-match suggestion.
+  actual count, or carrying a closest-match suggestion; a strict-column-count
+  error names the offending body row by its **0-based** index with the header
+  row excluded, so the first body row after the delimiter is `rows[0]`.
 - Cell extensions in a GFM-table cell. `{br}` is a line break, rendered as
   `<br>`; an attribute group `{…}` — outside an inline code span and a link's
   text and destination, by convention at the cell's end — sets one or more
