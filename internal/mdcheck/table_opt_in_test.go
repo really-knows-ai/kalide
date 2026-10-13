@@ -52,7 +52,7 @@ func TestCheckTableOptIn(t *testing.T) {
 	t.Run("strict column count is positioned at the offending row", func(t *testing.T) {
 		src := "| h1 | h2 |\n| --- | --- |\n| a | b | c |\n"
 		got := Check(testFile, []byte(src), Options{Mode: BodyMode, Tables: &TableOptions{}})
-		want := []Issue{issue(3, 1, KindTable, "rows[1]: 3 cells, header has 2", "")}
+		want := []Issue{issue(3, 1, KindTable, "rows[0]: 3 cells, header has 2", "")}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("Check(%q) strict count\n got: %#v\nwant: %#v", src, got, want)
 		}
