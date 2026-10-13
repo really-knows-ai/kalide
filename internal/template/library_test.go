@@ -109,6 +109,89 @@ func TestLoadLibraryValid(t *testing.T) {
 	if lib.HasMedia {
 		t.Error("HasMedia = true, want false: fixture has no media/ directory")
 	}
+
+	// named-library-definitions (plan.phase-04.task-14): a library.yaml that
+	// also declares the optional named-definition sections — groups:,
+	// field_sets: and types: — loads them onto the loading layer's
+	// LibraryLayer.Definitions. The sections are additive to format 1:
+	// loadLibraryDefinitions never inspects the format key, so the library
+	// still declares `format: 1` and LibraryMeta stays name/description/format
+	// only (it is untouched and stays comparable).
+	t.Run("named definitions land on the layer and leave LibraryMeta alone", func(t *testing.T) {
+		const defsLibraryYAML = `name: demo
+description: a demo library
+format: 1
+groups:
+  accents:
+    - emphasis
+    - note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants:
+      - red
+      - green
+      - blue
+`
+		fsys := baseLibraryFS()
+		fsys["library.yaml"] = &fstest.MapFile{Data: []byte(defsLibraryYAML)}
+
+		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil", err)
+		}
+
+		// The named-definition sections do not change format 1, and they never
+		// reach LibraryMeta, which stays name/description/format only.
+		wantMeta := LibraryMeta{Name: "demo", Description: "a demo library", Format: 1}
+		if lib.Meta != wantMeta {
+			t.Errorf("Meta = %+v, want %+v (name/description/format only, format unchanged at 1)", lib.Meta, wantMeta)
+		}
+
+		// layerFromLibrary copies the parsed definitions onto the loading
+		// layer's Definitions (the single-layer load path).
+		if len(lib.Layers) != 1 {
+			t.Fatalf("Layers = %d, want exactly 1", len(lib.Layers))
+		}
+		defs := lib.Layers[0].Definitions
+		if defs == nil {
+			t.Fatal("Layers[0].Definitions = nil, want the parsed named definitions")
+		}
+		assertStringSlice(t, `Definitions.Groups["accents"]`, defs.Groups["accents"], []string{"emphasis", "note"})
+		if got := defs.FieldSets["meta"]; len(got) != 2 ||
+			got[0].Name != "subtitle" || got[0].Type != FieldText ||
+			got[1].Name != "weight" || got[1].Type != FieldNumber {
+			t.Errorf(`Definitions.FieldSets["meta"] = %+v, want subtitle:text then weight:number`, got)
+		}
+		colour := defs.Types["colour"]
+		if colour.Name != "colour" || colour.Type != FieldEnum {
+			t.Errorf(`Definitions.Types["colour"] = %+v, want name=colour type=enum`, colour)
+		}
+		assertStringSlice(t, `Definitions.Types["colour"].Variants`, colour.Variants, []string{"red", "green", "blue"})
+
+		// loadLibraryMeta parses the sections through loadLibraryDefinitions
+		// and keeps the result on the single-layer *Library's unexported
+		// definitions carrier — the fallback NewRegistryFromLibrary consults
+		// for the layerless Library step 4 builds, while layerFromLibrary also
+		// copies them onto the layer asserted above.
+		single := &Library{}
+		if err := loadLibraryMeta(fsys, "templates", single); err != nil {
+			t.Fatalf("loadLibraryMeta() error = %v, want nil", err)
+		}
+		if single.definitions == nil {
+			t.Fatal("loadLibraryMeta left the single-layer *Library's definitions carrier nil")
+		}
+		assertStringSlice(t, `single.definitions.Groups["accents"]`, single.definitions.Groups["accents"], []string{"emphasis", "note"})
+		if single.Meta != wantMeta {
+			t.Errorf("loadLibraryMeta Meta = %+v, want %+v", single.Meta, wantMeta)
+		}
+	})
 }
 
 // rootedFS nests every entry of fsys one level under TemplatesDir, so
