@@ -685,6 +685,114 @@ sections:
 			}
 		})
 	})
+
+	// A full on-disk library carrying an internal template — a section whose
+	// manifest declares `internal: true` — loads and validates end to end
+	// through os.DirFS, and the internal template stays usable wherever a
+	// template is resolved through the registry's Lookup rather than the
+	// Catalogue surface: as a `section`-helper target and as a
+	// `section_template` field type. Its Internal flag reaches the loaded
+	// library's parsed definition, so a lister (`kalide templates`) can hide
+	// it while those two resolution paths still find it (internal-templates).
+	t.Run("an internal template loads and stays resolvable", func(t *testing.T) {
+		// The internal section template: hidden from the default listing but a
+		// valid section-usage target. anchor declares one optional text field
+		// so its example is parsed and validated, and its layout is renderable
+		// so a caller observes the resolution execute, not merely parse.
+		const anchorManifest = "name: anchor\ninternal: true\nfields:\n  - name: label\n    type: text\n"
+		const anchorLayout = `<aside class="anchor">{{ .label }}</aside>`
+		const anchorExample = "```\nlabel: Anchor\n```\n"
+
+		// The section-helper caller: a slide whose layout calls the internal
+		// template through the `section` helper, which resolves through Lookup
+		// and so accepts an internal target.
+		const helperHostManifest = "name: helperhost\nfields:\n  - name: title\n    type: text\n"
+		const helperHostLayout = `<section class="helperhost"><h1>{{ .title }}</h1>{{ section "anchor" (dict "label" "Hi") }}</section>`
+		const helperHostExample = "---\ntemplate: helperhost\ntitle: Host\n---\n"
+
+		// The section_template field-type caller: a slide declaring a
+		// section-template field naming the internal template, resolved by
+		// checkFieldTypes through Lookup.
+		const fieldHostManifest = "name: fieldhost\nfields:\n  - name: block\n    type: section-template\n    section_template: anchor\n"
+		const fieldHostLayout = `<article class="fieldhost">{{ .block.label }}</article>`
+		const fieldHostExample = "---\ntemplate: fieldhost\nblock:\n  label: Card\n---\n"
+
+		projectDir := t.TempDir()
+		root := filepath.Join(projectDir, TemplatesDir)
+		writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+		files := mergeIntFiles(
+			templateIntFiles(SectionsDir, "anchor", anchorManifest, anchorLayout, anchorExample),
+			templateIntFiles(SlidesDir, "helperhost", helperHostManifest, helperHostLayout, helperHostExample),
+			templateIntFiles(SlidesDir, "fieldhost", fieldHostManifest, fieldHostLayout, fieldHostExample),
+		)
+		for rel, data := range files {
+			writeFile(t, filepath.Join(root, filepath.FromSlash(rel)), []byte(data))
+		}
+
+		lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: an internal template is a valid section-helper target and section_template field type", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadLibrary() returned nil Library with nil error")
+		}
+
+		// The Internal flag reaches the loaded library's parsed definition, so
+		// a lister can hide the template while it stays resolvable.
+		anchor, kind, ok := lib.TemplateByName("anchor")
+		if !ok || kind != KindSection {
+			t.Fatalf("TemplateByName(anchor) = (%v, %q, %v), want (non-nil, %q, true)", anchor, kind, ok, KindSection)
+		}
+		if anchor.Definition == nil {
+			t.Fatal("checkLibraryBuild left anchor.Definition nil")
+		}
+		if !anchor.Definition.Internal {
+			t.Errorf("anchor.Definition.Internal = false, want true from the `internal: true` manifest")
+		}
+
+		// The `section`-helper target resolved: the loaded host definition
+		// carries the call, and executing the step-7 example renders the
+		// internal template's own layout.
+		helperHost, _, ok := lib.TemplateByName("helperhost")
+		if !ok || helperHost == nil || helperHost.Definition == nil {
+			t.Fatal(`TemplateByName("helperhost") definition not loaded`)
+		}
+		calls, err := NewSection(nil).HelperCalls(helperHost.Definition)
+		if err != nil {
+			t.Fatalf("HelperCalls(helperhost) error = %v, want nil", err)
+		}
+		if len(calls) != 1 || calls[0].Name != "anchor" {
+			t.Fatalf("HelperCalls(helperhost) = %+v, want one call to anchor", calls)
+		}
+		got, execErr := executeStep7ExampleInt(t, lib, "helperhost", nil)
+		if execErr != nil {
+			t.Fatalf("step-7 example execution error = %v, want nil: the internal template must execute as a helper target", execErr)
+		}
+		if !strings.Contains(got, `<aside class="anchor">Hi</aside>`) {
+			t.Errorf("step-7 rendered helperhost layout does not contain the internal template's HTML:\n%s", got)
+		}
+
+		// The `section_template` field type resolved: the loaded field
+		// definition carries the field, and executing the step-7 example reads
+		// the structured value through it.
+		fieldHost, _, ok := lib.TemplateByName("fieldhost")
+		if !ok || fieldHost == nil || fieldHost.Definition == nil {
+			t.Fatal(`TemplateByName("fieldhost") definition not loaded`)
+		}
+		if len(fieldHost.Definition.Fields) != 1 {
+			t.Fatalf("fieldhost.Fields = %+v, want one block field", fieldHost.Definition.Fields)
+		}
+		if f := fieldHost.Definition.Fields[0]; f.Type != FieldSectionTemplate || f.SectionTemplate != "anchor" {
+			t.Errorf("fieldhost.Fields[0] = %+v, want a section-template field naming anchor", f)
+		}
+		got, execErr = executeStep7ExampleInt(t, lib, "fieldhost", nil)
+		if execErr != nil {
+			t.Fatalf("step-7 example execution error = %v, want nil: the internal template must execute as a section_template field type", execErr)
+		}
+		if !strings.Contains(got, `<article class="fieldhost">Card</article>`) {
+			t.Errorf("step-7 rendered fieldhost layout does not contain the section_template field value:\n%s", got)
+		}
+	})
 }
 
 // TestLoadDeckLibraryMergedThemeAndMediaLayers covers LoadDeckLibrary's merged
