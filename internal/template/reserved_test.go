@@ -161,16 +161,19 @@ func TestReservedNamesAllRejected(t *testing.T) {
 }
 
 // TestContextKeys pins ContextKeys() to the reserved render-context vocabulary:
-// the fixed `.deck`/`.slide` leaf keys plus the dotted `.raw` and `.data`
-// namespaces. It proves raw/data are reported in their dotted form (the form a
-// layout reads), that no bare `raw`/`data` token leaks in, and that `.item` is
-// deliberately absent. The result is checked to be a fresh allocation.
+// the fixed `.deck`/`.slide` leaf keys plus the dotted `.raw`, `.data`, `.table`
+// and `.tables` namespaces. It proves raw/data/table/tables are reported in
+// their dotted form (the form a layout reads), that no bare `raw`/`data`/
+// `table`/`tables` token leaks in, and that `.item` is deliberately absent. The
+// result is checked to be a fresh allocation.
 func TestContextKeys(t *testing.T) {
 	got := ContextKeys()
 
 	want := []string{
 		".data",
 		".raw",
+		".table",
+		".tables",
 		"deck.author",
 		"deck.date",
 		"deck.properties",
@@ -180,15 +183,15 @@ func TestContextKeys(t *testing.T) {
 	}
 	assertStringSlice(t, "ContextKeys()", got, want)
 
-	// raw/data are context namespaces, read as `.raw`/`.data`.
-	for _, key := range []string{".raw", ".data"} {
+	// raw/data/table/tables are context namespaces, read as their dotted form.
+	for _, key := range []string{".raw", ".data", ".table", ".tables"} {
 		if !containsString(got, key) {
 			t.Errorf("ContextKeys() = %v, want it to contain %q", got, key)
 		}
 	}
 	// The bare spellings are declared-name tokens (ReservedNames), not context
 	// keys, and must not appear.
-	for _, key := range []string{"raw", "data"} {
+	for _, key := range []string{"raw", "data", "table", "tables"} {
 		if containsString(got, key) {
 			t.Errorf("ContextKeys() = %v, want no bare %q key (the dotted form is the context key)", got, key)
 		}
