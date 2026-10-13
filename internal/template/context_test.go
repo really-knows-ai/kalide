@@ -140,7 +140,12 @@ func TestRawContextSourceView(t *testing.T) {
 // the sibling descriptor derives number/first/last from the per-name count, a
 // nil-template node labels `template` "" and copies only its body, the top-level
 // `parent` is a typed nil map, and the recursion threads the enclosing instance's
-// raw to its children's `parent`.
+// raw and ancestor chain to its children.
+//
+// It also pins the per-level `item.depth` (item-context): 0 at the top level,
+// and the shared InstanceDepth of the enclosing chain at each self-nested level,
+// so a node of template X with an X child is depth 1 and the A→B→A→B chain —
+// which revisits templates — is 0, 0, 1, 1, not the immediate parent alone.
 func TestDataContextLiteralNodes(t *testing.T) {
 	block := newSection("block", Field{Name: "text", Type: FieldText})
 
@@ -209,6 +214,11 @@ func TestDataContextLiteralNodes(t *testing.T) {
 	if want := blocks[0]["raw"]; !reflect.DeepEqual(nestedItem["parent"], want) {
 		t.Errorf("nested item.parent = %v, want the enclosing instance's raw %v", nestedItem["parent"], want)
 	}
+	// The child resolves to the same template as its parent, so its enclosing
+	// chain is ["block"] and its depth is the shared InstanceDepth value, 1.
+	if got := nestedItem["depth"]; got != 1 {
+		t.Errorf("nested item.depth = %v, want 1 (one same-template ancestor)", got)
+	}
 
 	// A nil-template node labels its template "" and copies no declared fields,
 	// but still carries the raw body.
@@ -226,6 +236,53 @@ func TestDataContextLiteralNodes(t *testing.T) {
 	if !reflect.DeepEqual(widgets[0]["item"], wantWidget) {
 		t.Errorf("data[widgets][0].item = %v, want %v", widgets[0]["item"], wantWidget)
 	}
+
+	t.Run("the A→B→A→B chain carries per-level depth from the full chain", func(t *testing.T) {
+		// Each level resolves to its own template, revisiting names: depth
+		// counts the FULL enclosing chain's same-template ancestors, not the
+		// immediate parent alone, so the inner a and the second b are each 1
+		// (one earlier a and one earlier b), while the outer a and first b are
+		// each 0.
+		a := newSection("a")
+		b := newSection("b")
+		chain := []ContextNode{{
+			Name: "chain", Index: 0, Template: a,
+			Children: []ContextNode{{
+				Name: "chain", Index: 0, Template: b,
+				Children: []ContextNode{{
+					Name: "chain", Index: 0, Template: a,
+					Children: []ContextNode{{
+						Name: "chain", Index: 0, Template: b,
+					}},
+				}},
+			}},
+		}}
+
+		// level asserts the single `chain` entry at this level carries the
+		// wanted item.depth, then descends into its own `.data`.
+		level := func(parent map[string]any, wantDepth int) map[string]any {
+			t.Helper()
+			entries := contextEntryList(t, parent["chain"], `data["chain"]`)
+			if len(entries) != 1 {
+				t.Fatalf(`len(data["chain"]) = %d, want 1`, len(entries))
+			}
+			item := contextMap(t, entries[0]["item"], "chain item")
+			if got := item["depth"]; got != wantDepth {
+				t.Errorf("item.depth = %v, want %d", got, wantDepth)
+			}
+			return contextMap(t, entries[0]["data"], "chain data")
+		}
+
+		top := DataContext(chain, nil, nil)
+		// Level 0: the outer a.
+		toB := level(top, 0)
+		// Level 1: the first b.
+		toA := level(toB, 0)
+		// Level 2: the inner a, one enclosing a.
+		toB2 := level(toA, 1)
+		// Level 3: the second b, one enclosing b.
+		_ = level(toB2, 1)
+	})
 
 	t.Run("nil and empty nodes yield a non-nil empty map", func(t *testing.T) {
 		if got := DataContext(nil, nil, nil); got == nil || len(got) != 0 {
