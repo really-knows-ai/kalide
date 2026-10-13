@@ -16,8 +16,9 @@ import (
 
 // This file implements the step-(4) inter-slide link pass (inter-slide-links),
 // the last step of the fixed deterministic order defined by
-// whole-deck-validation. It runs only once every slide has passed steps 1–3,
-// so every slide label in the deck is known.
+// whole-deck-validation. It runs after the per-slide step, once every slide
+// label in the deck is known from the loaded deck; a slide that could not be
+// read or parsed was already reported by that step and is skipped here.
 //
 // Links come from three places, collected in slide/line order within each slide
 // and in the deck's number/letter order across slides:
