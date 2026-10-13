@@ -812,6 +812,33 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 // section-data-context). parent supplies the deck/slide execution context
 // (cfg/meta/total) the child inherits.
 //
+// The child's reserved `.data` view over its own nested children is built with
+// the child's OWN chain of resolved template names as the ancestor identity — the
+// chain it inherited with its resolved template appended — so each grandchild's
+// `.data` item descriptor carries per-level `item.depth` through the shared
+// template.InstanceDepth helper, exactly as renderSection passes an instance's
+// own chain to the same builder (item-context, section-data-context,
+// bounded-self-nesting).
+//
+// The inherited chain is the enclosing chain the section-helper call that
+// materialised the child was resolved under: the renderer's current caller chain
+// (r.callerChain), which is the calling instance's own chain and the render-time
+// counterpart of the load-time example runner's callerChain. It is deliberately
+// the caller chain rather than the child's parent instance chain, because
+// exampleSectionRunner.renderChildLists renders each child from the runner whose
+// callerChain is the CALLING instance's own chain, so a helper child's own chain
+// is runner.callerChain + the child's resolved template name; threading the same
+// value here keeps a nested renderInstance/sectionHelper call the child's layout
+// makes computing its target's `.item.depth` identically to the load-time side
+// (section-helper, item-context, bounded-self-nesting).
+//
+// The inherited chain is also stored on the child's sectionCtx.ancestors — the
+// enclosing resolved template names ABOVE the child, by the same convention
+// renderSection/renderInstance take — so renderInstance derives the child's own
+// chain as that chain with the child's resolved template name appended, both for
+// the child's `.data` and for the chain it publishes to a nested call its layout
+// makes.
+//
 // renderInstance consumes only the adapted section's effective field source
 // (Frontmatter) and body; every other input — the resolved template, layer,
 // `.item` and the resolved child tree — is carried directly, so the adapter
@@ -821,13 +848,16 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 func (r *renderer) renderChild(child *template.ResolvedChild, parent *sectionCtx) (htmltmpl.HTML, error) {
 	call := child.Call
 	raw := template.RawContext(child.Source, call.Template, call.Body)
+	inherited := r.callerChain
+	childAncestors := append(append([]string{}, inherited...), call.Template.Name)
 	childCtx := &sectionCtx{
 		cfg:              parent.cfg,
 		meta:             parent.meta,
 		total:            parent.total,
 		item:             call.Item,
 		raw:              raw,
-		data:             template.DataContext(childNodes(child.Children), nil, raw),
+		data:             template.DataContext(childNodes(child.Children), childAncestors, raw),
+		ancestors:        inherited,
 		resolvedChildren: child.Children,
 	}
 	sec := &slide.Section{
