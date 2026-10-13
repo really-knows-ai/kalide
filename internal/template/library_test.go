@@ -303,7 +303,12 @@ func TestLoadLibraryStep1BadName(t *testing.T) {
 }
 
 // TestLoadLibraryStep1BadFormat proves step 1 rejects an unsupported
-// library.yaml format value.
+// library.yaml format value, and that a malformed library.yaml (step 1) or
+// template.yaml manifest (step 3) is reported as a positioned *LibraryError
+// carrying the offending source line and — when the offending line is a plain
+// scalar YAML mis-read (a `:` inside it, or a first character of `*`/`&`/`%`/`@`
+// that YAML reads as an alias, anchor, directive or reserved indicator) — the
+// quoting hint (requirements.requirement.yaml-error-messages).
 func TestLoadLibraryStep1BadFormat(t *testing.T) {
 	fsys := baseLibraryFS()
 	fsys["library.yaml"] = &fstest.MapFile{Data: []byte("name: demo\nformat: 2\n")}
@@ -315,6 +320,174 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 	}
 	if !strings.Contains(libErr.Message, "unsupported library format") {
 		t.Errorf("Message = %q, want it to say the format is unsupported", libErr.Message)
+	}
+
+	// yaml-error-messages: a library.yaml document that is not well-formed YAML
+	// fails at step 1 before any key validation and is reported through
+	// parseLibraryErrorLine, so the step-1 error is positioned at the offending
+	// source line and, for a plain-scalar mis-read, carries the quoting hint.
+	t.Run("malformed library.yaml reports the line and the quoting hint", func(t *testing.T) {
+		cases := []struct {
+			name        string
+			yaml        string
+			wantLine    int
+			wantMessage string
+			wantHint    bool
+		}{
+			{
+				name:        "colon inside a plain scalar",
+				yaml:        "name: demo\nformat: 1\ndescription: Hello: world\n",
+				wantLine:    3,
+				wantMessage: "mapping values are not allowed in this context",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an alias indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: *\n",
+				wantLine:    3,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an anchor indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: &\n",
+				wantLine:    3,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a directive indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: %example.com\n",
+				wantLine:    3,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a reserved indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: @example.com\n",
+				wantLine:    3,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "malformed YAML that is not a plain-scalar mis-read carries no hint",
+				yaml:        "name: demo\nformat: 1\ndescription: \"unterminated\n",
+				wantLine:    3,
+				wantMessage: "found unexpected end of stream",
+				wantHint:    false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				fsys := baseLibraryFS()
+				fsys["library.yaml"] = &fstest.MapFile{Data: []byte(tc.yaml)}
+				_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+				libErr := asLibraryError(t, err)
+				if want := displaypath.Display(TemplatesDir, LibraryFile); libErr.Path != want {
+					t.Errorf("Path = %q, want %q", libErr.Path, want)
+				}
+				if libErr.Line != tc.wantLine {
+					t.Errorf("Line = %d, want %d (the offending source line)", libErr.Line, tc.wantLine)
+				}
+				if !strings.Contains(libErr.Message, tc.wantMessage) {
+					t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantMessage)
+				}
+				assertQuotingHint(t, libErr, tc.wantHint)
+			})
+		}
+	})
+
+	// The same treatment applies to a malformed template.yaml manifest, caught
+	// at step 3 and reported at the manifest's own path and line.
+	t.Run("malformed template.yaml manifest reports the line and the quoting hint", func(t *testing.T) {
+		cases := []struct {
+			name        string
+			manifest    string
+			wantLine    int
+			wantMessage string
+			wantHint    bool
+		}{
+			{
+				name:        "colon inside a plain scalar",
+				manifest:    "name: hello\ndescription: Hello: world\n",
+				wantLine:    2,
+				wantMessage: "mapping values are not allowed in this context",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an alias indicator",
+				manifest:    "name: hello\ndescription: *\n",
+				wantLine:    2,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an anchor indicator",
+				manifest:    "name: hello\ndescription: &\n",
+				wantLine:    2,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a directive indicator",
+				manifest:    "name: hello\ndescription: %example.com\n",
+				wantLine:    2,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a reserved indicator",
+				manifest:    "name: hello\ndescription: @example.com\n",
+				wantLine:    2,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "malformed YAML that is not a plain-scalar mis-read carries no hint",
+				manifest:    "name: hello\ndescription: \"unterminated\n",
+				wantLine:    2,
+				wantMessage: "found unexpected end of stream",
+				wantHint:    false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				fsys := baseLibraryFS()
+				fsys["slides/hello/template.yaml"] = &fstest.MapFile{Data: []byte(tc.manifest)}
+				_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+				libErr := asLibraryError(t, err)
+				wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+ManifestFile)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
+				}
+				if libErr.Line != tc.wantLine {
+					t.Errorf("Line = %d, want %d (the offending source line)", libErr.Line, tc.wantLine)
+				}
+				if !strings.Contains(libErr.Message, tc.wantMessage) {
+					t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantMessage)
+				}
+				assertQuotingHint(t, libErr, tc.wantHint)
+			})
+		}
+	})
+}
+
+// assertQuotingHint checks a *LibraryError's quoting hint against want: when
+// want is true the error carries exactly the plain-scalar quoting hint the
+// loader shares with the field checker, and when false it carries no hint at
+// all. It pins the literal hint text, so the assertion is independent of the
+// yamlQuotingHint constant.
+func assertQuotingHint(t *testing.T, libErr *LibraryError, want bool) {
+	t.Helper()
+	const wantHint = "quote the value as a string"
+	if !want {
+		if libErr.Hint != "" {
+			t.Errorf("Hint = %q, want none (the offending line is not a plain-scalar mis-read)", libErr.Hint)
+		}
+		return
+	}
+	if libErr.Hint != wantHint {
+		t.Errorf("Hint = %q, want %q", libErr.Hint, wantHint)
 	}
 }
 
