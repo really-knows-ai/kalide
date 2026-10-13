@@ -3,6 +3,8 @@ package template
 import (
 	"reflect"
 	"testing"
+
+	"github.com/really-knows-ai/kalide/internal/mdcheck"
 )
 
 // This file is the unit-test deliverable for the `body.tables` manifest
@@ -30,7 +32,11 @@ import (
 //   - an ambiguous declaration set — a declared boolean whose name is also an
 //     enum variant, or a variant declared by two enums — is refused at load by
 //     checkCellAttributeAmbiguity with an error naming the ambiguous name and
-//     the template.yaml.
+//     the template.yaml;
+//   - the single shared CellAttributeSpecs conversion maps FieldBoolean and
+//     FieldEnum onto mdcheck's plain boolean/enum descriptors, copies an enum's
+//     variants rather than aliasing the declaration slice, and yields nil for a
+//     template that declares none.
 //
 // The fixture manifest is always a minimal slide whose body carries `mode`
 // (required) and the `tables:` value under test; the test reads the real
@@ -531,6 +537,60 @@ func TestManifestBodyTablesCellAttributeAmbiguity(t *testing.T) {
 		}
 		if def.Body.Tables.CellAttributes[0].Kind != FieldBoolean {
 			t.Errorf("CellAttributes[0].Kind = %q, want %q", def.Body.Tables.CellAttributes[0].Kind, FieldBoolean)
+		}
+	})
+}
+
+// TestCellAttributeSpecs covers the single shared template.CellAttribute ->
+// mdcheck.CellAttributeSpec conversion (task-1): the FieldBoolean/FieldEnum
+// kind mapping onto mdcheck's plain boolean/enum constants, the copied
+// variants that never alias the template's own declaration slice, and nil for
+// a template that declares no cell attributes.
+func TestCellAttributeSpecs(t *testing.T) {
+	t.Run("FieldBoolean and FieldEnum map to mdcheck's boolean and enum", func(t *testing.T) {
+		got := CellAttributeSpecs([]CellAttribute{
+			{Name: "bold", Kind: FieldBoolean},
+			{Name: "highlight", Kind: FieldEnum, Variants: []string{"red", "green"}},
+		})
+		want := []mdcheck.CellAttributeSpec{
+			{Name: "bold", Kind: mdcheck.CellAttributeBoolean},
+			{Name: "highlight", Kind: mdcheck.CellAttributeEnum, Variants: []string{"red", "green"}},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("CellAttributeSpecs = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("no declarations yields nil", func(t *testing.T) {
+		if got := CellAttributeSpecs(nil); got != nil {
+			t.Errorf("CellAttributeSpecs(nil) = %+v, want nil", got)
+		}
+		if got := CellAttributeSpecs([]CellAttribute{}); got != nil {
+			t.Errorf("CellAttributeSpecs(empty) = %+v, want nil", got)
+		}
+	})
+
+	t.Run("variants are copied and never alias the declaration slice", func(t *testing.T) {
+		attrs := []CellAttribute{
+			{Name: "highlight", Kind: FieldEnum, Variants: []string{"red", "green"}},
+		}
+		got := CellAttributeSpecs(attrs)
+		if len(got) != 1 {
+			t.Fatalf("len(CellAttributeSpecs) = %d, want 1", len(got))
+		}
+
+		// Mutating the declaration slice must leave the converted spec's copy
+		// untouched: the converter took a copy rather than aliasing it.
+		attrs[0].Variants[0] = "mutated"
+		if want := []string{"red", "green"}; !reflect.DeepEqual(got[0].Variants, want) {
+			t.Errorf("after mutating the declaration, Variants = %v, want the copy %v", got[0].Variants, want)
+		}
+
+		// And the copy owns its own backing array, so growing it cannot spill
+		// back into the declaration slice.
+		got[0].Variants = append(got[0].Variants, "blue")
+		if want := []string{"mutated", "green"}; !reflect.DeepEqual(attrs[0].Variants, want) {
+			t.Errorf("after appending to the copy, declaration Variants = %v, want %v (unaffected)", attrs[0].Variants, want)
 		}
 	})
 }
