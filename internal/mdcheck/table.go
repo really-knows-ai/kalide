@@ -20,10 +20,12 @@
 // The effective limits — the fewest and most tables a body may contain, and the
 // fewest and most columns and rows a table may have — are carried in as
 // TableOptions, mdcheck's own plain limits type so the parser imports no schema
-// package. Each parsed table is returned as a Table of header cells,
-// per-column alignment and body rows of TableCell, and each breached count or
-// limit is returned as one positioned Issue naming the limit and the actual
-// count.
+// package. A template's declared cell attributes are likewise carried in as
+// CellAttributeSpec, the plain descriptor the cell-extension decoder resolves
+// a cell's `{...}` group against. Each parsed table is returned as a Table of
+// header cells, per-column alignment and body rows of TableCell, and each
+// breached count or limit is returned as one positioned Issue naming the limit
+// and the actual count.
 //
 // Every cell records the 1-based line and column of its trimmed
 // inline-Markdown source within the body, so a violation can be positioned at
@@ -63,6 +65,53 @@ type TableOptions struct {
 	MinRows int
 	MaxRows int
 }
+
+// CellAttributeSpec is one cell attribute a template declares for its GFM
+// tables, mdcheck's own plain descriptor for an entry of the
+// `body.tables.cell_attributes` list (table-cell-attributes). It is the
+// mdcheck-side counterpart of the template schema's CellAttribute: the
+// template loader and the validator convert their CellAttribute declarations
+// into a []CellAttributeSpec, so the cell-extension decoder can resolve a
+// cell's `{...}` attribute group without importing a schema package.
+//
+// Kind is one of the CellAttributeBoolean and CellAttributeEnum constants —
+// plain strings, so mdcheck imports no schema package. A boolean attribute is
+// set by presence (a bare `{name}` is `{name:true}`); an enum attribute is set
+// to one of Variants, the closed set of its accepted values. The reserved name
+// `br` is never a declared attribute.
+type CellAttributeSpec struct {
+	// Name is the attribute name an author writes in a cell's `{...}`
+	// group or as a bare-name short-hand, e.g. `bold` or `highlight`. The
+	// reserved name `br` is never a declared attribute.
+	Name string
+
+	// Kind is the attribute's value type: CellAttributeBoolean or
+	// CellAttributeEnum. It is a plain string so mdcheck imports no schema
+	// package; the two constants mirror the manifest's `boolean` and `enum`
+	// field-type names.
+	Kind string
+
+	// Variants, for an enum attribute, is the closed set of accepted
+	// values. A bare name that is a variant of exactly one declared enum
+	// attribute sets that attribute by mutex (table-cell-attributes). It is
+	// empty for a boolean attribute.
+	Variants []string
+}
+
+// CellAttributeSpec.Kind values: the value type of one declared cell
+// attribute. A cell attribute is either a boolean — set by presence, `{name}`
+// or `{name:true}` — or an enum, set to one of the spec's Variants. The values
+// are plain strings so mdcheck imports no schema package; they mirror the
+// manifest's `boolean` and `enum` field-type names (table-cell-attributes).
+const (
+	// CellAttributeBoolean is a boolean cell attribute: a bare `{name}`
+	// is `{name:true}`, and `{name:false}` unsets it.
+	CellAttributeBoolean = "boolean"
+
+	// CellAttributeEnum is an enum cell attribute: `{name:variant}` sets
+	// it to one of the spec's Variants.
+	CellAttributeEnum = "enum"
+)
 
 // TableCell is one cell of a parsed GFM table: the cell's trimmed
 // inline-Markdown source together with the 1-based position at which that text
