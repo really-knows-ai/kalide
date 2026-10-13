@@ -444,25 +444,27 @@ func (r *Registry) SectionNames(tmpl string) []string {
 }
 
 // SectionDecl returns the declaration for section section of the template tmpl:
-// the section-usage templates it accepts and the min and max number of times it
-// may repeat. ok is false when tmpl is unknown or declares no such section. The
-// accepted slice is a fresh copy. It is part of the slide.Catalogue contract.
+// the section-usage templates it accepts, the min and max number of times it may
+// repeat, and the declaration's max_depth bound. ok is false when tmpl is
+// unknown or declares no such section. The accepted slice is a fresh copy.
+// maxDepth is the declaration's positive-integer `max_depth` bound (0 when
+// unbounded). It is part of the slide.Catalogue contract.
 //
 // A `template:` key is required on a section instance iff len(accepted) > 1:
 // with exactly one accepted template the instance resolves to it, and with
 // several the author must choose one.
-func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, max int, ok bool) {
+func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, max, maxDepth int, ok bool) {
 	t, found := r.Lookup(tmpl)
 	if !found || t == nil {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
 	d, found := declaredSection(t, section)
 	if !found {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
 	out := make([]string, len(d.Accepted))
 	copy(out, d.Accepted)
-	return out, d.Min, d.Max, true
+	return out, d.Min, d.Max, d.MaxDepth, true
 }
 
 // checkDefinition validates a template's local definition: it must be non-nil
