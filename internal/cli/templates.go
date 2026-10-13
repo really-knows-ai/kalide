@@ -198,6 +198,8 @@ func printTemplateFields(w io.Writer, t *template.Template) {
 			line += " — " + f.Description
 		}
 		fmt.Fprintln(w, line)
+		printTemplateRecordFields(w, f, "    ")
+		printTemplateEnumVariants(w, f, "    ")
 	}
 	fmt.Fprintln(w)
 }
@@ -269,8 +271,11 @@ func templateFieldAttributes(f *template.Field) string {
 }
 
 // templateFieldLimits renders the limits that apply to a field's type: text
-// length and plainness, number bounds, date bounds, list item bounds, or the
-// closed set of enum variants. It returns "" when no limit applies.
+// length and plainness, number bounds, date bounds or list item bounds. An enum
+// field's closed set of variants is not a limit rendered here: the field's
+// effective variants are printed beneath its line by
+// printTemplateEnumVariants (see printTemplateFields). It returns "" when no
+// limit applies.
 func templateFieldLimits(f *template.Field) string {
 	var parts []string
 	switch f.Type {
@@ -287,10 +292,6 @@ func templateFieldLimits(f *template.Field) string {
 		parts = append(parts, templateDateBounds(f.MinDate, f.MaxDate)...)
 	case template.FieldList:
 		parts = append(parts, templateListBounds(f.MinItems, f.MaxItems)...)
-	case template.FieldEnum:
-		if len(f.Variants) > 0 {
-			parts = append(parts, "one of "+strings.Join(f.Variants, ", "))
-		}
 	}
 	return strings.Join(parts, ", ")
 }
