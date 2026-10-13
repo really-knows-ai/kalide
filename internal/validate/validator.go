@@ -135,6 +135,103 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 	return ValidationError{}, false
 }
 
+// collectErrors is the one fixed-order whole-deck walk every validation entry
+// shares. It runs the same deterministic order the specification fixes
+// (whole-deck-validation):
+//
+//  1. kalide.yaml, through deck.LoadConfig, with the config's theme resolved
+//     through themeReg (internal/deck + internal/theme);
+//  2. slide filenames — numbering, letters and label uniqueness — through
+//     deck.LoadSlides;
+//  3. each slide in number/letter order (a horizontal slide before the vertical
+//     slides beneath it), and within a slide top-to-bottom by source line: the
+//     slide frontmatter's fields, then the slide body, then the slide body
+//     rule, then each section recursively (fields, body, body rule, children),
+//     then the reserved notes body;
+//  4. inter-slide #label links last, once every slide label in the deck is
+//     known.
+//
+// It drives both validation modes. collectAll=false is fail-fast: the first
+// error in that order is returned and the walk stops (kalide start, and
+// kalide check without --all). collectAll=true accumulates every error in the
+// same order (kalide check --all). A failing step never blocks a later
+// independent step: a kalide.yaml error still lets the slide passes run, and a
+// failing slide still lets the next slide run; a step that depends on an
+// earlier failure — the per-slide and link passes need the loaded deck — is
+// skipped only because it has nothing to walk.
+//
+// reg and themeReg are required, never defaulted to any compiled-in registry.
+// The returned slice is nil when the deck is valid. The first element of the
+// fail-fast result is byte-for-byte the error Validate has always returned.
+func collectErrors(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry, collectAll bool) []ValidationError {
+	if fsys == nil {
+		return []ValidationError{New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS")}
+	}
+	if reg == nil {
+		return []ValidationError{New(deck.ConfigFile, 0, nil, "no template registry given", "pass a populated template registry")}
+	}
+	if themeReg == nil {
+		return []ValidationError{New(deck.ConfigFile, 0, nil, "no theme registry given", "pass the project's theme registry")}
+	}
+
+	var errs []ValidationError
+	add := func(e ValidationError) {
+		errs = append(errs, e)
+	}
+	stop := func() bool { return len(errs) > 0 && !collectAll }
+
+	// Step 1: kalide.yaml, including the deck-wide theme, through internal/deck
+	// and internal/theme. A config failure does not block the slide passes,
+	// which read the deck itself rather than the parsed config.
+	if cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg); err != nil {
+		add(adaptDeckError(err))
+	} else if !themeResolves(themeReg, cfg.Theme) {
+		// deck.LoadConfig has already resolved cfg.Theme against themeReg, so
+		// this is a defensive re-check rather than the primary enforcement
+		// point.
+		add(New(deck.ConfigFile, 0, nil,
+			fmt.Sprintf("unknown theme %q", cfg.Theme),
+			"use one of the registered themes"))
+	}
+	if stop() {
+		return errs
+	}
+
+	// Step 2: slide filenames, numbering, letters and label uniqueness.
+	d, err := deck.LoadSlides(fsys, deck.SlidesDir)
+	if err != nil {
+		add(adaptDeckError(err))
+	}
+	if stop() {
+		return errs
+	}
+
+	// Steps 3 and 4 need the loaded deck; without it there is nothing to walk.
+	if d != nil {
+		// Step 3: each slide in number/letter order, a horizontal slide before
+		// the vertical slides beneath it.
+		for _, stack := range d.Stacks {
+			ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
+			ordered = append(ordered, stack.Slide)
+			ordered = append(ordered, stack.Vertical...)
+			for _, s := range ordered {
+				errs = append(errs, validateSlide(fsys, s, reg)...)
+				if stop() {
+					return errs
+				}
+			}
+		}
+
+		// Step 4: inter-slide #label links, last, now that every slide in the
+		// deck has been walked and every slide label is therefore known.
+		errs = append(errs, checkLinks(fsys, d, reg)...)
+		if stop() {
+			return errs
+		}
+	}
+	return errs
+}
+
 // validateSlide validates one slide file in top-to-bottom order: parse the
 // frontmatter and section structure, then the slide frontmatter's fields, then
 // the slide body, then each section's frontmatter fields followed by its body,
