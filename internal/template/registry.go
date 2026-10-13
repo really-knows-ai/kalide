@@ -210,10 +210,20 @@ func LoadTemplate(content fs.FS, t *Template) error {
 // offending template.yaml.
 func (r *Registry) Validate() error {
 	for _, t := range r.Templates() {
-		// A nil root: the registry carries no per-template owning-layer root
-		// yet, so an enum `variants_from:` glob stays unexpanded here (a
-		// no-op, not a rejection).
-		if err := checkDefinition(t, nil); err != nil {
+		// Supply each template's owning-layer root so an enum
+		// `variants_from:` glob expands against the layer that owns the
+		// template (enum-variants-from): an external layer's glob resolves
+		// within the external library alone. The provenance is recorded at
+		// registry build (NewRegistryFromLibrary's setLayer) and, for the
+		// single-layer library the loader body builds, by checkLibraryBuild
+		// before this call. A template with no recorded layer — a registry
+		// built with NewRegistry/Register alone — passes a nil root, so the
+		// glob stays unexpanded (a no-op, not a rejection).
+		var root fs.FS
+		if layer := r.LayerOf(t.Name); layer != nil {
+			root = layer.Root
+		}
+		if err := checkDefinition(t, root); err != nil {
 			return err
 		}
 	}

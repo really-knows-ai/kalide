@@ -463,10 +463,36 @@ func mergeLibraryLayers(layers []*LibraryLayer) *Library {
 // Definition, or step 7 could not resolve that nested child. This is checked
 // here so the build fails fast, positioned at the offending container's
 // template.yaml, rather than surfacing mid-recursion later.
+//
+// It also supplies each template's owning library layer to the registry build,
+// so an enum field's `variants_from:` glob expands against the root of the
+// layer that owns the template (enum-variants-from). NewRegistryFromLibrary
+// already records that provenance for a merged Library — its Layers carry each
+// template's own root — and this supplies the one layer of the single-layer
+// *Library the loader body builds here (whose Layers is not populated until the
+// caller wraps it), before Validate reads it back through LayerOf. An external
+// layer's glob therefore resolves within the external library alone.
 func checkLibraryBuild(lib *Library) error {
 	reg, err := NewRegistryFromLibrary(lib)
 	if err != nil {
 		return err
+	}
+	// The single-layer *Library the loader body builds carries no Layers, so
+	// NewRegistryFromLibrary recorded no provenance for it. Register its one
+	// layer — the layer root, with media as a direct entry — for every
+	// template it carries, so Validate expands a `variants_from:` glob against
+	// that layer's root. A Library that resolved no root records no usable
+	// provenance and leaves the glob unexpanded, exactly as an unknown owning
+	// layer does.
+	if lib != nil && len(lib.Layers) == 0 {
+		if layer := layerFromLibrary(lib); layer.Root != nil {
+			for name := range lib.Slides {
+				reg.setLayer(name, layer)
+			}
+			for name := range lib.Sections {
+				reg.setLayer(name, layer)
+			}
+		}
 	}
 	if err := reg.Validate(); err != nil {
 		if name, ok := manifestTemplateErrorName(err); ok {
