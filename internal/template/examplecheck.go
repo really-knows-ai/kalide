@@ -1334,17 +1334,41 @@ func exampleError(path string, line int, container, format string, args ...any) 
 // subheadings; depths 4-6 are refused in subheading position
 // (markdown-allowed-subset). It reports the first offending heading with the
 // instance's containment path.
+//
+// It is also the example block body's single table-error source
+// (table-opt-in, table-errors): the enclosing template's `body.tables` option
+// (def.Body.Tables) is converted to mdcheck's own plain options
+// (mdcheckTableOptions / mdcheckCellAttributeSpecs) and mdcheck.Check runs in
+// BodyMode with it, so a non-opted-in body's table is the single opt-out
+// refusal and an opted-in body's table is checked for its strict column
+// counts, declared limits and cell attributes. Only heading-level issues and
+// table-kind issues (isTableIssue) are surfaced; every other mdcheck issue is
+// dropped, since the remaining Markdown-subset issues belong to the ordinary
+// body check. Each surfaced issue is a *LibraryError carrying the issue's line
+// and the instance's containment path. validateExampleBlockAt passes
+// template.WithoutTableCheck() to its own CheckBody call (task-9, task-17), so
+// CheckBody's table pass does not also run for the example body and each table
+// error is emitted exactly once.
 func checkExampleBodySubheadings(path string, def *Template, block *exampleBlock, container string) error {
 	if strings.TrimSpace(block.Body) == "" {
 		return nil
 	}
-	issues := mdcheck.Check(path, []byte(block.Body), mdcheck.Options{
+	opts := mdcheck.Options{
 		Mode:                          mdcheck.BodyMode,
 		StartLine:                     block.BodyLine,
 		TemplateDeclaresChildSections: len(def.Sections) > 0,
-	})
+	}
+	if def.Body.Tables != nil {
+		tables := mdcheckTableOptions(def.Body.Tables)
+		opts.Tables = &tables
+		opts.CellAttributes = mdcheckCellAttributeSpecs(def.Body.Tables.CellAttributes)
+	}
+	issues := mdcheck.Check(path, []byte(block.Body), opts)
 	for _, iss := range issues {
 		if iss.Kind == mdcheck.KindUnsupportedConstruct && strings.Contains(iss.Message, "heading level") {
+			return exampleError(path, iss.Line, container, "%s", iss.Message)
+		}
+		if isTableIssue(iss) {
 			return exampleError(path, iss.Line, container, "%s", iss.Message)
 		}
 	}
