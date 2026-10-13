@@ -208,21 +208,25 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 		}
 		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), callerChain, nil)
 
-		// The example body's own parsed tables, mirroring render's per-body
-		// table context exactly (table-layout-context): `.table` is the body's
+		// The example body's own parsed tables, built through the shared
+		// mdcheck.TableContext — the same builder render's per-body table
+		// context calls (table-layout-context): `.table` is the body's
 		// first parsed table as the table map or nil, and `.tables` is every
 		// parsed table in source order (a non-nil but empty list when the body
 		// carries none). The body's tables are parsed against the template's
 		// declared cell attributes, so a cell's `{...}` groups decode exactly
 		// as at render — a table-bearing example whose layout reads
 		// `.table.rows` unguarded therefore executes at step 7 as it would at
-		// render, instead of failing load. The example body is the body
-		// renderBody renders, so `.body` stays free of tables.
+		// render, instead of failing load. TableContext renders each cell's
+		// inline Markdown through the passed render-inline function, so the
+		// retained exampleRenderInline supplies the load-time HTML renderer.
+		// The example body is the body renderBody renders, so `.body` stays
+		// free of tables.
 		var tableSpecs []mdcheck.CellAttributeSpec
 		if def.Body.Tables != nil {
 			tableSpecs = mdcheckCellAttributeSpecs(def.Body.Tables.CellAttributes)
 		}
-		table, tables := exampleTableContext(block.Body, tableSpecs)
+		table, tables := mdcheck.TableContext(block.Body, tableSpecs, exampleRenderInline)
 		ctx["table"] = table
 		ctx["tables"] = tables
 
