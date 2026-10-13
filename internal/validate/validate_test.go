@@ -153,6 +153,42 @@ func testOrdering(t *testing.T) {
 		wantError(t, preg, deckFiles("kalide.yaml", "title: T\n", "slides/1-first.md", "---\ntemplate: plain\n---\n\nSee [x](#zzz).\n", "slides/1a-second.md", "---\ntemplate: plain\n---\n\nSee [y](#yyy).\n"),
 			displayFile("slides/1-first.md")+`:5: unknown link label "zzz" — use the label of one of the deck's slides`)
 	})
+
+	// Collect-all: the multi-fault deck below trips the config pass (an unknown
+	// navigation mode), two slides' frontmatter fields (a missing required
+	// heading) and the link pass (an unknown #label in each body).
+	// ValidateAll reports all five in the fixed order config -> slides ->
+	// links, while Validate still reports only the earliest.
+	t.Run("collect-all reports every error in the fixed order", func(t *testing.T) {
+		files := deckFiles(
+			"kalide.yaml", "navigation: diagonal\n",
+			"slides/1-a.md", "---\ntemplate: content\n---\n\nSee [x](#nope).\n",
+			"slides/2-b.md", "---\ntemplate: content\n---\n\nSee [y](#nada).\n",
+		)
+		wantAllErrors(t, reg, files, []string{
+			displayFile("kalide.yaml") + `:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
+			displayFile("slides/1-a.md") + ` › heading: required: field "heading" is required but missing — add a heading: value`,
+			displayFile("slides/2-b.md") + ` › heading: required: field "heading" is required but missing — add a heading: value`,
+			displayFile("slides/1-a.md") + `:5: unknown link label "nope" — use the label of one of the deck's slides`,
+			displayFile("slides/2-b.md") + `:5: unknown link label "nada" — use the label of one of the deck's slides`,
+		})
+	})
+
+	// A filename fault is collected right after the config fault, before the
+	// (unreachable) slide and link passes: deck.LoadSlides yields no deck when
+	// a filename is malformed, so ValidateAll reports exactly the two
+	// independent faults and fabricates no slide error for the unreadable
+	// tree.
+	t.Run("collect-all reports the filename fault after the config fault", func(t *testing.T) {
+		files := deckFiles(
+			"kalide.yaml", "navigation: diagonal\n",
+			"slides/notaslide.md", "not a slide\n",
+		)
+		wantAllErrors(t, reg, files, []string{
+			displayFile("kalide.yaml") + `:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
+			displayFile("slides/notaslide.md") + ": filename must be <number>[letter]-<label>.md",
+		})
+	})
 }
 
 // testDeterminism asserts repeated runs over the same invalid deck yield the
@@ -440,4 +476,38 @@ func wantError(t *testing.T, reg *template.Registry, files map[string]string, wa
 	if got := Format(verr); got != want {
 		t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 	}
+}
+
+// wantAllErrors asserts the deck's collect-all walk reports exactly the wanted
+// errors, rendered by Format, in the given fixed order, and that the fail-fast
+// Validate entry reports only the first of them (the earliest fault).
+func wantAllErrors(t *testing.T, reg *template.Registry, files map[string]string, want []string) {
+	t.Helper()
+	fsys := mapDeck(files)
+	all := ValidateAll(fsys, reg, exampleThemeRegistry())
+	if len(all) != len(want) {
+		t.Fatalf("ValidateAll() returned %d error(s), want %d: %q", len(all), len(want), formatAll(all))
+	}
+	for i, e := range all {
+		if got := Format(e); got != want[i] {
+			t.Fatalf("ValidateAll()[%d] =\n  %q\nwant\n  %q", i, got, want[i])
+		}
+	}
+
+	verr, invalid := Validate(fsys, reg, exampleThemeRegistry())
+	if !invalid {
+		t.Fatalf("Validate() invalid = false, want the earliest error %q", want[0])
+	}
+	if !reflect.DeepEqual(verr, all[0]) {
+		t.Fatalf("Validate() error = %#v, want ValidateAll()[0] = %#v", verr, all[0])
+	}
+}
+
+// formatAll renders each ValidationError with Format, preserving order.
+func formatAll(errs []ValidationError) []string {
+	out := make([]string, len(errs))
+	for i, e := range errs {
+		out[i] = Format(e)
+	}
+	return out
 }
