@@ -123,6 +123,8 @@ func Check(file string, src []byte, opts Options) []Issue {
 		mode:                          opts.Mode,
 		startLine:                     opts.StartLine,
 		templateDeclaresChildSections: opts.TemplateDeclaresChildSections,
+		tables:                        opts.Tables,
+		cellAttributes:                opts.CellAttributes,
 	}
 
 	// goldmark.New() with no options is the CommonMark core specification: no
