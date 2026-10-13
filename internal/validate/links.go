@@ -74,8 +74,8 @@ func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationErr
 			if err != nil {
 				return adaptParseError(err), true
 			}
-			if verr, invalid := checkSlideLinks(s.Path, ps, reg, labels, candidates); invalid {
-				return verr, true
+			if errs := checkSlideLinks(s.Path, ps, reg, labels, candidates); len(errs) > 0 {
+				return errs[0], true
 			}
 		}
 	}
@@ -85,28 +85,19 @@ func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationErr
 // checkSlideLinks checks one parsed slide's links in the same top-to-bottom
 // order the structural steps use: the slide frontmatter's fields (they sit at
 // the top of the file), the slide body, then each section's frontmatter fields
-// followed by its body, then the reserved notes body. It returns the first
-// error and whether one was found.
-func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// followed by its body, then the reserved notes body. It returns every error in
+// that top-to-bottom order, rather than only the first.
+func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
 	tmpl, _ := reg.Lookup(ps.Template)
 
-	if errs := checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates); len(errs) > 0 {
-		return errs[0], true
-	}
-	if errs := checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates); len(errs) > 0 {
-		return errs[0], true
-	}
-
-	if errs := checkSectionLinks(file, ps.Sections, reg, labels, candidates); len(errs) > 0 {
-		return errs[0], true
-	}
-
+	var errs []ValidationError
+	errs = append(errs, checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates)...)
+	errs = append(errs, checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates)...)
+	errs = append(errs, checkSectionLinks(file, ps.Sections, reg, labels, candidates)...)
 	if ps.Notes != nil {
-		if errs := checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates); len(errs) > 0 {
-			return errs[0], true
-		}
+		errs = append(errs, checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates)...)
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkSectionLinks checks the links of each section instance in source order —
