@@ -113,6 +113,42 @@ const (
 	CellAttributeEnum = "enum"
 )
 
+// DecodedCell is one table cell decoded through its template's declared cell
+// extensions (table-cell-attributes): the cell's visible inline-Markdown
+// content, split at each `{br}` line break, together with the declared cell
+// attributes its `{...}` groups set.
+//
+// Lines is the cell's inline Markdown with every `{br}` and every attribute
+// group stripped out, split into one segment per `{br}` break. A `{br}` is a
+// segment boundary and never a raw `<br>` left in the Markdown: the break is
+// the point between two entries of Lines, and the renderer joins the rendered
+// segments with `<br>` — a literal `<br>` handed to the inline renderer would
+// be escaped. Each entry keeps the cell's inline Markdown (an inline code span
+// or a link included) for the renderer to render. A cell with no `{br}` has a
+// single entry.
+//
+// Attrs is keyed by each cell attribute the enclosing template declares, so a
+// declared attribute the cell leaves unset is present as a nil entry rather
+// than absent. The value is the attribute's typed value once the cell's
+// `{...}` groups are resolved: a bool for a boolean attribute (`{bold}` or
+// `{bold:true}` is true, `{bold:false}` is false) and a string for an enum
+// attribute (the chosen variant, e.g. `{highlight:green}` is "green"). An
+// undeclared attribute is rejected where the cell is decoded, not carried
+// here.
+type DecodedCell struct {
+	// Lines is the cell's inline-Markdown content as the segments split at
+	// each `{br}` break, in source order. Every `{br}` is a segment boundary
+	// and no `{br}` appears in Lines as a raw `<br>`; a cell with no `{br}`
+	// has a single entry.
+	Lines []string
+
+	// Attrs is the decoded attribute set, one entry per cell attribute the
+	// enclosing template declares and keyed by the declared name: a bool for
+	// a boolean attribute, a string for an enum attribute, and nil for every
+	// declared attribute the cell leaves unset.
+	Attrs map[string]any
+}
+
 // TableCell is one cell of a parsed GFM table: the cell's trimmed
 // inline-Markdown source together with the 1-based position at which that text
 // begins in the body the table was parsed from.
