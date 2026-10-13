@@ -1491,43 +1491,6 @@ func emptyExampleSlideContext() map[string]any {
 	}
 }
 
-// exampleTableCellContext renders one parsed GFM table cell into the
-// `{html, attrs}` map a table context exposes, mirroring internal/render's
-// tableCellContext (table-layout-context, table-cell-attributes): html is the
-// cell's visible content as inline HTML (its `{br}` segments rendered and
-// joined with a literal `<br>`) and attrs is its decoded attribute set keyed by
-// the template's declared cell attributes, with a nil entry for every declared
-// attribute the cell leaves unset.
-//
-// The cell's `{br}` and `{...}` extensions are decoded by mdcheck's
-// DecodeTableCell, the exported seam internal/render also consumes, so the
-// load-time context never re-implements the extension stripping. Validation
-// guarantees a cell decodes without error here; should a decode still fail, the
-// cell degrades gracefully — its raw source is rendered inline and every
-// declared attribute is left nil — so a load-time execute never fails on a
-// cell.
-func exampleTableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec) map[string]any {
-	decoded, err := mdcheck.DecodeTableCell(cell, specs)
-	if err != nil {
-		attrs := make(map[string]any, len(specs))
-		for _, spec := range specs {
-			attrs[spec.Name] = nil
-		}
-		return map[string]any{
-			"html":  exampleRenderInline(cell.Text),
-			"attrs": attrs,
-		}
-	}
-	segments := make([]string, len(decoded.Lines))
-	for i, seg := range decoded.Lines {
-		segments[i] = string(exampleRenderInline(seg))
-	}
-	return map[string]any{
-		"html":  htmltemplate.HTML(strings.Join(segments, "<br>")),
-		"attrs": decoded.Attrs,
-	}
-}
-
 // exampleRenderInline renders one inline-Markdown string to HTML without the
 // paragraph wrapper goldmark adds around a block, mirroring internal/render's
 // renderInline (table-layout-context). A text field's single paragraph is the
