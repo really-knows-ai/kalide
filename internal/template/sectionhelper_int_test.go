@@ -1710,7 +1710,7 @@ func TestLoadLibraryChildLoadChecksInt(t *testing.T) {
 					},
 				}
 				call, err := ResolveChildCall(resolve, nil, parent,
-					&ChildRequest{Section: tt.target.Name, Fields: tt.fields}, 0, 1, nil)
+					&ChildRequest{Section: tt.target.Name, Fields: tt.fields}, 0, 1, nil, nil)
 
 				if tt.valid {
 					if err != nil {

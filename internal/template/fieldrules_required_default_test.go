@@ -106,7 +106,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 	resolve := resolveSectionCallResolver(target)
 
 	t.Run("an omitted required field's default is materialised into call.Values", func(t *testing.T) {
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil: the required field carries a default", err)
 		}
@@ -128,7 +128,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 
 	t.Run("a caller-supplied value overrides the default", func(t *testing.T) {
 		call, err := ResolveSectionCall(resolve, "footer",
-			map[string]any{"title": "Given", "count": 0}, "", nil)
+			map[string]any{"title": "Given", "count": 0}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -172,7 +172,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 		// nullable) and reaches call.Values as nil, while the omitted required
 		// field still materialises its default.
 		call, err := ResolveSectionCall(resolveSectionCallResolver(tmpl), "footer",
-			map[string]any{"note": nil}, "", nil)
+			map[string]any{"note": nil}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil: a nullable null is accepted", err)
 		}
@@ -245,7 +245,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 
 		// The same holds when ResolveSectionCall drives it, and the call's Source
 		// stays the caller's original, unmutated map.
-		call, err := ResolveSectionCall(resolveSectionCallResolver(tmpl), "footer", supplied, "", nil)
+		call, err := ResolveSectionCall(resolveSectionCallResolver(tmpl), "footer", supplied, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}

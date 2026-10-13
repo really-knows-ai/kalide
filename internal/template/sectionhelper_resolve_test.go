@@ -90,7 +90,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 			Example: Example{Frontmatter: map[string]any{"title": "Example"}},
 		})
 
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil: the required field carries a default", err)
 		}
@@ -106,7 +106,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 			Fields: []Field{{Name: "title", Type: FieldText, Required: true}},
 		})
 
-		_, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		_, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err == nil {
 			t.Fatal("ResolveSectionCall() error = nil, want the undefaulted required field rejected")
 		}
@@ -126,7 +126,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 			Fields: []Field{{Name: "title", Type: FieldText, Required: true, Default: "Untitled"}},
 		})
 
-		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "Given"}, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "Given"}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -146,7 +146,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 		})
 
 		fields := map[string]any{"subtitle": "S"}
-		call, err := ResolveSectionCall(resolve, "footer", fields, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", fields, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -198,7 +198,7 @@ func TestResolveSectionCallTargets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ResolveSectionCall(tt.resolve, tt.target, nil, "", nil)
+			_, err := ResolveSectionCall(tt.resolve, tt.target, nil, "", nil, nil)
 			if err == nil {
 				t.Fatalf("ResolveSectionCall() error = nil, want %q", tt.want)
 			}
@@ -219,7 +219,7 @@ func TestResolveSectionCallUndeclaredField(t *testing.T) {
 		Fields: []Field{{Name: "title", Type: FieldText}},
 	})
 
-	_, err := ResolveSectionCall(resolve, "footer", map[string]any{"nope": "v"}, "", nil)
+	_, err := ResolveSectionCall(resolve, "footer", map[string]any{"nope": "v"}, "", nil, nil)
 	if err == nil {
 		t.Fatal("ResolveSectionCall() error = nil, want the undeclared key rejected")
 	}
@@ -291,7 +291,7 @@ func TestResolveSectionCallBodyRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resolve := resolveSectionCallResolver(tt.target)
-			call, err := ResolveSectionCall(resolve, tt.target.Name, nil, tt.body, nil)
+			call, err := ResolveSectionCall(resolve, tt.target.Name, nil, tt.body, nil, nil)
 
 			if tt.rule == "" {
 				if err != nil {
@@ -331,7 +331,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 	resolve := resolveSectionCallResolver(target)
 
 	t.Run("parent nil from a slide layout", func(t *testing.T) {
-		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "T"}, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "T"}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -366,7 +366,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 
 	t.Run("parent is the caller's fields from a section layout", func(t *testing.T) {
 		parent := map[string]any{"title": "Outer"}
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", parent)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, parent)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -425,7 +425,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	})
 
 	t.Run("ResolveSectionCall leaves the layer nil", func(t *testing.T) {
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -547,7 +547,7 @@ func TestResolveSectionCallLayeredMatchesNonLayered(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plain, err := ResolveSectionCall(resolve, "footer", tt.fields, tt.body, nil)
+			plain, err := ResolveSectionCall(resolve, "footer", tt.fields, tt.body, nil, nil)
 			if err != nil {
 				t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 			}
