@@ -38,7 +38,9 @@ import (
 //     (library-layer-references);
 //   - the one-item `.item` descriptor is index 0 / number+count 1 / first+last
 //     true / section+template the target name / parent the caller's fields
-//     (nil from a slide); and
+//     (nil from a slide) / depth the target's same-template ancestor count
+//     (InstanceDepth(ancestors, name): 0 when the enclosing chain carries no
+//     same-template ancestor, non-zero when it does); and
 //   - exampleSectionHelper executes a target whose own layout calls
 //     {{ section … }}, rendering the nested helper output, with the nested
 //     call's `.item.parent` the outer target's effective fields.
@@ -322,6 +324,12 @@ func TestResolveSectionCallBodyRules(t *testing.T) {
 // from a slide layout) and with the caller's fields (a call made from a section
 // layout). The resolved template is the target pointer the resolver returned,
 // and the effective values carry the call's supplied fields.
+//
+// It also pins the descriptor's `depth` beside section and parent at every
+// call: depth is InstanceDepth(ancestors, name), so it is 0 for the empty/nil
+// chain and for a chain carrying no same-template ancestor, and it counts every
+// enclosing same-template ancestor (not only the immediate parent) when the
+// enclosing chain repeats the target name (item-context, bounded-self-nesting).
 func TestResolveSectionCallItemDescriptor(t *testing.T) {
 	target := &Template{
 		Name:   "footer",
@@ -386,6 +394,79 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 		}
 		if got, ok := call.Item["parent"].(map[string]any); !ok || !reflect.DeepEqual(got, parent) {
 			t.Errorf("call.Item[parent] = %v, want the caller's fields %v", call.Item["parent"], parent)
+		}
+	})
+
+	// A no-same-template chain is still depth 0: the descriptor counts only
+	// ancestors whose resolved template equals the target name.
+	t.Run("depth is zero when no ancestor is the target", func(t *testing.T) {
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", []string{"outer", "inner"}, nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		want := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "footer",
+			"template": "footer",
+			"depth":    0,
+			"parent":   map[string]any(nil),
+		}
+		if !reflect.DeepEqual(call.Item, want) {
+			t.Errorf("call.Item = %v, want %v", call.Item, want)
+		}
+	})
+
+	// A section layout whose enclosing chain repeats the target name yields a
+	// non-zero depth, carried beside section and parent.
+	t.Run("depth counts a same-template ancestor", func(t *testing.T) {
+		parent := map[string]any{"title": "Outer"}
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", []string{"outer", "footer"}, parent)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		want := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "footer",
+			"template": "footer",
+			"depth":    1,
+			"parent":   parent,
+		}
+		if !reflect.DeepEqual(call.Item, want) {
+			t.Errorf("call.Item = %v, want %v", call.Item, want)
+		}
+		if got, ok := call.Item["parent"].(map[string]any); !ok || !reflect.DeepEqual(got, parent) {
+			t.Errorf("call.Item[parent] = %v, want the caller's fields %v", call.Item["parent"], parent)
+		}
+	})
+
+	// Depth counts every earlier same-template ancestor, not only the immediate
+	// parent: on the footer→mid→footer chain the inner footer is depth 2.
+	t.Run("depth counts every same-template ancestor", func(t *testing.T) {
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", []string{"footer", "mid", "footer"}, nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		want := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "footer",
+			"template": "footer",
+			"depth":    2,
+			"parent":   map[string]any(nil),
+		}
+		if !reflect.DeepEqual(call.Item, want) {
+			t.Errorf("call.Item = %v, want %v", call.Item, want)
 		}
 	})
 }
