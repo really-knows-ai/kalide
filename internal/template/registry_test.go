@@ -2218,7 +2218,7 @@ func TestRegistryCheckSectionsChildChecksAcrossMergedLayers(t *testing.T) {
 		// Resolution agrees with the load check: the child instantiates the
 		// local template and carries the local layer on its own SectionCall,
 		// independently of the external target's layer.
-		call, err := ResolveSectionCallLayered(reg.Lookup, reg.LayerOf, "ext-parent", nil, "", nil, &ChildRequest{Section: "widgets"})
+		call, err := ResolveSectionCallLayered(reg.Lookup, reg.LayerOf, "ext-parent", nil, "", nil, nil, &ChildRequest{Section: "widgets"})
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}

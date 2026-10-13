@@ -485,7 +485,7 @@ func TestLoadLibrarySectionHelperChecksInt(t *testing.T) {
 				if resolve == nil {
 					resolve = resolverFor(tt.target)
 				}
-				call, err := ResolveSectionCallLayered(resolve, nil, tt.target.Name, tt.fields, "", nil)
+				call, err := ResolveSectionCallLayered(resolve, nil, tt.target.Name, tt.fields, "", nil, nil)
 
 				if tt.valid {
 					if err != nil {

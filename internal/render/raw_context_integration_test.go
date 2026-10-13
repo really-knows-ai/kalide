@@ -644,7 +644,7 @@ func TestRenderChildForwardRawDataAgreement(t *testing.T) {
 		t.Fatalf("template.ChildrenFunc: %v", err)
 	}
 	call, err := template.ResolveSectionCallLayered(reg.Lookup, reg.LayerOf, "rawchildwrapper",
-		map[string]any{"heading": "Wrapper H"}, "", nil, req)
+		map[string]any{"heading": "Wrapper H"}, "", nil, nil, req)
 	if err != nil {
 		t.Fatalf("template.ResolveSectionCallLayered: %v", err)
 	}

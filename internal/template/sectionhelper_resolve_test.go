@@ -347,6 +347,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 			"last":     true,
 			"section":  "footer",
 			"template": "footer",
+			"depth":    0,
 			"parent":   map[string]any(nil),
 		}
 		if !reflect.DeepEqual(call.Item, want) {
@@ -377,6 +378,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 			"last":     true,
 			"section":  "footer",
 			"template": "footer",
+			"depth":    0,
 			"parent":   parent,
 		}
 		if !reflect.DeepEqual(call.Item, want) {
@@ -413,7 +415,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	}
 
 	t.Run("the resolved target's owning layer is carried", func(t *testing.T) {
-		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, external), "footer", nil, "", nil)
+		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, external), "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -433,7 +435,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	})
 
 	t.Run("a nil layerOf records no layer", func(t *testing.T) {
-		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil)
+		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -443,7 +445,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	})
 
 	t.Run("a layerOf reporting no provenance records no layer", func(t *testing.T) {
-		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, nil), "footer", nil, "", nil)
+		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, nil), "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -494,7 +496,7 @@ func TestResolveSectionCallLayeredIgnoresLayerOfOnRejection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			consulted = false
-			_, err := ResolveSectionCallLayered(tt.resolve, layerOf, tt.target, nil, "", nil)
+			_, err := ResolveSectionCallLayered(tt.resolve, layerOf, tt.target, nil, "", nil, nil)
 			if err == nil {
 				t.Fatalf("ResolveSectionCallLayered() error = nil, want %q", tt.want)
 			}
@@ -549,7 +551,7 @@ func TestResolveSectionCallLayeredMatchesNonLayered(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 			}
-			layered, err := ResolveSectionCallLayered(resolve, layerOf, "footer", tt.fields, tt.body, nil)
+			layered, err := ResolveSectionCallLayered(resolve, layerOf, "footer", tt.fields, tt.body, nil, nil)
 			if err != nil {
 				t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 			}

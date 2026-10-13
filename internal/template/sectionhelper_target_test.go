@@ -215,7 +215,7 @@ func TestSectionHelperChildItemDescriptor(t *testing.T) {
 		target, accepted := childSectionTarget("footer", "widgets", 0)
 		resolve := resolveSectionCallResolver(target, accepted)
 
-		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil, &ChildRequest{Section: "widgets"})
+		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil, nil, &ChildRequest{Section: "widgets"})
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -242,7 +242,7 @@ func TestSectionHelperChildItemDescriptor(t *testing.T) {
 		resolve := resolveSectionCallResolver(parent, person, company)
 
 		req := &ChildRequest{Section: "card", Fields: map[string]any{"template": "company"}}
-		call, err := ResolveSectionCallLayered(resolve, nil, "cards", nil, "", nil, req)
+		call, err := ResolveSectionCallLayered(resolve, nil, "cards", nil, "", nil, nil, req)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
