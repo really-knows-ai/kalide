@@ -408,6 +408,15 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 		}
 		topLevel := parentIdx < 0
 
+		// The frames still open after superseding are exactly this instance's
+		// enclosing instances, so their resolved template names (root first) are
+		// the containment chain checkNestedDepth counts same-template ancestors
+		// over (bounded-self-nesting). Empty at the slide's top level.
+		enclosing := make([]string, len(stack))
+		for k := range stack {
+			enclosing[k] = stack[k].template
+		}
+
 		var d sectionDecl
 		if topLevel {
 			// Top-level: the slide template declares this section.
@@ -512,6 +521,15 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 		if section.Template == NotesSection {
 			return nil, nil, &ParseError{File: file, Line: positionOr(section.TemplateLine, headingLine), Path: path,
 				Msg: fmt.Sprintf("%q is reserved and cannot be used as a section template", NotesSection)}
+		}
+
+		// The instance's template is resolved, so its self-nesting depth along
+		// the enclosing chain can be bounded by the declaration's max_depth
+		// (bounded-self-nesting): every instance the parser builds — top-level
+		// and nested — is checked here, and its resolved template name joins the
+		// chain the frame opens below for the instances nested inside it.
+		if perr := checkNestedDepth(file, headingLine, path, enclosing, section.Template, name, d); perr != nil {
+			return nil, nil, perr
 		}
 
 		// Attach the instance to the tree and open its frame, so its body can
@@ -760,8 +778,8 @@ func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name strin
 //
 // internal/slide cannot import internal/template, so the count is taken here by
 // resolved template name; it is the same rule as template.InstanceDepth, and an
-// integration test pins the two in agreement (task 11 threads chain into it
-// from parseSections; this function is not yet wired).
+// integration test pins the two in agreement. parseSections threads the chain
+// and the instance's resolved template into it for every instance it builds.
 func checkNestedDepth(file string, line int, path string, chain []string, resolved, name string, decl sectionDecl) *ParseError {
 	if !decl.ok || decl.maxDepth <= 0 || resolved == "" {
 		return nil
