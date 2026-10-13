@@ -426,3 +426,227 @@ func tableListMarkerAt(s string) int {
 	}
 	return digits + 1
 }
+
+// ParseTables scans a body's Markdown source for GFM tables and returns the
+// tables it finds together with one positioned Issue per count or limit breach
+// (gfm-tables, table-syntax, table-limits).
+//
+// body is the body's Markdown source and startLine is the 1-based line in the
+// containing file at which body begins, so every returned Table, TableCell and
+// Issue is positioned file-absolutely — the same offset Options.StartLine
+// carries into Check. A startLine below 1 is treated as 1.
+//
+// The scan is line-based. It skips fenced code blocks (``` or ~~~, ended by a
+// run of the same character at least as long as the opener) and indented code
+// (a line indented four spaces or a tab), so a table-shaped pair of lines
+// inside a code block is never read as a table. Outside code, a table is
+// detected wherever a non-blank line is immediately followed by a delimiter row
+// (isTableDelimiterRow): the non-blank line is the header row and the next line
+// the delimiter row. parseTable then parses the table in full — header,
+// delimiter and body rows — ending it at the first blank line or other block's
+// start (table-syntax), and the scan resumes past it. A line that merely looks
+// like a header but has no delimiter row after it is left to the ordinary
+// Markdown walk.
+//
+// The effective limits are carried by opts (table-limits). Zero imposes no
+// bound: a Min* field of 0 is no minimum and a Max* field of 0 is unbounded.
+// Each table is checked against MinColumns/MaxColumns (its header included) and
+// MinRows/MaxRows (its body rows, the header excluded), and the whole body
+// against MinTables/MaxTables. Every breach is one Issue of KindTable: a
+// per-table breach sits at the table's own header line and a whole-body breach
+// at the first table's line, or at the body's first line when the body carries
+// no table. Each message names the limit and the actual count, in the form
+// `max_columns: table has 12 columns, maximum is 10` (table-errors).
+//
+// The returned Issues are ordered: the strict-column-count Issues parseTable
+// reports for each table in source order, then the per-table limit Issues in
+// table order, then the whole-body Issues. ParseTables sets no Issue File: the
+// caller supplies the body's own identity.
+func ParseTables(body string, startLine int, opts TableOptions) ([]Table, []Issue) {
+	if startLine < 1 {
+		startLine = 1
+	}
+	lines := strings.Split(body, "\n")
+
+	var tables []Table
+	var issues []Issue
+
+	for i := 0; i < len(lines); {
+		if marker, count, ok := tableFenceOpen(lines[i]); ok {
+			i = tableSkipFence(lines, i, marker, count)
+			continue
+		}
+		if tableIndentedCode(lines[i]) {
+			i++
+			continue
+		}
+		if strings.TrimSpace(lines[i]) != "" &&
+			i+1 < len(lines) && isTableDelimiterRow(lines[i+1]) {
+			table, tableIssues, next := parseTable(lines, i, startLine)
+			tables = append(tables, table)
+			issues = append(issues, tableIssues...)
+			i = next
+			continue
+		}
+		i++
+	}
+
+	for _, table := range tables {
+		issues = append(issues, tableLimitIssues(table, opts)...)
+	}
+	issues = append(issues, bodyTableLimitIssues(tables, startLine, opts)...)
+
+	return tables, issues
+}
+
+// tableLimitIssues checks one parsed table against the per-table column and row
+// limits and returns one Issue per breach, positioned at the table's header
+// line (table-limits). Columns count the header row's cells; rows count body
+// rows only, the header excluded. A Min* value of 0 is no minimum and a Max*
+// value of 0 is unbounded, so a zero option yields no Issue.
+func tableLimitIssues(table Table, opts TableOptions) []Issue {
+	columns := len(table.Headers)
+	rows := len(table.Rows)
+
+	var issues []Issue
+	if opts.MaxColumns > 0 && columns > opts.MaxColumns {
+		issues = append(issues, tableLimitIssue(table.Line,
+			fmt.Sprintf("max_columns: table has %d columns, maximum is %d", columns, opts.MaxColumns),
+			fmt.Sprintf("use at most %d columns", opts.MaxColumns)))
+	}
+	if opts.MinColumns > 0 && columns < opts.MinColumns {
+		issues = append(issues, tableLimitIssue(table.Line,
+			fmt.Sprintf("min_columns: table has %d columns, minimum is %d", columns, opts.MinColumns),
+			fmt.Sprintf("use at least %d columns", opts.MinColumns)))
+	}
+	if opts.MaxRows > 0 && rows > opts.MaxRows {
+		issues = append(issues, tableLimitIssue(table.Line,
+			fmt.Sprintf("max_rows: table has %d rows, maximum is %d", rows, opts.MaxRows),
+			fmt.Sprintf("use at most %d body rows", opts.MaxRows)))
+	}
+	if opts.MinRows > 0 && rows < opts.MinRows {
+		issues = append(issues, tableLimitIssue(table.Line,
+			fmt.Sprintf("min_rows: table has %d rows, minimum is %d", rows, opts.MinRows),
+			fmt.Sprintf("use at least %d body rows", opts.MinRows)))
+	}
+	return issues
+}
+
+// bodyTableLimitIssues checks the whole body's table count against MinTables and
+// MaxTables and returns one Issue per breach (table-limits). The Issue sits at
+// the first table's line, or at the body's first line (startLine) when the body
+// carries no table. A MinTables value of 0 is no minimum and a MaxTables value
+// of 0 is unbounded, so a zero option yields no Issue.
+func bodyTableLimitIssues(tables []Table, startLine int, opts TableOptions) []Issue {
+	count := len(tables)
+	line := startLine
+	if count > 0 {
+		line = tables[0].Line
+	}
+
+	var issues []Issue
+	if opts.MaxTables > 0 && count > opts.MaxTables {
+		issues = append(issues, tableLimitIssue(line,
+			fmt.Sprintf("max_tables: body has %d tables, maximum is %d", count, opts.MaxTables),
+			fmt.Sprintf("use at most %d tables", opts.MaxTables)))
+	}
+	if opts.MinTables > 0 && count < opts.MinTables {
+		issues = append(issues, tableLimitIssue(line,
+			fmt.Sprintf("min_tables: body has %d tables, minimum is %d", count, opts.MinTables),
+			fmt.Sprintf("use at least %d tables", opts.MinTables)))
+	}
+	return issues
+}
+
+// tableLimitIssue builds a KindTable limit Issue: the message names the limit
+// and the actual count, and the guidance is the fix (table-errors).
+func tableLimitIssue(line int, message, guidance string) Issue {
+	return Issue{
+		Line:     line,
+		Kind:     KindTable,
+		Message:  message,
+		Guidance: guidance,
+	}
+}
+
+// tableFenceOpen reports whether line opens a fenced code block and, if so, the
+// fence character (` or ~) and its run length. A fence is indented by at most
+// three spaces; four or more spaces is indented code, not a fence. A backtick
+// fence's info string may not contain a backtick, matching CommonMark.
+func tableFenceOpen(line string) (marker byte, count int, ok bool) {
+	i := 0
+	for i < len(line) && i < 4 && line[i] == ' ' {
+		i++
+	}
+	if i >= 4 {
+		return 0, 0, false
+	}
+	rest := line[i:]
+	if len(rest) < 3 {
+		return 0, 0, false
+	}
+	c := rest[0]
+	if c != '`' && c != '~' {
+		return 0, 0, false
+	}
+	for count < len(rest) && rest[count] == c {
+		count++
+	}
+	if count < 3 {
+		return 0, 0, false
+	}
+	if c == '`' && strings.IndexByte(rest[count:], '`') >= 0 {
+		return 0, 0, false
+	}
+	return c, count, true
+}
+
+// tableFenceClose reports whether line closes the fence opened with marker and
+// count: the same character repeated at least count times, indented by at most
+// three spaces and followed only by spaces or tabs.
+func tableFenceClose(line string, marker byte, count int) bool {
+	i := 0
+	for i < len(line) && i < 4 && line[i] == ' ' {
+		i++
+	}
+	if i >= 4 {
+		return false
+	}
+	rest := line[i:]
+	run := 0
+	for run < len(rest) && rest[run] == marker {
+		run++
+	}
+	if run < count {
+		return false
+	}
+	for k := run; k < len(rest); k++ {
+		if rest[k] != ' ' && rest[k] != '\t' && rest[k] != '\r' {
+			return false
+		}
+	}
+	return true
+}
+
+// tableSkipFence returns the index of the first line after the fenced code
+// block opened at lines[start], or len(lines) when the fence is never closed.
+func tableSkipFence(lines []string, start int, marker byte, count int) int {
+	for i := start + 1; i < len(lines); i++ {
+		if tableFenceClose(lines[i], marker, count) {
+			return i + 1
+		}
+	}
+	return len(lines)
+}
+
+// tableIndentedCode reports whether line is indented code — indented four
+// spaces or starting with a tab — and so cannot be a table's header row.
+func tableIndentedCode(line string) bool {
+	if line == "" {
+		return false
+	}
+	if line[0] == '\t' {
+		return true
+	}
+	return strings.HasPrefix(line, "    ")
+}
