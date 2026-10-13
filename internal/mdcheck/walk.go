@@ -120,16 +120,129 @@ type walkContext struct {
 	// own, so its position is recovered by scanning source lines in document
 	// order (visit is depth-first in document order).
 	themeCursor int
+
+	// tables is the effective GFM-table limits the enclosing template
+	// declares for this body, or nil when the template does not opt in
+	// (table-opt-in, table-limits). A non-nil tables turns on the whole-body
+	// table pass (checkTables): the body's GFM tables are parsed with
+	// ParseTables and every count, limit and cell-attribute violation is one
+	// positioned KindTable Issue. A nil tables leaves a body's table to the
+	// opt-out refusal in checkDisallowed (markdown-disallowed-errors).
+	tables *TableOptions
+
+	// cellAttributes is the enclosing template's declared cell attributes
+	// (table-cell-attributes). The table pass consults it — only when tables
+	// is non-nil — to resolve each cell's `{...}` group and report an
+	// unknown attribute or a value of the wrong type.
+	cellAttributes []CellAttributeSpec
 }
 
 // walk walks the parsed document's children and returns every issue found, in
 // document order. The Document node itself is a wrapper and is never reported.
+//
+// When the enclosing template opts in to GFM tables, the whole-body table pass
+// (checkTables) runs alongside the AST walk and its issues are merged into the
+// result in source order.
 func walk(ctx *walkContext, doc ast.Node) []Issue {
 	var issues []Issue
 	for child := doc.FirstChild(); child != nil; child = child.NextSibling() {
 		issues = append(issues, visit(ctx, child)...)
 	}
+	return mergeTableIssues(issues, ctx.checkTables())
+}
+
+// checkTables is the whole-body GFM-table pass (gfm-tables, table-opt-in,
+// table-syntax, table-limits, table-cell-attributes). It runs only for an
+// opted-in body: when ctx.tables is nil the template does not accept tables, so
+// the pass reports nothing and a table in the body is left to the opt-out
+// refusal in checkDisallowed (markdown-disallowed-errors). It also reports
+// nothing outside BodyMode, where there is no body to scan.
+//
+// When the template opts in, the body's whole source is scanned with
+// ParseTables, which yields each parsed table and one Issue per strict-column-
+// count or limit breach; each such Issue is tagged with the body's file. Every
+// parsed table's cells — header cells and body cells alike — are then decoded
+// against the template's declared cell attributes and each attribute violation
+// is one further KindTable Issue positioned at the offending cell. Every issue
+// is KindTable, positioned file-absolutely, and returned in ParseTables' order
+// (the strict-count Issues in source order, then the limit Issues, then the
+// cell-attribute Issues appended table by table).
+func (ctx *walkContext) checkTables() []Issue {
+	if ctx.mode != BodyMode || ctx.tables == nil {
+		return nil
+	}
+	tables, issues := ParseTables(string(ctx.source), ctx.startLine, *ctx.tables)
+	for i := range issues {
+		issues[i].File = ctx.file
+	}
+	for _, table := range tables {
+		issues = append(issues, ctx.checkTableCells(table)...)
+	}
 	return issues
+}
+
+// checkTableCells decodes every cell of one parsed table against the enclosing
+// template's declared cell attributes and returns one KindTable Issue for each
+// attribute violation, positioned at the offending cell's 1-based line and
+// column (table-cell-attributes). A header cell is decoded exactly as a body
+// cell, as decodeCellAttributes does. A cell that decodes cleanly yields no
+// Issue.
+func (ctx *walkContext) checkTableCells(table Table) []Issue {
+	var issues []Issue
+	for _, cell := range table.Headers {
+		if issue, bad := ctx.checkTableCell(cell); bad {
+			issues = append(issues, issue)
+		}
+	}
+	for _, row := range table.Rows {
+		for _, cell := range row {
+			if issue, bad := ctx.checkTableCell(cell); bad {
+				issues = append(issues, issue)
+			}
+		}
+	}
+	return issues
+}
+
+// checkTableCell decodes one parsed table cell against the template's declared
+// cell attributes and, when the cell's `{...}` group is invalid, returns a
+// KindTable Issue positioned at the cell. The decoder's error — an unknown
+// attribute (carrying its closest-match suggestion) or a value that is not of
+// the attribute's declared type — is the issue's message. The reserved `{br}`
+// line break is never an attribute and never an error.
+func (ctx *walkContext) checkTableCell(cell TableCell) (Issue, bool) {
+	if _, err := decodeCellAttributes(cell, ctx.cellAttributes); err != nil {
+		return Issue{
+			File:     ctx.file,
+			Line:     cell.Line,
+			Col:      cell.Column,
+			Kind:     KindTable,
+			Message:  err.Error(),
+			Guidance: "use one of the template's declared cell attributes, or remove the {…} group",
+		}, true
+	}
+	return Issue{}, false
+}
+
+// mergeTableIssues merges the AST walk's document-ordered issues with the table
+// pass's issues into one list in source order. The merge is a stable sort on the
+// issue position (line then column), so issues at the same position keep their
+// relative order — the AST walk's before the table pass's — and the AST walk's
+// own order is returned untouched when the table pass found nothing.
+func mergeTableIssues(astIssues, tableIssues []Issue) []Issue {
+	if len(tableIssues) == 0 {
+		return astIssues
+	}
+	merged := make([]Issue, 0, len(astIssues)+len(tableIssues))
+	merged = append(merged, astIssues...)
+	merged = append(merged, tableIssues...)
+	sort.SliceStable(merged, func(i, j int) bool {
+		if merged[i].Line != merged[j].Line {
+			return merged[i].Line < merged[j].Line
+		}
+		return merged[i].Col < merged[j].Col
+	})
+	return merged
 }
 
 // visit checks one node and, when it is accepted, its children.
