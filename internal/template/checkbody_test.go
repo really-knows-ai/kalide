@@ -27,6 +27,33 @@ func weBody(rule string, value any, what, fix string) *wantErr {
 	return &w
 }
 
+// tableBodyRule is the non-nil `body.tables` option several TestCheckBody
+// cases carry on a BodyRule to pin that CheckBody threads the option through
+// unchanged (phase-01.task-14). It sets limits and declared cell attributes
+// (both a boolean and an enum) so a case exercises the option's full payload,
+// and returns a fresh pointer per call so no case shares state.
+func tableBodyRule() *TableRule {
+	return &TableRule{
+		MinTables:  1,
+		MaxTables:  2,
+		MinColumns: 1,
+		MaxColumns: 3,
+		MinRows:    1,
+		MaxRows:    5,
+		CellAttributes: []CellAttribute{
+			{Name: "bold", Kind: FieldBoolean},
+			{Name: "highlight", Kind: FieldEnum, Variants: []string{"red", "green"}},
+		},
+	}
+}
+
+// tableBody is a GFM-table-like Markdown body: three pipe-delimited lines that
+// goldmark's CommonMark core (no table extension) parses as one plain
+// paragraph. Phase 1 carries the tables option but adds no table validation to
+// CheckBody, so with Mode optional and no size or heading limit this body must
+// pass whether or not the rule opts in.
+const tableBody = "| Name | Value |\n| --- | --- |\n| alpha | 1 |"
+
 // TestCheckBody is the table-driven suite for template.CheckBody. Each case
 // asserts the first violation's rule, path, actual value, author-facing
 // what/fix text and reported line, or that a valid body yields the zero
@@ -238,6 +265,61 @@ func TestCheckBody(t *testing.T) {
 			body: "# Reserved top-level",
 		},
 
+		// --- tables option -------------------------------------------------
+		// Phase 1 only carries `body.tables` on the BodyRule: CheckBody must
+		// behave identically with or without the option, performing no table
+		// refusal (a table-like body is not judged here), and every
+		// fixed-order check (mode, size limits, subheadings) must still fire
+		// exactly as before when the option is present.
+		{
+			name: "tables: a table-like body passes without the option",
+			rule: BodyRule{Mode: BodyOptional},
+			body: tableBody,
+		},
+		{
+			name: "tables: a table-like body passes with the option carried",
+			rule: BodyRule{Mode: BodyOptional, Tables: tableBodyRule()},
+			body: tableBody,
+		},
+		{
+			name: "tables: the option does not alter required",
+			rule: BodyRule{Mode: BodyRequired, Tables: tableBodyRule()},
+			body: "",
+			want: weBody("required", nil, requiredWhat, requiredFix),
+		},
+		{
+			name: "tables: the option does not alter disallowed",
+			rule: BodyRule{Mode: BodyDisallowed, Tables: tableBodyRule()},
+			body: "hello world",
+			want: weBody("disallowed", "hello world",
+				"disallowed: the body is not allowed, but the body has 2 word(s)",
+				disallowedFix),
+		},
+		{
+			name: "tables: the option does not alter max_words",
+			rule: BodyRule{Mode: BodyOptional, MaxWords: 2, Tables: tableBodyRule()},
+			body: "one two three",
+			want: weBody("max_words", "one two three",
+				"max_words: the body is 3 words, maximum is 2",
+				"shorten the body to at most 2 words"),
+		},
+		{
+			name: "order: with tables, max_words still beats subheadings",
+			rule: BodyRule{Mode: BodyOptional, MaxWords: 1, Tables: tableBodyRule()},
+			body: "## Details here",
+			want: weBody("max_words", "## Details here",
+				"max_words: the body is 2 words, maximum is 1",
+				"shorten the body to at most 1 words"),
+		},
+		{
+			name: "tables: the option does not alter subheadings",
+			rule: BodyRule{Mode: BodyOptional, Tables: tableBodyRule()},
+			body: "## Details",
+			want: weBody("subheadings", "## Details",
+				`subheadings: "## Details" is a subheading, but subheadings are not allowed`,
+				subheadFix),
+		},
+
 		// --- WithBodyLine -------------------------------------------------
 		{
 			name:     "line: missing required body carries the supplied line",
@@ -382,6 +464,21 @@ func TestCheckBody(t *testing.T) {
 				name:     "subheadings true allows a heading",
 				manifest: "body:\n  mode: optional\n  subheadings: true\n",
 				body:     "## Details",
+			},
+			{
+				// A manifest-declared `body.tables` option reaches CheckBody
+				// through BodyRule.Tables without altering the body outcome:
+				// phase 1 performs no table refusal here.
+				name:     "tables declared: a table-like body passes",
+				manifest: "body:\n  mode: optional\n  tables:\n    max_tables: 2\n    cell_attributes:\n      - name: bold\n        type: boolean\n",
+				body:     tableBody,
+			},
+			{
+				name:     "tables declared: max_words still applies",
+				manifest: "body:\n  mode: optional\n  max_words: 2\n  tables:\n    max_tables: 2\n",
+				body:     "one two three",
+				want: weBody("max_words", "one two three",
+					"max_words: the body is 3 words, maximum is 2", "shorten the body to at most 2 words"),
 			},
 		}
 		for _, tc := range manifestCases {
