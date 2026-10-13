@@ -374,6 +374,14 @@ type Template struct {
 	// inside one. Exactly one usage applies.
 	Usage Usage
 
+	// Internal marks a template hidden from the default listing: a template
+	// whose manifest declares `internal: true` is omitted from
+	// `kalide templates` unless --all is passed (internal-templates). An
+	// internal template stays resolvable as a `section`-helper target and as
+	// a `section_template` field type, but is refused as a Markdown
+	// `template:` target.
+	Internal bool
+
 	// Fields is the template's declared field schema, in declaration order.
 	Fields []Field
 
