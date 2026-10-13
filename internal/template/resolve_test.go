@@ -481,7 +481,12 @@ func TestLoadDeckLibrary(t *testing.T) {
 //   - a local template calling an external section passes the merged build —
 //     the local layer's per-layer cross-template checks are deferred to the
 //     merged library — while a call to an unresolved section name still fails
-//     path-qualified to the local template.
+//     path-qualified to the local template;
+//   - each layer's named definitions (groups:/field_sets:/types:) are scoped to
+//     that layer: an external-layer template resolves its own layer's
+//     type:/include:/@group names, while a name defined only in the other
+//     layer is a templates error naming the unresolvable reference, so
+//     definitions do not leak across layers (named-library-definitions).
 func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 	t.Run("external and local layers with disjoint names merge", func(t *testing.T) {
 		deckRoot := t.TempDir()
@@ -634,6 +639,165 @@ func TestLoadDeckLibraryMergedLayers(t *testing.T) {
 		}
 		if !strings.Contains(libErr.Message, "nope") {
 			t.Errorf("Message = %q, want it to name the unresolved section %q", libErr.Message, "nope")
+		}
+	})
+
+	// named-library-definitions (plan.phase-04.task-20): each layer's
+	// library.yaml may declare its own named definitions (groups:,
+	// field_sets: and types:). A template resolves its `type:`, `include:`
+	// and `@group` references against its OWN owning layer's definitions —
+	// here the external layer's — and a name defined only in the other layer
+	// is an unresolvable reference (a templates error naming it), so
+	// definitions never leak across layers.
+	t.Run("an external-layer template resolves its own layer's named definitions", func(t *testing.T) {
+		deckRoot := t.TempDir()
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+		writeLibraryWithTemplates(t, localRoot, "local", nil, nil)
+
+		external := t.TempDir()
+		writeFile(t, filepath.Join(external, LibraryFile), []byte(`name: external
+format: 1
+groups:
+  callouts:
+    - ext-note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants:
+      - red
+      - green
+      - blue
+`))
+		extFiles := mergeIntFiles(
+			templateIntFiles(SlidesDir, "ext-slide",
+				"name: ext-slide\n"+
+					"fields:\n"+
+					"  - include: meta\n"+
+					"  - name: accent\n"+
+					"    type: colour\n"+
+					"sections:\n"+
+					"  - name: asides\n"+
+					"    accepted:\n"+
+					"      - \"@callouts\"\n",
+				`<section class="ext"><span class="ext-subtitle">{{ .subtitle }}</span><span class="ext-accent">{{ .accent }}</span></section>`,
+				"---\ntemplate: ext-slide\nsubtitle: Quarterly\nweight: 3\naccent: red\n---\nBody.\n"),
+			templateIntFiles(SectionsDir, "ext-note",
+				"name: ext-note\nfields:\n  - name: text\n    type: text\n",
+				`<aside class="note">{{ .text }}</aside>`,
+				"A note.\n"),
+		)
+		for rel, data := range extFiles {
+			writeFile(t, filepath.Join(external, filepath.FromSlash(rel)), []byte(data))
+		}
+
+		lib, err := LoadDeckLibrary(deckRoot, external)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary: %v (the external template's own definitions must resolve)", err)
+		}
+		lt, kind, ok := lib.TemplateByName("ext-slide")
+		if !ok || kind != KindSlide {
+			t.Fatalf("TemplateByName(ext-slide) = (%v, %q, %v), want (non-nil, %q, true)", lt, kind, ok, KindSlide)
+		}
+		if lt.Definition == nil {
+			t.Fatal("ext-slide.Definition = nil, want the parsed definition")
+		}
+		def := lt.Definition
+
+		// `- include: meta` expanded the external layer's field set in place.
+		if len(def.Fields) != 3 ||
+			def.Fields[0].Name != "subtitle" || def.Fields[0].Type != FieldText ||
+			def.Fields[1].Name != "weight" || def.Fields[1].Type != FieldNumber {
+			t.Fatalf("ext-slide.Fields = %+v, want subtitle:text, weight:number (from include: meta) then accent", def.Fields)
+		}
+		// `type: colour` expanded the external layer's named enum under the
+		// referencing name, keeping the named variants.
+		if def.Fields[2].Name != "accent" || def.Fields[2].Type != FieldEnum {
+			t.Errorf("ext-slide.Fields[2] = %+v, want the named type colour expanded as accent:enum", def.Fields[2])
+		}
+		assertStringSlice(t, "accent.Variants", def.Fields[2].Variants, []string{"red", "green", "blue"})
+		// `@callouts` expanded the external layer's named group in place.
+		if len(def.Sections) != 1 {
+			t.Fatalf("ext-slide.Sections = %+v, want one asides section", def.Sections)
+		}
+		assertStringSlice(t, "asides.Accepted", def.Sections[0].Accepted, []string{"ext-note"})
+
+		// The definitions rode the EXTERNAL layer (Layers[0]), not the primary
+		// local one, so the external template resolved them in its own layer.
+		if len(lib.Layers) != 2 {
+			t.Fatalf("len(Layers) = %d, want 2", len(lib.Layers))
+		}
+		if lib.Layers[0].RootPath != external {
+			t.Errorf("Layers[0].RootPath = %q, want the external layer %q", lib.Layers[0].RootPath, external)
+		}
+		if lib.Layers[0].Definitions == nil {
+			t.Error("Layers[0] (external).Definitions = nil, want the external layer's parsed definitions")
+		}
+	})
+
+	t.Run("a definition from the other layer is an unresolvable reference", func(t *testing.T) {
+		// The LOCAL layer declares the definition; an EXTERNAL template
+		// references it. Because a template resolves only in its own layer,
+		// the reference is unknown at the external layer's own load (it loads
+		// fully, before the merge) and the load fails naming it — a merged
+		// definitions set would instead resolve it.
+		cases := []struct {
+			name     string
+			localDef string
+			manifest string
+			wantRef  string
+		}{
+			{
+				name:     "named type",
+				localDef: "types:\n  localshade:\n    type: text\n",
+				manifest: "name: ext-slide\nfields:\n  - name: accent\n    type: localshade\n",
+				wantRef:  `unknown type "localshade"`,
+			},
+			{
+				name:     "field set",
+				localDef: "field_sets:\n  localmeta:\n    - name: subtitle\n      type: text\n",
+				manifest: "name: ext-slide\nfields:\n  - include: localmeta\n",
+				wantRef:  `unknown field set "localmeta"`,
+			},
+			{
+				name:     "group",
+				localDef: "groups:\n  localcallouts:\n    - ext-note\n",
+				manifest: "name: ext-slide\nsections:\n  - name: asides\n    accepted:\n      - \"@localcallouts\"\n",
+				wantRef:  `unknown group "localcallouts"`,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				deckRoot := t.TempDir()
+				localRoot := filepath.Join(deckRoot, TemplatesDir)
+				writeFile(t, filepath.Join(localRoot, LibraryFile),
+					[]byte("name: local\nformat: 1\n"+tc.localDef))
+				external := t.TempDir()
+				writeFile(t, filepath.Join(external, LibraryFile), []byte("name: external\nformat: 1\n"))
+				writeLibraryTemplate(t, external, SlidesDir, "ext-slide", `<section class="ext"></section>`)
+				writeFile(t, filepath.Join(external, SlidesDir, "ext-slide", ManifestFile), []byte(tc.manifest))
+
+				lib, err := LoadDeckLibrary(deckRoot, external)
+				if err == nil {
+					t.Fatalf("LoadDeckLibrary() = %+v, nil; want the external template's reference to a name only the other layer defines to fail", lib)
+				}
+				if lib != nil {
+					t.Fatalf("LoadDeckLibrary() Library = %+v, want nil with the error", lib)
+				}
+				libErr := asLibraryError(t, err)
+				wantPath := filepath.Join(external, SlidesDir, "ext-slide", ManifestFile)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want the external template's manifest %q", libErr.Path, wantPath)
+				}
+				if !strings.Contains(libErr.Message, tc.wantRef) {
+					t.Errorf("Message = %q, want it to name the unresolvable reference %q", libErr.Message, tc.wantRef)
+				}
+			})
 		}
 	})
 }
