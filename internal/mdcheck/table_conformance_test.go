@@ -95,7 +95,7 @@ func TestGFMTableExamples(t *testing.T) {
 				},
 				Line: 1,
 			}},
-			issues: []Issue{tcount(4, 1, "rows[2]: 1 cells, header has 2")},
+			issues: []Issue{tcount(4, 1, "rows[1]: 1 cells, header has 2")},
 		},
 		{
 			// GFM spec example 202: the block quote starts another block, so
@@ -128,7 +128,7 @@ func TestGFMTableExamples(t *testing.T) {
 			}},
 			issues: []Issue{
 				tcount(2, 1, "header has 2 cells, delimiter row has 1"),
-				tcount(3, 1, "rows[1]: 1 cells, header has 2"),
+				tcount(3, 1, "rows[0]: 1 cells, header has 2"),
 			},
 		},
 		{
@@ -148,8 +148,8 @@ func TestGFMTableExamples(t *testing.T) {
 				Line: 1,
 			}},
 			issues: []Issue{
-				tcount(3, 1, "rows[1]: 1 cells, header has 2"),
-				tcount(4, 1, "rows[2]: 3 cells, header has 2"),
+				tcount(3, 1, "rows[0]: 1 cells, header has 2"),
+				tcount(4, 1, "rows[1]: 3 cells, header has 2"),
 			},
 		},
 		{
