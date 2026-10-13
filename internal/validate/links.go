@@ -97,8 +97,8 @@ func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, label
 		return errs[0], true
 	}
 
-	if verr, invalid := checkSectionLinks(file, ps.Sections, reg, labels, candidates); invalid {
-		return verr, true
+	if errs := checkSectionLinks(file, ps.Sections, reg, labels, candidates); len(errs) > 0 {
+		return errs[0], true
 	}
 
 	if ps.Notes != nil {
@@ -111,25 +111,22 @@ func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, label
 
 // checkSectionLinks checks the links of each section instance in source order —
 // its frontmatter fields then its body — recursing into nested instances
-// (slide-sections). It returns the first error and whether one was found.
-func checkSectionLinks(file string, sections []slide.Section, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// (slide-sections). It returns every link error of every instance, each
+// instance's fields then its body then its nested children, rather than only
+// the first.
+func checkSectionLinks(file string, sections []slide.Section, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
+	var errs []ValidationError
 	for i := range sections {
 		sec := &sections[i]
 		var secTmpl *template.Template
 		if sec.Template != "" {
 			secTmpl, _ = reg.Lookup(sec.Template)
 		}
-		if errs := checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates); len(errs) > 0 {
-			return errs[0], true
-		}
-		if errs := checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates); len(errs) > 0 {
-			return errs[0], true
-		}
-		if verr, invalid := checkSectionLinks(file, sec.Children, reg, labels, candidates); invalid {
-			return verr, true
-		}
+		errs = append(errs, checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates)...)
+		errs = append(errs, checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates)...)
+		errs = append(errs, checkSectionLinks(file, sec.Children, reg, labels, candidates)...)
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkFieldLinks resolves the `#label` targets CheckValues collected from one
