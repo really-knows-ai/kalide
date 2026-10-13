@@ -689,6 +689,140 @@ func entryNames(entries []os.DirEntry) []string {
 	return out
 }
 
+// TestCLITemplates is the plan.phase-10 task-15 end-to-end test: `kalide
+// templates` lists the project's MERGED, layered library (both the local
+// templates/ layer's `main`/`note` and the external ../shared-lib layer's
+// `extcard`) with each template's name, usage and description, hiding the
+// `internal: true` template by default and including it with `--all`; and
+// `kalide templates <name>` documents one template's fields/sections/body/
+// example, including a list-of-record field's recursively nested fields (with a
+// nullable one) and an enum field's effective variants.
+func TestCLITemplates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	writeCLIDeckFixture(t, h)
+
+	// --- The default listing: the merged library, internal template hidden. ---
+	stdout, stderr, code := h.Run("templates")
+	if code != 0 {
+		t.Fatalf("kalide templates exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide templates stderr = %q, want empty", stderr)
+	}
+	for _, want := range []string{"Templates:", "main", "note", "extcard"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("kalide templates output does not carry %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "hidden") {
+		t.Errorf("kalide templates listed the internal template by default:\n%s", stdout)
+	}
+	// The merged listing carries each template's usage and description; the
+	// external layer's extcard proves both layers are listed.
+	if row := cliTemplateRow(stdout, "main"); !strings.Contains(row, "slide") || !strings.Contains(row, "the main fixture slide") {
+		t.Errorf("kalide templates row for main = %q, want its usage and description", row)
+	}
+	if row := cliTemplateRow(stdout, "extcard"); !strings.Contains(row, "section") || !strings.Contains(row, "an external card section") {
+		t.Errorf("kalide templates row for the external layer's extcard = %q, want its usage and description", row)
+	}
+
+	// --- --all includes the internal template. ---
+	all, stderr, code := h.Run("templates", "--all")
+	if code != 0 {
+		t.Fatalf("kalide templates --all exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide templates --all stderr = %q, want empty", stderr)
+	}
+	hiddenRow := cliTemplateRow(all, "hidden")
+	if hiddenRow == "" {
+		t.Fatalf("kalide templates --all did not list the internal template:\n%s", all)
+	}
+	if !strings.Contains(hiddenRow, "slide") || !strings.Contains(hiddenRow, "an internal helper slide") {
+		t.Errorf("kalide templates --all row for the internal template = %q, want its usage and description", hiddenRow)
+	}
+	for _, want := range []string{"main", "extcard"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("kalide templates --all dropped the public template %q:\n%s", want, all)
+		}
+	}
+
+	// --- The named form still resolves the internal template by name. ---
+	hidden, stderr, code := h.Run("templates", "hidden")
+	if code != 0 {
+		t.Fatalf("kalide templates hidden exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide templates hidden stderr = %q, want empty", stderr)
+	}
+	if !strings.Contains(hidden, "hidden (slide)") {
+		t.Errorf("kalide templates hidden does not document the internal template:\n%s", hidden)
+	}
+
+	// --- The named form documents fields, sections, body and example. ---
+	detail, stderr, code := h.Run("templates", "main")
+	if code != 0 {
+		t.Fatalf("kalide templates main exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide templates main stderr = %q, want empty", stderr)
+	}
+	for _, want := range []string{
+		"main (slide)",
+		"the main fixture slide",
+		"Fields:",
+		"  heading (type: text; required)",
+		// The list-of-record field and its recursively nested fields, the
+		// nullable one included.
+		"  authors (type: list; optional)",
+		"    name (type: text; required)",
+		"    note (type: text; optional; nullable)",
+		"    handles (type: list; optional)",
+		"      handle (type: text; optional)",
+		// The enum field's effective variants.
+		"  status (type: enum; optional)",
+		"    one of draft, published",
+		"Sections:",
+		"  note (declares note; repeats ≤ 2)",
+		"Body:",
+		"  mode: optional",
+		"Example:",
+		"template: main",
+		"heading: Example",
+	} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("kalide templates main output is missing %q:\n%s", want, detail)
+		}
+	}
+
+	// --- An unknown name is an author error: exit 1, nothing on stdout. ---
+	stdout, stderr, code = h.Run("templates", "nosuchtemplate")
+	if code != 1 {
+		t.Fatalf("kalide templates nosuchtemplate exit = %d, want 1 (stdout = %q, stderr = %q)", code, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("kalide templates nosuchtemplate stdout = %q, want empty", stdout)
+	}
+	if want := `unknown template "nosuchtemplate"`; !strings.Contains(stderr, want) {
+		t.Errorf("kalide templates nosuchtemplate stderr = %q, want it to carry %q", stderr, want)
+	}
+}
+
+// cliTemplateRow returns the line of `kalide templates` listing output that
+// names the template, or "" when no line does.
+func cliTemplateRow(stdout, name string) string {
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.Contains(line, name) {
+			return line
+		}
+	}
+	return ""
+}
+
 // cliHeadingErrorMessage is the JSON message for the broken slide's missing
 // required `heading` field: validate.checkErrorMessage joins the field's
 // "what is wrong" and "how to fix it" text the way Format renders them.
