@@ -235,6 +235,18 @@ type SectionDecl struct {
 	// Max is the most instances allowed. <= 0 means unbounded, matching the
 	// slide parser's repeat-limit convention.
 	Max int
+
+	// MaxDepth, for a section declaration that accepts its own template
+	// (directly or through a cycle), is the positive-integer bound an
+	// author writes as `max_depth: N` (bounded-self-nesting). It bounds how
+	// many times this declaration's section may recur in one containment
+	// chain: an instance it produces has at most N enclosing instances that
+	// resolve to the same template it does, so its `.item.depth` is at most
+	// N. It belongs to the declaration that carries it; a declaration
+	// without it is unbounded — 0 means no bound. A value that is not a
+	// positive integer is a templates error naming the offending
+	// `template.yaml`.
+	MaxDepth int
 }
 
 // BodyMode says whether a template's implied `body` field is required,
