@@ -337,6 +337,17 @@ type Library struct {
 	// metadata is retained verbatim in Layers.
 	Meta LibraryMeta
 
+	// definitions is the load-time carrier of the named definitions the
+	// loading layer's library.yaml declares (its groups, field sets and
+	// types, parsed by loadLibraryDefinitions). loadLibraryMeta (step 1)
+	// fills it in on the single-layer *Library the loader body builds, and
+	// layerFromLibrary transfers it onto that layer's own
+	// LibraryLayer.Definitions field; a merged Library's per-layer
+	// definitions live on each LibraryLayer, never here, so this is a
+	// carrier and not a merged convenience field. It is nil when the
+	// manifest declares none.
+	definitions *LibraryDefinitions
+
 	// Slides holds the templates loaded from templates/slides, keyed by
 	// name.
 	Slides map[string]*LibraryTemplate

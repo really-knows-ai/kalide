@@ -309,14 +309,15 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string, mode libraryLayerMode) 
 // LibraryLayer it returns.
 func layerFromLibrary(lib *Library) *LibraryLayer {
 	return &LibraryLayer{
-		Root:     lib.Root,
-		RootPath: lib.RootPath,
-		Meta:     lib.Meta,
-		Slides:   lib.Slides,
-		Sections: lib.Sections,
-		Themes:   lib.Themes,
-		HasMedia: lib.HasMedia,
-		Media:    lib.Media,
+		Root:        lib.Root,
+		RootPath:    lib.RootPath,
+		Meta:        lib.Meta,
+		Definitions: lib.definitions,
+		Slides:      lib.Slides,
+		Sections:    lib.Sections,
+		Themes:      lib.Themes,
+		HasMedia:    lib.HasMedia,
+		Media:       lib.Media,
 	}
 }
 
@@ -551,6 +552,16 @@ func LibraryMetaKeys() []string {
 // loadLibraryMeta reads and parses root/library.yaml (step 1): name must
 // match the library naming convention, description is optional, and format
 // is a required integer whose only currently accepted value is 1.
+//
+// It also accepts the optional named-definition sections — groups:,
+// field_sets: and types: (named-library-definitions) — and parses them
+// through loadLibraryDefinitions into lib's load-time definitions carrier.
+// The loader body transfers those onto the loading layer's
+// LibraryLayer.Definitions (layerFromLibrary), so a template resolves its
+// `type:`/`include:`/`@group` names in its own owning layer; they are
+// additive to format 1 and never change LibraryMeta, which stays
+// name/description/format only. A malformed section is a positioned error
+// at its own line; an unknown key is still rejected with a suggestion.
 func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	metaPath := displaypath.Display(root, LibraryFile)
 	data, err := fs.ReadFile(sub, LibraryFile)
@@ -606,6 +617,13 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 			lib.Meta.Format = format
 			haveFormat = true
 
+		case "groups", "field_sets", "types":
+			// The optional named-definition sections are parsed in one pass
+			// by loadLibraryDefinitions below. They are accepted here so the
+			// unknown-key check does not reject them; their shape is
+			// validated by that pass, which reports a malformed section as a
+			// positioned error at the section's own line.
+
 		default:
 			e := libraryErrorf(metaPath, line, "unknown key %q", key.Value)
 			return e.withSuggestion(key.Value, libraryMetaKeys)
@@ -618,6 +636,19 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	if !haveFormat {
 		return libraryErrorf(metaPath, nodeLineOr(mapping, 1), `missing required key "format"`)
 	}
+
+	// The optional named-definition sections (groups:, field_sets:, types:)
+	// are additive to format 1: they never change the `format:` value, and
+	// this never inspects the format key, so a library that declares them
+	// still declares `format: 1`
+	// (domain.constraint.library-manifest-format-stable). The parsed
+	// definitions are carried on lib and transferred to the loading layer's
+	// LibraryLayer.Definitions by layerFromLibrary.
+	defs, err := loadLibraryDefinitions(metaPath, &doc)
+	if err != nil {
+		return err
+	}
+	lib.definitions = defs
 	return nil
 }
 
