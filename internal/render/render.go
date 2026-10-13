@@ -964,7 +964,7 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 	// parent is the calling instance's fields (nil from a slide layout), and
 	// records the target's owning layer (via r.reg.LayerOf) so its layout
 	// executes with that layer's media helper (library-layer-references).
-	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, r.callerFields, children...)
+	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, nil, r.callerFields, children...)
 	if err != nil {
 		return "", fmt.Errorf("section helper %q: %w", name, err)
 	}
