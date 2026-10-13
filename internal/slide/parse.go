@@ -415,8 +415,8 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				return nil, nil, unknownName(file, headingLine, "", "section", name, sortedCopy(cat.SectionNames(slideTemplate)))
 			}
 			topCounts[name]++
-			accepted, minRep, maxRep, _, _ := cat.SectionDecl(slideTemplate, name)
-			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}
+			accepted, minRep, maxRep, maxDepth, _ := cat.SectionDecl(slideTemplate, name)
+			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, maxDepth: maxDepth, ok: true}
 			if d.max > 0 && topCounts[name] > d.max {
 				return nil, nil, parseError(file, headingLine,
 					"section %q: at most %d allowed, found %d", name, d.max, topCounts[name])
@@ -630,8 +630,8 @@ func declsFor(cat Catalogue, tmpl string) map[string]sectionDecl {
 	names := cat.SectionNames(tmpl)
 	out := make(map[string]sectionDecl, len(names))
 	for _, n := range names {
-		a, mn, mx, _, ok := cat.SectionDecl(tmpl, n)
-		out[n] = sectionDecl{accepted: a, min: mn, max: mx, ok: ok}
+		a, mn, mx, md, ok := cat.SectionDecl(tmpl, n)
+		out[n] = sectionDecl{accepted: a, min: mn, max: mx, maxDepth: md, ok: ok}
 	}
 	return out
 }
@@ -712,11 +712,13 @@ func instanceIndexes(path string) []int { return parseChain(path).indexes }
 // instanceIndexes), named for the containmentPath call sites.
 func pathSegments(path string) []int { return parseChain(path).indexes }
 
-// sectionDecl mirrors a Catalogue SectionDecl result.
+// sectionDecl mirrors a Catalogue SectionDecl result, including the
+// declaration's max_depth bound (maxDepth, 0 when unbounded).
 type sectionDecl struct {
 	accepted []string
 	min      int
 	max      int
+	maxDepth int
 	ok       bool
 }
 
