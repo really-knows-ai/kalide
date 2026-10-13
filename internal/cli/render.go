@@ -21,7 +21,9 @@ package cli
 //
 // `--full` (the default) writes a complete standalone page whose reveal.js
 // container holds that slide: the same page shell, head, embedded assets and
-// theme stylesheet the server serves, built through internal/render.RenderDeck.
+// theme stylesheet the server serves, built through
+// internal/render.RenderSlidePage over the whole deck so the embedded
+// `<section>` is byte-identical to the `--fragment` output.
 // `--fragment` writes only the slide's `<section>` markup — the fragment the
 // deck page embeds — through internal/render.RenderSlide. The two flags are
 // mutually exclusive; giving both is a usage error (exit 2). Output is
@@ -135,7 +137,6 @@ func runRender(args []string, stdout, stderr io.Writer) int {
 	// media at the primary served base, exactly as the server's reload pipeline
 	// builds it; internal/render dispatches each layout to its owning layer.
 	funcMap := template.LayoutFuncMap(library.Media, server.MediaPath)
-	total := d.Total()
 
 	if opts.slide != "" {
 		meta, ok := findSlide(d, opts.slide)
@@ -148,7 +149,7 @@ func runRender(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "kalide render: %v\n", err)
 			return 1
 		}
-		html, err := renderOneSlide(cfg, meta, parsed, registry, themeReg, funcMap, total, opts.fragment)
+		html, err := renderOneSlide(cfg, d, meta, parsed, registry, themeReg, funcMap, opts.fragment)
 		if err != nil {
 			fmt.Fprintf(stderr, "kalide render: %v\n", err)
 			return 1
@@ -168,7 +169,7 @@ func runRender(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "kalide render: %v\n", err)
 			return 1
 		}
-		html, err := renderOneSlide(cfg, meta, parsed, registry, themeReg, funcMap, total, opts.fragment)
+		html, err := renderOneSlide(cfg, d, meta, parsed, registry, themeReg, funcMap, opts.fragment)
 		if err != nil {
 			fmt.Fprintf(stderr, "kalide render: %v\n", err)
 			return 1
@@ -227,21 +228,24 @@ func parseRenderArgs(args []string) (renderOptions, error) {
 }
 
 // renderOneSlide renders one slide either as its standalone `--full` page or as
-// its `--fragment` `<section>` markup. total is the whole deck's slide count.
-func renderOneSlide(cfg *deck.Config, meta deck.Slide, parsed *slide.Slide, reg *template.Registry, themeReg *theme.Registry, funcMap htmltmpl.FuncMap, total int, fragment bool) (string, error) {
+// its `--fragment` `<section>` markup. d is the WHOLE deck: the fragment and the
+// standalone page both render the selected slide from the whole deck's identity,
+// so the embedded `<section>` is byte-identical and `.slide.number`/`.slide.total`
+// count across the whole deck (requirements.requirement.cli-render).
+func renderOneSlide(cfg *deck.Config, d *deck.Deck, meta deck.Slide, parsed *slide.Slide, reg *template.Registry, themeReg *theme.Registry, funcMap htmltmpl.FuncMap, fragment bool) (string, error) {
 	if fragment {
-		frag, err := render.RenderSlide(parsed, meta.Label, cfg, meta, total, reg, funcMap)
+		frag, err := render.RenderSlide(parsed, meta.Label, cfg, meta, d.Total(), reg, funcMap)
 		if err != nil {
 			return "", err
 		}
 		return string(frag), nil
 	}
-	// The standalone page reuses the server's page construction
-	// (internal/render.RenderDeck over the deck-page shell, head, embedded
-	// assets and theme stylesheet) but holds only this slide: a one-stack deck
-	// renders exactly the selected slide's `<section>` inside the same page.
-	single := &deck.Deck{Stacks: []deck.Stack{{Slide: meta}}}
-	page, err := render.RenderDeck(cfg, single, []*slide.Slide{parsed}, reg, themeReg, funcMap)
+	// The standalone page reuses the shared page construction
+	// (internal/render.RenderSlidePage over the deck-page shell, head, embedded
+	// assets and theme stylesheet) and holds only this slide's `<section>`,
+	// rendered from the whole deck's identity so it matches the `--fragment`
+	// output byte for byte.
+	page, err := render.RenderSlidePage(cfg, d, meta, parsed, reg, themeReg, funcMap)
 	if err != nil {
 		return "", err
 	}
