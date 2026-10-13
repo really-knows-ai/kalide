@@ -186,7 +186,8 @@ type catalogueBlock struct {
 // Rules (deck-structure, slide-sections):
 //   - the file opens with YAML frontmatter delimited by --- … --- at line 1;
 //     missing, unterminated or not-at-top frontmatter is an error, and the
-//     frontmatter must name a slide-usage `template:`;
+//     frontmatter must name a slide-usage `template:` that is not internal
+//     (internal-templates);
 //   - the content between the frontmatter and the first heading is the slide's
 //     body;
 //   - a `# name` heading starts a top-level section; a heading one level deeper
@@ -242,9 +243,13 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	if !hasTmpl || strings.TrimSpace(tmpl) == "" {
 		return nil, parseError(file, 1, "missing required key %q in slide frontmatter", "template")
 	}
-	usage, _, ok := cat.LookupSlideTemplate(tmpl)
+	usage, internal, ok := cat.LookupSlideTemplate(tmpl)
 	if !ok {
 		return nil, unknownName(file, tmplLine, "", "template", tmpl, cat.TemplateNames())
+	}
+	if internal {
+		return nil, parseError(file, tmplLine,
+			"template %q is internal and cannot be used as a slide template", tmpl)
 	}
 	if usage != "slide" {
 		return nil, parseError(file, tmplLine,
