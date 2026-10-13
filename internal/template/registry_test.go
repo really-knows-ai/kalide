@@ -516,6 +516,74 @@ func TestRegistry(t *testing.T) {
 		}
 	})
 
+	// bounded-self-nesting / section-depth-limit: the Catalogue's SectionDecl
+	// exposes a declaration's `max_depth` bound beside accepted/min/max, and the
+	// build-time walk accepts a declared self-accepting chain up to the six
+	// heading levels the content syntax allows, refusing one heading level more
+	// as *SectionDepthError naming the chain and the max_depth that produced it
+	// (requirements.requirement.bounded-self-nesting,
+	// requirements.constraint.section-depth-limit). The spec's worked example is
+	// one template T declaring a `loop` section that accepts T at `max_depth: N`,
+	// so the self-accepting declaration below stands in for it: it yields six
+	// heading levels (the root plus five bounded levels) at max_depth: 5, which
+	// loads, and seven at max_depth: 6, which crosses the bound.
+	t.Run("SectionDecl exposes a declaration's max_depth", func(t *testing.T) {
+		r := NewRegistry(nil)
+		if err := r.Register(selfAcceptingSection("loop", 3)); err != nil {
+			t.Fatalf("Register(loop) error = %v, want nil", err)
+		}
+
+		accepted, min, max, maxDepth, ok := r.SectionDecl("loop", "loop")
+		if !ok {
+			t.Fatal(`SectionDecl("loop", "loop") ok = false, want true`)
+		}
+		assertStringSlice(t, "SectionDecl accepted", accepted, []string{"loop"})
+		if min != 0 || max != 0 {
+			t.Errorf("SectionDecl min/max = %d/%d, want 0/0 (max_depth does not change the repeat limits)", min, max)
+		}
+		if maxDepth != 3 {
+			t.Errorf("SectionDecl maxDepth = %d, want 3 (the declaration's max_depth)", maxDepth)
+		}
+	})
+
+	t.Run("a self-accepting walk at max_depth: 5 (six heading levels) loads", func(t *testing.T) {
+		if err := buildAndValidate(selfAcceptingSection("loop", 5)); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: max_depth: 5 produces six heading levels, within the six-level bound", err)
+		}
+	})
+
+	t.Run("a self-accepting walk at max_depth: 6 (seven heading levels) is refused", func(t *testing.T) {
+		err := buildAndValidate(selfAcceptingSection("loop", 6))
+		if err == nil {
+			t.Fatal("Validate() = nil, want *SectionDepthError")
+		}
+		var depth *SectionDepthError
+		if !errors.As(err, &depth) {
+			t.Fatalf("Validate() error = %v, want *SectionDepthError", err)
+		}
+		if depth.Limit != sectionDepthLimit {
+			t.Errorf("depth.Limit = %d, want %d", depth.Limit, sectionDepthLimit)
+		}
+		if depth.MaxDepth != 6 {
+			t.Errorf("depth.MaxDepth = %d, want 6 (the max_depth that produced the chain)", depth.MaxDepth)
+		}
+		// The bounded walk produces the root plus one heading per bounded level:
+		// max_depth: 6 gives seven levels, one past the six-heading-level bound.
+		wantPath := []string{"loop", "loop", "loop", "loop", "loop", "loop", "loop"}
+		if !reflect.DeepEqual(depth.Path, wantPath) {
+			t.Errorf("depth.Path = %v, want %v", depth.Path, wantPath)
+		}
+
+		// The depth-limit templates error names the over-deep chain and the
+		// max_depth that produced it (requirements.constraint.section-depth-limit).
+		wantMsg := `template "loop": section template composition is 7 levels deep, exceeding the 6-heading-level limit: ` +
+			`sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop ` +
+			`— the bounded self-nesting declaration max_depth: 6 produces this chain; lower max_depth or flatten the composition`
+		if err.Error() != wantMsg {
+			t.Errorf("Validate() error = %q, want %q", err.Error(), wantMsg)
+		}
+	})
+
 	t.Run("library-driven registry: parseManifest + NewRegistryFromLibrary", func(t *testing.T) {
 		lib, err := LoadLibrary(rootedFS(demoLibraryFS()), TemplatesDir)
 		if err != nil {
