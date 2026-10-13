@@ -665,12 +665,14 @@ type exampleSectionRunner struct {
 // `.table` is the call body's first parsed GFM table (nil when it carries
 // none) and `.tables` is its source-ordered tables (an empty list when it
 // carries none), parsed against the target template's declared cell attributes
-// (exampleTableContext), so a target layout reading `.table.rows` or `.tables`
-// unguarded executes at load exactly as at render; the body's tables reach the
-// layout through these entries alone, and the `.body` entry stays free of
-// tables, exactly as renderBody omits them. Each resolved child is rendered
-// through this same method and its HTML appended to the target's rendered
-// child-section list keyed by its declared section name, the list a target
+// (mdcheck.TableContext, the shared table-context builder, whose cell inline
+// Markdown the retained exampleRenderInline renders), so a target layout
+// reading `.table.rows` or `.tables` unguarded executes at load exactly as at
+// render; the body's tables reach the layout through these entries alone, and
+// the `.body` entry stays free of tables, exactly as renderBody omits them. Each
+// resolved child is rendered through this same method and its HTML appended to
+// the target's rendered child-section list keyed by its declared section name,
+// the list a target
 // layout ranges over to splice child markup (template-language). The body is
 // set only when the call supplies one.
 //
@@ -743,7 +745,7 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	if rule := call.Template.Body.Tables; rule != nil {
 		tableSpecs = mdcheckCellAttributeSpecs(rule.CellAttributes)
 	}
-	table, tables := exampleTableContext(call.Body, tableSpecs)
+	table, tables := mdcheck.TableContext(call.Body, tableSpecs, exampleRenderInline)
 	ctx["table"] = table
 	ctx["tables"] = tables
 	if err := ex.renderChildLists(ctx, call.Children); err != nil {
