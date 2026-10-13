@@ -218,6 +218,23 @@ func printTemplateRecordFields(w io.Writer, f *template.Field, indent string) {
 	}
 }
 
+// printTemplateEnumVariants writes an enum field's effective variants, indented
+// beneath the field's own line: the closed set the schema checker enforces,
+// whether declared inline with `variants:` or expanded from `variants_from:` at
+// library load (enum-variants-from). The variant values are written in the
+// order the loaded field carries them — sorted for a `variants_from:` glob,
+// declaration order for an inline set — so the documentation matches the
+// registry the checker and renderer use.
+//
+// It is a no-op for a field that is not an enum, or an enum carrying no
+// variants, so the caller can invoke it unconditionally for every field.
+func printTemplateEnumVariants(w io.Writer, f *template.Field, indent string) {
+	if f == nil || f.Type != template.FieldEnum || len(f.Variants) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%sone of %s\n", indent, strings.Join(f.Variants, ", "))
+}
+
 // templateFieldAttributes renders a field's documentation attributes: its type,
 // whether it is required or optional, its default when it has one, the limits
 // that apply to its type and its named formats. They are joined with "; ".
