@@ -458,6 +458,237 @@ func TestCLICheck(t *testing.T) {
 	assertNoServingLine(t, stdout, stderr)
 }
 
+// TestCLIRender is the plan.phase-10 task-14 end-to-end test: `kalide render`
+// selecting a slide by position label and by label to stdout, `--fragment`
+// yielding only the slide's `<section>` markup against the default full page,
+// `-o` writing one `<number>[letter]-<label>.html` per slide in deck order, the
+// usage errors (no slide and no -o; `--full` with `--fragment`) exiting 2, a
+// broken deck exiting 1, and byte-identical output across two runs with each
+// slide's anchor id equal to its label. Every run prints no
+// `Serving slides at <url>` marker and spawns no browser-opener child, and the
+// offline proxy environment is armed, so render starts no server, binds no port
+// and makes no network connection.
+func TestCLIRender(t *testing.T) {
+	if testing.Short() {
+		t.Skip("e2e test builds and drives the real kalide binary")
+	}
+
+	h := NewHarness(t)
+	h.EnableOfflineProxy()
+	writeCLIDeckFixture(t, h)
+
+	// --- render <position-label> to stdout: the default full page. ---
+	full, stderr, code := h.Run("render", "1")
+	if code != 0 {
+		t.Fatalf("kalide render 1 exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide render 1 stderr = %q, want empty", stderr)
+	}
+	assertNoServingLine(t, full, stderr)
+	assertFullPage(t, full, "intro", "Intro")
+
+	// --- render <label> to stdout selects the same single slide. ---
+	byLabel, stderr, code := h.Run("render", "detail")
+	if code != 0 {
+		t.Fatalf("kalide render detail exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide render detail stderr = %q, want empty", stderr)
+	}
+	assertNoServingLine(t, byLabel, stderr)
+	assertFullPage(t, byLabel, "detail", "Detail")
+
+	// A vertical slide is selectable by its position label (2a) and by its
+	// deck-unique label (extra); both name the same slide.
+	vertical, stderr, code := h.Run("render", "2a")
+	if code != 0 {
+		t.Fatalf("kalide render 2a exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide render 2a stderr = %q, want empty", stderr)
+	}
+	assertFullPage(t, vertical, "extra", "Extra")
+	byVerticalLabel, stderr, code := h.Run("render", "extra")
+	if code != 0 {
+		t.Fatalf("kalide render extra exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if byVerticalLabel != vertical {
+		t.Errorf("kalide render extra differs from kalide render 2a; the label and position label must select the same slide")
+	}
+
+	// --- --fragment yields only the slide's <section> markup. ---
+	fragment, stderr, code := h.Run("render", "1", "--fragment")
+	if code != 0 {
+		t.Fatalf("kalide render 1 --fragment exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide render 1 --fragment stderr = %q, want empty", stderr)
+	}
+	assertNoServingLine(t, fragment, stderr)
+	assertFragment(t, fragment, "intro", "Intro")
+
+	// --- byte-identical output across two runs. ---
+	again, stderr, code := h.Run("render", "1")
+	if code != 0 {
+		t.Fatalf("kalide render 1 (second run) exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if again != full {
+		t.Errorf("kalide render 1 is not byte-identical across two runs:\nfirst = %q\nsecond = %q", full, again)
+	}
+
+	// --- The opener guard: render never spawns a platform browser opener. ---
+	guarded, guardedErr, guardedCode := runWithOpenerGuard(t, h, "render", "1", "--fragment")
+	if guardedCode != 0 {
+		t.Fatalf("kalide render 1 --fragment (opener guard) exit = %d, want 0 (stderr = %q)", guardedCode, guardedErr)
+	}
+	if guarded != fragment {
+		t.Errorf("kalide render 1 --fragment with the opener guard on PATH differs from the plain run")
+	}
+	assertNoServingLine(t, guarded, guardedErr)
+
+	// --- -o writes one file per slide in deck order, each named
+	// <number>[letter]-<label>.html and carrying its label as the anchor id. ---
+	out1 := h.Path("out1")
+	_, stderr, code = h.Run("render", "-o", out1)
+	if code != 0 {
+		t.Fatalf("kalide render -o out1 exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("kalide render -o out1 stderr = %q, want empty", stderr)
+	}
+	written := []struct{ name, label, heading string }{
+		{"1-intro.html", "intro", "Intro"},
+		{"2-detail.html", "detail", "Detail"},
+		{"2a-extra.html", "extra", "Extra"},
+	}
+	entries, err := os.ReadDir(out1)
+	if err != nil {
+		t.Fatalf("read the -o directory %s: %v", out1, err)
+	}
+	if len(entries) != len(written) {
+		t.Errorf("render -o wrote %d files, want %d: %v", len(entries), len(written), entryNames(entries))
+	}
+	for _, w := range written {
+		data, err := os.ReadFile(filepath.Join(out1, w.name))
+		if err != nil {
+			t.Errorf("render -o did not write %s: %v", w.name, err)
+			continue
+		}
+		assertFullPage(t, string(data), w.label, w.heading)
+	}
+
+	// The -o output is byte-identical across two runs too.
+	out2 := h.Path("out2")
+	_, stderr, code = h.Run("render", "-o", out2)
+	if code != 0 {
+		t.Fatalf("kalide render -o out2 exit = %d, want 0 (stderr = %q)", code, stderr)
+	}
+	for _, w := range written {
+		first, err := os.ReadFile(filepath.Join(out1, w.name))
+		if err != nil {
+			t.Fatalf("read %s: %v", w.name, err)
+		}
+		second, err := os.ReadFile(filepath.Join(out2, w.name))
+		if err != nil {
+			t.Errorf("the second render -o did not write %s: %v", w.name, err)
+			continue
+		}
+		if !bytes.Equal(first, second) {
+			t.Errorf("render -o %s is not byte-identical across two runs", w.name)
+		}
+	}
+
+	// --- Usage errors: no slide and no -o; --full with --fragment. ---
+	stdout, stderr, code := h.Run("render")
+	if code != 2 {
+		t.Fatalf("kalide render (no slide, no -o) exit = %d, want 2 (stdout = %q, stderr = %q)", code, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("kalide render (no slide, no -o) stdout = %q, want empty", stdout)
+	}
+	for _, want := range []string{"kalide render:", "Usage:"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("kalide render (no slide, no -o) stderr = %q, want it to mention %q", stderr, want)
+		}
+	}
+	assertNoServingLine(t, stdout, stderr)
+
+	stdout, stderr, code = h.Run("render", "1", "--full", "--fragment")
+	if code != 2 {
+		t.Fatalf("kalide render 1 --full --fragment exit = %d, want 2 (stdout = %q, stderr = %q)", code, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("kalide render 1 --full --fragment stdout = %q, want empty", stdout)
+	}
+	for _, want := range []string{"--full and --fragment", "Usage:"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("kalide render 1 --full --fragment stderr = %q, want it to mention %q", stderr, want)
+		}
+	}
+	assertNoServingLine(t, stdout, stderr)
+
+	// --- A broken deck exits 1 with the first error, no server started. ---
+	writeCLIBrokenDeck(t, h)
+	stdout, stderr, code = h.Run("render", "1")
+	if code != 1 {
+		t.Fatalf("kalide render 1 (broken deck) exit = %d, want 1 (stdout = %q, stderr = %q)", code, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("kalide render 1 (broken deck) stdout = %q, want empty", stdout)
+	}
+	if want := cliHeadingErrorText(); !strings.Contains(stderr, want) {
+		t.Errorf("kalide render 1 (broken deck) stderr = %q, want it to carry %q", stderr, want)
+	}
+	assertNoServingLine(t, stdout, stderr)
+}
+
+// assertFullPage asserts html is the standalone deck page holding the slide
+// with the given label and heading: the page shell, the reveal.js initialiser
+// and the slide's anchored <section> markup.
+func assertFullPage(t *testing.T, html, label, heading string) {
+	t.Helper()
+
+	for _, want := range []string{
+		"<!DOCTYPE html>",
+		"Reveal.initialize",
+		`<section id="` + label + `"`,
+		`<h1 class="main-heading">` + heading + `</h1>`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("full page for label %q is missing %q:\n%s", label, want, html)
+		}
+	}
+}
+
+// assertFragment asserts html is only the slide's `<section>` markup — the
+// fragment the deck page embeds — anchored on the slide's label and carrying no
+// page-shell markup.
+func assertFragment(t *testing.T, html, label, heading string) {
+	t.Helper()
+
+	if !strings.HasPrefix(html, `<section id="`+label+`"`) {
+		t.Errorf("fragment for label %q does not begin with its anchored <section>:\n%s", label, html)
+	}
+	if want := `<h1 class="main-heading">` + heading + `</h1>`; !strings.Contains(html, want) {
+		t.Errorf("fragment for label %q is missing %q:\n%s", label, want, html)
+	}
+	for _, forbidden := range []string{"<!DOCTYPE html>", "Reveal.initialize", "<html"} {
+		if strings.Contains(html, forbidden) {
+			t.Errorf("fragment for label %q carries page-shell markup %q:\n%s", label, forbidden, html)
+		}
+	}
+}
+
+// entryNames returns the names of dir entries, for a failure message.
+func entryNames(entries []os.DirEntry) []string {
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Name())
+	}
+	return out
+}
+
 // cliHeadingErrorMessage is the JSON message for the broken slide's missing
 // required `heading` field: validate.checkErrorMessage joins the field's
 // "what is wrong" and "how to fix it" text the way Format renders them.
