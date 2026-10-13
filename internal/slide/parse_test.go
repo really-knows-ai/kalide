@@ -12,7 +12,8 @@ import (
 
 // fakeTemplate is one fake catalogue entry: a template's usage, whether it is
 // internal (`internal: true`), and, for slide templates, its declared sections
-// with their accepted section templates and repeat bounds.
+// with their accepted section templates, repeat bounds and per-section
+// `max_depth` bound (absent, i.e. 0, when the declaration is unbounded).
 type fakeTemplate struct {
 	usage    string
 	internal bool
@@ -20,6 +21,7 @@ type fakeTemplate struct {
 	accepted map[string][]string
 	min      map[string]int
 	max      map[string]int
+	maxDepth map[string]int
 }
 
 // fakeCatalogue is a hand-written Catalogue: the parser only ever consumes the
@@ -51,12 +53,12 @@ func (c fakeCatalogue) SectionNames(tmpl string) []string {
 	return names
 }
 
-func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, bool) {
+func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, int, bool) {
 	t, ok := c[tmpl]
 	if !ok || !slices.Contains(t.sections, section) {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
-	return t.accepted[section], t.min[section], t.max[section], true
+	return t.accepted[section], t.min[section], t.max[section], t.maxDepth[section], true
 }
 
 // testCatalogue returns the catalogue most cases share. It exercises every
