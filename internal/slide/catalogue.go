@@ -10,11 +10,21 @@ package slide
 // Catalogue is the read-only view of the slide/section template catalogue that
 // slide parsing consults.
 type Catalogue interface {
-	// LookupSlideTemplate reports how the named template may be used and
-	// whether it exists at all. usage is "slide" when the template describes a
-	// whole slide and "section" when it describes a section inside one. ok is
-	// false when no template has that name.
-	LookupSlideTemplate(name string) (usage string, ok bool)
+	// LookupSlideTemplate reports how the named template may be used, whether
+	// it is internal, and whether it exists at all. usage is "slide" when the
+	// template describes a whole slide and "section" when it describes a
+	// section inside one. internal reports the named template's Internal flag
+	// (the manifest's `internal: true`) and is false when no template has that
+	// name. ok is false when no template has that name.
+	//
+	// An internal template is refused as a Markdown `template:` target — a
+	// slide frontmatter `template:` or a section instance's `template:` — while
+	// its name stays in TemplateNames so a closest-match suggestion can still
+	// offer it. This surface does not affect the `section`-helper or
+	// `section_template` resolutions: those consult the registry's Lookup
+	// directly, not LookupSlideTemplate, and so still resolve an internal
+	// template.
+	LookupSlideTemplate(name string) (usage string, internal bool, ok bool)
 
 	// TemplateNames returns every template name, sorted, so callers can pass
 	// them to a closest-match "did you mean …?" helper.

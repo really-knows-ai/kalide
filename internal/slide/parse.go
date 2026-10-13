@@ -242,7 +242,7 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	if !hasTmpl || strings.TrimSpace(tmpl) == "" {
 		return nil, parseError(file, 1, "missing required key %q in slide frontmatter", "template")
 	}
-	usage, ok := cat.LookupSlideTemplate(tmpl)
+	usage, _, ok := cat.LookupSlideTemplate(tmpl)
 	if !ok {
 		return nil, unknownName(file, tmplLine, "", "template", tmpl, cat.TemplateNames())
 	}
@@ -783,7 +783,7 @@ func resolveSectionTemplate(file string, cat Catalogue, section string,
 		return perr(line,
 			"%q is reserved and cannot be used as a section template", NotesSection)
 	}
-	usage, ok := cat.LookupSlideTemplate(tmplName)
+	usage, _, ok := cat.LookupSlideTemplate(tmplName)
 	if !ok {
 		return unknownName(file, line, path, "template", tmplName, cat.TemplateNames())
 	}
