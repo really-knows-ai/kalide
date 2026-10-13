@@ -454,3 +454,85 @@ func TestSectionHelperChildDepthBoundNotExtendedByChildren(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// typed-records feedback-52: a bounded self-nesting's heading depth is measured
+// by heading levels, not by the length of the composition chain that reaches it.
+//
+// commit 91f8fca2 changed Section.Walk (section.go) so a bounded chain's depth
+// is the heading level of the repeated name's first occurrence plus one per
+// bounded declared-section level: helper-reached path entries sit at the
+// caller's level and add no heading level
+// (requirements.constraint.section-depth-limit). Before that change Walk
+// compared len(chain) against the bound, so a legal bounded cycle with a helper
+// edge above it — one extra chain entry that is a composition reference, not a
+// heading — was wrongly refused. The cases below are the regression: with the
+// old len(chain) measure the load case fails by exactly one entry.
+
+// helperAboveBoundedLoop returns the fixture for a `section` helper call placed
+// above a bounded self-nesting: a root slide template whose layout calls
+// `{{ section "loop" }}`, plus the self-accepting section template named "loop"
+// that accepts itself with max_depth maxDepth (selfAcceptingSection). The helper
+// edge is a composition reference, not a heading, so loop sits at the root's
+// heading level (one): the bounded chain carries the helper-reached root as an
+// extra entry, so len(chain) is one longer than its heading depth.
+func helperAboveBoundedLoop(maxDepth int) (*Template, *Template) {
+	return regLayout("root", `{{ section "loop" }}`), selfAcceptingSection("loop", maxDepth)
+}
+
+// TestSectionHelperAboveBoundedSelfNesting proves a `section` helper call above
+// a bounded accepted self-nesting does not count toward the six-heading-level
+// bound (requirements.constraint.section-depth-limit; typed-records
+// feedback-52). The loop self-accepts with max_depth 5, so its chain is the loop
+// at heading level one plus five bounded declared-section levels — exactly six
+// heading levels — while the root's helper edge adds a seventh path entry but no
+// level. It loads. The same loop at max_depth 6 crosses the bound and is refused
+// as *SectionDepthError. The load case is the regression: before commit 91f8fca2
+// Section.Walk measured len(chain) — seven here — and wrongly refused it.
+func TestSectionHelperAboveBoundedSelfNesting(t *testing.T) {
+	t.Run("a helper call above a six-heading-level bounded cycle loads", func(t *testing.T) {
+		root, loop := helperAboveBoundedLoop(5)
+		if err := buildAndValidate(root, loop); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: the helper edge adds no heading level, so the bounded chain's six heading levels sit exactly at the bound", err)
+		}
+
+		// Prove the helper edge is traversed and the bounded walk is accepted,
+		// not skipped: the walk from the root reaches the self-nesting loop with
+		// no depth failure.
+		r := NewRegistry(nil)
+		for _, tmpl := range []*Template{root, loop} {
+			if err := r.Register(tmpl); err != nil {
+				t.Fatalf("Register(%q) error = %v, want nil", tmpl.Name, err)
+			}
+		}
+		got, err := NewSection(r.Lookup).Walk(root)
+		if err != nil {
+			t.Fatalf("Walk(%q) error = %v, want nil", root.Name, err)
+		}
+		found := false
+		for _, tmpl := range got {
+			if tmpl.Name == loop.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Walk(%q) did not reach %q; reached %v", root.Name, loop.Name, got)
+		}
+	})
+
+	t.Run("the same cycle at max_depth 6 still fails as *SectionDepthError", func(t *testing.T) {
+		root, loop := helperAboveBoundedLoop(6)
+		err := buildAndValidate(root, loop)
+		var depth *SectionDepthError
+		if !errors.As(err, &depth) {
+			t.Fatalf("Validate() error = %v, want *SectionDepthError", err)
+		}
+		if depth.Limit != sectionDepthLimit {
+			t.Errorf("depth.Limit = %d, want %d", depth.Limit, sectionDepthLimit)
+		}
+		if depth.MaxDepth != 6 {
+			t.Errorf("depth.MaxDepth = %d, want 6: the max_depth declaration that stopped the bounded walk", depth.MaxDepth)
+		}
+	})
+}
