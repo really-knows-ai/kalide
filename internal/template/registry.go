@@ -674,9 +674,10 @@ func checkFieldVariants(tmpl string, f *Field, root fs.FS) error {
 
 // reservedDeclaredNames are the exact field/section names checkDeclaredName
 // rejects: `body` the implied body field, `notes` the parser's speaker-notes
-// section, `deck`, `slide`, `item`, `raw` and `data` the reserved
-// template-context names (requirements.constraint.reserved-template-names).
-var reservedDeclaredNames = []string{"body", "notes", "deck", "slide", "item", "raw", "data"}
+// section, `deck`, `slide`, `item`, `raw`, `data`, `table` and `tables` the
+// reserved template-context names
+// (requirements.constraint.reserved-template-names).
+var reservedDeclaredNames = []string{"body", "notes", "deck", "slide", "item", "raw", "data", "table", "tables"}
 
 // reservedDeclaredNameSuffix is the reserved suffix of a field's
 // format-selection sibling: a declared field or section name ending in it
@@ -685,7 +686,8 @@ const reservedDeclaredNameSuffix = "_format"
 
 // ReservedNames returns the sorted reserved declared-name tokens enforced by
 // checkDeclaredName: the exact names `body`, `notes`, `deck`, `slide`, `item`,
-// `raw` and `data`, plus the reserved `_format` suffix token. It is the single source of
+// `raw`, `data`, `table` and `tables`, plus the reserved `_format` suffix
+// token. It is the single source of
 // truth for the reserved-name vocabulary, deriving from the same declarations
 // checkDeclaredName enforces (the `_format` entry is a suffix, not an exact
 // name). The returned slice is a fresh allocation.
@@ -700,8 +702,8 @@ func ReservedNames() []string {
 
 // checkDeclaredName rejects a field or section name that is empty or reserved.
 // `body` is the implied body field, `notes` the parser's speaker-notes section,
-// `deck`, `slide`, `item`, `raw` and `data` the reserved top-level
-// template-context names, and a trailing `_format` the reserved
+// `deck`, `slide`, `item`, `raw`, `data`, `table` and `tables` the reserved
+// top-level template-context names, and a trailing `_format` the reserved
 // format-selection sibling of a field. None
 // of them is declarable.
 //
