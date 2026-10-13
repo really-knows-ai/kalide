@@ -147,13 +147,28 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 			source[k] = v
 		}
 		ctx["raw"] = RawContext(source, def, block.Body)
-		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil, nil)
+		// The example instance is the OUTERMOST instance of its own template
+		// when it is a section template — example.md belongs to lt, and nothing
+		// encloses it — so its authored children see it as their one enclosing
+		// instance: their ancestor chain of resolved template names is lt's own
+		// name. A child resolving to the same template therefore reads
+		// `.item.depth` 1, exactly as the render side computes it through the
+		// shared InstanceDepth helper (item-context, bounded-self-nesting). A
+		// slide template's example is the slide itself, not an instance of any
+		// template, so its top-level instances keep an empty enclosing chain.
+		var dataAncestors []string
+		if lt.Kind == KindSection {
+			dataAncestors = []string{lt.Name}
+		}
+		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), dataAncestors, nil)
 
 		if lt.Kind == KindSection {
 			// A section template's own layout is a section instance, so its
 			// `.item` descriptor mirrors a one-item section-helper invocation:
-			// section and template are the template's own name, parent nil
-			// (item-context). A slide template's item stays absent.
+			// section and template are the template's own name, depth 0 (it is
+			// the outermost instance of its template, the shared InstanceDepth
+			// of an empty enclosing chain), parent nil (item-context). A slide
+			// template's item stays absent.
 			callerFields = source
 			ctx["item"] = map[string]any{
 				"index":    0,
@@ -163,6 +178,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 				"last":     true,
 				"section":  lt.Name,
 				"template": lt.Name,
+				"depth":    InstanceDepth(nil, lt.Name),
 				// A typed nil map, matching the shape itemContext,
 				// ResolveSectionCall and DataContext publish for an
 				// absent parent: `{{if .parent}}` is false and a chained
