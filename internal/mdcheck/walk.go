@@ -318,7 +318,11 @@ func visit(ctx *walkContext, node ast.Node) []Issue {
 //     link reference definitions.
 //   - tables: the CommonMark core has no table syntax, so a GFM table parses as
 //     an ordinary paragraph; it is caught by looking for a delimiter row among
-//     the paragraph's own source lines rather than by node kind.
+//     the paragraph's own source lines rather than by node kind. This is the
+//     opt-out refusal (markdown-disallowed-errors): when the enclosing template
+//     opts in (ctx.tables is non-nil) the table is accepted here and validated
+//     by the whole-body table pass (checkTables), so the construct yields
+//     exactly one error on either path.
 //   - the extension-syntax heuristics (~~strike~~, ==highlight==, ^sup^, ~sub~,
 //     :emoji:) that the core parser leaves as literal text. They scan ast.Text
 //     segments only — never inline code content, never link destinations — and
@@ -362,9 +366,17 @@ func checkDisallowed(ctx *walkContext, node ast.Node) []Issue {
 			"use the slide's image field instead of a Markdown image")}
 	case *ast.Paragraph:
 		if hasTableDelimiterRow(ctx.source, n) {
+			// The template opts in (ctx.tables != nil): the table pass
+			// (checkTables) owns this table's validation, so the paragraph is
+			// accepted here and the table is not refused.
+			if ctx.tables != nil {
+				return nil
+			}
+			// The template does not accept tables: this is the single opt-out
+			// refusal (markdown-disallowed-errors).
 			return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
 				"tables are not allowed",
-				"use a section template or a list instead of a Markdown table")}
+				"opt in to tables with the `tables` option in the template's body rule, or use a list instead")}
 		}
 	case *ast.Blockquote:
 		return []Issue{ctx.newIssue(node, KindDisallowedConstruct,
