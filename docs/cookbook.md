@@ -143,6 +143,19 @@ templates, each `column` child supplies the `template:` selector in its fields:
   supplies no fields and no body.
 - The nested `child "cell"` is resolved against the instantiated column
   template (`half` or `full`), which declares `cell`.
+- Every instance rendered by the `section`, `child` and `children` helpers is a
+  real section instance with its own `.item` descriptor: `.item.index`
+  (zero-based), `.item.number`/`.item.count`, `.item.first`/`.item.last`,
+  `.item.depth`, `.item.section`, `.item.template` and `.item.parent`. A
+  `section` call is a one-item group, so a call from a slide reports `index` 0,
+  `count` 1 and `first`/`last` true.
+- `.item.depth` counts the enclosing instances whose resolved template repeats
+  the instance's own — `0` at a template's outermost instance and `+1` for each
+  enclosing same-template instance. A `child`/`children` composition that
+  repeats a template — a declaration accepting its own template, directly or
+  through a cycle — is **bounded self-nesting** and needs the declaration to
+  carry a positive `max_depth: N`; see
+  [A self-nesting `timeline-event` section](#a-self-nesting-timeline-event-section).
 
 A minimal `example.md` for each template makes the library load: for `half`, a
 section fragment with its field and a body:
@@ -237,10 +250,197 @@ title: Welcome
 ```
 
 Each forwarded entry re-instantiates as a real child, keeping its own
-`template`, its fields and body, and its own nested `.data`. A `children`
-forwarding is not inspected at load; it is checked against the target's
-declared sections when the target renders, and the declaration's `min`/`max` is
-counted over the forwarded set.
+`template`, its fields and body, its own `.item` — including the reserved
+`.item.depth` — and its own nested `.data`. A `children` forwarding is not
+inspected at load; it is checked against the target's declared sections when the
+target renders, and the declaration's `min`/`max` is counted over the forwarded
+set.
+
+## Reading the `.item` context
+
+Every section instance — authored as a section heading, or rendered by the
+`section`, `child` or `children` helper — sees its own `.item` descriptor among
+its same-name siblings. A numbered crumb layout stamps its position and depth:
+
+`sections/crumb/template.yaml`:
+
+```yaml
+description: One numbered crumb in a trail.
+fields:
+  - name: label
+    type: text
+    required: true
+```
+
+`sections/crumb/layout.html.tmpl`:
+
+```html
+<span class="crumb" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-depth="{{ .item.depth }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}">{{ .label }}</span>
+```
+
+`sections/crumb/example.md`:
+
+````markdown
+```
+label: Introduction
+```
+A crumb.
+````
+
+- `.item.index` (zero-based) and `.item.number` (one-based) are the instance's
+  position among its same-name siblings, with `.item.count`, `.item.first` and
+  `.item.last`.
+- `.item.section` is the declared section name and `.item.template` the resolved
+  template name; `.item.parent` is the enclosing section instance's field
+  values, or nil at the top level, where the parent is the slide.
+- `.item.depth` is the instance's self-nesting depth: how many enclosing
+  instances resolved to the same template as this one. It is `0` for an ordinary
+  instance and rises only where a template's resolved name repeats up the
+  containment chain — see
+  [A self-nesting `timeline-event` section](#a-self-nesting-timeline-event-section).
+
+The authored tree carries the same descriptor under `.data`: `.data.<section>`
+has one entry per authored instance, each with its own `.raw`, `.item` and
+`.data`, and every entry's `.item.depth` matches that instance's rendered
+`.item.depth`.
+
+## A self-nesting `timeline-event` section
+
+A section declaration may accept a template that leads back to the declaring
+template — directly, or through a cycle of declarations — when it carries a
+positive `max_depth: N`. The instance the declaration produces then has at most
+`N` enclosing instances that resolve to its own template, and each instance
+reads that count as `.item.depth`. A self-nesting (or cyclic) acceptance with no
+`max_depth` is refused at load as a reference cycle.
+
+`sections/timeline-event/template.yaml` declares a `loop` section accepting the
+template's own name, bounded so an event may hold nested events two levels deep:
+
+```yaml
+description: One event on a timeline, nestable into sub-events.
+fields:
+  - name: date
+    type: text
+    required: true
+  - name: title
+    type: text
+    required: true
+body:
+  mode: optional
+sections:
+  - name: loop
+    accepted: [timeline-event]
+    max_depth: 2
+```
+
+`sections/timeline-event/layout.html.tmpl` renders the event and its `loop`
+children — each a `timeline-event` again — through the section the template
+accepts, and tags the instance with its depth:
+
+```html
+<li class="event" data-depth="{{ .item.depth }}">
+  <time class="event-date">{{ .date }}</time>
+  <h3 class="event-title">{{ .title }}</h3>
+  {{ .body }}
+  {{ if .loop }}<ul class="event-nested">{{ range .loop }}{{ . }}{{ end }}</ul>{{ end }}
+</li>
+```
+
+`sections/timeline-event/example.md` is a section fragment: its own fields and
+body, then one nested `# loop` instance:
+
+````markdown
+```
+date: 2026-01
+title: Kickoff
+```
+The project starts.
+
+# loop
+```
+date: 2026-02
+title: Design freeze
+```
+````
+
+A slide template declares an `event` section accepting `timeline-event`:
+
+`slides/timeline/template.yaml`:
+
+```yaml
+description: A timeline of events.
+fields:
+  - name: title
+    type: text
+    required: true
+sections:
+  - name: event
+    accepted: [timeline-event]
+    min: 1
+    max: 0
+```
+
+`slides/timeline/layout.html.tmpl`:
+
+```html
+<section class="timeline">
+  <h1>{{ .title }}</h1>
+  <ul class="timeline-list">{{ range .event }}{{ . }}{{ end }}</ul>
+</section>
+```
+
+`slides/timeline/example.md` is a slide source like any slide template's:
+
+````markdown
+---
+template: timeline
+title: Example timeline
+---
+# event
+```
+date: 2026-01
+title: Kickoff
+```
+````
+
+The author nests events with headings: a `# event` section, then a `## loop`
+child one level deeper, then a `### loop` grandchild:
+
+````markdown
+---
+template: timeline
+title: Release timeline
+---
+# event
+```
+date: 2026-01
+title: Kickoff
+```
+## loop
+```
+date: 2026-02
+title: Design freeze
+```
+### loop
+```
+date: 2026-03
+title: Beta
+```
+````
+
+- All three instances resolve to `timeline-event`, so their `.item.depth` is
+  `0`, `1` and `2` — the count of enclosing instances whose resolved template
+  repeats. `max_depth: 2` is the deepest an instance of the declaration may go,
+  so a fourth-level `#### loop` is refused with
+  `section "loop": nesting deeper than max_depth 2`.
+- Each instance also reads `.item.section` (`event` or `loop`), its sibling
+  `.item.index`/`.item.number`/`.item.count` and `.item.parent` (the enclosing
+  instance's field values), and every `.data.loop` entry carries the same
+  `depth`.
+- Authored nesting is written as headings (`#` through `######`), so a
+  self-nesting declaration's `max_depth` must leave room for the heading levels
+  above it: the loader walks the longest chain the bound allows and refuses the
+  declaration at load if that chain would exceed the six-heading-level syntax.
 
 ## Theme `media:` and `theme:<name>/` references
 
