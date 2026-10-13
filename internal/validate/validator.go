@@ -269,16 +269,25 @@ func declaresChildSections(tmpl *template.Template) bool {
 // (nested-section-validation). The slide frontmatter call passes nil.
 //
 // Image fields carry the field descriptor and the authored path to the
-// WithImageExists callback; against the deck's assets/ root the callback
-// checks the file exists in fsys. The roots-aware resolution against the
-// field's declared roots (image-field-roots) is task 10's wiring; here the
-// callback keeps the pre-existing assets/-only behaviour.
+// WithImageExists callback, which resolves the path against the field's
+// declared roots in written order and existence-checks the candidate files the
+// field accepts (image-field-roots): an `assets` root resolves against fsys,
+// the deck filesystem rooted at the deck directory (paths deck-relative, e.g.
+// `assets/x.png`), and a `media` root against the media sub-filesystem of the
+// library layer that owns tmpl, rooted at that layer's media/ directory. The
+// owning layer is found through reg.LayerOf(tmpl.Name); when tmpl has no known
+// owning layer its media is nil, so a media root is not existence-checked ("not
+// checkable") rather than falsely reported missing. A missing file carries the
+// field's accepted candidate files so the error can suggest the closest match.
 func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) (ValidationError, bool) {
+	var media fs.FS
+	if tmpl != nil {
+		if layer := reg.LayerOf(tmpl.Name); layer != nil {
+			media = layer.Media
+		}
+	}
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
-		template.WithImageExists(func(_ *template.Field, p string) (bool, []string) {
-			_, err := fs.Stat(fsys, p)
-			return err == nil, nil
-		}))
+		template.WithImageExists(template.ImageExistsFunc(fsys, media)))
 	if len(res.Errors) == 0 {
 		return ValidationError{}, false
 	}

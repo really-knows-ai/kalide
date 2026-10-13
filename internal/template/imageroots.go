@@ -158,6 +158,31 @@ func checkImageRoots(f *Field, authored string, assets, media fs.FS) (exists boo
 	return false, out
 }
 
+// ImageExistsFunc builds the WithImageExists callback a caller supplies to
+// CheckValues for the deck filesystem assets and an image field's owning
+// library layer's media filesystem (image-field-roots).
+//
+// It is the exported access to the package-internal root resolver
+// checkImageRoots, which another package (validate.checkFields) closes over so
+// an image field's declared roots resolve in written order: an `assets` root
+// against assets, the deck filesystem rooted at the deck directory, and a
+// `media` root against media, the media sub-filesystem of the library layer
+// that owns the field's template (LibraryLayer.Media, rooted at that layer's
+// media/ directory). A nil filesystem means that root is not available and is
+// skipped, so the load-time example check — which has only the owning layer's
+// media and no deck — passes a nil assets. When no declared root is resolvable
+// the callback reports exists=true with no candidates ("not checkable"),
+// distinct from a missing file.
+//
+// The caller obtains the owning layer through Registry.LayerOf(template.Name)
+// and passes its Media (nil when the template has no known owning layer, so a
+// media root is then simply not existence-checked).
+func ImageExistsFunc(assets, media fs.FS) func(f *Field, path string) (exists bool, candidates []string) {
+	return func(f *Field, path string) (bool, []string) {
+		return checkImageRoots(f, path, assets, media)
+	}
+}
+
 // imageExtensionAllowed reports whether the file name carries one of exts, the
 // field's declared `extensions:` (image-field-roots). An empty exts allows
 // every name. The comparison ignores a leading dot and case, so `jpg`, `.jpg`
