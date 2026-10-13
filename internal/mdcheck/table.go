@@ -88,3 +88,31 @@ type TableCell struct {
 	// Column is the 1-based byte column within Line at which Text begins.
 	Column int
 }
+
+// Table is one parsed GFM table: its header cells, the alignment of each
+// column, its body rows of cells, and the 1-based body line of its header row
+// (gfm-tables, table-syntax).
+//
+// A table is recognised by its delimiter row and parsed in full — header, then
+// delimiter, then body rows — so the header cells and the per-column alignment
+// are always present for a returned table. The parser is strict about column
+// counts (table-limits): the delimiter row agrees with the header row and every
+// body row has exactly as many cells as the header, so Headers, Align and every
+// row in Rows share one length.
+type Table struct {
+	// Headers is the header row's cells, one per column, in column order.
+	Headers []TableCell
+
+	// Align is the per-column alignment taken from the delimiter row, one
+	// entry per column in the same order as Headers. Each entry is a plain
+	// string: "" for no alignment, "left", "center" or "right" for `:---`,
+	// `:---:` and `---:` respectively.
+	Align []string
+
+	// Rows is the body rows, source-ordered and including no header row. Each
+	// row holds one TableCell per column, in the same column order as Headers.
+	Rows [][]TableCell
+
+	// Line is the 1-based line in the body at which the header row begins.
+	Line int
+}
