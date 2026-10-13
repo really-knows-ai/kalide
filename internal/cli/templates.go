@@ -194,6 +194,30 @@ func printTemplateFields(w io.Writer, t *template.Template) {
 	fmt.Fprintln(w)
 }
 
+// printTemplateRecordFields writes the nested field schema of a list field
+// whose item is an inline record (record-item-type), indented beneath the list
+// field's own line. Each nested field is printed on its own line at indent with
+// its name, type and rules — including `nullable` — and its description; a
+// nested field whose own item is a record is then printed recursively at a
+// deeper indent, so a record nested inside a record shows every level.
+//
+// It is a no-op for a field that is not a list whose item is a record, so the
+// caller can invoke it unconditionally for every field.
+func printTemplateRecordFields(w io.Writer, f *template.Field, indent string) {
+	if f == nil || f.Type != template.FieldList || f.Item == nil || f.Item.Type != template.FieldRecord {
+		return
+	}
+	for i := range f.Item.Fields {
+		sub := &f.Item.Fields[i]
+		line := indent + sub.Name + " (" + templateFieldAttributes(sub) + ")"
+		if sub.Description != "" {
+			line += " — " + sub.Description
+		}
+		fmt.Fprintln(w, line)
+		printTemplateRecordFields(w, sub, indent+"  ")
+	}
+}
+
 // templateFieldAttributes renders a field's documentation attributes: its type,
 // whether it is required or optional, its default when it has one, the limits
 // that apply to its type and its named formats. They are joined with "; ".
@@ -203,6 +227,9 @@ func templateFieldAttributes(f *template.Field) string {
 		parts = append(parts, "required")
 	} else {
 		parts = append(parts, "optional")
+	}
+	if f.Nullable {
+		parts = append(parts, "nullable")
 	}
 	if f.Default != nil {
 		parts = append(parts, "default: "+fmt.Sprint(f.Default))
