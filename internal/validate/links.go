@@ -130,12 +130,13 @@ func checkSectionLinks(file string, sections []slide.Section, reg *template.Regi
 // A field has no retained source line (the phase-2 parser keeps only the
 // section/field structure, not per-value YAML positions), so a link error in a
 // field carries the field's path but no line, exactly as the field errors of
-// step 3 do. Non-http(s) field destinations never reach here: template's
-// validateLink/validateText already reject them in step 3, and the deck must
-// have passed step 3 for this pass to run. It returns every error of every
-// `#label` target CheckValues collected from the data map — link fields and
-// inline text fields alike — in declaration order with their paths, rather than
-// only the first.
+// step 3 do. Only `#label` targets are resolved here: an http(s) destination is
+// allowed, and a non-#, non-http(s) destination was already reported by the
+// step-3 CheckValues pass as a field error (validateLink / validateText), so
+// the link pass would only duplicate it under collect-all. It returns every
+// error of every `#label` target CheckValues collected from the data map — link
+// fields and inline text fields alike — in declaration order with their paths,
+// rather than only the first.
 func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
 	if tmpl == nil || len(data) == 0 {
 		return nil
@@ -143,6 +144,12 @@ func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, 
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup)
 	var errs []ValidationError
 	for _, lr := range res.Links {
+		// res.Links carries every inline link of a text field, including an
+		// http(s) or bad-scheme one; only a `#label` reference is this pass's
+		// to resolve.
+		if !strings.HasPrefix(strings.TrimSpace(lr.Destination), "#") {
+			continue
+		}
 		if verr, invalid := checkLabelRef(file, lr.Label, lr.Destination, valuePath(lr.Path), 0, labels, candidates); invalid {
 			errs = append(errs, verr)
 		}
