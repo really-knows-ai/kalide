@@ -98,6 +98,15 @@ forward-slash on every OS (see
   tree — the layer the layout was loaded from.
 - A theme's reserved `media:` and `theme:<name>/` CSS references resolve inside
   that theme's **own layer**.
+- An **image field's `media` root** resolves in the **owning layer's** `media/`
+  tree — the layer that owns the field's template — and the field's `dir`
+  subdirectory and `extensions` filter are applied within that same tree. (An
+  `assets` root is not layer-scoped: it always resolves in the deck's own
+  `assets/` tree, whoever owns the field.)
+- An **enum field's `variants_from`** glob is written relative to the owning
+  layer's root and names files under that layer's `media/` tree; the field's
+  effective variants are those matches, written media-relative. An external
+  layer's glob therefore expands within the external library alone.
 - The `section` helper, by contrast, resolves against the **merged** section
   namespace, so a local-layer layout may call an external-layer section exactly
   as if it were local:
@@ -121,6 +130,28 @@ though the name resolves in the merged deck.
 Because the external library is validated standalone, its theme names must not
 collide with the local layer, and its `media:` / `theme:<name>/` references
 never reach the deck's local layer.
+
+## Named definitions are per-layer
+
+A library's `library.yaml` may declare reusable, **named definitions** —
+`groups:`, `field_sets:` and `types:` (see
+[docs/templates.md](templates.md#named-definitions)). A template resolves its
+named references in the **layer that owns it**, against that layer's own three
+sections:
+
+- a field's `type: <name>` resolves against the owning layer's `types:`;
+- a `fields:` entry `- include: <name>` resolves against the owning layer's
+  `field_sets:`; and
+- a section's `accepted:` entry `@<name>` resolves against the owning layer's
+  `groups:`.
+
+A name declared in one layer is **not visible** to a template in the other: an
+external-layer template cannot name a definition that exists only in the deck's
+local `templates/` layer, and a local-layer template cannot name one that exists
+only in the external layer. An unknown name is a templates error that names the
+reference and suggests the closest definition in the owning layer. Because the
+external library is validated standalone, every named reference its templates
+make must resolve within the external library's own `library.yaml`.
 
 ## Composing layouts across layers
 
