@@ -22,10 +22,9 @@ import (
 //	a short body row and a body row with too many cells
 //	a header and delimiter row with no body rows
 //
-// The fixture file names (example-198.md … example-205.md) carry a numbering
-// that this test does not assert: the published GFM specification was not
-// available to verify it, so every case is labelled descriptively instead of
-// by a specification example number, and ParseTables is checked against the
+// The fixture files are descriptive conformance cases for the tables-extension
+// constructs, each named for the construct it exercises; they claim no
+// specification example number, and ParseTables is checked against the
 // construct itself rather than against a claimed example number.
 //
 // Kalide's parser deliberately differs from the specification in the examples
@@ -46,7 +45,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// The tables extension's basic table. Nothing here turns on a
 			// count, so the parse matches the specification's own reading.
 			name:    "basic table",
-			fixture: "example-198.md",
+			fixture: "basic.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("foo", 1, 3), tcell("bar", 1, 9)},
 				Align:   []string{"", ""},
@@ -60,7 +59,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// leading or trailing pipe. The column counts agree, so the parse
 			// matches the specification.
 			name:    "alignment and no leading or trailing pipes",
-			fixture: "example-199.md",
+			fixture: "alignment-no-outer-pipes.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("abc", 1, 3), tcell("defghi", 1, 9)},
 				Align:   []string{"center", "right"},
@@ -73,7 +72,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// inline code span or a strong span — and the parser stores it as
 			// the plain `|` the cell's inline Markdown renders.
 			name:    "escaped pipe is a literal cell character",
-			fixture: "example-200.md",
+			fixture: "escaped-pipe.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("f|oo", 1, 3)},
 				Align:   []string{""},
@@ -90,7 +89,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// strict column-count rule is the deviation: the short row is one
 			// error, not a padded cell.
 			name:    "blank line ends the table and a short row is a strict-count error",
-			fixture: "example-201.md",
+			fixture: "blank-line-ends-table.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("abc", 1, 3), tcell("def", 1, 9)},
 				Align:   []string{"", ""},
@@ -107,7 +106,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// it ends the table and is not absorbed as a body row. The table
 			// itself is well formed, so the parse matches the specification.
 			name:    "block quote ends the table",
-			fixture: "example-202.md",
+			fixture: "block-quote-ends-table.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("abc", 1, 3), tcell("def", 1, 9)},
 				Align:   []string{"", ""},
@@ -124,7 +123,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// mismatch Issue on the delimiter row plus the resulting short
 			// body row's Issue.
 			name:    "header/delimiter mismatch is an error, not a paragraph",
-			fixture: "example-203.md",
+			fixture: "header-delimiter-mismatch.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("abc", 1, 3), tcell("def", 1, 9)},
 				Align:   []string{"", ""},
@@ -142,7 +141,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// each mismatched row is one strict-count error, so both rows are
 			// flagged and neither is padded or truncated.
 			name:    "short and long body rows are strict-count errors",
-			fixture: "example-204.md",
+			fixture: "short-and-long-body-rows.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("abc", 1, 3), tcell("def", 1, 9)},
 				Align:   []string{"", ""},
@@ -162,7 +161,7 @@ func TestGFMTableExamples(t *testing.T) {
 			// rows. The table parses with an empty body, matching the
 			// specification (which omits the <tbody>).
 			name:    "no body rows",
-			fixture: "example-205.md",
+			fixture: "no-body-rows.md",
 			want: []Table{{
 				Headers: []TableCell{tcell("abc", 1, 3), tcell("def", 1, 9)},
 				Align:   []string{"", ""},
