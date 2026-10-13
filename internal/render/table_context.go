@@ -47,19 +47,27 @@ func tableCellContext(cell mdcheck.TableCell, specs []mdcheck.CellAttributeSpec)
 // tableContext parses one body's Markdown source for its GFM tables and returns
 // the two reserved table entries a template context exposes
 // (table-layout-context, gfm-tables): table is the body's FIRST parsed table as
-// the table map, or nil when the body carries no table, and tables is every
-// parsed table in source order, as a non-nil but empty list when the body
-// carries none.
+// the table map, or a TYPED nil map (map[string]any(nil)) when the body carries
+// no table, and tables is every parsed table in source order, as a non-nil but
+// empty list when the body carries none.
 //
 // body is the body's Markdown source — the same source renderBody renders — and
 // specs is the enclosing template's declared cell attributes, the set each
 // cell's `{...}` groups are decoded against (table-cell-attributes). The pair is
 // returned rather than a single map so the renderer can set the two reserved
 // entries directly (data["table"], data["tables"]) and keep the
-// always-present shape explicit: table is always the first table or nil and
-// tables is always a (possibly empty) list, in a template that does not declare
-// `tables` and in any body that carries no table, so a layout reads the entries
-// without a guard.
+// always-present shape explicit: table is always the first table or a typed nil
+// map and tables is always a (possibly empty) list, in a template that does not
+// declare `tables` and in any body that carries no table, so a layout reads the
+// entries without a guard.
+//
+// The no-table value is deliberately a typed nil map rather than a bare nil
+// interface: `{{ if .table }}` is then falsy (a nil map has length 0), while
+// `{{ .table.rows }}` and `{{ range .table.rows }}` evaluate the absent key to
+// an invalid value with no error — a no-op range — instead of failing with
+// "nil pointer evaluating interface {}.rows", which a bare nil interface
+// produces. That keeps the documented AC shape `{{ range .table.rows }}` a
+// no-op on a body with no table.
 //
 // Parsing is permissive: tableContext passes the zero mdcheck.TableOptions (no
 // limit bounds) and startLine 1, because by render time validation has already
@@ -108,6 +116,11 @@ func tableContext(body string, specs []mdcheck.CellAttributeSpec) (table any, ta
 
 	if len(parsed) > 0 {
 		table = tables[0]
+	} else {
+		// A typed nil map, not a bare nil: see the doc comment — it keeps
+		// `{{ if .table }}` falsy while `{{ range .table.rows }}` stays a
+		// no-op instead of erroring.
+		table = map[string]any(nil)
 	}
 	return table, tables
 }
