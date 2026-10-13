@@ -36,6 +36,8 @@ package mdcheck
 import (
 	"fmt"
 	"strings"
+
+	"github.com/really-knows-ai/kalide/internal/suggest"
 )
 
 // TableOptions carries the effective GFM-table limits for a body: the fewest
@@ -147,6 +149,147 @@ type DecodedCell struct {
 	// a boolean attribute, a string for an enum attribute, and nil for every
 	// declared attribute the cell leaves unset.
 	Attrs map[string]any
+}
+
+// reservedCellAttribute is the name reserved for a cell's line break, `{br}`.
+// It is never a declared cell attribute: resolveCellAttribute always rejects it
+// as a named attribute, whether written bare or with a value
+// (table-cell-attributes).
+const reservedCellAttribute = "br"
+
+// resolveCellAttribute resolves one cell-attribute occurrence against the
+// template's declared cell attributes and returns the typed value to store in
+// the decoded cell's attrs map (table-cell-attributes).
+//
+// occurrence is one attribute exactly as the author wrote it: either a bare
+// `name` or a `name:value` pair (the colon is the first one). Its result is the
+// value DecodedCell.Attrs carries for the attribute — a bool for a boolean
+// attribute and a string, the chosen variant, for an enum attribute.
+//
+// The rules follow the declared kind (CellAttributeSpec.Kind):
+//
+//   - a boolean attribute is set by presence: a bare `{name}` is `{name:true}`,
+//     `{name:true}` sets it true and `{name:false}` sets it false;
+//   - an enum attribute is set to one of its Variants by `{name:variant}`;
+//   - a bare name that is a variant of exactly one declared enum attribute sets
+//     that attribute to the variant — the mutex short-hand, so `{green}` sets
+//     the sole `highlight` enum to "green".
+//
+// A value that is not of the attribute's declared type is a validation error
+// naming the attribute and its value: a boolean given anything but true or
+// false, or an enum given a value outside its Variants.
+//
+// An occurrence whose name is not a declared attribute is an
+// unknown-attribute error carrying the closest-match suggestion over the
+// declared names, for example
+// `unknown cell attribute "hilight": did you mean "highlight"?`. The reserved
+// name `br` is never a declared cell attribute and is always refused.
+//
+// resolveCellAttribute trusts the declarations: the template loader rejects an
+// ambiguous declaration set before any cell is decoded — a bare name that is
+// both a declared boolean and an enum variant, or a variant of more than one
+// declared enum — so a bare name resolves to at most one declared attribute
+// here.
+func resolveCellAttribute(occurrence string, specs []CellAttributeSpec) (any, error) {
+	name, value, hasValue := strings.Cut(occurrence, ":")
+
+	if name == reservedCellAttribute {
+		return nil, fmt.Errorf("cell attribute %q is reserved and cannot be set", name)
+	}
+
+	spec, declared := lookupCellAttribute(specs, name)
+
+	if !hasValue {
+		// A bare `{name}` is `{name:true}` for a declared boolean attribute.
+		if declared && spec.Kind == CellAttributeBoolean {
+			return true, nil
+		}
+		// A bare name that is a variant of exactly one declared enum
+		// attribute sets that attribute to the variant (the mutex
+		// short-hand). The declaration set is unambiguous, so at most one
+		// enum matches.
+		if _, ok := enumCellAttributeForVariant(specs, name); ok {
+			return name, nil
+		}
+		if declared {
+			return nil, fmt.Errorf("cell attribute %q: a variant is required (%s)",
+				name, strings.Join(spec.Variants, ", "))
+		}
+		return nil, unknownCellAttributeError(name, specs)
+	}
+
+	if !declared {
+		return nil, unknownCellAttributeError(name, specs)
+	}
+
+	if spec.Kind == CellAttributeEnum {
+		for _, v := range spec.Variants {
+			if v == value {
+				return value, nil
+			}
+		}
+		return nil, fmt.Errorf("cell attribute %q: %q is not one of the allowed variants (%s)",
+			name, value, strings.Join(spec.Variants, ", "))
+	}
+
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return nil, fmt.Errorf("cell attribute %q: %q is not a boolean", name, value)
+}
+
+// lookupCellAttribute returns the declared spec named name and reports whether
+// the template declares it.
+func lookupCellAttribute(specs []CellAttributeSpec, name string) (CellAttributeSpec, bool) {
+	for _, spec := range specs {
+		if spec.Name == name {
+			return spec, true
+		}
+	}
+	return CellAttributeSpec{}, false
+}
+
+// enumCellAttributeForVariant returns the first declared enum attribute whose
+// Variants include name. The template loader rejects a declaration set in which
+// one variant belongs to more than one enum, so a bare name matches at most one
+// declared enum (table-cell-attributes).
+func enumCellAttributeForVariant(specs []CellAttributeSpec, name string) (CellAttributeSpec, bool) {
+	for _, spec := range specs {
+		if spec.Kind != CellAttributeEnum {
+			continue
+		}
+		for _, v := range spec.Variants {
+			if v == name {
+				return spec, true
+			}
+		}
+	}
+	return CellAttributeSpec{}, false
+}
+
+// unknownCellAttributeError builds the error for an occurrence naming no
+// declared cell attribute: it names the offending attribute and, when
+// internal/suggest finds one, appends the closest declared name as a
+// `did you mean %q?` suggestion.
+func unknownCellAttributeError(name string, specs []CellAttributeSpec) error {
+	if closest := suggest.Closest(name, cellAttributeNames(specs)); closest != "" {
+		return fmt.Errorf("unknown cell attribute %q: did you mean %q?", name, closest)
+	}
+	return fmt.Errorf("unknown cell attribute %q", name)
+}
+
+// cellAttributeNames returns the declared attribute names in declaration order,
+// the candidate set for the closest-match suggestion an unknown-attribute error
+// carries.
+func cellAttributeNames(specs []CellAttributeSpec) []string {
+	names := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		names = append(names, spec.Name)
+	}
+	return names
 }
 
 // TableCell is one cell of a parsed GFM table: the cell's trimmed
