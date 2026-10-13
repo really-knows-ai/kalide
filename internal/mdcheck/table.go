@@ -385,6 +385,35 @@ func decodeCellAttributes(cell TableCell, specs []CellAttributeSpec) (DecodedCel
 	return DecodedCell{Lines: lines, Attrs: attrs}, firstErr
 }
 
+// DecodeTableCell decodes one parsed table cell's `{br}` and `{...}` extensions
+// against the enclosing template's declared cell attributes and returns the
+// cell's visible inline-Markdown content and its decoded attribute set
+// (table-cell-attributes).
+//
+// It is the exported seam internal/render depends on: the renderer hands it a
+// parsed TableCell and the template's []CellAttributeSpec and receives the
+// DecodedCell to render, so the renderer never re-implements the `{br}`/`{...}`
+// stripping. CellAttributeSpec is mdcheck's own plain descriptor, so the
+// renderer passes the template's declarations through without importing a
+// schema package.
+//
+// cell is the parsed cell — its Text is the cell's trimmed inline-Markdown
+// source — and specs are the template's declared cell attributes. The decode
+// applies to a header cell exactly as to a body cell. The returned DecodedCell
+// carries the cell's content as Lines, split at each `{br}` line break (a
+// segment boundary, never a raw `<br>` left in the Markdown), and Attrs, one
+// entry per declared attribute with nil for every attribute the cell leaves
+// unset.
+//
+// DecodeTableCell delegates to decodeCellAttributes; see it for the decoding
+// rules. A `{...}` occurrence that names no declared attribute, or sets a value
+// of the wrong type, is returned as err with a DecodedCell that is as complete
+// as the cell's remaining occurrences allow; the caller turns the error into a
+// validation issue positioned at the cell.
+func DecodeTableCell(cell TableCell, specs []CellAttributeSpec) (DecodedCell, error) {
+	return decodeCellAttributes(cell, specs)
+}
+
 // cellGroupEnd returns the index of the `}` that closes the `{...}` group whose
 // `{` is at start in the masked cell source, or -1 when start does not open a
 // closed group. A group is confined to one run of scannable cell text: an
