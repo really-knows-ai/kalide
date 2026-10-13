@@ -959,6 +959,60 @@ func parseManifestBody(manifestPath string, val *yaml.Node) (BodyRule, error) {
 	return b, nil
 }
 
+// checkCellAttributeAmbiguity rejects a decoded set of cell-attribute
+// declarations whose short-hand names would not resolve by mutex
+// (table-cell-attributes): a declared boolean attribute whose name is also a
+// variant of a declared enum attribute, or an enum variant declared by more
+// than one enum attribute, makes a bare `{name}` group ambiguous, so it is
+// refused at template load. The returned error is a positioned templates
+// error (*LibraryError) naming the ambiguous name and the offending
+// template.yaml, or nil when every declared short-hand name resolves
+// unambiguously.
+//
+// It inspects the whole decoded set and is order-independent. Duplicate
+// declared names and the reserved name `br` are separate concerns of the
+// manifest decoder that builds the declarations (parseManifestCellAttributes)
+// and are not checked here.
+func checkCellAttributeAmbiguity(manifestPath string, attrs []CellAttribute) error {
+	// variantOwner records, for each declared enum variant, the index of the
+	// first enum attribute that declared it. A variant another enum attribute
+	// also declares is ambiguous: a bare `{variant}` would set either.
+	variantOwner := make(map[string]int, len(attrs))
+	for i, a := range attrs {
+		if a.Kind != FieldEnum {
+			continue
+		}
+		for _, v := range a.Variants {
+			owner, ok := variantOwner[v]
+			if !ok {
+				variantOwner[v] = i
+				continue
+			}
+			if owner != i {
+				return libraryErrorf(manifestPath, 0,
+					"cell attribute %q is ambiguous: it is a variant of more than one declared enum attribute",
+					v)
+			}
+			// A repeated variant within one enum is not this check's
+			// concern (duplicate declarations are parseManifestCellAttributes').
+		}
+	}
+	// A declared boolean attribute whose name is also a declared enum variant
+	// is ambiguous: a bare `{name}` could mean the boolean attribute or the
+	// single enum variant that carries that name.
+	for _, a := range attrs {
+		if a.Kind != FieldBoolean {
+			continue
+		}
+		if owner, ok := variantOwner[a.Name]; ok {
+			return libraryErrorf(manifestPath, 0,
+				"cell attribute %q is ambiguous: it is declared as a boolean attribute and as a variant of the enum attribute %q",
+				a.Name, attrs[owner].Name)
+		}
+	}
+	return nil
+}
+
 // scalarBool decodes val as a plain YAML boolean.
 func scalarBool(val *yaml.Node, manifestPath string, line int, key string) (bool, error) {
 	if val.Kind != yaml.ScalarNode || val.ShortTag() != "!!bool" {
