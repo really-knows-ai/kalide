@@ -477,6 +477,214 @@ fields:
 			})
 		}
 	})
+
+	// A full on-disk library whose library.yaml carries the three
+	// named-definition sections — groups:, field_sets: and types: — loads
+	// through os.DirFS, and a template's `type:` (a named type), `- include:`
+	// (a named field set) and `@group` `accepted:` entry all resolve against
+	// the library's OWN definitions; its example then validates end to end
+	// against the expanded schema (named-library-definitions). This is the
+	// single-layer LoadLibrary path: loadLibraryMeta parses the sections onto
+	// the loader's unexported carrier, layerFromLibrary copies them onto the
+	// loading layer's Definitions, and NewRegistryFromLibrary (step 4)
+	// threads every template's owning-layer Definitions through
+	// registerLibraryTemplate into parseManifest — the layerless step-4
+	// *Library's fallback — so the references resolve while the example is
+	// validated.
+	t.Run("named definitions (groups, field_sets, types) resolve and validate end to end", func(t *testing.T) {
+		// The three sections are additive to format 1: the library still
+		// declares `format: 1`. callouts is the named accept-list (referenced
+		// as `@callouts`), meta the named field set (`- include: meta`) and
+		// colour the named field type (`type: colour`).
+		const namedLibraryYAML = `name: demo
+format: 1
+groups:
+  callouts:
+    - note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants:
+      - red
+      - green
+      - blue
+`
+		// The report slide references each kind: `- include: meta` expands the
+		// field set's subtitle/weight in place, `type: colour` expands the
+		// named enum under the referencing name accent, and the asides section
+		// accepts the named group `@callouts` combinable with the literal
+		// template name tip.
+		const reportManifest = `name: report
+fields:
+  - include: meta
+  - name: accent
+    type: colour
+    required: true
+sections:
+  - name: asides
+    accepted:
+      - "@callouts"
+      - tip
+    max: 4
+`
+		const reportLayout = `<section class="report">` +
+			`<span class="report-subtitle">{{ .subtitle }}</span>` +
+			`<span class="report-weight">{{ .weight }}</span>` +
+			`<span class="report-accent">{{ .accent }}</span>` +
+			`{{ range .asides }}<span class="report-aside">{{ .text }}</span>{{ end }}` +
+			`</section>`
+
+		const noteManifest = "name: note\nfields:\n  - name: text\n    type: text\n"
+		const noteLayout = `<aside class="note">{{ .text }}</aside>`
+		const noteExample = "A note.\n"
+		const tipManifest = "name: tip\nfields:\n  - name: text\n    type: text\n"
+		const tipLayout = `<aside class="tip">{{ .text }}</aside>`
+		const tipExample = "A tip.\n"
+
+		// The report example supplies the included fields, a variant of the
+		// named enum, and nests a note child (accepted only via `@callouts`)
+		// and a tip child (accepted via the literal name), so BOTH the field
+		// references and the group expansion reach the example-validation
+		// site, not just the parsed declaration.
+		const reportExample = "---\n" +
+			"template: report\n" +
+			"subtitle: Quarterly\n" +
+			"weight: 3\n" +
+			"accent: red\n" +
+			"---\n" +
+			"Report body.\n" +
+			"# asides\n" +
+			"```\n" +
+			"template: note\n" +
+			"text: hello\n" +
+			"```\n" +
+			"# asides\n" +
+			"```\n" +
+			"template: tip\n" +
+			"text: bye\n" +
+			"```\n"
+
+		// writeNamedLibrary writes library.yaml plus the three templates to a
+		// fresh temp dir, returning the project root for os.DirFS. Only the
+		// report example varies, so the positive and negative cases differ
+		// solely in the authored accent value.
+		writeNamedLibrary := func(t *testing.T, reportEx string) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte(namedLibraryYAML))
+			files := mergeIntFiles(
+				templateIntFiles(SlidesDir, "report", reportManifest, reportLayout, reportEx),
+				templateIntFiles(SectionsDir, "note", noteManifest, noteLayout, noteExample),
+				templateIntFiles(SectionsDir, "tip", tipManifest, tipLayout, tipExample),
+			)
+			for rel, data := range files {
+				writeFile(t, filepath.Join(root, filepath.FromSlash(rel)), []byte(data))
+			}
+			return projectDir
+		}
+
+		t.Run("the template resolves type:/include:/@group and its example executes", func(t *testing.T) {
+			projectDir := writeNamedLibrary(t, reportExample)
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: named references must resolve at load", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+
+			report, kind, ok := lib.TemplateByName("report")
+			if !ok || kind != KindSlide {
+				t.Fatalf("TemplateByName(report) = (%v, %q, %v), want (non-nil, %q, true)", report, kind, ok, KindSlide)
+			}
+			if report.Definition == nil {
+				t.Fatal("checkLibraryBuild left report.Definition nil")
+			}
+			def := report.Definition
+
+			// `- include: meta` expanded the named field set in place, ahead of
+			// the literal accent field.
+			if len(def.Fields) != 3 {
+				t.Fatalf("report.Fields = %+v, want subtitle, weight (from include: meta) then accent", def.Fields)
+			}
+			if def.Fields[0].Name != "subtitle" || def.Fields[0].Type != FieldText {
+				t.Errorf("Fields[0] = %+v, want the field set's subtitle:text", def.Fields[0])
+			}
+			if def.Fields[1].Name != "weight" || def.Fields[1].Type != FieldNumber {
+				t.Errorf("Fields[1] = %+v, want the field set's weight:number", def.Fields[1])
+			}
+			// `type: colour` expanded the named enum under the referencing name
+			// accent, keeping the named variants and the referencing field's own
+			// required key.
+			if def.Fields[2].Name != "accent" || def.Fields[2].Type != FieldEnum || !def.Fields[2].Required {
+				t.Errorf("Fields[2] = %+v, want the named type colour expanded as accent:enum required", def.Fields[2])
+			}
+			assertStringSlice(t, "accent.Variants", def.Fields[2].Variants, []string{"red", "green", "blue"})
+
+			// `@callouts` expanded the named group in place, then the literal tip
+			// name, so the section's accepted list is the group's members plus the
+			// literal.
+			if len(def.Sections) != 1 {
+				t.Fatalf("report.Sections = %+v, want one asides section", def.Sections)
+			}
+			assertStringSlice(t, "asides.Accepted", def.Sections[0].Accepted, []string{"note", "tip"})
+
+			// The resolved schema is the one the example was validated against
+			// and the one the layout executes: subtitle/weight from the field set
+			// and accent from the named enum read their authored values, and both
+			// the `@callouts` note child and the literal tip child materialise.
+			got, execErr := executeStep7ExampleInt(t, lib, "report", nil)
+			if execErr != nil {
+				t.Fatalf("step-7 example execution error = %v, want nil", execErr)
+			}
+			for _, want := range []string{
+				`<span class="report-subtitle">Quarterly</span>`,
+				`<span class="report-weight">3</span>`,
+				`<span class="report-accent">red</span>`,
+				`<span class="report-aside">hello</span>`,
+				`<span class="report-aside">bye</span>`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("step-7 rendered report layout does not contain %q:\n%s", want, got)
+				}
+			}
+		})
+
+		// The resolved named enum is enforced end to end: an example accent
+		// outside the named type's variants fails the load at report's
+		// example.md, so the loader really validated the example against the
+		// EXPANDED schema, not just recorded it.
+		t.Run("the resolved named enum is enforced at the example site", func(t *testing.T) {
+			projectDir := writeNamedLibrary(t,
+				"---\n"+
+					"template: report\n"+
+					"subtitle: Quarterly\n"+
+					"weight: 3\n"+
+					"accent: purple\n"+
+					"---\n")
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err == nil {
+				t.Fatalf("LoadLibrary() = %+v, nil; want the named enum's out-of-variants value to fail the load", lib)
+			}
+			if lib != nil {
+				t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+			}
+			libErr := asLibraryError(t, err)
+			if want := filepath.Join(TemplatesDir, SlidesDir, "report", ExampleFile); libErr.Path != want {
+				t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
+			}
+			if !strings.Contains(libErr.Message, `accent: enum: "purple" is not one of the allowed variants (red, green, blue)`) {
+				t.Errorf("Message = %q, want the named enum's variant error", libErr.Message)
+			}
+		})
+	})
 }
 
 // TestLoadDeckLibraryMergedThemeAndMediaLayers covers LoadDeckLibrary's merged
