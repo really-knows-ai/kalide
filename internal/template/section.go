@@ -374,9 +374,10 @@ type SectionDepthError struct {
 	// MaxDepth is the `max_depth` bound of the declaration that stopped the
 	// bounded self-nesting walk at this chain, or 0 when the over-deep chain
 	// was not bounded by a max_depth declaration (an ordinary declared-section
-	// chain). It is the bound the depth-limit error names
-	// (requirements.constraint.section-depth-limit); rendering it is
-	// plan.phase-07.task-5's scope — this field is the data that task consumes.
+	// chain). Error names it when it is positive, so the depth-limit error
+	// names the max_depth that produced a bounded chain and not just the
+	// syntax bound it breaks (requirements.constraint.section-depth-limit,
+	// requirements.requirement.bounded-self-nesting).
 	MaxDepth int
 }
 
@@ -384,10 +385,32 @@ type SectionDepthError struct {
 // a plain-language templates error: how deep the chain is, the six-heading-
 // level limit it breaks, the chain itself, and a hint to nest fewer section
 // templates or flatten the composition.
+//
+// An ordinary declared-section chain (MaxDepth 0) keeps that rendering, with
+// the chain written as plain template names joined by ` → `. A positive
+// MaxDepth means the over-deep chain came from a bounded self-nesting walk
+// (walkBoundedSelfNesting) rather than an ordinary declared chain
+// (requirements.requirement.bounded-self-nesting), so Error also names the
+// max_depth that produced it: the chain is written section-qualified — each
+// plain template name gets the `sections/` directory prefix section templates
+// live in, exactly as *SectionCycleError renders one — and the declaration's
+// bound is named, e.g.
+// `… exceeding the 6-heading-level limit: sections/loop → sections/loop → … —
+// the bounded self-nesting declaration max_depth: 6 produces this chain …`
+// (requirements.constraint.section-depth-limit).
 func (e *SectionDepthError) Error() string {
 	limit := e.Limit
 	if limit <= 0 {
 		limit = sectionDepthLimit
+	}
+	if e.MaxDepth > 0 {
+		parts := make([]string, len(e.Path))
+		for i, name := range e.Path {
+			parts[i] = SectionsDir + "/" + name
+		}
+		return fmt.Sprintf(
+			"section template composition is %d levels deep, exceeding the %d-heading-level limit: %s — the bounded self-nesting declaration max_depth: %d produces this chain; lower max_depth or flatten the composition",
+			len(e.Path), limit, strings.Join(parts, " → "), e.MaxDepth)
 	}
 	return fmt.Sprintf(
 		"section template composition is %d levels deep, exceeding the %d-heading-level limit: %s — nest fewer section templates or flatten the composition",
