@@ -1434,6 +1434,37 @@ types:
 		}
 	})
 
+	// enum-variants-from (plan.phase-08.task-13): an enum field's
+	// `variants_from:` glob is expanded at build against the root of the
+	// layer that owns the template — checkLibraryBuild supplies the
+	// single-layer library's root to Registry.Validate — so a glob matching
+	// no file under that layer's media/ tree is a step-4 templates error,
+	// while declaring both `variants:` and the glob on one field is rejected
+	// at registration. Each is a positioned *LibraryError naming the
+	// offending template.yaml, exactly as the loader reports it.
+
+	t.Run("variants_from: a glob matching no media file is rejected", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: mode\n    type: enum\n    variants_from: media/nope/*.jpg\n", "")
+		if want := "templates/slides/badslide/template.yaml"; libErr.Path != want {
+			t.Errorf("Path = %q, want %q", libErr.Path, want)
+		}
+		if want := `template "badslide": field "mode": variants_from "media/nope/*.jpg" matches no file under the library layer's media/ tree`; libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
+	t.Run("variants_from: declaring both variants and variants_from is rejected", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: mode\n    type: enum\n    variants: [a, b]\n    variants_from: media/*.jpg\n", "")
+		if want := "templates/slides/badslide/template.yaml"; libErr.Path != want {
+			t.Errorf("Path = %q, want %q", libErr.Path, want)
+		}
+		if want := `template "badslide": field "mode" declares both "variants" and "variants_from"`; libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
 	// The bad-variant and cross-field-bound build-time checks reach a field
 	// inside an inline record item exactly as they do at the top level
 	// (plan.phase-03.task-8, record-item-type): checkFieldVariants recurses
