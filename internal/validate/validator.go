@@ -188,8 +188,8 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// instance's template declares its own body rule and its own
 	// child-section state, so each body is checked against its own enclosing
 	// template.
-	if verr, invalid := checkSections(fsys, s.Path, ps.Sections, nil, reg); invalid {
-		return verr, true
+	if errs := checkSections(fsys, s.Path, ps.Sections, nil, reg); len(errs) > 0 {
+		return errs[0], true
 	}
 
 	// The reserved notes section is a body too and, being last, is checked
@@ -207,14 +207,17 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 // checkSections validates a slice of section instances in source order: each
 // instance's frontmatter fields, then its body against its own template's
 // implied body rule, then its children recursively (slide-sections). file is
-// the slide path every error is positioned in.
+// the slide path every error is positioned in. It returns every error of every
+// instance at every nesting depth, in that source order, rather than only the
+// first; a failing instance never blocks a later sibling.
 //
 // prefix is the containment chain of the enclosing instances (outermost first,
 // each segment `name[index]`); it is extended by the current instance before
 // checking its fields, so a nested instance's field error carries its full
 // instance chain (nested-section-validation). The slide's top-level call passes
 // nil.
-func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []string, reg *template.Registry) (ValidationError, bool) {
+func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []string, reg *template.Registry) []ValidationError {
+	var errs []ValidationError
 	for i := range sections {
 		sec := &sections[i]
 		secPrefix := append(append([]string(nil), prefix...), sec.Name+"["+strconv.Itoa(sec.Index)+"]")
@@ -222,32 +225,24 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 			// No resolvable template: the parser already reported it, and no
 			// nested instances can be checked without one. Children with a
 			// template are still walked by their own parent below.
-			if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
-				return verr, true
-			}
+			errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 			continue
 		}
 		secTmpl, ok := reg.Lookup(sec.Template)
 		if !ok || secTmpl == nil {
-			if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
-				return verr, true
-			}
+			errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 			continue
 		}
-		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
-			return verr, true
+		if ve, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
+			errs = append(errs, ve)
 		}
-		if errs := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix); len(errs) > 0 {
-			return errs[0], true
+		errs = append(errs, checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix)...)
+		if ve, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
+			errs = append(errs, ve)
 		}
-		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
-			return verr, true
-		}
+		errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // declaresChildSections reports whether tmpl declares child sections, the
