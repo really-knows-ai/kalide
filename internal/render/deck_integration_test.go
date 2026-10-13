@@ -307,6 +307,75 @@ func TestRenderDeckNestedSections(t *testing.T) {
 	if strings.Contains(page, "map[") {
 		t.Errorf("page carries a section data map rather than rendered section markup:\n%s", page)
 	}
+
+	// plan.phase-07.task-20 (bounded-self-nesting, item-context): a real deck
+	// whose library carries ONE section template (`bstloop`) that declares a
+	// self-accepting `loop` section bounded at `max_depth: 1`, plus a slide
+	// template (`bstevents`) whose `events` section accepts it. The slide
+	// authors `# events` (resolving `bstloop`) with two nested `## loop`
+	// children, both resolving `bstloop` again: the events instance is the
+	// template's outermost level (`.item.depth` 0) and each nested `loop`
+	// instance has exactly one enclosing same-template ancestor, so
+	// `.item.depth` 1. The whole bounded tree renders end to end, and each
+	// instance reads its own `.item` — `.item.section` (`events`/`loop`),
+	// `.item.index`/`.item.count` its real position among its `loop` siblings
+	// and `.item.parent.name` the enclosing events instance's fields.
+	t.Run("bounded self-nesting renders each level's item context", func(t *testing.T) {
+		dir := writeBoundedSelfNestingDeck(t)
+		fsys := os.DirFS(dir)
+
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
+			t.Fatalf("template.LoadLibrary: %v", err)
+		}
+		reg, err := template.NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+		}
+		themeReg, err := theme.LoadDir(fsys, template.TemplatesDir+"/"+template.ThemesDir)
+		if err != nil {
+			t.Fatalf("theme.LoadDir: %v", err)
+		}
+		funcMap := template.LayoutFuncMap(lib.Media, "/assets/templates/media")
+
+		if verr, invalid := validate.Validate(fsys, reg, themeReg); invalid {
+			t.Fatalf("validate.Validate rejected the deck: %s", validate.Format(verr))
+		}
+
+		cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
+		if err != nil {
+			t.Fatalf("deck.LoadConfig: %v", err)
+		}
+		d, err := deck.LoadSlides(fsys, deck.SlidesDir)
+		if err != nil {
+			t.Fatalf("deck.LoadSlides: %v", err)
+		}
+		parsed := parsePipelineSlides(t, fsys, d, reg)
+
+		pageHTML, err := RenderDeck(cfg, d, parsed, reg, themeReg, funcMap)
+		if err != nil {
+			t.Fatalf("RenderDeck: %v", err)
+		}
+		page := string(pageHTML)
+
+		// The whole bounded self-nested tree, deepest-first: the events
+		// instance (depth 0, no section parent) wrapping its two loop
+		// children (depth 1 each, sibling positions 0/1 of 2), each reading
+		// `.item.parent.name` from the enclosing events instance's fields.
+		wantTree := `<div class="bst-loop" data-name="Events" data-depth="0" data-section="events" data-template="bstloop" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-parent="absent" data-parent-name="">` +
+			`<div class="bst-loop" data-name="First" data-depth="1" data-section="loop" data-template="bstloop" data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-parent="present" data-parent-name="Events"></div>` +
+			`<div class="bst-loop" data-name="Second" data-depth="1" data-section="loop" data-template="bstloop" data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-parent="present" data-parent-name="Events"></div>` +
+			`</div>`
+		if !strings.Contains(page, wantTree) {
+			t.Errorf("page does not contain the bounded self-nested tree:\nwant: %s\npage:\n%s", wantTree, page)
+		}
+
+		// As above, the page carries rendered section markup, never section
+		// data maps.
+		if strings.Contains(page, "map[") {
+			t.Errorf("page carries a section data map rather than rendered section markup:\n%s", page)
+		}
+	})
 }
 
 // writeNestedPipelineDeck writes nestedPipelineDeckFiles to a fresh
@@ -329,6 +398,100 @@ func writeNestedPipelineDeck(t *testing.T) string {
 	writeProbeTemplate(t, dir, "slides", "pipelinesections", nestedPipelineSlideTemplateYAML, nestedPipelineSlideLayout, nestedPipelineSlideExample)
 	writeProbeTemplate(t, dir, "sections", "pipelineblock", nestedPipelineBlockTemplateYAML, nestedPipelineBlockLayout, nestedPipelineBlockExample)
 	writeProbeTemplate(t, dir, "sections", "pipelineleaf", nestedPipelineLeafTemplateYAML, nestedPipelineLeafLayout, nestedPipelineLeafExample)
+	return dir
+}
+
+// The bounded-self-nesting probe library has ONE section template (`bstloop`)
+// declaring a self-accepting `loop` section bounded at `max_depth: 1`, plus a
+// slide template (`bstevents`) whose `events` section accepts it. The slide
+// authors `# events` (an instance of `bstloop`) holding two nested `## loop`
+// instances (also `bstloop`), so the events instance is the template's
+// outermost level and each loop instance is its first self-nested level — the
+// one-template case of bounded-self-nesting's "one template that declares
+// `loop` accepting itself with max_depth: 1, rendering a top `events` instance
+// holding `loop` children that hold no further `loop` children". Every layout
+// is a single compact line so the page carries an exactly assertable fragment
+// of rendered section markup (not data maps), and each instance prints its own
+// reserved `.item` descriptor.
+const (
+	boundedSelfNestingSlideTemplateYAML = `description: slide hosting a bounded self-nesting events tree
+sections:
+  - name: events
+    accepted:
+      - bstloop
+body:
+  mode: optional
+`
+
+	boundedSelfNestingSlideLayout = `<section class="bst-slide">{{range .events}}{{.}}{{end}}</section>`
+
+	boundedSelfNestingSlideExample = "---\ntemplate: bstevents\n---\n"
+
+	boundedSelfNestingLoopTemplateYAML = `description: bounded self-nesting loop section
+fields:
+  - name: name
+    type: text
+    required: true
+sections:
+  - name: loop
+    accepted:
+      - bstloop
+    max_depth: 1
+body:
+  mode: optional
+`
+
+	// The loop layout prints its own `.item` at each level: depth, section,
+	// resolved template, sibling index/number/count/first/last, and the
+	// parent instance's `name` field when there is one, then recurses into its
+	// authored `loop` children.
+	boundedSelfNestingLoopLayout = `<div class="bst-loop" data-name="{{.name}}" data-depth="{{.item.depth}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-index="{{.item.index}}" data-number="{{.item.number}}" data-count="{{.item.count}}" data-first="{{.item.first}}" data-last="{{.item.last}}" data-parent="{{if .item.parent}}present{{else}}absent{{end}}" data-parent-name="{{if .item.parent}}{{.item.parent.name}}{{end}}">{{range .loop}}{{.}}{{end}}</div>`
+
+	// The loop template's example authors the one nested `loop` instance its
+	// declaration accepts (max_depth: 1), so step 7 validates the bounded
+	// instance too.
+	boundedSelfNestingLoopExample = "```\nname: Example\n```\n# loop\n```\nname: Inner\n```\n"
+)
+
+// boundedSelfNestingDeckFiles is the real deck written for the bounded
+// self-nesting pipeline test: kalide.yaml plus one slide using `bstevents`
+// whose `# events` section resolves `bstloop` and holds two `## loop`
+// children, both resolving `bstloop` (the nested level bounded by max_depth 1).
+var boundedSelfNestingDeckFiles = map[string]string{
+	"kalide.yaml": "title: Bounded Self-Nesting Deck\n" +
+		"theme: plain\n",
+	"slides/1-events.md": `---
+template: bstevents
+---
+
+# events
+` + "```\nname: Events\n```" + `
+## loop
+` + "```\nname: First\n```" + `
+## loop
+` + "```\nname: Second\n```" + `
+`,
+}
+
+// writeBoundedSelfNestingDeck writes boundedSelfNestingDeckFiles to a fresh
+// t.TempDir(), copies the fixture templates/ library, and writes the
+// bounded-self-nesting probe templates (bstevents, bstloop) into that copied
+// library, returning the directory.
+func writeBoundedSelfNestingDeck(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, data := range boundedSelfNestingDeckFiles {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(p), err)
+		}
+		if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+			t.Fatalf("write %s: %v", p, err)
+		}
+	}
+	copyTemplatesDir(t, filepath.Join(fixtureLibraryDir, "templates"), filepath.Join(dir, "templates"))
+	writeProbeTemplate(t, dir, "slides", "bstevents", boundedSelfNestingSlideTemplateYAML, boundedSelfNestingSlideLayout, boundedSelfNestingSlideExample)
+	writeProbeTemplate(t, dir, "sections", "bstloop", boundedSelfNestingLoopTemplateYAML, boundedSelfNestingLoopLayout, boundedSelfNestingLoopExample)
 	return dir
 }
 
