@@ -1,6 +1,7 @@
 package mdcheck
 
 import (
+	htmltemplate "html/template"
 	"reflect"
 	"strings"
 	"testing"
@@ -386,5 +387,189 @@ func TestParseTablesNoDelimiterRow(t *testing.T) {
 				t.Fatalf("tables = %#v, issues = %#v, want none", tables, issues)
 			}
 		})
+	}
+}
+
+// tctxRenderInline is the render-inline function TableContext takes: it records
+// every segment it is asked to render and wraps the segment in a deterministic
+// marker, so a test can assert both the cell's html and that the CALLER's
+// renderer — never a re-implementation inside mdcheck — produced it.
+type tctxRenderInline struct {
+	seen []string
+}
+
+func (r *tctxRenderInline) render(segment string) htmltemplate.HTML {
+	r.seen = append(r.seen, segment)
+	return htmltemplate.HTML("R(" + segment + ")")
+}
+
+// tctxMap asserts v is the map one table-context entry carries.
+func tctxMap(t *testing.T, v any) map[string]any {
+	t.Helper()
+	m, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("table value = %T, want map[string]any", v)
+	}
+	return m
+}
+
+// tctxCells asserts v is the []any a table's headers or one body row carries.
+func tctxCells(t *testing.T, v any) []any {
+	t.Helper()
+	cells, ok := v.([]any)
+	if !ok {
+		t.Fatalf("cell list = %T, want []any", v)
+	}
+	return cells
+}
+
+// tctxHTML asserts v is a `{html, attrs}` cell map and returns its rendered
+// html. The cell map carries exactly the html and attrs keys, and html is an
+// html/template.HTML — the trusted type a template injects unescaped.
+func tctxHTML(t *testing.T, v any) string {
+	t.Helper()
+	m := tctxMap(t, v)
+	if len(m) != 2 {
+		t.Errorf("cell = %v, want exactly the html and attrs keys", m)
+	}
+	html, ok := m["html"].(htmltemplate.HTML)
+	if !ok {
+		t.Fatalf("cell html = %T, want html/template.HTML", m["html"])
+	}
+	if _, ok := m["attrs"].(map[string]any); !ok {
+		t.Fatalf("cell attrs = %T, want map[string]any", m["attrs"])
+	}
+	return string(html)
+}
+
+// TestTableContextColumnsInOrder pins the shared TableContext's table-map shape
+// (table-layout-context, gfm-tables): headers, align and every body row carry one
+// entry per column, in column order, and each entry is a `{html, attrs}` map
+// whose html the caller's render-inline function produced.
+func TestTableContextColumnsInOrder(t *testing.T) {
+	src := "| H1 | H2 | H3 |\n| :--- | :---: | ---: |\n| a | b | c |\n| d | e | f |\n"
+	rec := &tctxRenderInline{}
+	table, tables := TableContext(src, nil, rec.render)
+
+	if len(tables) != 1 {
+		t.Fatalf("TableContext tables = %d entries, want 1", len(tables))
+	}
+	tm := tctxMap(t, table)
+
+	headers := tctxCells(t, tm["headers"])
+	for i, want := range []string{"H1", "H2", "H3"} {
+		if got := tctxHTML(t, headers[i]); got != "R("+want+")" {
+			t.Errorf("header[%d] html = %q, want %q", i, got, "R("+want+")")
+		}
+	}
+
+	align, ok := tm["align"].([]string)
+	if !ok {
+		t.Fatalf("TableContext align = %T, want []string", tm["align"])
+	}
+	if want := []string{"left", "center", "right"}; !reflect.DeepEqual(align, want) {
+		t.Errorf("TableContext align = %v, want %v", align, want)
+	}
+
+	rows := tctxCells(t, tm["rows"])
+	wantRows := [][]string{{"a", "b", "c"}, {"d", "e", "f"}}
+	if len(rows) != len(wantRows) {
+		t.Fatalf("TableContext rows = %d entries, want %d", len(rows), len(wantRows))
+	}
+	for r, wantRow := range wantRows {
+		cells := tctxCells(t, rows[r])
+		if len(cells) != len(wantRow) {
+			t.Fatalf("TableContext row[%d] = %d cells, want %d", r, len(cells), len(wantRow))
+		}
+		for c, want := range wantRow {
+			if got := tctxHTML(t, cells[c]); got != "R("+want+")" {
+				t.Errorf("TableContext row[%d] cell[%d] html = %q, want %q", r, c, got, "R("+want+")")
+			}
+		}
+	}
+}
+
+// TestTableContextCellsThroughRenderInline pins that TableContext builds every
+// cell's `{html, attrs}` map through the render-inline function it is passed
+// (table-cell-attributes, table-layout-context): the function receives each
+// decoded `{br}` segment of the cell, the rendered segments are joined with a
+// literal `<br>`, and attrs carries a nil entry for each declared attribute the
+// cell leaves unset.
+func TestTableContextCellsThroughRenderInline(t *testing.T) {
+	specs := []CellAttributeSpec{
+		{Name: "bold", Kind: CellAttributeBoolean},
+		{Name: "highlight", Kind: CellAttributeEnum, Variants: []string{"green", "red"}},
+	}
+	src := "| head |\n| --- |\n| x{bold} y{br}**z** |\n"
+	rec := &tctxRenderInline{}
+	table, _ := TableContext(src, specs, rec.render)
+
+	rows := tctxCells(t, tctxMap(t, table)["rows"])
+	cells := tctxCells(t, rows[0])
+	cell := tctxMap(t, cells[0])
+
+	if got, want := string(cell["html"].(htmltemplate.HTML)), "R(x y)<br>R(**z**)"; got != want {
+		t.Errorf("cell html = %q, want %q", got, want)
+	}
+	if got, want := rec.seen, []string{"head", "x y", "**z**"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("renderInline segments = %q, want %q", got, want)
+	}
+	attrs, ok := cell["attrs"].(map[string]any)
+	if !ok {
+		t.Fatalf("cell attrs = %T, want map[string]any", cell["attrs"])
+	}
+	if attrs["bold"] != true {
+		t.Errorf("attrs[bold] = %v, want true", attrs["bold"])
+	}
+	if v, present := attrs["highlight"]; !present || v != nil {
+		t.Errorf("attrs[highlight] = %v (present %v), want a present nil entry", v, present)
+	}
+}
+
+// TestTableContextNoTable pins the always-present no-table shape
+// (table-layout-context, gfm-tables): a body carrying no table yields table as a
+// TYPED nil map — `{{ if .table }}` falsy and `{{ range .table.rows }}` a no-op —
+// and tables as a non-nil, empty list rather than a bare nil.
+func TestTableContextNoTable(t *testing.T) {
+	table, tables := TableContext("A paragraph, and no table at all.\n", nil, (&tctxRenderInline{}).render)
+
+	tm, ok := table.(map[string]any)
+	if !ok {
+		t.Fatalf("TableContext table = %T, want map[string]any", table)
+	}
+	if tm != nil {
+		t.Errorf("TableContext table = %#v, want a typed nil map", tm)
+	}
+	if len(tm) != 0 {
+		t.Errorf("TableContext len(table) = %d, want 0", len(tm))
+	}
+	if tables == nil {
+		t.Error("TableContext tables = nil, want a non-nil empty list")
+	} else if len(tables) != 0 {
+		t.Errorf("TableContext tables = %v, want an empty list", tables)
+	}
+}
+
+// TestTableContextFirstTable pins that .table is the body's FIRST parsed table
+// while .tables lists every table in source order (table-layout-context,
+// gfm-tables).
+func TestTableContextFirstTable(t *testing.T) {
+	src := "| A1 | A2 |\n| --- | --- |\n| a | b |\n\nIntro.\n\n| B1 | B2 |\n| --- | --- |\n| c | d |\n"
+	table, tables := TableContext(src, nil, (&tctxRenderInline{}).render)
+
+	if len(tables) != 2 {
+		t.Fatalf("TableContext tables = %d entries, want 2", len(tables))
+	}
+	first := tctxCells(t, tctxMap(t, tables[0])["headers"])
+	second := tctxCells(t, tctxMap(t, tables[1])["headers"])
+	if got := tctxHTML(t, first[0]); got != "R(A1)" {
+		t.Errorf("tables[0] first header = %q, want %q", got, "R(A1)")
+	}
+	if got := tctxHTML(t, second[0]); got != "R(B1)" {
+		t.Errorf("tables[1] first header = %q, want %q in source order", got, "R(B1)")
+	}
+	exposed := tctxCells(t, tctxMap(t, table)["headers"])
+	if got := tctxHTML(t, exposed[0]); got != "R(A1)" {
+		t.Errorf(".table first header = %q, want the first table's %q", got, "R(A1)")
 	}
 }
