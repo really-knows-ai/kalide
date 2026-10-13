@@ -92,6 +92,30 @@ func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (Val
 	return ValidationError{}, false
 }
 
+// ValidateAll validates the whole deck rooted at fsys and returns every failure
+// in the fixed deterministic order defined by whole-deck-validation, rather
+// than only the first. It is the collect-all entry behind kalide check --all:
+// it runs collectErrors (validator.go) in collect-all mode, so kalide.yaml,
+// the slide filenames, every slide top-to-bottom (frontmatter fields, body,
+// body rule, sections recursively, notes) and finally the inter-slide #label
+// links each contribute all of their errors; a failing step never blocks a
+// later independent step.
+//
+// reg and themeReg are required exactly as for Validate, never defaulted to any
+// compiled-in registry. The result is nil when the deck is valid, so a caller
+// reports every error like:
+//
+//	for _, verr := range validate.ValidateAll(fsys, reg, themeReg) {
+//		fmt.Fprintln(os.Stderr, validate.Format(verr))
+//	}
+//
+// Every returned error carries the same file/line/path/what/fix shape
+// Validate's single error does, and the list is deterministic: the same deck
+// always yields the same ordered list of failures.
+func ValidateAll(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) []ValidationError {
+	return collectErrors(fsys, reg, themeReg, true)
+}
+
 // collectErrors is the one fixed-order whole-deck walk every validation entry
 // shares. It runs the same deterministic order the specification fixes
 // (whole-deck-validation):
