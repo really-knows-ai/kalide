@@ -17,8 +17,9 @@ import (
 
 // integrationTemplate is one fake catalogue entry used by the integration test:
 // a template's usage, whether it is internal (`internal: true`), and, for slide
-// templates, its declared sections with the section templates they accept and
-// their repeat bounds.
+// templates, its declared sections with the section templates they accept,
+// their repeat bounds and their per-section `max_depth` bound (absent, i.e. 0,
+// when the declaration is unbounded).
 type integrationTemplate struct {
 	usage    string
 	internal bool
@@ -26,6 +27,7 @@ type integrationTemplate struct {
 	accepted map[string][]string
 	min      map[string]int
 	max      map[string]int
+	maxDepth map[string]int
 }
 
 // integrationCatalog is the small fake slide.Catalogue the integration test
@@ -58,12 +60,12 @@ func (c integrationCatalog) SectionNames(tmpl string) []string {
 	return names
 }
 
-func (c integrationCatalog) SectionDecl(tmpl, section string) ([]string, int, int, bool) {
+func (c integrationCatalog) SectionDecl(tmpl, section string) ([]string, int, int, int, bool) {
 	t, ok := c[tmpl]
 	if !ok || !slices.Contains(t.sections, section) {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
-	return t.accepted[section], t.min[section], t.max[section], true
+	return t.accepted[section], t.min[section], t.max[section], t.maxDepth[section], true
 }
 
 // integrationCatalogFor returns the catalogue the testdata/valid deck needs: a
