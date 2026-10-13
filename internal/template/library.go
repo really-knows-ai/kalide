@@ -228,8 +228,8 @@ const (
 // A LibraryLayer carries the layer's own Root and RootPath, so its files are
 // read from that layer and an error raised while loading it names that layer's
 // root (error-reporting), alongside what was loaded from it: its metadata, its
-// slide and section templates, its themes and its media sub-filesystem. It is
-// the per-layer counterpart type of the merged Library.
+// named definitions, its slide and section templates, its themes and its media
+// sub-filesystem. It is the per-layer counterpart type of the merged Library.
 //
 // The deck-root local templates/ layer (LayerRoleLocal) is the merged
 // Library's primary layer: its metadata, root and media become the merged
@@ -259,6 +259,21 @@ type LibraryLayer struct {
 
 	// Meta is the parsed library.yaml metadata of this layer.
 	Meta LibraryMeta
+
+	// Definitions holds the named, reusable definitions this layer's
+	// library.yaml declares — its groups (named accept-lists), field sets
+	// and types (named-library-definitions) — parsed by
+	// loadLibraryDefinitions. It is nil when the layer declares none, and a
+	// nil *LibraryDefinitions holds no definitions.
+	//
+	// Definitions are scoped to the layer that declares them: a template
+	// resolves its `type:`/`include:`/`@group` names against the Definitions
+	// of the layer that OWNS it (resolveNamedDefinition), so a name declared
+	// in one layer is not visible to a template in another and the same name
+	// may be declared independently in each. They live here, on the layer,
+	// and never on LibraryMeta, which stays name/description/format only and
+	// comparable.
+	Definitions *LibraryDefinitions
 
 	// Slides holds the templates loaded from this layer's slides/ directory,
 	// keyed by name.
