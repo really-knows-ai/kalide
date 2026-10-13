@@ -307,6 +307,40 @@ func mdcheckTableOptions(rule *TableRule) mdcheck.TableOptions {
 	}
 }
 
+// CellAttributeSpecs converts a template's decoded CellAttribute declarations
+// into mdcheck's own plain CellAttributeSpec descriptors, the closed set
+// mdcheck's cell-extension decoder resolves a cell's `{...}` group against
+// (mdcheck.Options.CellAttributes). It is the single shared converter every
+// caller uses — the implied-body check, the validator and the renderer — so the
+// conversion lives in exactly one place rather than being duplicated.
+//
+// The descriptor's Kind is mapped explicitly to mdcheck's plain boolean/enum
+// constants (FieldBoolean and FieldEnum); the variants are copied with
+// append([]string(nil), a.Variants...), so the returned slice never aliases the
+// template's own (read-only) declaration slice. A template that declares none
+// yields nil.
+func CellAttributeSpecs(attrs []CellAttribute) []mdcheck.CellAttributeSpec {
+	if len(attrs) == 0 {
+		return nil
+	}
+	specs := make([]mdcheck.CellAttributeSpec, len(attrs))
+	for i, a := range attrs {
+		kind := string(a.Kind)
+		switch a.Kind {
+		case FieldBoolean:
+			kind = mdcheck.CellAttributeBoolean
+		case FieldEnum:
+			kind = mdcheck.CellAttributeEnum
+		}
+		specs[i] = mdcheck.CellAttributeSpec{
+			Name:     a.Name,
+			Kind:     kind,
+			Variants: append([]string(nil), a.Variants...),
+		}
+	}
+	return specs
+}
+
 // mdcheckCellAttributeSpecs converts a template's decoded CellAttribute
 // declarations into mdcheck's own plain CellAttributeSpec descriptors, the
 // closed set mdcheck's cell-extension decoder resolves a cell's `{...}` group
