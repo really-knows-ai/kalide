@@ -941,9 +941,22 @@ func parseManifestBody(manifestPath string, val *yaml.Node) (BodyRule, error) {
 				return BodyRule{}, err
 			}
 			b.Subheadings = bv
+		case "tables":
+			// The optional GFM-table rule (table-opt-in). An absent key or
+			// the scalar `false` opts out (nil rule); a mapping opts in and
+			// declares the rule's sub-keys. The option is independent of the
+			// body mode, so it is decoded whatever the mode and with no
+			// cross-check; parseManifestTables reports every malformed value
+			// as a positioned templates error naming the offending
+			// template.yaml.
+			tr, err := parseManifestTables(manifestPath, v)
+			if err != nil {
+				return BodyRule{}, err
+			}
+			b.Tables = tr
 		default:
 			e := libraryErrorf(manifestPath, kl, "unknown key %q in body", key.Value)
-			return BodyRule{}, e.withSuggestion(key.Value, []string{"mode", "max_words", "max_paragraphs", "max_list_items", "subheadings"})
+			return BodyRule{}, e.withSuggestion(key.Value, []string{"mode", "max_words", "max_paragraphs", "max_list_items", "subheadings", "tables"})
 		}
 	}
 
