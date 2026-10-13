@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "constraint",
   "name": "template-defects-build-time",
-  "body": "Template-definition defects (cycles, slide template in a section, required-body template as a field type, reserved names, undefined references, invalid examples) must be caught when the project's templates are loaded — before any deck validation — and reported as templates errors (addressed to the template author, path-qualified to the template file), never as slide errors.",
+  "body": "Template-definition defects (reference cycles not bounded by a declaration's `max_depth`, a slide template in a section, a required-body template as a field type, reserved names, undefined references, a `max_depth` that is not a positive integer, invalid examples) must be caught when the project's templates are loaded — before any deck validation — and reported as templates errors (addressed to the template author, path-qualified to the template file), never as slide errors. A declared-section self-nesting cycle bounded by a declaration's `max_depth` is valid; the depth it exceeds when content over-nests is a slide error (bounded-self-nesting).",
   "properties": {},
   "out": [],
   "in": []

@@ -38,7 +38,9 @@ import (
 //     (library-layer-references);
 //   - the one-item `.item` descriptor is index 0 / number+count 1 / first+last
 //     true / section+template the target name / parent the caller's fields
-//     (nil from a slide); and
+//     (nil from a slide) / depth the target's same-template ancestor count
+//     (InstanceDepth(ancestors, name): 0 when the enclosing chain carries no
+//     same-template ancestor, non-zero when it does); and
 //   - exampleSectionHelper executes a target whose own layout calls
 //     {{ section … }}, rendering the nested helper output, with the nested
 //     call's `.item.parent` the outer target's effective fields.
@@ -90,7 +92,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 			Example: Example{Frontmatter: map[string]any{"title": "Example"}},
 		})
 
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil: the required field carries a default", err)
 		}
@@ -106,7 +108,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 			Fields: []Field{{Name: "title", Type: FieldText, Required: true}},
 		})
 
-		_, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		_, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err == nil {
 			t.Fatal("ResolveSectionCall() error = nil, want the undefaulted required field rejected")
 		}
@@ -126,7 +128,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 			Fields: []Field{{Name: "title", Type: FieldText, Required: true, Default: "Untitled"}},
 		})
 
-		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "Given"}, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "Given"}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -146,7 +148,7 @@ func TestResolveSectionCallDefaultsFirst(t *testing.T) {
 		})
 
 		fields := map[string]any{"subtitle": "S"}
-		call, err := ResolveSectionCall(resolve, "footer", fields, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", fields, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -198,7 +200,7 @@ func TestResolveSectionCallTargets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ResolveSectionCall(tt.resolve, tt.target, nil, "", nil)
+			_, err := ResolveSectionCall(tt.resolve, tt.target, nil, "", nil, nil)
 			if err == nil {
 				t.Fatalf("ResolveSectionCall() error = nil, want %q", tt.want)
 			}
@@ -219,7 +221,7 @@ func TestResolveSectionCallUndeclaredField(t *testing.T) {
 		Fields: []Field{{Name: "title", Type: FieldText}},
 	})
 
-	_, err := ResolveSectionCall(resolve, "footer", map[string]any{"nope": "v"}, "", nil)
+	_, err := ResolveSectionCall(resolve, "footer", map[string]any{"nope": "v"}, "", nil, nil)
 	if err == nil {
 		t.Fatal("ResolveSectionCall() error = nil, want the undeclared key rejected")
 	}
@@ -291,7 +293,7 @@ func TestResolveSectionCallBodyRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resolve := resolveSectionCallResolver(tt.target)
-			call, err := ResolveSectionCall(resolve, tt.target.Name, nil, tt.body, nil)
+			call, err := ResolveSectionCall(resolve, tt.target.Name, nil, tt.body, nil, nil)
 
 			if tt.rule == "" {
 				if err != nil {
@@ -322,6 +324,12 @@ func TestResolveSectionCallBodyRules(t *testing.T) {
 // from a slide layout) and with the caller's fields (a call made from a section
 // layout). The resolved template is the target pointer the resolver returned,
 // and the effective values carry the call's supplied fields.
+//
+// It also pins the descriptor's `depth` beside section and parent at every
+// call: depth is InstanceDepth(ancestors, name), so it is 0 for the empty/nil
+// chain and for a chain carrying no same-template ancestor, and it counts every
+// enclosing same-template ancestor (not only the immediate parent) when the
+// enclosing chain repeats the target name (item-context, bounded-self-nesting).
 func TestResolveSectionCallItemDescriptor(t *testing.T) {
 	target := &Template{
 		Name:   "footer",
@@ -331,7 +339,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 	resolve := resolveSectionCallResolver(target)
 
 	t.Run("parent nil from a slide layout", func(t *testing.T) {
-		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "T"}, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", map[string]any{"title": "T"}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -347,6 +355,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 			"last":     true,
 			"section":  "footer",
 			"template": "footer",
+			"depth":    0,
 			"parent":   map[string]any(nil),
 		}
 		if !reflect.DeepEqual(call.Item, want) {
@@ -365,7 +374,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 
 	t.Run("parent is the caller's fields from a section layout", func(t *testing.T) {
 		parent := map[string]any{"title": "Outer"}
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", parent)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, parent)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -377,6 +386,7 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 			"last":     true,
 			"section":  "footer",
 			"template": "footer",
+			"depth":    0,
 			"parent":   parent,
 		}
 		if !reflect.DeepEqual(call.Item, want) {
@@ -384,6 +394,79 @@ func TestResolveSectionCallItemDescriptor(t *testing.T) {
 		}
 		if got, ok := call.Item["parent"].(map[string]any); !ok || !reflect.DeepEqual(got, parent) {
 			t.Errorf("call.Item[parent] = %v, want the caller's fields %v", call.Item["parent"], parent)
+		}
+	})
+
+	// A no-same-template chain is still depth 0: the descriptor counts only
+	// ancestors whose resolved template equals the target name.
+	t.Run("depth is zero when no ancestor is the target", func(t *testing.T) {
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", []string{"outer", "inner"}, nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		want := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "footer",
+			"template": "footer",
+			"depth":    0,
+			"parent":   map[string]any(nil),
+		}
+		if !reflect.DeepEqual(call.Item, want) {
+			t.Errorf("call.Item = %v, want %v", call.Item, want)
+		}
+	})
+
+	// A section layout whose enclosing chain repeats the target name yields a
+	// non-zero depth, carried beside section and parent.
+	t.Run("depth counts a same-template ancestor", func(t *testing.T) {
+		parent := map[string]any{"title": "Outer"}
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", []string{"outer", "footer"}, parent)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		want := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "footer",
+			"template": "footer",
+			"depth":    1,
+			"parent":   parent,
+		}
+		if !reflect.DeepEqual(call.Item, want) {
+			t.Errorf("call.Item = %v, want %v", call.Item, want)
+		}
+		if got, ok := call.Item["parent"].(map[string]any); !ok || !reflect.DeepEqual(got, parent) {
+			t.Errorf("call.Item[parent] = %v, want the caller's fields %v", call.Item["parent"], parent)
+		}
+	})
+
+	// Depth counts every earlier same-template ancestor, not only the immediate
+	// parent: on the footer→mid→footer chain the inner footer is depth 2.
+	t.Run("depth counts every same-template ancestor", func(t *testing.T) {
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", []string{"footer", "mid", "footer"}, nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		want := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "footer",
+			"template": "footer",
+			"depth":    2,
+			"parent":   map[string]any(nil),
+		}
+		if !reflect.DeepEqual(call.Item, want) {
+			t.Errorf("call.Item = %v, want %v", call.Item, want)
 		}
 	})
 }
@@ -413,7 +496,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	}
 
 	t.Run("the resolved target's owning layer is carried", func(t *testing.T) {
-		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, external), "footer", nil, "", nil)
+		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, external), "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -423,7 +506,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	})
 
 	t.Run("ResolveSectionCall leaves the layer nil", func(t *testing.T) {
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -433,7 +516,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	})
 
 	t.Run("a nil layerOf records no layer", func(t *testing.T) {
-		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil)
+		call, err := ResolveSectionCallLayered(resolve, nil, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -443,7 +526,7 @@ func TestResolveSectionCallLayeredCarriesLayer(t *testing.T) {
 	})
 
 	t.Run("a layerOf reporting no provenance records no layer", func(t *testing.T) {
-		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, nil), "footer", nil, "", nil)
+		call, err := ResolveSectionCallLayered(resolve, ownedBy(t, nil), "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}
@@ -494,7 +577,7 @@ func TestResolveSectionCallLayeredIgnoresLayerOfOnRejection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			consulted = false
-			_, err := ResolveSectionCallLayered(tt.resolve, layerOf, tt.target, nil, "", nil)
+			_, err := ResolveSectionCallLayered(tt.resolve, layerOf, tt.target, nil, "", nil, nil)
 			if err == nil {
 				t.Fatalf("ResolveSectionCallLayered() error = nil, want %q", tt.want)
 			}
@@ -545,11 +628,11 @@ func TestResolveSectionCallLayeredMatchesNonLayered(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plain, err := ResolveSectionCall(resolve, "footer", tt.fields, tt.body, nil)
+			plain, err := ResolveSectionCall(resolve, "footer", tt.fields, tt.body, nil, nil)
 			if err != nil {
 				t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 			}
-			layered, err := ResolveSectionCallLayered(resolve, layerOf, "footer", tt.fields, tt.body, nil)
+			layered, err := ResolveSectionCallLayered(resolve, layerOf, "footer", tt.fields, tt.body, nil, nil)
 			if err != nil {
 				t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 			}

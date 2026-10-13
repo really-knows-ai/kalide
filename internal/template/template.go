@@ -88,8 +88,16 @@ const (
 	FieldList FieldType = "list"
 
 	// FieldSectionTemplate is structured YAML data shaped by the section
-	// template named Field.SectionTemplate (no separate record types).
+	// template named Field.SectionTemplate.
 	FieldSectionTemplate FieldType = "section-template"
+
+	// FieldRecord is an inline record: a list's `item:` descriptor declaring
+	// `type: record` together with its own `fields:` (record-item-type). A
+	// record is never a field's `type:` — it appears only as a list's item
+	// descriptor — and its fields use exactly the same descriptors as a
+	// template's top-level fields, validated recursively. They live in
+	// Field.Fields.
+	FieldRecord FieldType = "record"
 )
 
 // Field is one declared template field: the key Name an author writes, its
@@ -106,14 +114,40 @@ type Field struct {
 	// Type selects the value type and which rules below apply.
 	Type FieldType
 
+	// Nullable accepts an explicit YAML `null` for this field — or, on a
+	// record item descriptor, a null list entry — whatever its Type
+	// (nullable-fields). A null value runs no bound, format or membership
+	// check. Null is distinct from absent: a `required` nullable field's key
+	// must be present (it may be null), and an explicit null never triggers
+	// Default.
+	Nullable bool
+
 	// Plain, for a text field, strips inline Markdown styles silently
 	// instead of interpreting them (field-types `plain` flag).
 	Plain bool
+
+	// Coerce, for a text field, accepts a YAML number or boolean in place of
+	// a string and converts it to its string form (text-coercion). A value
+	// that is neither a string nor, under Coerce, a number or boolean stays
+	// a type error.
+	Coerce bool
 
 	// Variants, for an enum field, is the closed set of accepted values.
 	// Exactly one of them may be the Default, and an enum field's value is
 	// how a layout variant is selected (template-variants).
 	Variants []string
+
+	// VariantsFrom, for an enum field, is instead of an inline Variants set
+	// a glob relative to the root of the library layer that owns the
+	// template, whose matching files lie under that layer's media/ tree
+	// (e.g. `media/bgs/*.jpg`). The glob is expanded when the layer loads;
+	// the field's valid values are the matching files, each written
+	// relative to that layer's media/ tree (e.g. `bgs/right-8.jpg`), in
+	// sorted order. Declaring Variants and VariantsFrom together on one
+	// field, or a VariantsFrom glob matching no file, is a templates error
+	// at load (enum-variants-from). An empty VariantsFrom means no
+	// expansion.
+	VariantsFrom string
 
 	// Formats, for a number or date field, is the closed set of named display
 	// formats the author may select with this field's reserved
@@ -133,11 +167,37 @@ type Field struct {
 	// YAML value.
 	SectionTemplate string
 
+	// Roots, for an image field, names the root set the field's path points
+	// at, in written order: "assets", the deck's assets/ tree, or "media",
+	// the media/ tree of the library layer that owns the field's template
+	// (image-field-roots). A path is resolved against the roots in their
+	// written order and must name an existing file in a declared root; with
+	// no Roots it resolves under the deck's assets/.
+	Roots []string
+
+	// Dir, for an image field, optionally restricts the accepted path to a
+	// subdirectory within a root. An empty Dir means no subdirectory
+	// restriction (image-field-roots).
+	Dir string
+
+	// Extensions, for an image field, optionally restricts the accepted
+	// path to a set of allowed file-name extensions. An empty Extensions
+	// means no extension restriction (image-field-roots).
+	Extensions []string
+
 	// Item, for a list field, is the single item type every element must
 	// have (field-types: list of exactly one item type). Its Name is
 	// irrelevant; its Type (and, for a section-template item, its
 	// SectionTemplate) describes one element. It is nil for non-list fields.
 	Item *Field
+
+	// Fields, for a list item descriptor whose Type is FieldRecord, is the
+	// inline record's field schema: the same descriptors as a template's
+	// top-level fields — name, type, rules and description — validated
+	// recursively, so a record's field may itself be a list whose item is a
+	// record (record-item-type). Each may be Nullable. It is nil for every
+	// other field.
+	Fields []Field
 
 	// Required says the field must be present in the frontmatter.
 	Required bool
@@ -156,6 +216,16 @@ type Field struct {
 	// the slide parser's unbounded-repeat convention).
 	MinItems int
 	MaxItems int
+
+	// MaxItemsFrom and MinItemsFrom, for a list field, name another list
+	// field whose item count bounds this list: MaxItemsFrom bounds this list
+	// to at most the named list's count, MinItemsFrom to at least it
+	// (cross-field-list-constraints). A leading `/name` names a top-level
+	// field of the template; a bare name names a sibling field within the
+	// same inline record (record-item-type). An empty string means no
+	// cross-field bound.
+	MaxItemsFrom string
+	MinItemsFrom string
 
 	// Min and Max, for a number field, are inclusive NUMBER bounds. A nil
 	// bound is absent, so a legitimate 0 is distinct from "unset". They do
@@ -195,6 +265,18 @@ type SectionDecl struct {
 	// Max is the most instances allowed. <= 0 means unbounded, matching the
 	// slide parser's repeat-limit convention.
 	Max int
+
+	// MaxDepth, for a section declaration that accepts its own template
+	// (directly or through a cycle), is the positive-integer bound an
+	// author writes as `max_depth: N` (bounded-self-nesting). It bounds how
+	// many times this declaration's section may recur in one containment
+	// chain: an instance it produces has at most N enclosing instances that
+	// resolve to the same template it does, so its `.item.depth` is at most
+	// N. It belongs to the declaration that carries it; a declaration
+	// without it is unbounded — 0 means no bound. A value that is not a
+	// positive integer is a templates error naming the offending
+	// `template.yaml`.
+	MaxDepth int
 }
 
 // BodyMode says whether a template's implied `body` field is required,
@@ -333,6 +415,14 @@ type Template struct {
 	// Usage says whether this template describes a whole slide or a section
 	// inside one. Exactly one usage applies.
 	Usage Usage
+
+	// Internal marks a template hidden from the default listing: a template
+	// whose manifest declares `internal: true` is omitted from
+	// `kalide templates` unless --all is passed (internal-templates). An
+	// internal template stays resolvable as a `section`-helper target and as
+	// a `section_template` field type, but is refused as a Markdown
+	// `template:` target.
+	Internal bool
 
 	// Fields is the template's declared field schema, in declaration order.
 	Fields []Field

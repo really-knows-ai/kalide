@@ -187,7 +187,7 @@ func TestUnguardedExampleRawAndDataContextValues(t *testing.T) {
 		t.Errorf(`raw["body"] = %q, want the example's source body %q`, got, "Main source body.")
 	}
 
-	data := DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
+	data := DataContext(exampleContextNodes(block.Sections, def, resolve), nil, nil)
 	blocks := contextEntryList(t, data["blocks"], `data["blocks"]`)
 	if len(blocks) != 2 {
 		t.Fatalf(`len(data["blocks"]) = %d, want 2 authored instances`, len(blocks))
@@ -250,10 +250,21 @@ func TestUnguardedExampleRawAndDataContextValues(t *testing.T) {
 
 // TestSectionExampleReservedContext proves a section template's own example
 // (validated by checkLibraryExample's section loop) also gets the reserved
-// context: a section layout that reads `.item` and `.raw` with no guard loads
-// cleanly, and the `.raw` for its example excludes a field's declared default
-// (the default is not an authored source value), while still carrying the
-// example's source body.
+// context: a section layout that reads `.item`, its per-level `.data` tree and
+// `.raw` with no guard loads cleanly, and the `.raw` for its example excludes a
+// field's declared default (the default is not an authored source value), while
+// still carrying the example's source body.
+//
+// It also pins the section example instance's reserved-context depth
+// (item-context, bounded-self-nesting) against checkLibraryExample
+// (examplecheck.go): a section template's own example is the OUTERMOST instance
+// of its own template — example.md belongs to the template and nothing encloses
+// it — so its one-item `.item` descriptor's depth is the shared
+// InstanceDepth of an empty enclosing chain, 0; and its authored children are
+// walked with the instance's own resolved template name as their enclosing
+// chain, so a child resolving to a different template reads depth 0 while a
+// same-template child reads depth 1 (its one enclosing same-template ancestor),
+// exactly as the render side computes it through the same shared helper.
 func TestSectionExampleReservedContext(t *testing.T) {
 	fsys := fstest.MapFS{
 		"library.yaml": {Data: []byte("name: demo\nformat: 1\n")},
@@ -264,26 +275,51 @@ func TestSectionExampleReservedContext(t *testing.T) {
 		"slides/main/example.md":       {Data: []byte("# main\n")},
 
 		// `label` has a default the example omits, so it is not a source value.
+		// `badge` declares a `tags` child accepting `tag`, so its own example can
+		// author a nested instance and the reserved `.data` tree has an entry.
 		"sections/badge/template.yaml": {Data: []byte(
 			"name: badge\n" +
 				"fields:\n" +
 				"  - name: label\n    type: text\n    default: Defaulted\n" +
+				"sections:\n" +
+				"  - name: tags\n    accepted: [tag]\n" +
 				"body:\n  mode: optional\n")},
 		"sections/badge/layout.html.tmpl": {Data: []byte(
 			`<span class="badge">` +
-				`<span class="badge-item">{{ .item.index }}/{{ .item.number }}/{{ .item.count }}/{{ .item.first }}/{{ .item.last }}/{{ .item.section }}/{{ .item.template }}/{{ if .item.parent }}parent{{ else }}noparent{{ end }}</span>` +
+				`<span class="badge-item">{{ .item.index }}/{{ .item.number }}/{{ .item.count }}/{{ .item.first }}/{{ .item.last }}/{{ .item.section }}/{{ .item.template }}/{{ .item.depth }}/{{ if .item.parent }}parent{{ else }}noparent{{ end }}</span>` +
 				`<span class="badge-raw-body">{{ .raw.body }}</span>` +
+				`<span class="badge-data">{{ range .data.tags }}{{ .item.section }}={{ .item.template }}@{{ .item.depth }}{{ end }}</span>` +
 				`</span>`)},
-		// An empty frontmatter fence: the example supplies no field, and a body.
+		// An empty frontmatter fence: the example supplies no field, and a body,
+		// plus one authored `tags` child (a `tag` instance).
 		"sections/badge/example.md": {Data: []byte(
 			"```\n" +
 				"```\n" +
-				"Badge example body.\n")},
+				"Badge example body.\n" +
+				"\n" +
+				"# tags\n" +
+				"```\n" +
+				"text: Nested\n" +
+				"```\n" +
+				"Nested body.\n")},
+
+		// The template the badge example's `tags` instance instantiates.
+		"sections/tag/template.yaml": {Data: []byte(
+			"name: tag\n" +
+				"fields:\n" +
+				"  - name: text\n    type: text\n" +
+				"body:\n  mode: optional\n")},
+		"sections/tag/layout.html.tmpl": {Data: []byte(
+			`<b class="tag">{{ .raw.text }}{{ .item.depth }}</b>`)},
+		"sections/tag/example.md": {Data: []byte(
+			"```\n" +
+				"text: Sample\n" +
+				"```\n")},
 	}
 
 	lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 	if err != nil {
-		t.Fatalf("LoadLibrary() error = %v, want nil: a section example reading .item/.raw unguarded must load", err)
+		t.Fatalf("LoadLibrary() error = %v, want nil: a section example reading .item/.data/.raw unguarded must load", err)
 	}
 	badge, _, ok := lib.TemplateByName("badge")
 	if !ok || badge == nil || badge.Definition == nil {
@@ -307,6 +343,80 @@ func TestSectionExampleReservedContext(t *testing.T) {
 	}
 	if got := raw["body"]; got != "Badge example body." {
 		t.Errorf(`raw["body"] = %q, want the example's source body %q`, got, "Badge example body.")
+	}
+
+	// The example instance's own one-item `.item` descriptor, mirroring
+	// checkLibraryExample: section and template are the template's own name and
+	// depth is the shared InstanceDepth of an empty enclosing chain — 0, the
+	// outermost instance of `badge` — beside its single-item sibling position
+	// and a nil parent (item-context).
+	def := badge.Definition
+	resolve := exampleLibraryResolver(lib)
+	item := map[string]any{
+		"index":    0,
+		"number":   1,
+		"count":    1,
+		"first":    true,
+		"last":     true,
+		"section":  badge.Name,
+		"template": badge.Name,
+		"depth":    InstanceDepth(nil, badge.Name),
+		"parent":   map[string]any(nil),
+	}
+	if got := item["depth"]; got != 0 {
+		t.Errorf("example instance .item.depth = %v, want 0 (the outermost instance of %q)", got, badge.Name)
+	}
+
+	// The example's authored `tags` child is walked with `badge` as its enclosing
+	// chain (checkLibraryExample passes [lt.Name]); it resolves to `tag`, not
+	// badge, so it has no same-template ancestor and reads depth 0.
+	data := DataContext(exampleContextNodes(block.Sections, def, resolve), []string{badge.Name}, nil)
+	tags := contextEntryList(t, data["tags"], `data["tags"]`)
+	if len(tags) != 1 {
+		t.Fatalf(`len(data["tags"]) = %d, want the one authored child`, len(tags))
+	}
+	tagItem := contextMap(t, tags[0]["item"], `data["tags"][0].item`)
+	for _, want := range []struct {
+		key  string
+		want any
+	}{
+		{"section", "tags"},
+		{"template", "tag"},
+		{"depth", 0},
+	} {
+		if got := tagItem[want.key]; got != want.want {
+			t.Errorf(`data["tags"][0].item.%s = %v, want %v`, want.key, got, want.want)
+		}
+	}
+
+	// A same-template child — the case checkLibraryExample's [badge] chain
+	// produces — reads depth 1, and its own same-template child reads depth 2:
+	// depth counts every enclosing same-template ancestor in the chain, not just
+	// the immediate parent. A self-accepting declaration is a composition cycle
+	// and cannot yet be loaded from a library (phase 7 bounds it), so walk the
+	// same load-time builders checkLibraryExample uses over an authored tree.
+	selfChild := exampleSection{Name: "badges", Index: 0, exampleBlock: &exampleBlock{
+		Frontmatter: map[string]any{"template": badge.Name},
+	}}
+	selfGrandchild := exampleSection{Name: "badges", Index: 0, exampleBlock: &exampleBlock{
+		Frontmatter: map[string]any{"template": badge.Name},
+	}}
+	selfChild.exampleBlock.Sections = []exampleSection{selfGrandchild}
+
+	selfData := DataContext(exampleContextNodes([]exampleSection{selfChild}, def, resolve), []string{badge.Name}, nil)
+	self := contextEntryList(t, selfData["badges"], `data["badges"]`)
+	if len(self) != 1 {
+		t.Fatalf(`len(data["badges"]) = %d, want 1`, len(self))
+	}
+	if got := contextMap(t, self[0]["item"], "badges item")["depth"]; got != 1 {
+		t.Errorf("same-template child .item.depth = %v, want 1 (one enclosing %q)", got, badge.Name)
+	}
+	nested := contextEntryList(t, contextMap(t, self[0]["data"], "badges data")["badges"], `data["badges"][0].data["badges"]`)
+	if len(nested) != 1 {
+		t.Fatalf(`len(data["badges"][0].data["badges"]) = %d, want 1`, len(nested))
+	}
+	if got := contextMap(t, nested[0]["item"], "nested badges item")["depth"]; got != 2 {
+		t.Errorf("nested same-template child .item.depth = %v, want 2 (two enclosing %q)", got, badge.Name)
 	}
 }
 
@@ -394,7 +504,7 @@ func TestDataContext(t *testing.T) {
 			{Name: "widgets", Index: 0, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"template": "widget", "name": "W"}}},
 			{Name: "blocks", Index: 1, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"text": "B"}}},
 		}
-		got := DataContext(exampleContextNodes(sections, hostTmpl, resolve), nil)
+		got := DataContext(exampleContextNodes(sections, hostTmpl, resolve), nil, nil)
 		if len(got) != 2 {
 			t.Fatalf("DataContext() keys = %v, want exactly blocks and widgets", contextKeys(got))
 		}
@@ -411,14 +521,14 @@ func TestDataContext(t *testing.T) {
 		}
 		wantBlock0Item := map[string]any{
 			"index": 0, "number": 1, "count": 2, "first": true, "last": false,
-			"section": "blocks", "template": "block", "parent": map[string]any(nil),
+			"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 		}
 		if !reflect.DeepEqual(blocks[0]["item"], wantBlock0Item) {
 			t.Errorf("data[blocks][0].item = %v, want %v", blocks[0]["item"], wantBlock0Item)
 		}
 		wantBlock1Item := map[string]any{
 			"index": 1, "number": 2, "count": 2, "first": false, "last": true,
-			"section": "blocks", "template": "block", "parent": map[string]any(nil),
+			"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 		}
 		if !reflect.DeepEqual(blocks[1]["item"], wantBlock1Item) {
 			t.Errorf("data[blocks][1].item = %v, want %v", blocks[1]["item"], wantBlock1Item)
@@ -436,7 +546,7 @@ func TestDataContext(t *testing.T) {
 		}
 		wantWidgetItem := map[string]any{
 			"index": 0, "number": 1, "count": 1, "first": true, "last": true,
-			"section": "widgets", "template": "widget", "parent": map[string]any(nil),
+			"section": "widgets", "template": "widget", "depth": 0, "parent": map[string]any(nil),
 		}
 		if !reflect.DeepEqual(widgets[0]["item"], wantWidgetItem) {
 			t.Errorf("data[widgets][0].item = %v, want %v", widgets[0]["item"], wantWidgetItem)
@@ -458,7 +568,7 @@ func TestDataContext(t *testing.T) {
 				Sections:    []exampleSection{child},
 			},
 		}
-		got := DataContext(exampleContextNodes([]exampleSection{column}, hostTmpl, resolve), nil)
+		got := DataContext(exampleContextNodes([]exampleSection{column}, hostTmpl, resolve), nil, nil)
 		entries := contextEntryList(t, got["columns"], `data["columns"]`)
 		if len(entries) != 1 {
 			t.Fatalf(`len(data["columns"]) = %d, want 1`, len(entries))
@@ -492,7 +602,7 @@ func TestDataContext(t *testing.T) {
 		sections := []exampleSection{
 			{Name: "blocks", Index: 0, exampleBlock: &exampleBlock{Frontmatter: map[string]any{"text": "A"}}},
 		}
-		got := DataContext(exampleContextNodes(sections, hostTmpl, nil), nil)
+		got := DataContext(exampleContextNodes(sections, hostTmpl, nil), nil, nil)
 		entries := contextEntryList(t, got["blocks"], `data["blocks"]`)
 		if len(entries) != 1 {
 			t.Fatalf(`len(data["blocks"]) = %d, want 1`, len(entries))

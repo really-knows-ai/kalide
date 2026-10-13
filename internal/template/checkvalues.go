@@ -82,7 +82,8 @@ type ValueError struct {
 	Line int
 
 	// Rule names the violated rule: "type", "required", "date", "enum",
-	// "image", "link", "max_length", "min_items", "max_items", "min", "max",
+	// "image", "link", "max_length", "min_items", "max_items",
+	// "max_items_from", "min_items_from", "min", "max",
 	// "unknown-field", "section-template", a body rule name ("required",
 	// "disallowed", "max_words", "max_paragraphs", "max_list_items",
 	// "subheadings" from CheckBody), or a mdcheck kind for inline text
@@ -161,8 +162,18 @@ type Result struct {
 
 // checkConfig holds the optional callbacks an Option supplies.
 type checkConfig struct {
-	lineFor     func(path []PathSegment) int
-	imageExists func(path string) bool
+	lineFor func(path []PathSegment) int
+
+	// imageExists resolves and existence-checks one image field's value
+	// (image-field-roots). It receives the field whose schema declares the
+	// path options (Roots, Dir and Extensions) and the path exactly as the
+	// author wrote it, and reports whether the path names an existing file in
+	// one of the field's declared roots together with the candidate files the
+	// field accepts, so a missing file can carry a closest-match suggestion.
+	// The caller closes over the filesystems the field's roots resolve
+	// against: the deck's assets/ tree for an assets root and the owning
+	// library layer's media/ tree for a media root.
+	imageExists func(f *Field, path string) (exists bool, candidates []string)
 }
 
 // Option configures a CheckValues call.
@@ -175,11 +186,21 @@ func WithLineSource(fn func(path []PathSegment) int) Option {
 	return func(c *checkConfig) { c.lineFor = fn }
 }
 
-// WithImageExists supplies the existence check for image fields. It receives
-// the path exactly as the author wrote it (always already under assets/). When
-// no callback is passed, CheckValues still enforces the assets/ prefix but
-// does not check that the file exists.
-func WithImageExists(fn func(path string) bool) Option {
+// WithImageExists supplies the resolution and existence check for image
+// fields. fn receives the field whose schema declares the image's path options
+// (Roots, Dir and Extensions) and the path exactly as the author wrote it, and
+// returns whether the path names an existing file in one of the field's
+// declared roots, in written order, plus the candidate files the field accepts
+// so a missing file can carry a closest-match suggestion (image-field-roots).
+//
+// The caller closes over the filesystems the field's roots resolve against:
+// "assets" resolves against the deck's assets/ tree and "media" against the
+// media/ tree of the library layer that owns the field's template; with no
+// roots declared the path resolves under the deck's assets/.
+//
+// When no callback is passed, CheckValues still enforces the assets/ prefix
+// but does not check that the file exists.
+func WithImageExists(fn func(f *Field, path string) (exists bool, candidates []string)) Option {
 	return func(c *checkConfig) { c.imageExists = fn }
 }
 
@@ -212,7 +233,7 @@ func CheckValues(data map[string]any, tmpl *Template, resolve func(name string) 
 		return Result{}
 	}
 	c := &checker{cfg: cfg, resolve: resolve}
-	c.mapValues(nil, tmpl, data, 0)
+	c.mapValues(nil, tmpl, data, 0, true)
 	return Result{Errors: c.errors, Links: c.links}
 }
 
@@ -225,15 +246,44 @@ type checker struct {
 	resolve func(name string) (*Template, bool)
 	errors  []ValueError
 	links   []LinkRef
+
+	// rootFields and rootData are the enclosing template's declared fields and
+	// its data mapping: the scope a leading `/name` cross-field reference
+	// (max_items_from/min_items_from) resolves against. mapValues sets them
+	// when it enters a template scope (a top-level template or a nested
+	// section template) and leaves them untouched for an inline record, so a
+	// `/name` written inside a record still names the record's enclosing
+	// template's top-level field while a bare name names a record sibling
+	// (cross-field-list-constraints).
+	rootFields []Field
+	rootData   map[string]any
 }
 
 // mapValues checks one mapping against tmpl's declared fields: unknown keys
 // first (sorted, deterministic), then each declared field in declaration
 // order. It recurses into section-template values.
-func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]any, depth int) {
+//
+// templateScope says whether tmpl is a full template scope — a top-level
+// template or a nested section template, whose mapping is the scope a leading
+// `/name` cross-field reference resolves against — rather than an inline
+// record's synthetic field set. At a template scope it publishes tmpl's fields
+// and data as the checker's root scope for the duration of the call; an inline
+// record inherits the enclosing template's root scope, so a `/name` written
+// inside a record still names the enclosing template's top-level field. A bare
+// cross-field name always resolves against tmpl.Fields and data — the current
+// scope — so a record's bare name names a record sibling and a template's bare
+// name names a top-level field.
+func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]any, depth int, templateScope bool) {
 	if depth > maxDepth {
 		c.add(path, "section-template", data, "section-template nesting is too deep", "check the template for a reference cycle")
 		return
+	}
+	if templateScope {
+		prevFields, prevData := c.rootFields, c.rootData
+		c.rootFields, c.rootData = tmpl.Fields, data
+		defer func() {
+			c.rootFields, c.rootData = prevFields, prevData
+		}()
 	}
 
 	declared := make(map[string]struct{}, len(tmpl.Fields))
@@ -287,6 +337,37 @@ func (c *checker) mapValues(path []PathSegment, tmpl *Template, data map[string]
 			continue
 		}
 		c.validateValue(fieldPath, f, value, depth)
+
+		// cross-field-list-constraints: enforce each declared
+		// max_items_from/min_items_from against its peer list's length. A
+		// leading `/name` names a top-level field of the enclosing template
+		// (c.rootFields/c.rootData); a bare name names a sibling in this
+		// mapping's own scope (tmpl.Fields/data). checkDefinition already
+		// resolved the reference at load, so a valid schema always finds its
+		// peer; checkCrossFieldListConstraints skips a missing or non-list
+		// peer, and a non-list value carries no length to compare.
+		for _, ref := range []struct{ rule, target string }{
+			{"max_items_from", f.MaxItemsFrom},
+			{"min_items_from", f.MinItemsFrom},
+		} {
+			if ref.target == "" {
+				continue
+			}
+			name := ref.target
+			lookup, peerData := tmpl.Fields, data
+			if strings.HasPrefix(name, "/") {
+				name = strings.TrimPrefix(name, "/")
+				lookup, peerData = c.rootFields, c.rootData
+			}
+			var peer *Field
+			for j := range lookup {
+				if lookup[j].Name == name {
+					peer = &lookup[j]
+					break
+				}
+			}
+			checkCrossFieldListConstraints(c, fieldPath, f, ref.rule, value, peer, peerData[name])
+		}
 	}
 }
 
@@ -323,8 +404,113 @@ func formatPath(path []PathSegment, field string) []PathSegment {
 	return appendSeg(path, PathSegment{Name: field + "_format"})
 }
 
+// checkNullable handles a YAML null value for one field: a non-nullable field
+// rejects it with the nullable-fields error `got null — this field isn't
+// nullable`, while a nullable field accepts it, so a null runs no type, bound,
+// format or membership check. It reports whether value was a null, in which
+// case the caller stops checking the field either way.
+//
+// It is shared by every validateValue call, so it covers a template's
+// top-level fields and a list's item descriptor alike: a nullable item accepts
+// a null element (`items: [null]`) and skips the item's checks. Null is
+// distinct from absent — mapValues reports a key that is missing and calls
+// validateValue only for a key that is present — so an explicit null reaches
+// here while an omitted field never does.
+func checkNullable(c *checker, path []PathSegment, f *Field, value any) bool {
+	if value != nil {
+		return false
+	}
+	if f.Nullable {
+		return true
+	}
+	c.add(path, "nullable", value, "got null", "this field isn't nullable")
+	return true
+}
+
+// checkRecordValue checks one inline-record value against its record item
+// descriptor's declared fields (record-item-type): the value must be a
+// mapping, and its keys are checked by the same schema-mapping pass as a
+// template's top-level fields — unknown keys (with a closest-match suggestion
+// against the record's fields), required fields and every per-type rule — so a
+// record's field may itself be a list whose item is a record and a nested
+// violation carries the full path, for example `items › [2] › value`.
+//
+// It reports a type violation when the value is not a mapping and otherwise
+// defers to mapValues, which the file already uses for a template's fields; a
+// record carries no sections, body or identity, so a throwaway Template holding
+// only its inline Fields is enough to reuse that pass. It is shared by every
+// validateValue call for a FieldRecord item descriptor.
+func checkRecordValue(c *checker, path []PathSegment, f *Field, value any, depth int) {
+	m, ok := asMap(value)
+	if !ok {
+		c.add(path, "type", value,
+			fmt.Sprintf("type: expected a mapping for a record, got %s", describeValue(value)),
+			"write the record as YAML key: value pairs")
+		return
+	}
+	record := &Template{Fields: f.Fields}
+	c.mapValues(path, record, m, depth, false)
+}
+
+// checkCrossFieldListConstraints enforces one list field's cross-field bound
+// (cross-field-list-constraints): rule names the reference being enforced,
+// either "max_items_from" — the field's item count must not exceed the named
+// peer list's count — or "min_items_from" — it must be at least the peer's
+// count. value is this list field's value and peer/peerValue are the field the
+// reference names and its value in the same mapping. The caller resolves the
+// reference — a leading `/name` names a top-level field of the template, a bare
+// name a sibling within the enclosing inline record — so this helper only
+// compares the two lengths; it is shared by the mapping pass at every nesting
+// depth, so a bound declared inside an inline record is enforced through the
+// same helper as a top-level one.
+//
+// A violated bound is reported as one error naming both fields (this field and
+// the peer) and both lengths, so the author sees the field, its peer and the
+// two counts together; a value or peer that is not a list carries no length to
+// compare and is skipped. The caller invokes it once per reference, so a field
+// declaring both bounds toward different peers has each enforced against its
+// own peer.
+func checkCrossFieldListConstraints(c *checker, path []PathSegment, f *Field, rule string, value any, peer *Field, peerValue any) {
+	if c == nil || f == nil || peer == nil {
+		return
+	}
+	items, ok := asSlice(value)
+	if !ok {
+		return
+	}
+	peerItems, ok := asSlice(peerValue)
+	if !ok {
+		return
+	}
+	n, bound := len(items), len(peerItems)
+	switch rule {
+	case "max_items_from":
+		if n > bound {
+			c.add(path, "max_items_from", value,
+				fmt.Sprintf("max_items_from: field %q has %d item(s), more than field %q has %d", f.Name, n, peer.Name, bound),
+				fmt.Sprintf("remove items until at most %d remain", bound))
+		}
+	case "min_items_from":
+		if n < bound {
+			c.add(path, "min_items_from", value,
+				fmt.Sprintf("min_items_from: field %q has %d item(s), fewer than field %q has %d", f.Name, n, peer.Name, bound),
+				fmt.Sprintf("add items until at least %d remain", bound))
+		}
+	}
+}
+
 // validateValue checks one value against one field's type and rules.
+//
+// A YAML null is handled first, whatever the field's type (nullable-fields):
+// checkNullable accepts it for a nullable field — or a nullable record item
+// descriptor — and rejects it for a non-nullable one, and either way no type,
+// bound, format or membership check runs. This covers a template's top-level
+// fields and a list's item descriptor alike, because validateList routes every
+// element through here.
 func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth int) {
+	if checkNullable(c, path, f, value) {
+		return
+	}
 	switch f.Type {
 	case FieldText:
 		c.validateText(path, f, value)
@@ -337,11 +523,16 @@ func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth i
 	case FieldEnum:
 		c.validateEnum(path, f, value)
 	case FieldImage:
-		c.validateImage(path, value)
+		c.validateImage(path, f, value)
 	case FieldLink:
 		c.validateLink(path, value)
 	case FieldList:
 		c.validateList(path, f, value, depth)
+	case FieldRecord:
+		// A record appears only as a list's item descriptor, but it is
+		// dispatched here so every validateValue caller — the mapping pass
+		// and validateList alike — routes it through the same record check.
+		checkRecordValue(c, path, f, value, depth)
 	case FieldSectionTemplate:
 		c.validateSection(path, f, value, depth)
 	default:
@@ -351,10 +542,51 @@ func (c *checker) validateValue(path []PathSegment, f *Field, value any, depth i
 	}
 }
 
+// coerceText returns the string form of a coerce text field's YAML number or
+// boolean (text-coercion): the number 42 becomes "42" and the boolean true
+// becomes "true". It reports false for any other value — a mapping, a list, a
+// date or a null — so the caller keeps its usual text type error; a value that
+// is neither a string nor, under Coerce, a number or boolean is always a type
+// error.
+//
+// A string is already text and never reaches this helper for coercion: its
+// callers type-assert a string first and offer only a non-string value here,
+// so a string is not one of the forms this converts. The schema checker and
+// the render conversion both need the same number/boolean-to-string form.
+func coerceText(value any) (string, bool) {
+	switch v := value.(type) {
+	case bool:
+		return strconv.FormatBool(v), true
+	}
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() {
+		return "", false
+	}
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(rv.Int(), 10), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(rv.Uint(), 10), true
+	case reflect.Float32, reflect.Float64:
+		return formatNumber(rv.Float()), true
+	}
+	return "", false
+}
+
 // validateText checks a text field: the inline Markdown rules (unless Plain),
 // the collected links, and MaxLength after Markdown is stripped.
+//
+// A coerce text field (text-coercion) accepts a YAML number or boolean in
+// place of a string: coerceText converts it to its string form before the
+// Markdown and MaxLength checks run, so `42` and `true` are checked as "42"
+// and "true". Any other non-string value — a mapping, a list, a date or a null
+// — is still the usual text type error, and a non-coerce text field rejects
+// every non-string value unchanged.
 func (c *checker) validateText(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
+	if !ok && f.Coerce {
+		s, ok = coerceText(value)
+	}
 	if !ok {
 		c.add(path, "type", value,
 			fmt.Sprintf("type: expected a text field, got %s", describeValue(value)),
@@ -472,7 +704,13 @@ func (c *checker) validateBoolean(path []PathSegment, value any) {
 		"write true or false without quotes")
 }
 
-// validateEnum checks that an enum value is one of the field's variants.
+// validateEnum checks that an enum value is one of the field's effective
+// variants: f.Variants is the field's declared inline variants: set or, when
+// the field declared variants_from:, the variant list expanded from the glob
+// at load (enum-variants-from). A value outside those variants is the enum
+// error naming the allowed variants; when one of them is close to the
+// offending value the fix adds a closest-match "did you mean …?" hint ahead of
+// the allowed-values list, so the author sees the intended variant.
 func (c *checker) validateEnum(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
 	if !ok {
@@ -486,14 +724,33 @@ func (c *checker) validateEnum(path []PathSegment, f *Field, value any) {
 			return
 		}
 	}
+	fix := "use one of: " + strings.Join(f.Variants, ", ")
+	if closest := suggest.Closest(s, f.Variants); closest != "" {
+		fix = fmt.Sprintf("did you mean %q? use one of: %s", closest, strings.Join(f.Variants, ", "))
+	}
 	c.add(path, "enum", value,
 		fmt.Sprintf("enum: %s is not one of the allowed variants (%s)", strconv.Quote(s), strings.Join(f.Variants, ", ")),
-		"use one of: "+strings.Join(f.Variants, ", "))
+		fix)
 }
 
-// validateImage checks that an image path is under assets/ and, when the
-// caller supplied an existence callback, that it exists.
-func (c *checker) validateImage(path []PathSegment, value any) {
+// validateImage checks an image field's authored path against the field's
+// declared roots and, when the caller supplied an existence callback, that it
+// names an existing file (image-field-roots).
+//
+// f carries the field's declared path options (Roots, Dir and Extensions),
+// handed to the WithImageExists callback so the caller can resolve the path
+// against them in written order and report whether it names an existing file
+// together with the candidate files the field accepts. A path the callback
+// reports missing is the image error, carrying the offending path and, when one
+// of the accepted candidates is close enough, a closest-match suggestion.
+//
+// The assets/ prefix is enforced only when the field's roots do not admit a
+// media/ path: with an empty or assets-only root set a bare path is the
+// pre-existing "not under assets/" error, while a media-capable field accepts a
+// media-relative path and hands it to the callback. Without a callback there is
+// nothing to resolve a declared root against, so a media-capable field is left
+// unexistence-checked rather than falsely rejected.
+func (c *checker) validateImage(path []PathSegment, f *Field, value any) {
 	s, ok := value.(string)
 	if !ok {
 		c.add(path, "type", value,
@@ -501,17 +758,47 @@ func (c *checker) validateImage(path []PathSegment, value any) {
 			"write the path as a string")
 		return
 	}
-	if !strings.HasPrefix(s, "assets/") {
+	if !imageFieldAllowsMedia(f) && !strings.HasPrefix(s, "assets/") {
 		c.add(path, "image", value,
 			fmt.Sprintf("image: %s is not under assets/", strconv.Quote(s)),
 			"move the image into the deck's assets/ directory and reference it as assets/…")
 		return
 	}
-	if c.cfg.imageExists != nil && !c.cfg.imageExists(s) {
-		c.add(path, "image", value,
-			fmt.Sprintf("image: %s does not exist", strconv.Quote(s)),
-			"add the file under assets/ or fix the path")
+	if c.cfg.imageExists == nil {
+		return
 	}
+	if exists, candidates := c.cfg.imageExists(f, s); !exists {
+		what := fmt.Sprintf("image: %s does not exist", strconv.Quote(s))
+		// The default fix names the root the value was resolved against: a
+		// field whose declared roots admit media/ (imageFieldAllowsMedia) may
+		// name a media-relative path, so "under assets/" would point at a root
+		// the field does not declare; it gets the media wording instead. An
+		// assets-only or no-roots field keeps the pre-existing assets text
+		// byte-identical.
+		fix := "add the file under assets/ or fix the path"
+		if imageFieldAllowsMedia(f) {
+			fix = "add the file under the declared media/ root or fix the path"
+		}
+		if closest := suggest.Closest(s, candidates); closest != "" {
+			fix = fmt.Sprintf("did you mean %q?", closest)
+		}
+		c.add(path, "image", value, what, fix)
+	}
+}
+
+// imageFieldAllowsMedia reports whether f's declared roots admit a media/ path.
+// When they do, a path without the assets/ prefix is a legal media-relative path
+// and the assets/ prefix check cannot apply.
+func imageFieldAllowsMedia(f *Field) bool {
+	if f == nil {
+		return false
+	}
+	for _, root := range f.Roots {
+		if root == imageRootMedia {
+			return true
+		}
+	}
+	return false
 }
 
 // validateLink checks that a link field is a `#label` anchor or an http(s)
@@ -605,7 +892,7 @@ func (c *checker) validateSection(path []PathSegment, f *Field, value any, depth
 			"check the template name against the built-in templates")
 		return
 	}
-	c.mapValues(path, nested, m, depth+1)
+	c.mapValues(path, nested, m, depth+1, true)
 }
 
 // unknownKey reports an unknown key, with guidance for the reserved effect and

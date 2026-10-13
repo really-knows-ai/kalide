@@ -70,7 +70,7 @@ body:
   mode: disallowed
 `
 
-	sectionProbeFooterLayout = `<footer class="probe-footer" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}">{{ .slide.number }} / {{ .slide.total }}</footer>`
+	sectionProbeFooterLayout = `<footer class="probe-footer" data-index="{{ .item.index }}" data-depth="{{ .item.depth }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}">{{ .slide.number }} / {{ .slide.total }}</footer>`
 
 	sectionProbeFooterExample = "```\n```\n"
 
@@ -87,7 +87,7 @@ body:
   mode: optional
 `
 
-	sectionProbeColumnLayout = `<div class="probe-column" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}"><span class="column-title">{{ .title }}</span><span class="column-deck-title">{{ .deck.title }}</span><span class="column-slide-number">{{ .slide.number }}</span>{{ range .people }}{{ . }}{{ end }}</div>`
+	sectionProbeColumnLayout = `<div class="probe-column" data-index="{{ .item.index }}" data-depth="{{ .item.depth }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent="{{ if .item.parent }}present{{ else }}absent{{ end }}"><span class="column-title">{{ .title }}</span><span class="column-deck-title">{{ .deck.title }}</span><span class="column-slide-number">{{ .slide.number }}</span>{{ range .people }}{{ . }}{{ end }}</div>`
 
 	sectionProbeColumnExample = "```\ntitle: Example column\n```\n# people\n```\ntemplate: probeperson\nname: Ada\n```\n"
 
@@ -100,9 +100,22 @@ body:
   mode: disallowed
 `
 
-	sectionProbePersonLayout = `<span class="person-name">{{ .name }}</span><span class="person-deck-title">{{ .deck.title }}</span><span class="person-slide-number">{{ .slide.number }}</span><span class="person-item" data-index="{{ .item.index }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent-title="{{ .item.parent.title }}"></span>`
+	sectionProbePersonLayout = `<span class="person-name">{{ .name }}</span><span class="person-deck-title">{{ .deck.title }}</span><span class="person-slide-number">{{ .slide.number }}</span><span class="person-item" data-index="{{ .item.index }}" data-depth="{{ .item.depth }}" data-number="{{ .item.number }}" data-count="{{ .item.count }}" data-first="{{ .item.first }}" data-last="{{ .item.last }}" data-section="{{ .item.section }}" data-template="{{ .item.template }}" data-parent-title="{{ .item.parent.title }}"></span>`
 
 	sectionProbePersonExample = "```\nname: Ada\n```\n"
+
+	// The repeated-template probe: a slide template declaring a `loop` section
+	// accepting the `probeloop` section template, which itself declares the
+	// same `loop` section accepting `probeloop` — a self-accepting (cyclic)
+	// declaration. The chain is built directly in the test (Register, no
+	// Validate) so the render-time `item.depth` at each repeat can be pinned
+	// while the loader still rejects the cycle (item-context,
+	// bounded-self-nesting; phase 7 adds max_depth and the loadable fixture).
+	// Every layout is a single compact line so the fragment can be asserted
+	// exactly, and the loop layout prints its per-level `.item` descriptor.
+	repeatProbeSlideLayout = `<section class="repeat-slide">{{range .loop}}{{.}}{{end}}</section>`
+
+	repeatProbeLoopLayout = `<div class="repeat-loop" data-depth="{{.item.depth}}" data-section="{{.item.section}}" data-template="{{.item.template}}" data-parent="{{if .item.parent}}present{{else}}absent{{end}}" data-parent-name="{{if .item.parent}}{{.item.parent.name}}{{end}}"><span class="repeat-name">{{.name}}</span>{{range .loop}}{{.}}{{end}}</div>`
 )
 
 // TestSectionInstanceContextPipeline drives the reserved `.deck`/`.slide`
@@ -111,11 +124,21 @@ body:
 // slide layout and every section instance it declares, at every depth: the
 // motivating footer section renders `{{.slide.number}} / {{.slide.total}}`
 // (e.g. `2a / 3`); a top-level section instance reads `.deck.title`,
-// `.slide.number` and its own `.item` (index/number/count/first/last/section/
-// template, with a nil parent, since a top-level instance's parent is the
-// slide); and a nested child section reads the same `.item` one level down plus
-// `.item.parent.title`, the enclosing instance's field values. It reads the
-// real filesystem, so it is skipped under -short.
+// `.slide.number` and its own `.item` (index/depth/number/count/first/last/
+// section/template, with a nil parent, since a top-level instance's parent is
+// the slide); and a nested child section reads the same `.item` one level down
+// plus `.item.parent.title`, the enclosing instance's field values.
+//
+// `item.depth` is the count of the instance's enclosing instances whose
+// resolved template repeats its own template (item-context,
+// bounded-self-nesting): 0 at the top level and +1 per self-nested level whose
+// resolved template repeats. The disk fixture here composes four DISTINCT
+// templates (footer, columns/probecolumn, people/probeperson), so every level's
+// depth is 0 — the repeat case is pinned below by a directly-built
+// self-nesting chain, because a self-accepting declaration is a composition
+// cycle that LoadLibrary/Registry.Validate reject until phase 7 adds max_depth.
+//
+// It reads the real filesystem, so it is skipped under -short.
 func TestSectionInstanceContextPipeline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test reads a real deck directory from disk")
@@ -134,7 +157,7 @@ func TestSectionInstanceContextPipeline(t *testing.T) {
 	for _, want := range []string{
 		// The motivating footer: string position label over the integer total,
 		// plus its top-level `.item` (one of one; parent absent).
-		`<footer class="probe-footer" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="footer" data-template="probefooter" data-parent="absent">2a / 3</footer>`,
+		`<footer class="probe-footer" data-index="0" data-depth="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="footer" data-template="probefooter" data-parent="absent">2a / 3</footer>`,
 		// .deck.title and .slide.number from the top-level column and the
 		// person section nested one level deeper inside the column.
 		`<span class="column-deck-title">Section Context Deck</span>`,
@@ -150,19 +173,91 @@ func TestSectionInstanceContextPipeline(t *testing.T) {
 		`<span class="person-name">Linus</span>`,
 		// Top-level `.item`: index/number/count/first/last/section/template,
 		// with a nil parent (the parent is the slide).
-		`<div class="probe-column" data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="columns" data-template="probecolumn" data-parent="absent"><span class="column-title">First column</span>`,
-		`<div class="probe-column" data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="columns" data-template="probecolumn" data-parent="absent"><span class="column-title">Second column</span>`,
+		`<div class="probe-column" data-index="0" data-depth="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="columns" data-template="probecolumn" data-parent="absent"><span class="column-title">First column</span>`,
+		`<div class="probe-column" data-index="1" data-depth="0" data-number="2" data-count="2" data-first="false" data-last="true" data-section="columns" data-template="probecolumn" data-parent="absent"><span class="column-title">Second column</span>`,
 		// Nested `.item`: the same descriptor one level down, where
 		// `.item.parent.title` resolves the enclosing column instance's field
 		// values.
-		`<span class="person-item" data-index="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="people" data-template="probeperson" data-parent-title="First column"></span>`,
-		`<span class="person-item" data-index="1" data-number="2" data-count="2" data-first="false" data-last="true" data-section="people" data-template="probeperson" data-parent-title="First column"></span>`,
-		`<span class="person-item" data-index="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="people" data-template="probeperson" data-parent-title="Second column"></span>`,
+		`<span class="person-item" data-index="0" data-depth="0" data-number="1" data-count="2" data-first="true" data-last="false" data-section="people" data-template="probeperson" data-parent-title="First column"></span>`,
+		`<span class="person-item" data-index="1" data-depth="0" data-number="2" data-count="2" data-first="false" data-last="true" data-section="people" data-template="probeperson" data-parent-title="First column"></span>`,
+		`<span class="person-item" data-index="0" data-depth="0" data-number="1" data-count="1" data-first="true" data-last="true" data-section="people" data-template="probeperson" data-parent-title="Second column"></span>`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page does not contain %q:\n%s", want, page)
 		}
 	}
+
+	// The DISTINCT-template levels above pin depth 0. A level whose resolved
+	// template REPEATS needs a self-nesting declaration, which is a composition
+	// cycle: template.LoadLibrary (step 4, checkLibraryBuild) and
+	// Registry.Validate reject it as a *SectionCycleError until phase 7 adds
+	// max_depth to a bounded self-accepting declaration. The render pipeline
+	// itself (RenderSlide → slideData → renderSection → renderInstance) does not
+	// validate, so a self-nesting chain built directly here — Register, no
+	// Validate — genuinely renders, and pins the +1-per-repeat rule: the outer
+	// `loop` instance is depth 0, the `loop` nested in it depth 1 and the third
+	// depth 2, each carrying its own item.section and item.parent (nil at the
+	// top level, the enclosing instance's field values below). The on-disk,
+	// loadable repeat case is pinned later by phase 7 task 21
+	// (TestRenderDeckNestedSections), once max_depth makes the chain loadable.
+	t.Run("repeat adds one depth per self-nested level", func(t *testing.T) {
+		reg := template.NewRegistry(nil)
+		for _, tmpl := range []*template.Template{
+			{
+				Name:     "repeatprobeslide",
+				Usage:    template.UsageSlide,
+				Sections: []template.SectionDecl{{Name: "loop", Accepted: []string{"probeloop"}, Max: 4}},
+				Body:     template.BodyRule{Mode: template.BodyOptional},
+				Layout:   template.Layout{Text: repeatProbeSlideLayout},
+			},
+			{
+				Name:     "probeloop",
+				Usage:    template.UsageSection,
+				Fields:   []template.Field{{Name: "name", Type: template.FieldText, Required: true}},
+				Sections: []template.SectionDecl{{Name: "loop", Accepted: []string{"probeloop"}, Max: 4}},
+				Body:     template.BodyRule{Mode: template.BodyDisallowed},
+				Layout:   template.Layout{Text: repeatProbeLoopLayout},
+			},
+		} {
+			if err := reg.Register(tmpl); err != nil {
+				t.Fatalf("register template %q: %v", tmpl.Name, err)
+			}
+		}
+
+		// One `loop` instance nested three levels deep, every level resolving
+		// the SAME template (probeloop) through the self-accepting `loop`
+		// declaration, so the enclosing chain a level's depth is measured
+		// against repeats at each step.
+		inner := slide.Section{Name: "loop", Level: 3, Index: 0, Template: "probeloop", Frontmatter: map[string]any{"name": "inner"}}
+		mid := slide.Section{Name: "loop", Level: 2, Index: 0, Template: "probeloop", Frontmatter: map[string]any{"name": "mid"}, Children: []slide.Section{inner}}
+		outer := slide.Section{Name: "loop", Level: 1, Index: 0, Template: "probeloop", Frontmatter: map[string]any{"name": "outer"}, Children: []slide.Section{mid}}
+		parsed := &slide.Slide{
+			File:        "slides/1-repeat.md",
+			Template:    "repeatprobeslide",
+			Frontmatter: map[string]any{},
+			Sections:    []slide.Section{outer},
+		}
+
+		rendered, err := RenderSlide(parsed, "repeat", &deck.Config{Title: "Repeat Deck"}, deck.Slide{Number: 1, Label: "repeat"}, 1, reg, template.LayoutFuncMap(nil, ""))
+		if err != nil {
+			t.Fatalf("RenderSlide: %v", err)
+		}
+		page := string(rendered)
+
+		for _, want := range []string{
+			// Top level: the slide is not an instance of any template, so the
+			// outermost `loop` is depth 0 with a nil parent.
+			`<div class="repeat-loop" data-depth="0" data-section="loop" data-template="probeloop" data-parent="absent" data-parent-name=""><span class="repeat-name">outer</span>`,
+			// First repeat: one enclosing same-template ancestor (outer).
+			`<div class="repeat-loop" data-depth="1" data-section="loop" data-template="probeloop" data-parent="present" data-parent-name="outer"><span class="repeat-name">mid</span>`,
+			// Second repeat: two enclosing same-template ancestors (outer, mid).
+			`<div class="repeat-loop" data-depth="2" data-section="loop" data-template="probeloop" data-parent="present" data-parent-name="mid"><span class="repeat-name">inner</span>`,
+		} {
+			if !strings.Contains(page, want) {
+				t.Errorf("repeated-template page does not contain %q:\n%s", want, page)
+			}
+		}
+	})
 }
 
 // sectionProbeSlide is one slide file using the section-context-probe layout,

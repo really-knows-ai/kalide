@@ -13,11 +13,15 @@ package scaffold
 // read through mustReadSeed and mustReadLibraryFullGuide, while the AGENTS.md
 // pointers are separately asserted to carry the reference line. The
 // `{{ template }}` layout-composition tokens and the composition statements
-// have no canonical accessor, so they are authored scope alongside deckGuideCLI.
-// The vocabulary is never restated as a hand-maintained fixture list: a format
-// token added to the implementation is returned by an accessor and immediately
-// has to appear in a guide, so a token the union of the two guides omits makes
-// the test fail.
+// have no canonical accessor, so they are authored scope alongside deckGuideCLI;
+// so are the delta's keys that only unexported switches parse — the section
+// declaration keys (name/accepted/min/max/max_depth), the reserved item-context
+// key item.depth (`.item.depth`), the image path keys (roots/dir/extensions)
+// and the enum keys (variants/variants_from) — see
+// agentGuideAuthoredScopeGroups. The vocabulary is never restated as a
+// hand-maintained fixture list: a format token added to the implementation is
+// returned by an accessor and immediately has to appear in a guide, so a token
+// the union of the two guides omits makes the test fail.
 //
 // Coverage is per guide so the test never demands from a guide a token its
 // declared scope does not own:
@@ -26,13 +30,15 @@ package scaffold
 //   - deck-guide scope: every kalide.yaml key (deck.ConfigKeys), the full CLI
 //     command set, and the shared format vocabulary (the deck guide is the
 //     complete format reference), including the reserved `media:`/`theme:<name>/`
-//     prefixes and the `{{ template }}` layout-composition tokens;
+//     prefixes, the `{{ template }}` layout-composition tokens and the delta's
+//     authored keys (section declaration keys, the reserved item-context key
+//     item.depth, image path keys and enum keys);
 //   - library-guide scope: the templates/ library layout, the library.yaml
 //     keys, the template.yaml schema and body modes, the layout language and its
 //     `{{ template }}` composition tokens, the reserved context names
 //     deck/slide/item/raw/data, the layout helpers, the reserved context keys,
 //     every field type, the themes/media rules and the reserved
-//     `media:`/`theme:<name>/` prefixes.
+//     `media:`/`theme:<name>/` prefixes, plus the same delta authored keys.
 //
 // Negative assertion: the kalide.yaml config keys and the init/version CLI are
 // deliberately OUTSIDE the library-guide scope, so their absence from
@@ -72,12 +78,17 @@ package scaffold
 // source through internal/slide.Parse, a library.yaml snippet through
 // template.LoadLibrary, and a template.yaml snippet through template.LoadLibrary
 // on an in-memory fs.FS that supplies the person section template its
-// `accepted: [person]` reference needs. A snippet that is intentionally
-// illustrative and not standalone-loadable (a layout tree, the CLI usage
-// listing, a `media` action fragment, a section-instance fragment, an error
-// message) must be declared, with a reason, in agentGuideIllustrativeSnippets;
-// any fenced snippet that is neither validated nor declared there fails the
-// test, so no snippet is ever silently skipped.
+// `accepted: [person]` reference needs, the owning layer's named definitions
+// (groups/field_sets/types) and the media/ files a `variants_from` glob expands
+// against. A library.yaml snippet declaring named definitions is additionally
+// required to have them parsed onto its layer. The fixture's delta provisions
+// are themselves exercised by the "the snippet fixture loads the delta's
+// template.yaml forms" self-check, so they cannot rot. A snippet that is
+// intentionally illustrative and not standalone-loadable (a layout tree, the
+// CLI usage listing, a `media` action fragment, a section-instance fragment, an
+// error message) must be declared, with a reason, in
+// agentGuideIllustrativeSnippets; any fenced snippet that is neither validated
+// nor declared there fails the test, so no snippet is ever silently skipped.
 //
 // Inline template snippets are validated too: every single-line backtick code
 // span carrying a Go template action (`{{ … }}`) is parsed with the canonical
@@ -113,7 +124,10 @@ const deckPointerSeedPath = agentsGuideName
 // deckGuideCLI is the full CLI command set the deck guide must carry
 // (agent-guide-drift-check, agent-authoring). There is no canonical accessor
 // for command names, so this one scope list is deliberately authored here: it
-// is scope, not format vocabulary.
+// is scope, not format vocabulary. It carries the whole user-facing command
+// set — including the config, check, render and help commands the typed-records
+// delta added — and the deck-guide CLI scope subtest asserts every entry is
+// documented.
 var deckGuideCLI = []string{
 	"init",
 	"init-library",
@@ -122,6 +136,10 @@ var deckGuideCLI = []string{
 	"templates <name>",
 	"upgrade",
 	"version",
+	"config",
+	"check",
+	"render",
+	"help",
 }
 
 // agentGuideTokenGroup is one named family of implemented tokens, so a drift
@@ -259,6 +277,10 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 			{"the media layout helper renders a file", "media:"},
 			{"theme: default", "theme:"},
 			{"theme:", "theme:"},
+			{"The nested sections are bounded by a max_depth value.", "max_depth"},
+			{"The item depth grows with each nesting level.", "item.depth"},
+			{"Images resolve under the declared roots in order.", "roots"},
+			{"Variants from a glob expand at load.", "variants_from"},
 		}
 		for _, tc := range absent {
 			if agentGuideContainsToken(tc.text, tc.token) {
@@ -280,6 +302,12 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 			{"```\nurl('media:fonts/x.woff2')\n```", "media:"},
 			{"`theme:<name>/`", "theme:"},
 			{"@import 'theme:default/theme.css'\nurl('theme:default/bg.png')", "theme:"},
+			{"`max_depth: N`", "max_depth"},
+			{"`.item.depth`", "item.depth"},
+			{"roots: [assets, media]", "roots"},
+			{"dir: logos", "dir"},
+			{"extensions: [svg, png]", "extensions"},
+			{"`variants_from`", "variants_from"},
 		}
 		for _, tc := range present {
 			if !agentGuideContainsToken(tc.text, tc.token) {
@@ -315,6 +343,38 @@ func TestAgentGuidesMatchFormat(t *testing.T) {
 		agentGuideAssertSnippetsLoad(t, "library guide (libraryguide/AGENTS_KALIDE.md)", libraryGuide)
 	})
 
+	t.Run("the snippet fixture loads the delta's template.yaml forms", func(t *testing.T) {
+		// The in-memory library the guides' own snippets load through must
+		// itself carry the delta's forms, or a snippet that uses them would be
+		// reported as a load failure unrelated to the guide. This self-check
+		// loads one template.yaml exercising every fixture provision: a named
+		// type (`type: colour`), a named field set (`- include: meta`), a named
+		// accept-list (`accepted: [@callouts]`), an image field's media root and
+		// an enum field's variants_from glob — the forms the guides document
+		// (named-library-definitions, image-field-roots, enum-variants-from).
+		manifest := "description: delta fixture\n" +
+			"fields:\n" +
+			"  - name: accent\n" +
+			"    type: colour\n" +
+			"  - name: logo\n" +
+			"    type: image\n" +
+			"    roots: [media]\n" +
+			"    dir: bgs\n" +
+			"    extensions: [jpg]\n" +
+			"  - name: background\n" +
+			"    type: enum\n" +
+			"    variants_from: media/bgs/*.jpg\n" +
+			"  - include: meta\n" +
+			"sections:\n" +
+			"  - name: people\n" +
+			"    accepted: [\"@callouts\"]\n" +
+			"body:\n" +
+			"  mode: optional\n"
+		if _, err := template.LoadLibrary(agentGuideManifestFS(manifest), template.TemplatesDir); err != nil {
+			t.Errorf("the snippet fixture fails to load a delta template.yaml (named type/include/@group, image media root, variants_from): %v", err)
+		}
+	})
+
 	t.Run("the guides' inline template snippets parse with the layout func map", func(t *testing.T) {
 		agentGuideAssertInlineSnippetsParse(t, "deck guide (seed/AGENTS_KALIDE.md)", deckGuide)
 		agentGuideAssertInlineSnippetsParse(t, "library guide (libraryguide/AGENTS_KALIDE.md)", libraryGuide)
@@ -342,14 +402,17 @@ func agentGuideTexts(t *testing.T) (deckGuide, libraryGuide string) {
 
 // agentGuideFormatGroups returns the format vocabulary the union check and the
 // deck-guide scope check carry, grouped by family: the accessor-derived format
-// tokens plus the authored layout-composition tokens and the deck guide's
-// composition statements. The composition families have no canonical accessor
-// (they document the {{ template }} composition the loader implements), so they
-// are authored scope here, exactly as deckGuideCLI is.
+// tokens, the authored layout-composition tokens and the deck guide's
+// composition statements, and the delta's authored scope groups
+// (agentGuideAuthoredScopeGroups). The composition and delta families have no
+// canonical accessor (the composition documents the {{ template }} composition
+// the loader implements; the delta families are keys parsed only inside
+// unexported switches), so they are authored scope here, exactly as
+// deckGuideCLI is.
 func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 	t.Helper()
 
-	return []agentGuideTokenGroup{
+	groups := []agentGuideTokenGroup{
 		{name: "field type", tokens: template.ManifestFieldTypes()},
 		{name: "body mode", tokens: template.BodyModes()},
 		{name: "reserved name", tokens: template.ReservedNames()},
@@ -360,6 +423,37 @@ func agentGuideFormatGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "reserved URL prefix", tokens: []string{template.MediaURLPrefix(), template.ThemeURLPrefix()}},
 		{name: "layout composition token", tokens: agentGuideCompositionTokens(t)},
 		{name: "layout composition statement", tokens: agentGuideDeckCompositionStatements, literal: true},
+	}
+	return append(groups, agentGuideAuthoredScopeGroups()...)
+}
+
+// agentGuideAuthoredScopeGroups returns the delta's authored token families —
+// the format keys the implementation accepts but no exported accessor
+// enumerates, so they cannot be derived and are authored here exactly as
+// deckGuideCLI and the layout-composition families are. They belong to BOTH
+// guides' scopes (the delta is documented in each), so they are appended to
+// both the deck-guide scope (agentGuideFormatGroups) and the library-guide
+// scope (agentGuideLibraryScopeGroups); a guide that omits one fails the drift
+// test.
+//
+//   - section declaration key: name, accepted, min, max and max_depth are
+//     parsed only by parseManifestSection's unexported inline switch (there is
+//     no SectionKeys accessor to read max_depth from), and the delta adds
+//     max_depth to that set.
+//   - reserved item-context key: item.depth (`.item.depth` in a layout) is
+//     reserved by the render/example context (item-context) but is outside
+//     template.ContextKeys and template.ReservedNames, so it is authored here.
+//   - image path key: the image field's roots, dir and extensions options
+//     (image-field-roots) are parsed only by parseManifestField's unexported
+//     switch.
+//   - enum key: the enum field's variants and variants_from keys
+//     (enum-variants-from) are parsed only by the same unexported switch.
+func agentGuideAuthoredScopeGroups() []agentGuideTokenGroup {
+	return []agentGuideTokenGroup{
+		{name: "section declaration key", tokens: []string{"name", "accepted", "min", "max", "max_depth"}},
+		{name: "reserved item-context key", tokens: []string{"item.depth"}},
+		{name: "image path key", tokens: []string{"roots", "dir", "extensions"}},
+		{name: "enum key", tokens: []string{"variants", "variants_from"}},
 	}
 }
 
@@ -472,9 +566,12 @@ func agentGuideLibraryReservedContextNames(t *testing.T) []string {
 // layout, the library.yaml keys, the template.yaml schema and body modes, the
 // layout language and its {{ template }} composition tokens and statements, the
 // reserved context names deck/slide/item/raw/data, the layout helpers, the
-// reserved context keys, every field type, and the themes/media rules and the
-// reserved `media:`/`theme:<name>/` prefixes. It deliberately omits the
-// kalide.yaml config keys and the init/version CLI, which are deck-guide-only.
+// reserved context keys, every field type, the themes/media rules and the
+// reserved `media:`/`theme:<name>/` prefixes, plus the delta's authored scope
+// groups (agentGuideAuthoredScopeGroups) — the section-declaration keys, the
+// reserved item-context key, the image path keys and the enum keys. It
+// deliberately omits the kalide.yaml config keys and the init/version CLI,
+// which are deck-guide-only.
 func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 	t.Helper()
 
@@ -485,7 +582,7 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 		template.ThemesDir + "/<name>/",
 		template.MediaDir + "/",
 	}
-	return []agentGuideTokenGroup{
+	groups := []agentGuideTokenGroup{
 		{name: "library layout entry", tokens: layout},
 		{name: "library.yaml key", tokens: template.LibraryMetaKeys()},
 		{name: "template.yaml top-level key", tokens: template.ManifestTopLevelKeys()},
@@ -499,6 +596,7 @@ func agentGuideLibraryScopeGroups(t *testing.T) []agentGuideTokenGroup {
 		{name: "field type", tokens: template.ManifestFieldTypes()},
 		{name: "themes/media rule token", tokens: []string{template.ThemeStylesheet, template.MediaURLPrefix(), template.ThemeURLPrefix(), "url()", "media \""}},
 	}
+	return append(groups, agentGuideAuthoredScopeGroups()...)
 }
 
 // agentGuideAssertGuideCarries asserts guide contains every token in every
@@ -917,7 +1015,10 @@ func agentGuideAssertInlineSnippetsParse(t *testing.T, guideName, guide string) 
 // (title) through deck.LoadConfig, a library.yaml document (name/format)
 // through template.LoadLibrary, and a template.yaml manifest or manifest
 // fragment (fields/sections/body) through template.LoadLibrary on an in-memory
-// library.
+// library. A library.yaml snippet that declares named definitions
+// (groups/field_sets/types) is additionally required to have them parsed onto
+// its loading layer, so the delta's definitions section is validated, not
+// silently ignored (named-library-definitions).
 func agentGuideValidateYAMLSnippet(t *testing.T, where, body string, themes *theme.Registry) {
 	t.Helper()
 
@@ -938,27 +1039,79 @@ func agentGuideValidateYAMLSnippet(t *testing.T, where, body string, themes *the
 		fsys := fstest.MapFS{
 			template.TemplatesDir + "/" + template.LibraryFile: &fstest.MapFile{Data: []byte(body)},
 		}
-		if _, err := template.LoadLibrary(fsys, template.TemplatesDir); err != nil {
+		lib, err := template.LoadLibrary(fsys, template.TemplatesDir)
+		if err != nil {
 			t.Errorf("%s: library.yaml snippet does not load: %v", where, err)
+			return
+		}
+		if agentGuideLibraryDefinitionsKey.MatchString(body) && !agentGuideHasDefinitions(lib.Layers) {
+			t.Errorf("%s: library.yaml snippet declares named definitions but the loader parsed none onto its layer", where)
 		}
 	default:
 		t.Errorf("%s: yaml snippet is neither a kalide.yaml, library.yaml nor template.yaml fragment:\n%s", where, body)
 	}
 }
 
+// agentGuideHasDefinitions reports whether any loading layer carries named
+// definitions — a named accept-list, field group or field type
+// (named-library-definitions).
+func agentGuideHasDefinitions(layers []*template.LibraryLayer) bool {
+	for _, layer := range layers {
+		defs := layer.Definitions
+		if defs != nil && (len(defs.Groups) > 0 || len(defs.FieldSets) > 0 || len(defs.Types) > 0) {
+			return true
+		}
+	}
+	return false
+}
+
+// agentGuideFixtureLibraryMeta is the in-memory library.yaml the manifest
+// fixture supplies. Besides the required name/format it carries the owning
+// layer's named definitions — a named accept-list (groups), a named field group
+// (field_sets) and a named field type (types) — so a guide's template.yaml
+// snippet may reference them as `@name`, `- include: name` and `type: name` and
+// still load through the real parser, which resolves each name against the
+// Definitions of the layer that owns the referencing template
+// (named-library-definitions).
+const agentGuideFixtureLibraryMeta = "name: guide-snippet\n" +
+	"format: 1\n" +
+	"groups:\n" +
+	"  callouts: [person]\n" +
+	"field_sets:\n" +
+	"  meta:\n" +
+	"    - name: subtitle\n" +
+	"      type: text\n" +
+	"      nullable: true\n" +
+	"types:\n" +
+	"  colour:\n" +
+	"    type: enum\n" +
+	"    variants: [red, green, blue]\n"
+
+// agentGuideFixtureMedia lists the media/ files the manifest fixture supplies,
+// keyed by their layer-relative path. They let an enum field's `variants_from`
+// glob (for example media/bgs/*.jpg) expand against real files and an image
+// field's media root resolve, so a guide's template.yaml snippet carrying
+// either loads through the real parser (enum-variants-from, image-field-roots).
+var agentGuideFixtureMedia = []string{
+	template.MediaDir + "/bgs/left-1.jpg",
+	template.MediaDir + "/bgs/right-8.jpg",
+}
+
 // agentGuideManifestFS builds an in-memory template library whose hello slide
 // manifest is the snippet under test. The library supplies a person section
-// template so a manifest's `accepted: [person]` reference resolves, and a
-// minimal example whose frontmatter names title only when the snippet declares
-// a title field.
+// template so a manifest's `accepted: [person]` reference resolves, the owning
+// layer's named definitions so a `type:`/`include:`/`@group` reference resolves
+// (agentGuideFixtureLibraryMeta), the media/ files a `variants_from` glob
+// expands against (agentGuideFixtureMedia), and a minimal example whose
+// frontmatter names title only when the snippet declares a title field.
 func agentGuideManifestFS(manifest string) fstest.MapFS {
 	example := "---\ntemplate: hello\n---\nAn example body.\n"
 	if agentGuideManifestTitleField.MatchString(manifest) {
 		example = "---\ntemplate: hello\ntitle: Example\n---\nAn example body.\n"
 	}
 	dir := template.TemplatesDir + "/"
-	return fstest.MapFS{
-		dir + template.LibraryFile:                                      &fstest.MapFile{Data: []byte("name: guide-snippet\nformat: 1\n")},
+	fsys := fstest.MapFS{
+		dir + template.LibraryFile:                                      &fstest.MapFile{Data: []byte(agentGuideFixtureLibraryMeta)},
 		dir + template.SlidesDir + "/hello/" + template.ManifestFile:    &fstest.MapFile{Data: []byte(manifest)},
 		dir + template.SlidesDir + "/hello/" + template.LayoutFile:      &fstest.MapFile{Data: []byte("{{ .title }}{{ .body }}")},
 		dir + template.SlidesDir + "/hello/" + template.ExampleFile:     &fstest.MapFile{Data: []byte(example)},
@@ -966,6 +1119,10 @@ func agentGuideManifestFS(manifest string) fstest.MapFS {
 		dir + template.SectionsDir + "/person/" + template.LayoutFile:   &fstest.MapFile{Data: []byte("{{ .body }}")},
 		dir + template.SectionsDir + "/person/" + template.ExampleFile:  &fstest.MapFile{Data: []byte("A person.\n")},
 	}
+	for _, media := range agentGuideFixtureMedia {
+		fsys[dir+media] = &fstest.MapFile{Data: []byte("fixture media")}
+	}
+	return fsys
 }
 
 // agentGuideManifestFragment matches a top-level template.yaml schema key.
@@ -976,6 +1133,9 @@ var agentGuideDeckConfigKey = regexp.MustCompile(`(?m)^title\s*:`)
 
 // agentGuideLibraryMetaKey matches a required library.yaml key.
 var agentGuideLibraryMetaKey = regexp.MustCompile(`(?m)^(name|format)\s*:`)
+
+// agentGuideLibraryDefinitionsKey matches a library.yaml named-definition key.
+var agentGuideLibraryDefinitionsKey = regexp.MustCompile(`(?m)^(groups|field_sets|types)\s*:`)
 
 // agentGuideManifestTitleField matches a declared field named title.
 var agentGuideManifestTitleField = regexp.MustCompile(`(?m)^\s*-\s*name:\s*title\s*$`)

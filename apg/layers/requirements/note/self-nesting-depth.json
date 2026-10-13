@@ -1,0 +1,15 @@
+{
+  "layer": "requirements",
+  "type": "note",
+  "name": "self-nesting-depth",
+  "body": "Self-nesting depth, worked. One template `T` declares a `loop` section that accepts `T` with `max_depth: 1`, and a slide nests `# events` (T) › `## loop` (T) › `### loop` (T). Every instance resolves template `T`, and each instance's `.item.depth` is the count of enclosing instances whose resolved template is also `T`: the `events` instance has no `T` ancestor, so `.item.depth` is 0; the first `loop` sits under the `events` `T` instance, so `.item.depth` is 1; the second `loop` sits under two `T` instances, so `.item.depth` is 2. The declaration `loop` accepts `T`, so it bounds the `.item.depth` of the instances it produces at 1: the depth-0 and depth-1 instances are accepted and the depth-2 instance is reported `section \"loop\": nesting deeper than max_depth 1`. Because that declaration is the one that accepts `T`, the bound is `T`'s `.item.depth`. `.item.section` names the declared slot at each level — `events` for the depth-0 instance and `loop` for each nested instance — and `.item.parent` is the immediately enclosing instance's field values at every level.\n\nMulti-template, worked. Template `A` declares a `b` section that accepts template `B` with `max_depth: 1`, and template `B` declares an `a` section that accepts template `A` with no `max_depth`. A slide nests `# a` (A) › `## b` (B) › `### a` (A) › `#### b` (B): `.item.depth` counts per resolved template — the top `a` is `A` depth 0, the first `b` is `B` depth 0, the second `a` is `A` depth 1 (one enclosing `A`), the second `b` is `B` depth 1 (one enclosing `B`) — while declaration `b` bounds the instances it accepts, which resolve to `B`, at `max_depth: 1`, so that second `b` at depth 1 is accepted. Continuing `##### a` › `###### b` makes the third `b` instance, whose `.item.depth` 2 would exceed the `b` declaration's `max_depth: 1`, so the `b` declaration refuses it with `section \"b\": nesting deeper than max_depth 1`; the `a` declaration carries no `max_depth`, so it bounds nothing and the `a` instances are limited only by the `b` bound. The error names the bounded declaration's section slot (`b`), not the instance's template or the declaring template's own slot.",
+  "properties": {},
+  "out": [
+    {
+      "kind": "details",
+      "target": "requirements.requirement.bounded-self-nesting",
+      "properties": {}
+    }
+  ],
+  "in": []
+}

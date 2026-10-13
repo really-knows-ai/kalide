@@ -132,6 +132,10 @@ func TestRunVersion(t *testing.T) {
 // scaffolds a starter deck, so it is run in a throwaway temp directory and
 // never in the package directory. Full per-command coverage lives in the
 // phase-7 task 9 and phase-8 task 5 tests; here we only pin the routes.
+//
+// `check` routes to runCheck and `render` to runRender (phase-10 task 5), and
+// each command's own argument guard makes a malformed flag or argument a usage
+// error (exit 2, usage text on stderr, empty stdout).
 func TestRunRoutesCommands(t *testing.T) {
 	t.Run("init scaffolds and refuses a second run", func(t *testing.T) {
 		// runInit resolves the current working directory with os.Getwd and
@@ -299,22 +303,154 @@ func TestRunRoutesCommands(t *testing.T) {
 			t.Fatalf("Run(templates no-such-template) stdout = %q, want empty", stdout)
 		}
 	})
+
+	t.Run("check routes to runCheck", func(t *testing.T) {
+		// The fixture templates/ library loads, but the project has no
+		// kalide.yaml, so whole-deck validation fails deterministically. The
+		// command reaches runCheck — an unknown command would exit 2 with an
+		// unknown-command error — and reports the text summary plus the first
+		// error.
+		chdirFixtureLibrary(t)
+
+		code, stdout, stderr := runCLI("check")
+		if code != 1 {
+			t.Fatalf("Run(check) exit = %d, want 1", code)
+		}
+		if strings.Contains(stderr, "unknown command") {
+			t.Fatalf("Run(check) stderr = %q, want the real runCheck handler", stderr)
+		}
+		if stdout != "kalide check: 1 error\n" {
+			t.Errorf("Run(check) stdout = %q, want the error summary", stdout)
+		}
+		if !strings.Contains(stderr, "kalide.yaml") {
+			t.Errorf("Run(check) stderr = %q, want the first error naming kalide.yaml", stderr)
+		}
+	})
+
+	t.Run("check rejects a malformed flag as a usage error", func(t *testing.T) {
+		chdirFixtureLibrary(t)
+
+		for _, args := range [][]string{{"check", "--bogus"}, {"check", "extra"}} {
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				code, stdout, stderr := runCLI(args...)
+				if code != 2 {
+					t.Fatalf("Run(%q) exit = %d, want 2", args, code)
+				}
+				if stdout != "" {
+					t.Errorf("Run(%q) stdout = %q, want empty", args, stdout)
+				}
+				if strings.Contains(stderr, "unknown command") {
+					t.Fatalf("Run(%q) stderr = %q, want runCheck's usage error", args, stderr)
+				}
+				if !strings.Contains(stderr, "Usage:") {
+					t.Errorf("Run(%q) stderr = %q, want usage text", args, stderr)
+				}
+			})
+		}
+	})
+
+	t.Run("render routes to runRender", func(t *testing.T) {
+		// With no kalide.yaml the deck fails validation before any rendering,
+		// proving the route reaches runRender (not an unknown-command usage
+		// error).
+		chdirFixtureLibrary(t)
+
+		code, stdout, stderr := runCLI("render", "1")
+		if code != 1 {
+			t.Fatalf("Run(render 1) exit = %d, want 1", code)
+		}
+		if strings.Contains(stderr, "unknown command") {
+			t.Fatalf("Run(render 1) stderr = %q, want the real runRender handler", stderr)
+		}
+		if stdout != "" {
+			t.Errorf("Run(render 1) stdout = %q, want empty for an invalid deck", stdout)
+		}
+		if !strings.Contains(stderr, "kalide.yaml") {
+			t.Errorf("Run(render 1) stderr = %q, want the validation error naming kalide.yaml", stderr)
+		}
+	})
+
+	t.Run("render usage errors exit 2", func(t *testing.T) {
+		chdirFixtureLibrary(t)
+
+		for _, args := range [][]string{
+			{"render"},
+			{"render", "--full", "--fragment"},
+		} {
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				code, stdout, stderr := runCLI(args...)
+				if code != 2 {
+					t.Fatalf("Run(%q) exit = %d, want 2", args, code)
+				}
+				if stdout != "" {
+					t.Errorf("Run(%q) stdout = %q, want empty", args, stdout)
+				}
+				if !strings.Contains(stderr, "Usage:") {
+					t.Errorf("Run(%q) stderr = %q, want usage text", args, stderr)
+				}
+			})
+		}
+	})
 }
 
 func TestRunTemplatesRejectsExtraArgs(t *testing.T) {
-	code, stdout, stderr := runCLI("templates", "a", "b")
-	if code != 2 {
-		t.Fatalf("Run(templates a b) exit = %d, want 2", code)
-	}
-	if !strings.Contains(stderr, "at most one") {
-		t.Fatalf("Run(templates a b) stderr = %q, want an argument-count error", stderr)
-	}
-	if !strings.Contains(stderr, "Usage:") {
-		t.Fatalf("Run(templates a b) stderr = %q, want usage text", stderr)
-	}
-	if stdout != "" {
-		t.Fatalf("Run(templates a b) stdout = %q, want empty", stdout)
-	}
+	t.Run("two names is an argument-count usage error", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates", "a", "b")
+		if code != 2 {
+			t.Fatalf("Run(templates a b) exit = %d, want 2", code)
+		}
+		if !strings.Contains(stderr, "at most one") {
+			t.Fatalf("Run(templates a b) stderr = %q, want an argument-count error", stderr)
+		}
+		if !strings.Contains(stderr, "Usage:") {
+			t.Fatalf("Run(templates a b) stderr = %q, want usage text", stderr)
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates a b) stdout = %q, want empty", stdout)
+		}
+	})
+
+	t.Run("--all is accepted beside at most one name", func(t *testing.T) {
+		// `--all` is a listing flag, not a template name: Run's relaxed guard
+		// must not count it, so `templates --all` reaches runTemplates and
+		// lists every template (including internal ones) rather than failing
+		// as an argument-count usage error.
+		chdirFixtureLibrary(t)
+
+		for _, args := range [][]string{
+			{"templates", "--all"},
+			{"templates", "--all", "hello"},
+		} {
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				code, stdout, stderr := runCLI(args...)
+				if code != 0 {
+					t.Fatalf("Run(%q) exit = %d, want 0 (stderr = %q)", args, code, stderr)
+				}
+				if strings.Contains(stderr, "at most one") {
+					t.Fatalf("Run(%q) stderr = %q, want --all accepted, not an argument-count error", args, stderr)
+				}
+				if stdout == "" {
+					t.Errorf("Run(%q) stdout = \"\", want output", args)
+				}
+			})
+		}
+	})
+
+	t.Run("--all beside two names is still an argument-count usage error", func(t *testing.T) {
+		code, stdout, stderr := runCLI("templates", "--all", "a", "b")
+		if code != 2 {
+			t.Fatalf("Run(templates --all a b) exit = %d, want 2", code)
+		}
+		if !strings.Contains(stderr, "at most one") {
+			t.Fatalf("Run(templates --all a b) stderr = %q, want an argument-count error", stderr)
+		}
+		if !strings.Contains(stderr, "Usage:") {
+			t.Fatalf("Run(templates --all a b) stderr = %q, want usage text", stderr)
+		}
+		if stdout != "" {
+			t.Fatalf("Run(templates --all a b) stdout = %q, want empty", stdout)
+		}
+	})
 }
 
 func TestRunUnknownCommand(t *testing.T) {

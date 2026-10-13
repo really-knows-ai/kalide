@@ -147,6 +147,21 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 		slides.WriteString(string(horizontal))
 	}
 
+	return renderPage(cfg, themeCSS, slides.String())
+}
+
+// renderPage executes the embedded assets.DeckPage page shell for a deck whose
+// already-rendered `.reveal > .slides` markup is slides: the document title
+// (cfg.Title), the resolved theme stylesheet URL (themeCSS), the reveal.js
+// navigationMode (cfg.Navigation) and the trusted slide markup (slides). It is
+// the single page-shell construction path shared by RenderDeck (which passes
+// every slide's markup) and RenderSlidePage (which passes one selected slide's),
+// so the whole-deck page the server serves and the standalone single-slide page
+// `kalide render <slide> --full` writes are built from the same shell, head,
+// embedded assets and theme stylesheet and differ only in the markup placed
+// inside the container. A page parse or execution failure is returned as a
+// *RenderError.
+func renderPage(cfg *deck.Config, themeCSS, slides string) (htmltmpl.HTML, error) {
 	page, err := htmltmpl.ParseFS(assets.DeckPage(), deckPageName)
 	if err != nil {
 		return "", &RenderError{Err: fmt.Errorf("parse deck page %q: %w", deckPageName, err)}
@@ -156,7 +171,7 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 		"Title":      cfg.Title,
 		"ThemeCSS":   themeCSS,
 		"Navigation": cfg.Navigation,
-		"Slides":     htmltmpl.HTML(slides.String()),
+		"Slides":     htmltmpl.HTML(slides),
 	}
 
 	var buf bytes.Buffer
@@ -164,6 +179,79 @@ func RenderDeck(cfg *deck.Config, d *deck.Deck, parsed []*slide.Slide, reg *temp
 		return "", &RenderError{Err: fmt.Errorf("execute deck page %q: %w", deckPageName, err)}
 	}
 	return htmltmpl.HTML(buf.String()), nil
+}
+
+// RenderSlidePage renders ONE selected slide of a deck as a complete standalone
+// page: the same offline reveal.js page shell, head, embedded assets and theme
+// stylesheet RenderDeck serves (assets.DeckPage executed through the shared
+// renderPage path), holding ONLY the selected slide's own `<section>` — no
+// outer vertical-stack wrapper — in its `.reveal > .slides` container.
+//
+// Unlike the whole-deck page, the container holds just one slide, but that slide
+// is rendered from the WHOLE deck's identity: total is d.Total(), the whole
+// deck's slide-file count, and meta is the selected slide's own modelled
+// position (deck.Slide, supplying PositionLabel), so the embedded `<section>` is
+// byte-identical to the `--fragment` markup — internal/render.RenderSlide called
+// with the same parsed structure, label, cfg, meta, total, registry and func map
+// — and a layout reading `.slide.number`/`.slide.total` sees the same values in
+// the standalone page, the served whole-deck page and the fragment
+// (requirements.requirement.cli-render). It is deliberately NOT a render of a
+// one-slide projection of the deck, which would report total 1.
+//
+// d is the deck's ordered slide model (internal/deck.LoadSlides, the WHOLE
+// deck); meta is the selected slide's modelled position (deck.Slide); parsed is
+// that slide's parsed structure (internal/slide.Parse). reg is the populated
+// template registry the deck was validated against — typically built from the
+// project's templates/ library (template.NewRegistryFromLibrary); themeReg is
+// the project theme registry (theme.LoadDir) and must be non-nil — callers
+// always construct one from the project's on-disk theme library, so a nil
+// themeReg is a caller error and RenderSlidePage reports it rather than silently
+// substituting a default. funcMap is the library's layout func map
+// (template.LayoutFuncMap), threaded through RenderSlide exactly as RenderDeck
+// threads it.
+//
+// A nil config, deck, registry or theme registry, a slide that cannot be
+// rendered, and any page execution failure are returned as a *RenderError, as
+// RenderDeck reports them. RenderSlidePage is deterministic: the same deck and
+// selected slide always render to the same page HTML.
+//
+// single-binary: like RenderDeck, the page is built in-process and offline — the
+// embedded reveal.js under assetsURLPrefix and the project theme under
+// themesURLPrefix (or the /assets/theme.css fallback), never an external host —
+// so the output is OS-neutral and identical across all six supported targets
+// (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64,
+// linux/arm64) (requirements.requirement.single-binary).
+func RenderSlidePage(cfg *deck.Config, d *deck.Deck, meta deck.Slide, parsed *slide.Slide, reg *template.Registry, themeReg *theme.Registry, funcMap htmltmpl.FuncMap) (htmltmpl.HTML, error) {
+	if cfg == nil {
+		return "", &RenderError{Err: errors.New("nil deck config")}
+	}
+	if d == nil {
+		return "", &RenderError{Err: errors.New("nil deck")}
+	}
+	if reg == nil {
+		return "", &RenderError{Err: errors.New("nil template registry")}
+	}
+	if themeReg == nil {
+		return "", &RenderError{Err: errors.New("nil theme registry")}
+	}
+
+	themeCSS, err := themeStylesheet(cfg.Theme, themeReg)
+	if err != nil {
+		return "", &RenderError{Err: err}
+	}
+
+	// The selected slide renders through the same RenderSlide call the
+	// `--fragment` path makes — the WHOLE deck's slide-file count as total and
+	// the slide's own modelled position as meta — so the embedded <section> is
+	// byte-identical to that fragment and .slide.number/.slide.total count
+	// across the whole deck (requirements.requirement.cli-render).
+	total := d.Total()
+	slideHTML, err := RenderSlide(parsed, meta.Label, cfg, meta, total, reg, funcMap)
+	if err != nil {
+		return "", err
+	}
+
+	return renderPage(cfg, themeCSS, string(slideHTML))
 }
 
 // renderDeckSlide renders one modelled slide (a horizontal slide or a vertical

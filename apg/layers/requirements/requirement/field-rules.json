@@ -16,6 +16,16 @@
       "kind": "drives",
       "target": "domain.value.field",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.text-coercion",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cross-field-list-constraints",
+      "properties": {}
     }
   ],
   "in": [

@@ -16,17 +16,19 @@ import (
 	"github.com/really-knows-ai/kalide/internal/theme"
 )
 
-// This file implements Validate, the fail-fast whole-deck validator. It drives
-// the phase-2/3/4 loaders and checkers in the fixed deterministic order the
-// specification requires and turns their first error into the single
-// author-facing ValidationError defined in validate.go.
+// This file implements collectErrors, the fixed-order whole-deck walk, plus its
+// two entries: Validate (fail-fast, returning the first error in that order)
+// and ValidateAll (collect-all, returning every error). It drives the
+// phase-2/3/4 loaders and checkers in the fixed deterministic order the
+// specification requires and turns their errors into the author-facing
+// ValidationError defined in validate.go.
 //
-// Validate owns no rules of its own: kalide.yaml is checked by internal/deck
+// The validator owns no rules of its own: kalide.yaml is checked by internal/deck
 // (which resolves the theme through internal/theme), slide filenames and
 // ordering by internal/deck, slide structure by internal/slide.Parse, Markdown
 // bodies and inline text by internal/mdcheck, and field values by
-// internal/template.CheckValues. Validate's whole job is the order, the
-// recursion boundaries and the error adaptation.
+// internal/template.CheckValues. Its whole job is the order, the recursion
+// boundaries and the error adaptation.
 //
 // The compile-time assertion below pins the structural conformance between the
 // phase-4 template registry and the phase-2 slide catalogue: internal/template
@@ -38,7 +40,9 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 // Validate validates the whole deck rooted at fsys — ConfigFile (kalide.yaml)
 // and the SlidesDir (slides/) directly beneath it — and returns exactly the
 // first failure in the fixed deterministic order defined by
-// whole-deck-validation:
+// whole-deck-validation. It is the fail-fast entry: it runs collectErrors
+// (validator.go) in fail-fast mode and returns that walk's first error, so the
+// order below is the order collectErrors runs:
 //
 //  1. kalide.yaml, through deck.LoadConfig, with the config's theme resolved
 //     through themeReg (internal/deck + internal/theme);
@@ -84,67 +88,145 @@ var _ slide.Catalogue = (*template.Registry)(nil)
 // (darwin/arm64, darwin/amd64, windows/amd64, windows/arm64, linux/amd64,
 // linux/arm64), so the same deck yields the same result on each.
 func Validate(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) (ValidationError, bool) {
+	if errs := collectErrors(fsys, reg, themeReg, false); len(errs) > 0 {
+		return errs[0], true
+	}
+	return ValidationError{}, false
+}
+
+// ValidateAll validates the whole deck rooted at fsys and returns every failure
+// in the fixed deterministic order defined by whole-deck-validation, rather
+// than only the first. It is the collect-all entry behind kalide check --all:
+// it runs collectErrors (validator.go) in collect-all mode, so kalide.yaml,
+// the slide filenames, every slide top-to-bottom (frontmatter fields, body,
+// body rule, sections recursively, notes) and finally the inter-slide #label
+// links each contribute all of their errors; a failing step never blocks a
+// later independent step.
+//
+// reg and themeReg are required exactly as for Validate, never defaulted to any
+// compiled-in registry. The result is nil when the deck is valid, so a caller
+// reports every error like:
+//
+//	for _, verr := range validate.ValidateAll(fsys, reg, themeReg) {
+//		fmt.Fprintln(os.Stderr, validate.Format(verr))
+//	}
+//
+// Every returned error carries the same file/line/path/what/fix shape
+// Validate's single error does, and the list is deterministic: the same deck
+// always yields the same ordered list of failures.
+func ValidateAll(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry) []ValidationError {
+	return collectErrors(fsys, reg, themeReg, true)
+}
+
+// collectErrors is the one fixed-order whole-deck walk every validation entry
+// shares. It runs the same deterministic order the specification fixes
+// (whole-deck-validation):
+//
+//  1. kalide.yaml, through deck.LoadConfig, with the config's theme resolved
+//     through themeReg (internal/deck + internal/theme);
+//  2. slide filenames — numbering, letters and label uniqueness — through
+//     deck.LoadSlides;
+//  3. each slide in number/letter order (a horizontal slide before the vertical
+//     slides beneath it), and within a slide top-to-bottom by source line: the
+//     slide frontmatter's fields, then the slide body, then the slide body
+//     rule, then each section recursively (fields, body, body rule, children),
+//     then the reserved notes body;
+//  4. inter-slide #label links last, once every slide label in the deck is
+//     known.
+//
+// It drives both validation modes. collectAll=false is fail-fast: the first
+// error in that order is returned and the walk stops (kalide start, and
+// kalide check without --all). collectAll=true accumulates every error in the
+// same order (kalide check --all). A failing step never blocks a later
+// independent step: a kalide.yaml error still lets the slide passes run, and a
+// failing slide still lets the next slide run; a step that depends on an
+// earlier failure — the per-slide and link passes need the loaded deck — is
+// skipped only because it has nothing to walk.
+//
+// reg and themeReg are required, never defaulted to any compiled-in registry.
+// The returned slice is nil when the deck is valid. The first element of the
+// fail-fast result is byte-for-byte the error Validate has always returned.
+func collectErrors(fsys fs.FS, reg *template.Registry, themeReg *theme.Registry, collectAll bool) []ValidationError {
 	if fsys == nil {
-		return New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS"), true
+		return []ValidationError{New("", 0, nil, "no deck filesystem given", "pass the deck directory's fs.FS")}
 	}
 	if reg == nil {
-		return New(deck.ConfigFile, 0, nil, "no template registry given", "pass a populated template registry"), true
+		return []ValidationError{New(deck.ConfigFile, 0, nil, "no template registry given", "pass a populated template registry")}
 	}
 	if themeReg == nil {
-		return New(deck.ConfigFile, 0, nil, "no theme registry given", "pass the project's theme registry"), true
+		return []ValidationError{New(deck.ConfigFile, 0, nil, "no theme registry given", "pass the project's theme registry")}
 	}
 
-	// Step 1: kalide.yaml, including the deck-wide theme, through internal/deck
-	// and internal/theme.
-	cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg)
-	if err != nil {
-		return adaptDeckError(err), true
+	var errs []ValidationError
+	add := func(e ValidationError) {
+		errs = append(errs, e)
 	}
-	// deck.LoadConfig has already resolved cfg.Theme against themeReg, so this
-	// is a defensive re-check rather than the primary enforcement point.
-	if !themeResolves(themeReg, cfg.Theme) {
-		return New(deck.ConfigFile, 0, nil,
+	stop := func() bool { return len(errs) > 0 && !collectAll }
+
+	// Step 1: kalide.yaml, including the deck-wide theme, through internal/deck
+	// and internal/theme. A config failure does not block the slide passes,
+	// which read the deck itself rather than the parsed config.
+	if cfg, err := deck.LoadConfig(fsys, deck.ConfigFile, themeReg); err != nil {
+		add(adaptDeckError(err))
+	} else if !themeResolves(themeReg, cfg.Theme) {
+		// deck.LoadConfig has already resolved cfg.Theme against themeReg, so
+		// this is a defensive re-check rather than the primary enforcement
+		// point.
+		add(New(deck.ConfigFile, 0, nil,
 			fmt.Sprintf("unknown theme %q", cfg.Theme),
-			"use one of the registered themes"), true
+			"use one of the registered themes"))
+	}
+	if stop() {
+		return errs
 	}
 
 	// Step 2: slide filenames, numbering, letters and label uniqueness.
 	d, err := deck.LoadSlides(fsys, deck.SlidesDir)
 	if err != nil {
-		return adaptDeckError(err), true
+		add(adaptDeckError(err))
+	}
+	if stop() {
+		return errs
 	}
 
-	// Step 3: each slide in number/letter order, a horizontal slide before the
-	// vertical slides beneath it.
-	for _, stack := range d.Stacks {
-		ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
-		ordered = append(ordered, stack.Slide)
-		ordered = append(ordered, stack.Vertical...)
-		for _, s := range ordered {
-			if verr, invalid := validateSlide(fsys, s, reg); invalid {
-				return verr, true
+	// Steps 3 and 4 need the loaded deck; without it there is nothing to walk.
+	if d != nil {
+		// Step 3: each slide in number/letter order, a horizontal slide before
+		// the vertical slides beneath it.
+		for _, stack := range d.Stacks {
+			ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
+			ordered = append(ordered, stack.Slide)
+			ordered = append(ordered, stack.Vertical...)
+			for _, s := range ordered {
+				errs = append(errs, validateSlide(fsys, s, reg)...)
+				if stop() {
+					return errs
+				}
 			}
 		}
-	}
 
-	// Step 4: inter-slide #label links, last, now that every slide in the deck
-	// has passed steps 1–3 and every slide label is therefore known.
-	if verr, invalid := checkLinks(fsys, d, reg); invalid {
-		return verr, true
+		// Step 4: inter-slide #label links, last, now that every slide in the
+		// deck has been walked and every slide label is therefore known.
+		errs = append(errs, checkLinks(fsys, d, reg)...)
+		if stop() {
+			return errs
+		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // validateSlide validates one slide file in top-to-bottom order: parse the
 // frontmatter and section structure, then the slide frontmatter's fields, then
 // the slide body, then each section's frontmatter fields followed by its body,
-// then the notes body. It returns the first error and whether one was found.
-func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (ValidationError, bool) {
+// then the notes body. It returns every error of the slide in that order,
+// rather than only the first; a read or parse failure is the one prerequisite
+// error of the slide and the per-slide checks below it cannot run without it.
+func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) []ValidationError {
 	src, err := fs.ReadFile(fsys, s.Path)
 	if err != nil {
-		return New(s.Path, 0, nil,
+		return []ValidationError{New(s.Path, 0, nil,
 			fmt.Sprintf("cannot read slide: %v", err),
-			"check that the slide file exists and is readable"), true
+			"check that the slide file exists and is readable")}
 	}
 
 	// The parser validates the frontmatter structure, the slide template, the
@@ -152,22 +234,21 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// prerequisite for every later check.
 	ps, err := slide.Parse(s.Path, src, reg)
 	if err != nil {
-		return adaptParseError(err), true
+		return []ValidationError{adaptParseError(err)}
 	}
 	tmpl, ok := reg.Lookup(ps.Template)
 	if !ok || tmpl == nil {
 		// slide.Parse already reported an unknown slide template, so this is
 		// unreachable; kept as a guard rather than a nil dereference.
-		return New(s.Path, ps.TemplateLine, nil,
+		return []ValidationError{New(s.Path, ps.TemplateLine, nil,
 			fmt.Sprintf("unknown slide template %q", ps.Template),
-			"use one of the built-in templates"), true
+			"use one of the built-in templates")}
 	}
 
 	// Slide frontmatter fields, top of the file. The reserved `template:`
 	// selector is not a field value and is removed before schema checking.
-	if verr, invalid := checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg); invalid {
-		return verr, true
-	}
+	var errs []ValidationError
+	errs = append(errs, checkFields(fsys, s.Path, ps.Frontmatter, tmpl, nil, reg)...)
 
 	// Slide body Markdown, then the slide template's implied body rule. The
 	// Markdown-subset check runs first because it is the body's well-formedness
@@ -176,11 +257,9 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// slide template declares child sections, so a heading at any depth is a
 	// section marker there and deeper headings stay subheadings otherwise
 	// (markdown-allowed-subset).
-	if verr, invalid := checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil); invalid {
-		return verr, true
-	}
-	if verr, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
-		return verr, true
+	errs = append(errs, checkBody(s.Path, ps.Body, ps.BodyLine, declaresChildSections(tmpl), nil)...)
+	if ve, invalid := checkBodyRule(s.Path, tmpl.Body, ps.Body, ps.BodyLine, nil); invalid {
+		errs = append(errs, ve)
 	}
 
 	// Sections in source order, each one's frontmatter fields then its body,
@@ -188,33 +267,32 @@ func validateSlide(fsys fs.FS, s deck.Slide, reg *template.Registry) (Validation
 	// instance's template declares its own body rule and its own
 	// child-section state, so each body is checked against its own enclosing
 	// template.
-	if verr, invalid := checkSections(fsys, s.Path, ps.Sections, nil, reg); invalid {
-		return verr, true
-	}
+	errs = append(errs, checkSections(fsys, s.Path, ps.Sections, nil, reg)...)
 
 	// The reserved notes section is a body too and, being last, is checked
 	// last. `# notes` is top-level only, and a deeper heading never starts
 	// notes, so the notes body carries the slide body's subheading gate.
 	if ps.Notes != nil {
-		if verr, invalid := checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil); invalid {
-			return verr, true
-		}
+		errs = append(errs, checkBody(s.Path, ps.Notes.Body, ps.Notes.BodyLine, declaresChildSections(tmpl), nil)...)
 	}
 
-	return ValidationError{}, false
+	return errs
 }
 
 // checkSections validates a slice of section instances in source order: each
 // instance's frontmatter fields, then its body against its own template's
 // implied body rule, then its children recursively (slide-sections). file is
-// the slide path every error is positioned in.
+// the slide path every error is positioned in. It returns every error of every
+// instance at every nesting depth, in that source order, rather than only the
+// first; a failing instance never blocks a later sibling.
 //
 // prefix is the containment chain of the enclosing instances (outermost first,
 // each segment `name[index]`); it is extended by the current instance before
 // checking its fields, so a nested instance's field error carries its full
 // instance chain (nested-section-validation). The slide's top-level call passes
 // nil.
-func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []string, reg *template.Registry) (ValidationError, bool) {
+func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []string, reg *template.Registry) []ValidationError {
+	var errs []ValidationError
 	for i := range sections {
 		sec := &sections[i]
 		secPrefix := append(append([]string(nil), prefix...), sec.Name+"["+strconv.Itoa(sec.Index)+"]")
@@ -222,32 +300,22 @@ func checkSections(fsys fs.FS, file string, sections []slide.Section, prefix []s
 			// No resolvable template: the parser already reported it, and no
 			// nested instances can be checked without one. Children with a
 			// template are still walked by their own parent below.
-			if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
-				return verr, true
-			}
+			errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 			continue
 		}
 		secTmpl, ok := reg.Lookup(sec.Template)
 		if !ok || secTmpl == nil {
-			if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
-				return verr, true
-			}
+			errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 			continue
 		}
-		if verr, invalid := checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg); invalid {
-			return verr, true
+		errs = append(errs, checkFields(fsys, file, sec.Frontmatter, secTmpl, secPrefix, reg)...)
+		errs = append(errs, checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix)...)
+		if ve, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
+			errs = append(errs, ve)
 		}
-		if verr, invalid := checkBody(file, sec.Body, sec.BodyLine, declaresChildSections(secTmpl), secPrefix); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkBodyRule(file, secTmpl.Body, sec.Body, sec.BodyLine, secPrefix); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkSections(fsys, file, sec.Children, secPrefix, reg); invalid {
-			return verr, true
-		}
+		errs = append(errs, checkSections(fsys, file, sec.Children, secPrefix, reg)...)
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // declaresChildSections reports whether tmpl declares child sections, the
@@ -260,7 +328,8 @@ func declaresChildSections(tmpl *template.Template) bool {
 // checkFields checks one frontmatter/section data map against tmpl's field
 // schema through template.CheckValues, which recurses through
 // section-template-as-type values and list items at every depth with full path
-// tracking. It returns the first error and whether one was found.
+// tracking. It returns every error CheckValues reports, in the schema checker's
+// order, rather than only the first.
 //
 // prefix is the enclosing section instance's containment chain (for example
 // []string{"columns[2]", "blocks[1]"}); when non-empty it is prepended to the
@@ -268,19 +337,31 @@ func declaresChildSections(tmpl *template.Template) bool {
 // instance chain, e.g. `columns[2] › blocks[1] › lable`
 // (nested-section-validation). The slide frontmatter call passes nil.
 //
-// Image fields are checked against fsys: template.CheckValues enforces the
-// assets/ prefix itself and the WithImageExists callback verifies the file
-// exists in the deck.
-func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) (ValidationError, bool) {
-	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
-		template.WithImageExists(func(p string) bool {
-			_, err := fs.Stat(fsys, p)
-			return err == nil
-		}))
-	if len(res.Errors) == 0 {
-		return ValidationError{}, false
+// Image fields carry the field descriptor and the authored path to the
+// WithImageExists callback, which resolves the path against the field's
+// declared roots in written order and existence-checks the candidate files the
+// field accepts (image-field-roots): an `assets` root resolves against fsys,
+// the deck filesystem rooted at the deck directory (paths deck-relative, e.g.
+// `assets/x.png`), and a `media` root against the media sub-filesystem of the
+// library layer that owns tmpl, rooted at that layer's media/ directory. The
+// owning layer is found through reg.LayerOf(tmpl.Name); when tmpl has no known
+// owning layer its media is nil, so a media root is not existence-checked ("not
+// checkable") rather than falsely reported missing. A missing file carries the
+// field's accepted candidate files so the error can suggest the closest match.
+func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Template, prefix []string, reg *template.Registry) []ValidationError {
+	var media fs.FS
+	if tmpl != nil {
+		if layer := reg.LayerOf(tmpl.Name); layer != nil {
+			media = layer.Media
+		}
 	}
-	return adaptValueError(file, res.Errors[0], prefix), true
+	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup,
+		template.WithImageExists(template.ImageExistsFunc(fsys, media)))
+	errs := make([]ValidationError, 0, len(res.Errors))
+	for _, ve := range res.Errors {
+		errs = append(errs, adaptValueError(file, ve, prefix))
+	}
+	return errs
 }
 
 // checkBody checks one Markdown body (a slide body, a section body or the notes
@@ -291,20 +372,23 @@ func checkFields(fsys fs.FS, file string, data map[string]any, tmpl *template.Te
 // non-empty, is the enclosing section instance's containment chain and becomes
 // the issue's path, so a nested Markdown-subset issue reads
 // `columns[0] › blocks[0]` (nested-section-validation); the slide and notes
-// bodies pass nil. It returns the first issue and whether one was found.
-func checkBody(file, body string, startLine int, declaresChildSections bool, prefix []string) (ValidationError, bool) {
+// bodies pass nil. It returns every issue mdcheck.Check reports, positioned and
+// path-qualified, in issue order (collect-all), so one body contributes all of
+// its errors rather than only the first.
+func checkBody(file, body string, startLine int, declaresChildSections bool, prefix []string) []ValidationError {
 	if body == "" {
-		return ValidationError{}, false
+		return nil
 	}
 	issues := mdcheck.Check(file, []byte(body), mdcheck.Options{
 		Mode:                          mdcheck.BodyMode,
 		StartLine:                     startLine,
 		TemplateDeclaresChildSections: declaresChildSections,
 	})
-	if len(issues) == 0 {
-		return ValidationError{}, false
+	errs := make([]ValidationError, 0, len(issues))
+	for _, iss := range issues {
+		errs = append(errs, adaptIssue(iss, prefix))
 	}
-	return adaptIssue(issues[0], prefix), true
+	return errs
 }
 
 // checkBodyRule checks one Markdown body against its template's implied `body`

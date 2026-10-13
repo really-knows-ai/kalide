@@ -28,6 +28,8 @@ offline, and there is no separate tool to install or run alongside it.
   - [`kalide init-library`](#kalide-init-library)
   - [`kalide config`](#kalide-config)
   - [`kalide start`](#kalide-start)
+  - [`kalide check`](#kalide-check)
+  - [`kalide render`](#kalide-render)
   - [`kalide templates`](#kalide-templates)
   - [`kalide templates <name>`](#kalide-templates-name)
   - [`kalide upgrade`](#kalide-upgrade)
@@ -347,25 +349,93 @@ kalide start [--port N] [--no-open]
   yourself, or run headless.
 - Press **Ctrl+C** to stop. `kalide` shuts down cleanly and releases the port.
 
+### `kalide check`
+
+Validates the whole deck — its slide files, its resolved library layers and its
+theme — without serving it:
+
+```
+kalide check [--all] [--json]
+```
+
+By default it stops at the **first** problem and reports it exactly as
+`kalide start` would. With `--all` it collects **every** problem, in the same
+fixed order, instead of stopping at the first. `--json` writes a
+machine-readable report to stdout (a `valid` boolean, a summary, and each
+error's file, line, path and message) following the same collection mode;
+without it the summary goes to stdout and the errors go to stderr. A usage
+error is plain text on stderr even with `--json`, and no report is emitted.
+
+Exit codes are `0` when the deck is valid, `1` when something is wrong, and `2`
+for a usage error.
+
+A **library or theme load failure** — a missing or invalid `templates/` library
+layer, or a theme that fails to load — is reported as the first check error and
+ends the report there even with `--all`, because no registry exists to collect
+further errors from.
+
+### `kalide render`
+
+Writes a slide's rendered HTML without serving it — no server, no port, no
+network:
+
+```
+kalide render [slide] [-o dir] [--full|--fragment]
+```
+
+With a slide it prints that slide's HTML to stdout; without one it writes one
+`<number>[letter]-<label>.html` file per slide into the required `-o`
+directory, in deck order. The slide is selected by its position label (`3` or
+`3a`) first, then by its deck-unique label (the filename's `<label>`); an
+argument matching no slide is an error with a closest-match suggestion.
+
+`--full` (the default) writes a complete standalone page whose reveal.js
+container holds that slide — the same page shell, head, embedded assets and
+theme stylesheet the server serves. `--fragment` writes only the slide's
+`<section>` markup, the fragment the deck page embeds. Both build the selected
+slide from the **whole deck's** identity, so the `--full` page embeds exactly
+the `--fragment` output and `.slide.number`/`.slide.total` count across the
+whole deck. The two flags are mutually exclusive; giving both is a usage error.
+
+A validation error exits `1` in the error-reporting format; a usage error exits
+`2`.
+
 ### `kalide templates`
 
 Lists every template in the project's resolved template library — its name,
-whether it is a `slide` or a `section`, and a one-line description. There is no
-built-in fallback of any kind: if the current folder has no valid library,
-`kalide templates` (and `kalide start`) reports the problem instead of listing
-anything.
+whether it is a `slide` or a `section`, and a one-line description:
+
+```
+kalide templates [--all] [name]
+```
+
+Templates whose manifest declares `internal: true` are hidden from the default
+listing; `--all` includes them. There is no built-in fallback of any kind: if
+the current folder has no valid library, `kalide templates` (and
+`kalide start`) reports the problem instead of listing anything.
 
 ### `kalide templates <name>`
 
-Shows one template's full documentation: its fields (type, whether required,
-default, limits, formats), its sections, the rules for its body text, and a
-copyable example, exactly as loaded from the project's library. For example:
+Shows one template's full documentation, exactly as loaded from the project's
+library:
+
+```
+kalide templates <name>
+```
+
+For example:
 
 ```
 kalide templates content
 ```
 
-If the name is misspelled, `kalide` suggests the closest match.
+The report covers the template's fields — each with its type, whether it is
+required or optional, whether it is `nullable`, its default, its limits and its
+formats — its sections (the accepted templates and repeat bounds), the rules
+for its body text, and a copyable example. A field whose type is an inline
+record has its nested fields listed beneath it, and an enum field's variants
+are listed beneath the field rather than inline among its other attributes. If
+the name is misspelled, `kalide` suggests the closest match.
 
 ### `kalide upgrade`
 
@@ -394,12 +464,25 @@ upgrade the **program** (see [Upgrading the kalide binary](#upgrading-the-kalide
 ### `kalide version`
 
 Prints the version of the `kalide` you are running (stamped into the binary
-when it was built). Also `--version` and `-v`. Use it to check an install or
+when it was built):
+
+```
+kalide version
+```
+
+Also `kalide --version` and `kalide -v`. Use it to check that an install or
 upgrade worked.
 
 ### `kalide help`
 
-Prints a short reminder of the commands above.
+Prints a short reminder of the commands above:
+
+```
+kalide help
+```
+
+A bare `kalide` with no command prints the same text, as does `kalide --help`
+and `kalide -h`. The help is also shown, on stderr, after a usage error.
 
 ## How a deck is laid out
 

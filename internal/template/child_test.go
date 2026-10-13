@@ -382,7 +382,7 @@ func TestResolveChildCallSectionAndTemplateChecks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ResolveChildCall(resolve, nil, parent, tt.req, 0, 1, nil)
+			_, err := ResolveChildCall(resolve, nil, parent, tt.req, 0, 1, nil, nil)
 			if err == nil {
 				t.Fatalf("ResolveChildCall() error = nil, want %q", tt.want)
 			}
@@ -393,7 +393,7 @@ func TestResolveChildCallSectionAndTemplateChecks(t *testing.T) {
 	}
 
 	t.Run("a nil parent is an error", func(t *testing.T) {
-		_, err := ResolveChildCall(resolve, nil, nil, &ChildRequest{Section: "column"}, 0, 1, nil)
+		_, err := ResolveChildCall(resolve, nil, nil, &ChildRequest{Section: "column"}, 0, 1, nil, nil)
 		want := `child "column": no parent template to resolve the declared section against`
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildCall(nil parent) error = %v, want %q", err, want)
@@ -401,7 +401,7 @@ func TestResolveChildCallSectionAndTemplateChecks(t *testing.T) {
 	})
 
 	t.Run("a nil resolver is an error, not a panic", func(t *testing.T) {
-		_, err := ResolveChildCall(nil, nil, parent, &ChildRequest{Section: "column"}, 0, 1, nil)
+		_, err := ResolveChildCall(nil, nil, parent, &ChildRequest{Section: "column"}, 0, 1, nil, nil)
 		want := `child "column": no template resolver`
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildCall(nil resolver) error = %v, want %q", err, want)
@@ -430,7 +430,7 @@ func TestResolveChildCallDefaultsAndSource(t *testing.T) {
 
 	t.Run("the default is applied for an omitted required field", func(t *testing.T) {
 		req := &ChildRequest{Section: "column"}
-		call, err := ResolveChildCall(resolve, nil, parent, req, 0, 1, nil)
+		call, err := ResolveChildCall(resolve, nil, parent, req, 0, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 		}
@@ -447,7 +447,7 @@ func TestResolveChildCallDefaultsAndSource(t *testing.T) {
 
 	t.Run("a supplied value wins and is carried on Source", func(t *testing.T) {
 		fields := map[string]any{"title": "Given"}
-		call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column", Fields: fields}, 0, 1, nil)
+		call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column", Fields: fields}, 0, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 		}
@@ -465,8 +465,12 @@ func TestResolveChildCallDefaultsAndSource(t *testing.T) {
 
 // TestResolveChildCallItemDescriptor proves the child's own `.item` descriptor:
 // the sibling position the caller passes (index/number/count/first/last), the
-// named declared section and the instantiated template, and `parent` the
-// parent instance's fields.
+// named declared section and the instantiated template, `parent` the parent
+// instance's fields, and `depth` the shared InstanceDepth of the enclosing
+// ancestor chain against the child's resolved template — 0 for an ordinary
+// child and 1 for a declared self-nesting child whose resolved template is the
+// parent declaration's own, resolved inside a parent instance of the same
+// template.
 func TestResolveChildCallItemDescriptor(t *testing.T) {
 	target := &Template{Name: "column", Usage: UsageSection}
 	parent := &Template{
@@ -477,7 +481,7 @@ func TestResolveChildCallItemDescriptor(t *testing.T) {
 	resolve := resolveSectionCallResolver(target)
 	parentFields := map[string]any{"heading": "H"}
 
-	call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 1, 3, parentFields)
+	call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 1, 3, nil, parentFields)
 	if err != nil {
 		t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 	}
@@ -489,6 +493,7 @@ func TestResolveChildCallItemDescriptor(t *testing.T) {
 		"last":     false,
 		"section":  "column",
 		"template": "column",
+		"depth":    0, // an ordinary child: no enclosing same-template ancestor
 		"parent":   parentFields,
 	}
 	if !reflect.DeepEqual(call.Item, want) {
@@ -496,20 +501,52 @@ func TestResolveChildCallItemDescriptor(t *testing.T) {
 	}
 
 	// The first of a three-child set is first and not last.
-	first, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 0, 3, nil)
+	first, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 0, 3, nil, nil)
 	if err != nil {
 		t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 	}
 	if first.Item["first"] != true || first.Item["last"] != false {
 		t.Errorf("first.Item first/last = %v/%v, want true/false", first.Item["first"], first.Item["last"])
 	}
-	last, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 2, 3, nil)
+	last, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 2, 3, nil, nil)
 	if err != nil {
 		t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 	}
 	if last.Item["first"] != false || last.Item["last"] != true {
 		t.Errorf("last.Item first/last = %v/%v, want false/true", last.Item["first"], last.Item["last"])
 	}
+
+	// A declared self-nesting child: the parent template's own section accepts
+	// the parent's own template, so a child resolving to that template, inside a
+	// parent instance of the same template, counts the one enclosing
+	// same-template ancestor the caller threads in — depth 1, beside its sibling
+	// position, section and parent.
+	t.Run("a self-nesting child counts its enclosing same-template ancestor", func(t *testing.T) {
+		self := &Template{
+			Name:     "column",
+			Usage:    UsageSection,
+			Sections: []SectionDecl{{Name: "column", Accepted: []string{"column"}}},
+		}
+		selfResolve := resolveSectionCallResolver(self)
+		nested, err := ResolveChildCall(selfResolve, nil, self, &ChildRequest{Section: "column"}, 0, 1, []string{"column"}, parentFields)
+		if err != nil {
+			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
+		}
+		wantNested := map[string]any{
+			"index":    0,
+			"number":   1,
+			"count":    1,
+			"first":    true,
+			"last":     true,
+			"section":  "column",
+			"template": "column",
+			"depth":    1, // one enclosing same-template ancestor: the parent instance
+			"parent":   parentFields,
+		}
+		if !reflect.DeepEqual(nested.Item, wantNested) {
+			t.Errorf("nested.Item = %v, want %v", nested.Item, wantNested)
+		}
+	})
 }
 
 // TestResolveChildCallTemplateSelector proves the reserved `template` selector:
@@ -535,7 +572,7 @@ func TestResolveChildCallTemplateSelector(t *testing.T) {
 
 	t.Run("the selector picks the template and is consumed, not counted", func(t *testing.T) {
 		req := &ChildRequest{Section: "card", Fields: map[string]any{"template": "person", "name": "Ada"}}
-		call, err := ResolveChildCall(resolve, nil, parent, req, 0, 1, nil)
+		call, err := ResolveChildCall(resolve, nil, parent, req, 0, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 		}
@@ -560,7 +597,7 @@ func TestResolveChildCallTemplateSelector(t *testing.T) {
 	})
 
 	t.Run("an omitted selector on a single-template section instantiates that one", func(t *testing.T) {
-		call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 0, 1, nil)
+		call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "column"}, 0, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 		}
@@ -582,7 +619,7 @@ func TestResolveChildCallTemplateSelector(t *testing.T) {
 		}
 		resolveSpecial := resolveSectionCallResolver(special)
 
-		call, err := ResolveChildCall(resolveSpecial, nil, host, &ChildRequest{Section: "slot", Fields: map[string]any{"template": "special"}}, 0, 1, nil)
+		call, err := ResolveChildCall(resolveSpecial, nil, host, &ChildRequest{Section: "slot", Fields: map[string]any{"template": "special"}}, 0, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveChildCall() error = %v, want nil", err)
 		}
@@ -618,7 +655,7 @@ func TestResolveChildCallBodyHeadingRejected(t *testing.T) {
 	resolve := resolveSectionCallResolver(target)
 
 	t.Run("a heading naming a declared child section is rejected", func(t *testing.T) {
-		_, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "host", Body: "# widgets"}, 0, 1, nil)
+		_, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "host", Body: "# widgets"}, 0, 1, nil, nil)
 		if err == nil {
 			t.Fatal("ResolveChildCall() error = nil, want the child-section heading rejected")
 		}
@@ -632,7 +669,7 @@ func TestResolveChildCallBodyHeadingRejected(t *testing.T) {
 	})
 
 	t.Run("a heading inside a code fence is ignored", func(t *testing.T) {
-		call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "host", Body: "```\n# widgets\n```"}, 0, 1, nil)
+		call, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "host", Body: "```\n# widgets\n```"}, 0, 1, nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveChildCall() error = %v, want nil for a fenced heading", err)
 		}
@@ -642,7 +679,7 @@ func TestResolveChildCallBodyHeadingRejected(t *testing.T) {
 	})
 
 	t.Run("a heading naming an undeclared section loads", func(t *testing.T) {
-		if _, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "host", Body: "# other"}, 0, 1, nil); err != nil {
+		if _, err := ResolveChildCall(resolve, nil, parent, &ChildRequest{Section: "host", Body: "# other"}, 0, 1, nil, nil); err != nil {
 			t.Errorf("ResolveChildCall() error = %v, want nil for an undeclared heading", err)
 		}
 	})
@@ -722,7 +759,7 @@ func TestResolveChildrenForwarding(t *testing.T) {
 		{Section: "card", Forward: true, Entries: companyEntries},
 	}
 
-	got, err := ResolveChildren(resolve, nil, parent, reqs, nil, true)
+	got, err := ResolveChildren(resolve, nil, parent, reqs, nil, nil, true)
 	if err != nil {
 		t.Fatalf("ResolveChildren() error = %v, want nil", err)
 	}
@@ -804,7 +841,7 @@ func TestResolveChildrenCounts(t *testing.T) {
 	}
 
 	t.Run("checkCounts true enforces the minimum", func(t *testing.T) {
-		_, err := ResolveChildren(resolve, nil, limited, one, nil, true)
+		_, err := ResolveChildren(resolve, nil, limited, one, nil, nil, true)
 		want := `children: section "column" on parent template "limited" has 1 child(ren), minimum is 2`
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildren() error = %v, want %q", err, want)
@@ -812,7 +849,7 @@ func TestResolveChildrenCounts(t *testing.T) {
 	})
 
 	t.Run("checkCounts true enforces the maximum", func(t *testing.T) {
-		_, err := ResolveChildren(resolve, nil, limited, four, nil, true)
+		_, err := ResolveChildren(resolve, nil, limited, four, nil, nil, true)
 		want := `children: section "column" on parent template "limited" has 4 child(ren), maximum is 3`
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildren() error = %v, want %q", err, want)
@@ -820,7 +857,7 @@ func TestResolveChildrenCounts(t *testing.T) {
 	})
 
 	t.Run("checkCounts false defers the counts", func(t *testing.T) {
-		got, err := ResolveChildren(resolve, nil, limited, one, nil, false)
+		got, err := ResolveChildren(resolve, nil, limited, one, nil, nil, false)
 		if err != nil {
 			t.Fatalf("ResolveChildren(checkCounts=false) error = %v, want nil", err)
 		}
@@ -840,7 +877,7 @@ func TestResolveChildrenCounts(t *testing.T) {
 				childTestEntry("column", nil, nil),
 			},
 		}}
-		_, err := ResolveChildren(resolve, nil, limited, reqs, nil, true)
+		_, err := ResolveChildren(resolve, nil, limited, reqs, nil, nil, true)
 		want := `children: section "column" on parent template "limited" has 4 child(ren), maximum is 3`
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildren() error = %v, want %q", err, want)
@@ -860,7 +897,7 @@ func TestResolveChildrenCounts(t *testing.T) {
 				childTestEntry("column", nil, nil),
 			}},
 		}
-		got, err := ResolveChildren(resolve, nil, parent, reqs, nil, true)
+		got, err := ResolveChildren(resolve, nil, parent, reqs, nil, nil, true)
 		if err != nil {
 			t.Fatalf("ResolveChildren() error = %v, want nil", err)
 		}
@@ -892,7 +929,7 @@ func TestResolveChildrenEmptyAndMalformed(t *testing.T) {
 	}
 
 	t.Run("a nil parent with an empty set yields no children", func(t *testing.T) {
-		got, err := ResolveChildren(resolve, nil, nil, nil, nil, true)
+		got, err := ResolveChildren(resolve, nil, nil, nil, nil, nil, true)
 		if err != nil {
 			t.Fatalf("ResolveChildren(nil parent, empty set) error = %v, want nil", err)
 		}
@@ -902,7 +939,7 @@ func TestResolveChildrenEmptyAndMalformed(t *testing.T) {
 	})
 
 	t.Run("a nil parent with requests is an error", func(t *testing.T) {
-		_, err := ResolveChildren(resolve, nil, nil, []*ChildRequest{{Section: "column"}}, nil, true)
+		_, err := ResolveChildren(resolve, nil, nil, []*ChildRequest{{Section: "column"}}, nil, nil, true)
 		want := "children: no parent template to resolve declared sections against"
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildren(nil parent) error = %v, want %q", err, want)
@@ -910,7 +947,7 @@ func TestResolveChildrenEmptyAndMalformed(t *testing.T) {
 	})
 
 	t.Run("a nil request element is an error", func(t *testing.T) {
-		_, err := ResolveChildren(resolve, nil, parent, []*ChildRequest{nil}, nil, true)
+		_, err := ResolveChildren(resolve, nil, parent, []*ChildRequest{nil}, nil, nil, true)
 		want := "children: child request must not be nil"
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildren(nil request) error = %v, want %q", err, want)
@@ -919,7 +956,7 @@ func TestResolveChildrenEmptyAndMalformed(t *testing.T) {
 
 	t.Run("a malformed forwarded entry is an error", func(t *testing.T) {
 		reqs := []*ChildRequest{{Section: "column", Forward: true, Entries: []any{"nope"}}}
-		_, err := ResolveChildren(resolve, nil, parent, reqs, nil, true)
+		_, err := ResolveChildren(resolve, nil, parent, reqs, nil, nil, true)
 		want := `children "column": forwarded entry must be a .data entry map, got a quoted string`
 		if err == nil || err.Error() != want {
 			t.Errorf("ResolveChildren(bad entry) error = %v, want %q", err, want)

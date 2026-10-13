@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "template-variants",
-  "body": "Template variants are expressed as enum field(s) whose value changes the layout (e.g. `layout: image-left | image-right`); this is the only variant mechanism.",
+  "body": "Template variants are expressed as enum field(s) whose value changes the layout (e.g. `layout: image-left | image-right`); this is the only variant mechanism. An enum field's variants are declared inline with `variants:` or expanded from a library-relative glob with `variants_from:`; the two are alternatives, and declaring both, or a glob matching nothing, is a templates error (enum-variants-from).",
   "properties": {
     "feature": "templates"
   },
@@ -10,6 +10,11 @@
     {
       "kind": "drives",
       "target": "domain.entity.template",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.enum-variants-from",
       "properties": {}
     }
   ],

@@ -47,12 +47,14 @@ import (
 	"github.com/really-knows-ai/kalide/internal/template"
 )
 
-// runTemplates implements `kalide templates [name]`.
+// runTemplates implements `kalide templates [--all] [name]`.
 //
-// With no arguments it lists every template in the project's merged, layered
-// template library (every layer the deck draws from). With exactly one
-// argument it shows that template's full documentation. It returns the
-// process status code: 0 on success; 1 when
+// With no name it lists every template in the project's merged, layered
+// template library (every layer the deck draws from); the optional `--all`
+// flag additionally lists every template whose manifest declares
+// `internal: true`, which the default listing omits (internal-templates). With
+// exactly one name it shows that template's full documentation, whatever its
+// internal flag. It returns the process status code: 0 on success; 1 when
 // the project's template library cannot be resolved, when the name is
 // unknown (the error names the available templates and suggests the
 // closest), or when the loaded library cannot be built into a registry,
@@ -102,12 +104,27 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	if len(args) == 0 {
-		printTemplateList(stdout, registry)
+	// `--all` is the listing mode, never a template name: it includes every
+	// template whose manifest declares `internal: true`, which the default
+	// listing omits (internal-templates). It is parsed here so the flag is
+	// never mistaken for a name; the named form still shows one template by
+	// name (an internal template is resolvable by name in every mode).
+	all := false
+	names := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--all" {
+			all = true
+			continue
+		}
+		names = append(names, arg)
+	}
+
+	if len(names) == 0 {
+		printTemplateList(stdout, registry, all)
 		return 0
 	}
 
-	name := args[0]
+	name := names[0]
 	t, ok := registry.Lookup(name)
 	if !ok {
 		fmt.Fprintln(stderr, templateUnknownMessage(name, registry.TemplateNames()))
@@ -136,12 +153,20 @@ func templateUnknownMessage(name string, names []string) string {
 // printTemplateList writes the one-line-per-template list: name, usage and
 // description, in the registry's sorted name order. The name and usage columns
 // are padded so the descriptions line up.
-func printTemplateList(w io.Writer, registry *template.Registry) {
+//
+// A template whose manifest declares `internal: true` (Template.Internal) is
+// omitted from the default listing and included only when all is true — the
+// `--all` listing mode (internal-templates). An internal template is still
+// listed exactly once, with its name, usage and description, when it is shown.
+func printTemplateList(w io.Writer, registry *template.Registry, all bool) {
 	templates := registry.Templates()
 
 	nameWidth := 0
 	for _, t := range templates {
-		if t != nil && len(t.Name) > nameWidth {
+		if t == nil || (!all && t.Internal) {
+			continue
+		}
+		if len(t.Name) > nameWidth {
 			nameWidth = len(t.Name)
 		}
 	}
@@ -149,7 +174,7 @@ func printTemplateList(w io.Writer, registry *template.Registry) {
 	fmt.Fprintln(w, "Templates:")
 	fmt.Fprintln(w)
 	for _, t := range templates {
-		if t == nil {
+		if t == nil || (!all && t.Internal) {
 			continue
 		}
 		fmt.Fprintf(w, "  %-*s  %-7s  %s\n", nameWidth, t.Name, string(t.Usage), t.Description)
@@ -190,8 +215,51 @@ func printTemplateFields(w io.Writer, t *template.Template) {
 			line += " — " + f.Description
 		}
 		fmt.Fprintln(w, line)
+		printTemplateRecordFields(w, f, "    ")
+		printTemplateEnumVariants(w, f, "    ")
 	}
 	fmt.Fprintln(w)
+}
+
+// printTemplateRecordFields writes the nested field schema of a list field
+// whose item is an inline record (record-item-type), indented beneath the list
+// field's own line. Each nested field is printed on its own line at indent with
+// its name, type and rules — including `nullable` — and its description; a
+// nested field whose own item is a record is then printed recursively at a
+// deeper indent, so a record nested inside a record shows every level.
+//
+// It is a no-op for a field that is not a list whose item is a record, so the
+// caller can invoke it unconditionally for every field.
+func printTemplateRecordFields(w io.Writer, f *template.Field, indent string) {
+	if f == nil || f.Type != template.FieldList || f.Item == nil || f.Item.Type != template.FieldRecord {
+		return
+	}
+	for i := range f.Item.Fields {
+		sub := &f.Item.Fields[i]
+		line := indent + sub.Name + " (" + templateFieldAttributes(sub) + ")"
+		if sub.Description != "" {
+			line += " — " + sub.Description
+		}
+		fmt.Fprintln(w, line)
+		printTemplateRecordFields(w, sub, indent+"  ")
+	}
+}
+
+// printTemplateEnumVariants writes an enum field's effective variants, indented
+// beneath the field's own line: the closed set the schema checker enforces,
+// whether declared inline with `variants:` or expanded from `variants_from:` at
+// library load (enum-variants-from). The variant values are written in the
+// order the loaded field carries them — sorted for a `variants_from:` glob,
+// declaration order for an inline set — so the documentation matches the
+// registry the checker and renderer use.
+//
+// It is a no-op for a field that is not an enum, or an enum carrying no
+// variants, so the caller can invoke it unconditionally for every field.
+func printTemplateEnumVariants(w io.Writer, f *template.Field, indent string) {
+	if f == nil || f.Type != template.FieldEnum || len(f.Variants) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%sone of %s\n", indent, strings.Join(f.Variants, ", "))
 }
 
 // templateFieldAttributes renders a field's documentation attributes: its type,
@@ -203,6 +271,9 @@ func templateFieldAttributes(f *template.Field) string {
 		parts = append(parts, "required")
 	} else {
 		parts = append(parts, "optional")
+	}
+	if f.Nullable {
+		parts = append(parts, "nullable")
 	}
 	if f.Default != nil {
 		parts = append(parts, "default: "+fmt.Sprint(f.Default))
@@ -217,8 +288,11 @@ func templateFieldAttributes(f *template.Field) string {
 }
 
 // templateFieldLimits renders the limits that apply to a field's type: text
-// length and plainness, number bounds, date bounds, list item bounds, or the
-// closed set of enum variants. It returns "" when no limit applies.
+// length and plainness, number bounds, date bounds or list item bounds. An enum
+// field's closed set of variants is not a limit rendered here: the field's
+// effective variants are printed beneath its line by
+// printTemplateEnumVariants (see printTemplateFields). It returns "" when no
+// limit applies.
 func templateFieldLimits(f *template.Field) string {
 	var parts []string
 	switch f.Type {
@@ -235,10 +309,6 @@ func templateFieldLimits(f *template.Field) string {
 		parts = append(parts, templateDateBounds(f.MinDate, f.MaxDate)...)
 	case template.FieldList:
 		parts = append(parts, templateListBounds(f.MinItems, f.MaxItems)...)
-	case template.FieldEnum:
-		if len(f.Variants) > 0 {
-			parts = append(parts, "one of "+strings.Join(f.Variants, ", "))
-		}
 	}
 	return strings.Join(parts, ", ")
 }

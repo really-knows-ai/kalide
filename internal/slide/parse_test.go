@@ -10,15 +10,18 @@ import (
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 )
 
-// fakeTemplate is one fake catalogue entry: a template's usage and, for
-// slide templates, its declared sections with their accepted section templates
-// and repeat bounds.
+// fakeTemplate is one fake catalogue entry: a template's usage, whether it is
+// internal (`internal: true`), and, for slide templates, its declared sections
+// with their accepted section templates, repeat bounds and per-section
+// `max_depth` bound (absent, i.e. 0, when the declaration is unbounded).
 type fakeTemplate struct {
 	usage    string
+	internal bool
 	sections []string
 	accepted map[string][]string
 	min      map[string]int
 	max      map[string]int
+	maxDepth map[string]int
 }
 
 // fakeCatalogue is a hand-written Catalogue: the parser only ever consumes the
@@ -27,12 +30,12 @@ type fakeTemplate struct {
 // parser reads SectionDecl (a positive max is a hard limit).
 type fakeCatalogue map[string]fakeTemplate
 
-func (c fakeCatalogue) LookupSlideTemplate(name string) (string, bool) {
+func (c fakeCatalogue) LookupSlideTemplate(name string) (string, bool, bool) {
 	t, ok := c[name]
 	if !ok {
-		return "", false
+		return "", false, false
 	}
-	return t.usage, true
+	return t.usage, t.internal, true
 }
 
 func (c fakeCatalogue) TemplateNames() []string {
@@ -50,12 +53,12 @@ func (c fakeCatalogue) SectionNames(tmpl string) []string {
 	return names
 }
 
-func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, bool) {
+func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, int, bool) {
 	t, ok := c[tmpl]
 	if !ok || !slices.Contains(t.sections, section) {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
-	return t.accepted[section], t.min[section], t.max[section], true
+	return t.accepted[section], t.min[section], t.max[section], t.maxDepth[section], true
 }
 
 // testCatalogue returns the catalogue most cases share. It exercises every
@@ -65,7 +68,10 @@ func (c fakeCatalogue) SectionDecl(tmpl, section string) ([]string, int, int, bo
 //     "gallery" accepting two (>1 => a template: is required);
 //   - limited / needs / once: "columns" with a hard max, a min, and a max of 1;
 //   - badnotes: a slide template that (illegally) declares the reserved
-//     "notes" section name.
+//     "notes" section name;
+//   - internal-slide / internal-section: templates flagged internal, which
+//     TemplateNames still lists (so a closest-match suggestion can name them)
+//     but which are refused as a Markdown template target (internal-templates).
 func testCatalogue() fakeCatalogue {
 	return fakeCatalogue{
 		"title": {usage: "slide"},
@@ -109,6 +115,14 @@ func testCatalogue() fakeCatalogue {
 			accepted: map[string][]string{"blocks": {"block", "brick"}}},
 		"block": {usage: "section"},
 		"brick": {usage: "section"},
+
+		// Internal templates: listed by TemplateNames (so a closest-match
+		// suggestion can name them) but refused as a Markdown template target
+		// — a slide frontmatter `template:` or a section instance's
+		// `template:` naming one is an internal-template error, distinct from
+		// unknown (internal-templates).
+		"internal-slide":   {usage: "slide", internal: true},
+		"internal-section": {usage: "section", internal: true},
 	}
 }
 
@@ -190,9 +204,12 @@ func wantParseErrorPath(t *testing.T, err error, file string, line int, path str
 func TestParse(t *testing.T) {
 	t.Run("constants", testParseConstants)
 	t.Run("frontmatter", testParseFrontmatter)
+	t.Run("yaml errors", testParseYAMLErrors)
 	t.Run("template", testParseTemplate)
+	t.Run("internal template", testParseInternalTemplate)
 	t.Run("structure", testParseStructure)
 	t.Run("nested sections", testParseNestedSections)
+	t.Run("nested depth bound", testParseNestedDepth)
 	t.Run("sections", testParseSections)
 	t.Run("repeats", testParseRepeats)
 	t.Run("section fence", testParseSectionFence)
@@ -243,6 +260,150 @@ func testParseFrontmatter(t *testing.T) {
 	})
 }
 
+// testParseYAMLErrors covers parseBlock's YAML parse-error reporting through
+// yamlErrorWithLine (requirements.requirement.yaml-error-messages): a
+// malformed slide frontmatter or section-instance frontmatter reports the
+// offending source line, absolute within the file, and keeps the instance's
+// containment path; a plain-scalar mis-read — a `:` inside a plain scalar or a
+// plain scalar beginning with `*`, `&`, `%` or `@` — additionally carries the
+// quoting hint, while a failure that is not a plain-scalar mis-read does not.
+// A named alias such as `*foo` is rejected by yaml.v3 with a lineless
+// "unknown anchor" message, so its line is recovered from the source instead,
+// and the case is still positioned and hinted like the one-character form.
+func testParseYAMLErrors(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("slide frontmatter", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			value   string
+			message string
+			hint    bool
+		}{
+			{"colon inside a plain scalar", "Hello: world",
+				"mapping values are not allowed in this context", true},
+			{"plain scalar beginning with an alias indicator", "*",
+				"did not find expected alphabetic or numeric character", true},
+			{"named alias with no matching anchor", "*foo",
+				"unknown anchor 'foo' referenced", true},
+			{"named alias with trailing text", "*foo bar",
+				"unknown anchor 'foo' referenced", true},
+			{"plain scalar beginning with an anchor indicator", "&",
+				"did not find expected alphabetic or numeric character", true},
+			{"plain scalar beginning with a directive indicator", "%example.com",
+				"found character that cannot start any token", true},
+			{"plain scalar beginning with a reserved indicator", "@example.com",
+				"found character that cannot start any token", true},
+			{"malformed YAML that is not a plain-scalar mis-read carries no hint", `"unterminated`,
+				"found unexpected end of stream", false},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := Parse(file, src(
+					"---",
+					"title: "+tc.value,
+					"template: title",
+					"---",
+				), cat)
+				wants := []string{"invalid YAML: " + tc.message}
+				if tc.hint {
+					wants = append(wants, "(quote the value as a string)")
+				}
+				wantParseErrorPath(t, err, file, 2, "", wants...)
+				assertNoQuotingHint(t, err, tc.hint)
+			})
+		}
+	})
+
+	// A malformed section-instance frontmatter keeps the instance's
+	// containment path, at the top level and nested, alongside the line and
+	// hint treatment.
+	t.Run("section-instance frontmatter", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			lines   []string
+			line    int
+			path    string
+			message string
+			hint    bool
+		}{
+			{
+				name: "colon inside a plain scalar keeps the instance path",
+				lines: []string{
+					"---", "template: content", "---", "",
+					"# columns", "```", "title: Hello: world", "```",
+				},
+				line: 7, path: "columns[0]",
+				message: "mapping values are not allowed in this context", hint: true,
+			},
+			{
+				name: "plain scalar beginning with a reserved indicator",
+				lines: []string{
+					"---", "template: content", "---", "",
+					"# columns", "```", "title: @example.com", "```",
+				},
+				line: 7, path: "columns[0]",
+				message: "found character that cannot start any token", hint: true,
+			},
+			{
+				name: "named alias with no matching anchor keeps the instance path",
+				lines: []string{
+					"---", "template: content", "---", "",
+					"# columns", "```", "title: *foo", "```",
+				},
+				line: 7, path: "columns[0]",
+				message: "unknown anchor 'foo' referenced", hint: true,
+			},
+			{
+				name: "named alias with trailing text recovers the nested instance line",
+				lines: []string{
+					"---", "template: grouped", "---", "",
+					"# columns", "```", "template: group", "```", "",
+					"## blocks", "```", "weight: *foo bar", "```",
+				},
+				line: 12, path: "columns[0] › blocks[0]",
+				message: "unknown anchor 'foo' referenced", hint: true,
+			},
+			{
+				name: "nested instance carries its full containment path",
+				lines: []string{
+					"---", "template: grouped", "---", "",
+					"# columns", "```", "template: group", "```", "",
+					"## blocks", "```", "weight: Hello: world", "```",
+				},
+				line: 12, path: "columns[0] › blocks[0]",
+				message: "mapping values are not allowed in this context", hint: true,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := Parse(file, src(tc.lines...), cat)
+				wants := []string{"invalid YAML: " + tc.message}
+				if tc.hint {
+					wants = append(wants, "(quote the value as a string)")
+				}
+				wantParseErrorPath(t, err, file, tc.line, tc.path, wants...)
+				assertNoQuotingHint(t, err, tc.hint)
+			})
+		}
+	})
+}
+
+// assertNoQuotingHint fails when hint is false but err carries the
+// plain-scalar quoting hint. wantParseError only checks that the wanted
+// substrings are present, so this pins the absence of the hint for a
+// non-plain-scalar mis-read.
+func assertNoQuotingHint(t *testing.T, err error, hint bool) {
+	t.Helper()
+	if hint || err == nil {
+		return
+	}
+	if strings.Contains(err.Error(), "quote the value as a string") {
+		t.Fatalf("error carries a quoting hint, want none: %v", err)
+	}
+}
+
 // testParseTemplate covers slide-template lookup and usage through Catalogue.
 func testParseTemplate(t *testing.T) {
 	cat := testCatalogue()
@@ -271,6 +432,74 @@ func testParseTemplate(t *testing.T) {
 		_, err := Parse(file, src("---", "title: X", "template: titel", "---"), cat)
 		wantParseError(t, err, file, 3, `did you mean "title"?`)
 	})
+}
+
+// testParseInternalTemplate covers the internal-template refusal
+// (internal-templates) at the parser's Markdown template-targets: a slide
+// frontmatter `template:` or a section instance's `template:` naming a
+// template whose Internal flag is set is refused with a clear, positioned
+// error — carrying the instance's containment path for a section — distinct
+// from the unknown-template error. The name stays listed by TemplateNames for
+// a closest-match suggestion (pinned in the catalogue helpers), so it is
+// refused as internal, never as unknown.
+func testParseInternalTemplate(t *testing.T) {
+	cat := testCatalogue()
+	const file = "slides/1-intro.md"
+
+	t.Run("slide frontmatter refuses an internal slide template", func(t *testing.T) {
+		_, err := Parse(file, src("---", "template: internal-slide", "---"), cat)
+		wantParseErrorPath(t, err, file, 2, "",
+			`template "internal-slide" is internal and cannot be used as a slide template`)
+		assertNotUnknownTemplate(t, err)
+	})
+
+	t.Run("section instance refuses an internal section template", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: internal-section",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 7, "columns[0]",
+			`template "internal-section" is internal and cannot be used as a section template`)
+		assertNotUnknownTemplate(t, err)
+	})
+
+	// The internal refusal is the parser's answer even when the template's
+	// usage is the other kind: an internal slide template reaching a section
+	// instance is refused as internal, not as a slide-usage/section mismatch.
+	t.Run("internal refusal precedes the usage mismatch", func(t *testing.T) {
+		_, err := Parse(file, src(
+			"---",
+			"template: content",
+			"---",
+			"",
+			"# columns",
+			"```",
+			"template: internal-slide",
+			"```",
+		), cat)
+		wantParseErrorPath(t, err, file, 7, "columns[0]",
+			`template "internal-slide" is internal and cannot be used as a section template`)
+		assertNotUnknownTemplate(t, err)
+	})
+}
+
+// assertNotUnknownTemplate fails when err reads as an unknown-template error
+// (with its optional closest-match suggestion), so an internal-template
+// refusal stays distinct from an unknown name.
+func assertNotUnknownTemplate(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	if strings.Contains(err.Error(), "unknown template") {
+		t.Fatalf("internal-template error reads as unknown: %v", err)
+	}
 }
 
 // testParseStructure covers the body-before-first-section boundary and the
@@ -684,6 +913,155 @@ func testParseNestedSections(t *testing.T) {
 		if slide.Notes == nil || slide.Notes.HeadingLine != 12 || slide.Notes.Body != "note body" {
 			t.Fatalf("Notes = %+v, want the top-level section at line 12 body %q", slide.Notes, "note body")
 		}
+	})
+}
+
+// testParseNestedDepth covers the parse-time per-instance depth bound
+// (bounded-self-nesting, nested-section-validation): a section declaration that
+// accepts its own template — directly or through a cycle — may carry a positive
+// max_depth, and parseSections hands checkNestedDepth the resolved template of
+// every enclosing instance it has built, so an instance whose self-nesting
+// depth exceeds its declaration's bound is refused with the path-qualified
+// slide error `section "<declared name>": nesting deeper than max_depth N`. The
+// depth is counted over the FULL containment chain, not from the immediate
+// parent alone, so on the A→B→A→B cycle the second b (one enclosing b) is depth
+// 1 and accepted. The authored heading-depth syntax is unchanged.
+func testParseNestedDepth(t *testing.T) {
+	cat := testCatalogue()
+	// Bounded self-nesting fixtures, local to this test (the shared catalogue
+	// carries no max_depth declaration).
+	//
+	// "T" is a slide template that declares an "events" section accepting T and
+	// a "loop" section accepting T again, bounded at max_depth 1 — the
+	// one-template self-accepting case. Both `# events` and the nested `loop`
+	// instances resolve T, so the first `loop` (one enclosing T) is depth 1 and
+	// a `loop` nested inside it (two enclosing Ts) would be depth 2.
+	cat["T"] = fakeTemplate{
+		usage:    "slide",
+		sections: []string{"events", "loop"},
+		accepted: map[string][]string{"events": {"T"}, "loop": {"T"}},
+		maxDepth: map[string]int{"loop": 1},
+	}
+	// A declared-section cycle: template "A" declares a "b" section accepting
+	// "B" with max_depth 1; template "B" declares an "a" section accepting "A"
+	// with no bound. "B" is the slide template, so its "a" section makes the top
+	// `# a` resolve "A". The depth rule counts each template's own enclosing
+	// same-template ancestors, so the first `b` is depth 0, the inner `a` depth
+	// 1, and the second `b` depth 1 — accepted — while a third `b` is depth 2.
+	cat["A"] = fakeTemplate{
+		usage:    "section",
+		sections: []string{"b"},
+		accepted: map[string][]string{"b": {"B"}},
+		maxDepth: map[string]int{"b": 1},
+	}
+	cat["B"] = fakeTemplate{
+		usage:    "slide",
+		sections: []string{"a"},
+		accepted: map[string][]string{"a": {"A"}},
+	}
+
+	const file = "slides/1-loop.md"
+
+	t.Run("self-accepting declaration at its bound parses", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: T",
+			"---",
+			"",
+			"# events",
+			"## loop",
+		), cat)
+
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		events := slide.Sections[0]
+		if events.Name != "events" || events.Template != "T" {
+			t.Fatalf("Sections[0] = %q template %q, want %q template %q", events.Name, events.Template, "events", "T")
+		}
+		if len(events.Children) != 1 {
+			t.Fatalf("len(events.Children) = %d, want 1 (the nested loop)", len(events.Children))
+		}
+		loop := events.Children[0]
+		if loop.Name != "loop" || loop.Level != 2 || loop.Index != 0 || loop.Template != "T" {
+			t.Errorf("loop = %q level %d index %d template %q, want %q level 2 index 0 template %q",
+				loop.Name, loop.Level, loop.Index, loop.Template, "loop", "T")
+		}
+	})
+
+	t.Run("self-nesting past the bound carries the instance path", func(t *testing.T) {
+		// The second loop's enclosing chain is [T (events), T (loop)], so its
+		// self-nesting depth is 2, past the loop declaration's max_depth 1. The
+		// error names the bounded declaration's slot ("loop") and is qualified
+		// to the offending slide file with the instance's containment chain.
+		_, err := Parse(file, src(
+			"---",
+			"template: T",
+			"---",
+			"",
+			"# events",
+			"## loop",
+			"### loop",
+		), cat)
+		wantParseErrorPath(t, err, file, 7, "events[0] › loop[0] › loop[0]",
+			`section "loop": nesting deeper than max_depth 1`)
+	})
+
+	t.Run("cycle instance at its bound parses", func(t *testing.T) {
+		slide := parseOK(t, file, src(
+			"---",
+			"template: B",
+			"---",
+			"",
+			"# a",
+			"## b",
+			"### a",
+			"#### b",
+		), cat)
+
+		if len(slide.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(slide.Sections))
+		}
+		a := slide.Sections[0]
+		if a.Name != "a" || a.Level != 1 || a.Template != "A" {
+			t.Fatalf("Sections[0] = %q level %d template %q, want %q level 1 template %q", a.Name, a.Level, a.Template, "a", "A")
+		}
+		if len(a.Children) != 1 || a.Children[0].Name != "b" {
+			t.Fatalf("a.Children = %+v, want the single %q child", a.Children, "b")
+		}
+		innerA := a.Children[0].Children
+		if len(innerA) != 1 || innerA[0].Name != "a" {
+			t.Fatalf("b.Children = %+v, want the single %q child", innerA, "a")
+		}
+		secondB := innerA[0].Children
+		if len(secondB) != 1 {
+			t.Fatalf("inner a.Children = %+v, want the single second %q child", secondB, "b")
+		}
+		if got := secondB[0]; got.Name != "b" || got.Level != 4 || got.Index != 0 || got.Template != "B" {
+			t.Errorf("second b = %q level %d index %d template %q, want %q level 4 index 0 template %q",
+				got.Name, got.Level, got.Index, got.Template, "b", "B")
+		}
+	})
+
+	t.Run("cycle continuation past the bound names the bounded declaration", func(t *testing.T) {
+		// The third b's enclosing chain is [A, B, A, B, A] — two enclosing B
+		// instances — so its self-nesting depth is 2, past the b declaration's
+		// max_depth 1. The error names the bounded declaration's slot ("b"), not
+		// the instance's template or the unbounded a declaration.
+		_, err := Parse(file, src(
+			"---",
+			"template: B",
+			"---",
+			"",
+			"# a",
+			"## b",
+			"### a",
+			"#### b",
+			"##### a",
+			"###### b",
+		), cat)
+		wantParseErrorPath(t, err, file, 10, "a[0] › b[0] › a[0] › b[0] › a[0] › b[0]",
+			`section "b": nesting deeper than max_depth 1`)
 	})
 }
 

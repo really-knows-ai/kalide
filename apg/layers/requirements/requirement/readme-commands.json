@@ -2,7 +2,7 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "readme-commands",
-  "body": "README command reference: README.md documents every user-facing command — `init` (with its optional `[path]` argument and `--local` flag), `init-library`, `config`, `start`, `templates`, `templates <name>`, `upgrade`, `version`, and `help` — each with its usage, and its table of contents resolves to every section (no stale or missing entries).\n\nAC: README.md documents `init`, `init-library`, `config`, `start`, `templates`, `templates <name>`, `upgrade`, `version` and `help`; `upgrade` is documented with its no-path-argument, no-`--force` behaviour; every table-of-contents entry links to a heading that exists, and every command section is reachable from the table of contents.",
+  "body": "README command reference: README.md documents every user-facing command — `init` (with its optional `[path]` argument and `--local` flag), `init-library`, `config`, `start`, `check`, `render`, `templates`, `templates <name>`, `upgrade`, `version`, and `help` — each with its usage, and its table of contents resolves to every section (no stale or missing entries).\n\nAC: README.md documents `init`, `init-library`, `config`, `start`, `check`, `render`, `templates`, `templates <name>`, `upgrade`, `version` and `help`; `upgrade` is documented with its no-path-argument, no-`--force` behaviour; every table-of-contents entry links to a heading that exists, and every command section is reachable from the table of contents.",
   "properties": {
     "feature": "docs"
   },
@@ -14,12 +14,12 @@
     },
     {
       "kind": "drives",
-      "target": "domain.service.serve-deck",
+      "target": "domain.service.scaffold-deck",
       "properties": {}
     },
     {
       "kind": "drives",
-      "target": "domain.service.scaffold-deck",
+      "target": "domain.service.serve-deck",
       "properties": {}
     }
   ],

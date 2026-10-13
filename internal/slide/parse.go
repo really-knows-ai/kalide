@@ -186,7 +186,8 @@ type catalogueBlock struct {
 // Rules (deck-structure, slide-sections):
 //   - the file opens with YAML frontmatter delimited by --- … --- at line 1;
 //     missing, unterminated or not-at-top frontmatter is an error, and the
-//     frontmatter must name a slide-usage `template:`;
+//     frontmatter must name a slide-usage `template:` that is not internal
+//     (internal-templates);
 //   - the content between the frontmatter and the first heading is the slide's
 //     body;
 //   - a `# name` heading starts a top-level section; a heading one level deeper
@@ -242,9 +243,13 @@ func Parse(file string, src []byte, cat Catalogue) (*Slide, error) {
 	if !hasTmpl || strings.TrimSpace(tmpl) == "" {
 		return nil, parseError(file, 1, "missing required key %q in slide frontmatter", "template")
 	}
-	usage, ok := cat.LookupSlideTemplate(tmpl)
+	usage, internal, ok := cat.LookupSlideTemplate(tmpl)
 	if !ok {
 		return nil, unknownName(file, tmplLine, "", "template", tmpl, cat.TemplateNames())
+	}
+	if internal {
+		return nil, parseError(file, tmplLine,
+			"template %q is internal and cannot be used as a slide template", tmpl)
 	}
 	if usage != "slide" {
 		return nil, parseError(file, tmplLine,
@@ -403,6 +408,15 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 		}
 		topLevel := parentIdx < 0
 
+		// The frames still open after superseding are exactly this instance's
+		// enclosing instances, so their resolved template names (root first) are
+		// the containment chain checkNestedDepth counts same-template ancestors
+		// over (bounded-self-nesting). Empty at the slide's top level.
+		enclosing := make([]string, len(stack))
+		for k := range stack {
+			enclosing[k] = stack[k].template
+		}
+
 		var d sectionDecl
 		if topLevel {
 			// Top-level: the slide template declares this section.
@@ -410,8 +424,8 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				return nil, nil, unknownName(file, headingLine, "", "section", name, sortedCopy(cat.SectionNames(slideTemplate)))
 			}
 			topCounts[name]++
-			accepted, minRep, maxRep, _ := cat.SectionDecl(slideTemplate, name)
-			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}
+			accepted, minRep, maxRep, maxDepth, _ := cat.SectionDecl(slideTemplate, name)
+			d = sectionDecl{accepted: accepted, min: minRep, max: maxRep, maxDepth: maxDepth, ok: true}
 			if d.max > 0 && topCounts[name] > d.max {
 				return nil, nil, parseError(file, headingLine,
 					"section %q: at most %d allowed, found %d", name, d.max, topCounts[name])
@@ -509,6 +523,15 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				Msg: fmt.Sprintf("%q is reserved and cannot be used as a section template", NotesSection)}
 		}
 
+		// The instance's template is resolved, so its self-nesting depth along
+		// the enclosing chain can be bounded by the declaration's max_depth
+		// (bounded-self-nesting): every instance the parser builds — top-level
+		// and nested — is checked here, and its resolved template name joins the
+		// chain the frame opens below for the instances nested inside it.
+		if perr := checkNestedDepth(file, headingLine, path, enclosing, section.Template, name, d); perr != nil {
+			return nil, nil, perr
+		}
+
 		// Attach the instance to the tree and open its frame, so its body can
 		// be bounded at the next section marker in its own resolved template's
 		// context (slide-sections).
@@ -564,7 +587,7 @@ func checkTopMin(file string, names []string, cat Catalogue, slideTemplate strin
 		if name == NotesSection {
 			continue
 		}
-		accepted, minRep, _, ok := cat.SectionDecl(slideTemplate, name)
+		accepted, minRep, _, _, ok := cat.SectionDecl(slideTemplate, name)
 		_ = accepted
 		if !ok || minRep <= 0 {
 			continue
@@ -625,8 +648,8 @@ func declsFor(cat Catalogue, tmpl string) map[string]sectionDecl {
 	names := cat.SectionNames(tmpl)
 	out := make(map[string]sectionDecl, len(names))
 	for _, n := range names {
-		a, mn, mx, ok := cat.SectionDecl(tmpl, n)
-		out[n] = sectionDecl{accepted: a, min: mn, max: mx, ok: ok}
+		a, mn, mx, md, ok := cat.SectionDecl(tmpl, n)
+		out[n] = sectionDecl{accepted: a, min: mn, max: mx, maxDepth: md, ok: ok}
 	}
 	return out
 }
@@ -707,11 +730,13 @@ func instanceIndexes(path string) []int { return parseChain(path).indexes }
 // instanceIndexes), named for the containmentPath call sites.
 func pathSegments(path string) []int { return parseChain(path).indexes }
 
-// sectionDecl mirrors a Catalogue SectionDecl result.
+// sectionDecl mirrors a Catalogue SectionDecl result, including the
+// declaration's max_depth bound (maxDepth, 0 when unbounded).
 type sectionDecl struct {
 	accepted []string
 	min      int
 	max      int
+	maxDepth int
 	ok       bool
 }
 
@@ -725,11 +750,55 @@ type sectionDecl struct {
 // validation only; it never resolves the instance's `template:` value.
 func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name string, line int, path string) (sectionDecl, error) {
 	names := cat.SectionNames(parentTemplate)
-	accepted, minRep, maxRep, ok := cat.SectionDecl(parentTemplate, name)
+	accepted, minRep, maxRep, maxDepth, ok := cat.SectionDecl(parentTemplate, name)
 	if !ok {
 		return sectionDecl{}, unknownName(file, line, path, "section", name, names)
 	}
-	return sectionDecl{accepted: accepted, min: minRep, max: maxRep, ok: true}, nil
+	return sectionDecl{accepted: accepted, min: minRep, max: maxRep, maxDepth: maxDepth, ok: true}, nil
+}
+
+// checkNestedDepth enforces a bounded section declaration's `max_depth` at the
+// one instance that declaration produces (bounded-self-nesting,
+// nested-section-validation). chain is the resolved template name of every
+// enclosing instance — the FULL containment chain parseSections has built,
+// top-level and nested, empty at the slide's top level — and resolved is the
+// instance's own resolved template name. The instance's self-nesting depth is
+// the number of instances in that chain whose resolved template equals resolved,
+// counted over the whole chain rather than from the immediate parent alone: on
+// the A→B→A→B chain the second b is depth 1 (its one enclosing b), not 0.
+//
+// decl is the declaration for the instance's section slot; maxDepth is its
+// bound (0 when unbounded) and name is the declared slot name the message
+// reports. An instance whose depth exceeds decl.maxDepth is refused with a
+// *ParseError path-qualified to the offending slide file with its containment
+// chain (path) and the message
+// `section "<declared name>": nesting deeper than max_depth N`; otherwise
+// checkNestedDepth returns nil. An unbounded declaration, an unset declaration
+// or an instance with no resolved template (not a template instance) yields nil.
+//
+// internal/slide cannot import internal/template, so the count is taken here by
+// resolved template name; it is the same rule as template.InstanceDepth, and an
+// integration test pins the two in agreement. parseSections threads the chain
+// and the instance's resolved template into it for every instance it builds.
+func checkNestedDepth(file string, line int, path string, chain []string, resolved, name string, decl sectionDecl) *ParseError {
+	if !decl.ok || decl.maxDepth <= 0 || resolved == "" {
+		return nil
+	}
+	depth := 0
+	for _, ancestor := range chain {
+		if ancestor == resolved {
+			depth++
+		}
+	}
+	if depth <= decl.maxDepth {
+		return nil
+	}
+	return &ParseError{
+		File: file,
+		Line: line,
+		Path: path,
+		Msg:  fmt.Sprintf("section %q: nesting deeper than max_depth %d", name, decl.maxDepth),
+	}
 }
 
 // resolveSectionTemplate is the parent-level `template:` resolution entry
@@ -738,9 +807,10 @@ func resolveChildTemplate(file string, cat Catalogue, parentTemplate, name strin
 // (from the slide template for a top-level section, from resolveChildTemplate
 // for a child), it resolves the instance's `template:` into out: required when
 // the parent declares more than one accepted template, resolved automatically
-// when exactly one is accepted, refused for the reserved `notes` name, checked
-// to be a section-usage template, and checked for membership in the accepted
-// set. It never derives declarations.
+// when exactly one is accepted, refused for the reserved `notes` name, refused
+// when it names an internal template (internal-templates), checked to be a
+// section-usage template, and checked for membership in the accepted set. It
+// never derives declarations.
 //
 // fenceLine is the line of the opening ``` fence (0 when there is no
 // frontmatter), headingLine the section heading line, and path the instance's
@@ -783,9 +853,13 @@ func resolveSectionTemplate(file string, cat Catalogue, section string,
 		return perr(line,
 			"%q is reserved and cannot be used as a section template", NotesSection)
 	}
-	usage, ok := cat.LookupSlideTemplate(tmplName)
+	usage, internal, ok := cat.LookupSlideTemplate(tmplName)
 	if !ok {
 		return unknownName(file, line, path, "template", tmplName, cat.TemplateNames())
+	}
+	if internal {
+		return perr(line,
+			"template %q is internal and cannot be used as a section template", tmplName)
 	}
 	if usage != "section" {
 		return perr(line,
@@ -845,7 +919,9 @@ func templateInBlock(file string, b *catalogueBlock, path string) (name string, 
 // of the block's first YAML line; the text is padded with newlines so every
 // node line and YAML error position is absolute within the file. An empty block
 // decodes to an empty block with no mapping. path is the containment path of
-// the section the block belongs to, or "" for the slide frontmatter.
+// the section the block belongs to, or "" for the slide frontmatter. A parse
+// failure is reported through yamlErrorWithLine: the offending source line and,
+// for an offending plain scalar, the quoting hint, keeping path.
 func parseBlock(file string, lines []string, startLine int, path string) (*catalogueBlock, error) {
 	b := &catalogueBlock{values: map[string]any{}}
 	if len(lines) == 0 {
@@ -860,8 +936,7 @@ func parseBlock(file string, lines []string, startLine int, path string) (*catal
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
-		return nil, &ParseError{File: file, Line: startLine, Path: path,
-			Msg: fmt.Sprintf("invalid YAML: %v", err)}
+		return nil, yamlErrorWithLine(file, []byte(text), path, err)
 	}
 	m := documentMapping(&doc)
 	if m == nil {

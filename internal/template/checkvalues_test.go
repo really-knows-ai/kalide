@@ -116,6 +116,122 @@ func TestCheckValues(t *testing.T) {
 	bodyTmpl := newSlide("body", Field{Name: "title", Type: FieldText})
 	bodyTmpl.Body = BodyRule{Mode: BodyRequired, MaxWords: 10}
 	effectTmpl := newSlide("effect", Field{Name: "title", Type: FieldText})
+	nullableTmpl := newSlide("nullable",
+		Field{Name: "title", Type: FieldText, Nullable: true},
+		Field{Name: "count", Type: FieldNumber, Nullable: true, Min: &zero},
+		Field{Name: "modes", Type: FieldList, Nullable: true, Item: &Field{Type: FieldText}, MinItems: 1},
+		Field{Name: "mode", Type: FieldEnum, Nullable: true, Variants: []string{"a"}},
+		Field{Name: "when", Type: FieldDate, Nullable: true},
+	)
+	nonNullableTmpl := newSlide("nonnullable", Field{Name: "title", Type: FieldText})
+	reqNullableTmpl := newSlide("reqnullable",
+		Field{Name: "note", Type: FieldText, Required: true, Nullable: true})
+	coerceTmpl := newSlide("coerce",
+		Field{Name: "coerced", Type: FieldText, Coerce: true},
+		Field{Name: "short_coerced", Type: FieldText, Coerce: true, MaxLength: 2},
+		Field{Name: "plain", Type: FieldText},
+	)
+	recordTmpl := newSlide("records", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type:     FieldRecord,
+		Nullable: true,
+		Fields: []Field{
+			{Name: "title", Type: FieldText, Required: true},
+		},
+	}})
+	nestedRecordTmpl := newSlide("nestedrecords", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "values", Type: FieldList, Item: &Field{
+				Type: FieldRecord,
+				Fields: []Field{
+					{Name: "n", Type: FieldNumber, Min: &zero},
+				},
+			}},
+		},
+	}})
+
+	// crossFromTmpl declares two top-level list fields so a leading `/name`
+	// max_items_from on one enforces against the other by name
+	// (cross-field-list-constraints, plan.phase-03.task-7).
+	crossFromTmpl := newSlide("crossfrom",
+		Field{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "/b"},
+		Field{Name: "b", Type: FieldList, Item: &Field{Type: FieldText}},
+	)
+	// crossMinTmpl declares the min_items_from direction against a top-level
+	// peer list.
+	crossMinTmpl := newSlide("crossmin",
+		Field{Name: "c", Type: FieldList, Item: &Field{Type: FieldText}, MinItemsFrom: "/d"},
+		Field{Name: "d", Type: FieldList, Item: &Field{Type: FieldText}},
+	)
+	// crossRecordTmpl declares both lists inside one inline record, so a bare
+	// max_items_from names the record sibling.
+	crossRecordTmpl := newSlide("crossrecord", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "b"},
+			{Name: "b", Type: FieldList, Item: &Field{Type: FieldText}},
+		},
+	}})
+	// crossSlashRecordTmpl writes a `/name` inside a record: it still names the
+	// enclosing template's top-level field, never a record sibling.
+	crossSlashRecordTmpl := newSlide("crossslashrecord",
+		Field{Name: "top", Type: FieldList, Item: &Field{Type: FieldText}},
+		Field{Name: "items", Type: FieldList, Item: &Field{
+			Type: FieldRecord,
+			Fields: []Field{
+				{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "/top"},
+			},
+		}},
+	)
+	// crossSkipTmpl points one bound at an absent top-level field and the other
+	// at a non-list top-level field: neither peer carries a length to compare,
+	// so both bounds are skipped rather than reported.
+	crossSkipTmpl := newSlide("crossskip",
+		Field{Name: "a", Type: FieldList, Item: &Field{Type: FieldText}, MaxItemsFrom: "/missing", MinItemsFrom: "/mixed"},
+		Field{Name: "mixed", Type: FieldText},
+	)
+
+	// allTypesTmpl declares one record item field per field type, so a single
+	// wrong-typed record value proves the shared engine reports every field
+	// type's type error — including a record that is not a mapping — at the
+	// same path-qualified, positioned shape (plan.phase-02.task-8).
+	allTypesTmpl := newSlide("alltypes", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "t", Type: FieldText},
+			{Name: "n", Type: FieldNumber},
+			{Name: "d", Type: FieldDate},
+			{Name: "b", Type: FieldBoolean},
+			{Name: "e", Type: FieldEnum, Variants: []string{"a", "b"}},
+			{Name: "i", Type: FieldImage},
+			{Name: "l", Type: FieldLink},
+			{Name: "li", Type: FieldList, Item: &Field{Type: FieldText}},
+			{Name: "st", Type: FieldSectionTemplate, SectionTemplate: "col"},
+			{Name: "rec", Type: FieldList, Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "x", Type: FieldText},
+			}}},
+		},
+	}})
+
+	// allRulesTmpl declares one record item field per field rule, so a single
+	// violating record value proves the shared engine reports every rule's
+	// error at the same path-qualified, positioned shape (plan.phase-02.task-8).
+	allRulesTmpl := newSlide("allrules", Field{Name: "items", Type: FieldList, Item: &Field{
+		Type: FieldRecord,
+		Fields: []Field{
+			{Name: "req", Type: FieldText, Required: true},
+			{Name: "long", Type: FieldText, MaxLength: 2},
+			{Name: "num_min", Type: FieldNumber, Min: &zero},
+			{Name: "num_max", Type: FieldNumber, Max: float64Ptr(10)},
+			{Name: "date_min", Type: FieldDate, MinDate: "2020-01-01"},
+			{Name: "date_max", Type: FieldDate, MaxDate: "2025-12-31"},
+			{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}},
+			{Name: "img", Type: FieldImage},
+			{Name: "url", Type: FieldLink},
+			{Name: "min_list", Type: FieldList, Item: &Field{Type: FieldText}, MinItems: 1},
+			{Name: "max_list", Type: FieldList, Item: &Field{Type: FieldText}, MaxItems: 2},
+		},
+	}})
 
 	const boldAndCode = "**bold** and `code`"
 
@@ -362,7 +478,7 @@ func TestCheckValues(t *testing.T) {
 			tmpl: enumTmpl,
 			data: map[string]any{"mode": "c"},
 			want: []wantErr{we("enum", "mode", "c",
-				`enum: "c" is not one of the allowed variants (a, b)`, "use one of: a, b")},
+				`enum: "c" is not one of the allowed variants (a, b)`, `did you mean "a"? use one of: a, b`)},
 		},
 		{
 			name: "enum wrong type",
@@ -390,13 +506,13 @@ func TestCheckValues(t *testing.T) {
 			name: "image exists via callback",
 			tmpl: imageTmpl,
 			data: map[string]any{"img": "assets/ok.png"},
-			opts: []Option{WithImageExists(func(p string) bool { return p == "assets/ok.png" })},
+			opts: []Option{WithImageExists(func(f *Field, path string) (exists bool, candidates []string) { return path == "assets/ok.png", nil })},
 		},
 		{
 			name: "image missing via callback",
 			tmpl: imageTmpl,
 			data: map[string]any{"img": "assets/missing.png"},
-			opts: []Option{WithImageExists(func(p string) bool { return p == "assets/ok.png" })},
+			opts: []Option{WithImageExists(func(f *Field, path string) (exists bool, candidates []string) { return path == "assets/ok.png", nil })},
 			want: []wantErr{we("image", "img", "assets/missing.png",
 				`image: "assets/missing.png" does not exist`, "add the file under assets/ or fix the path")},
 		},
@@ -581,6 +697,188 @@ func TestCheckValues(t *testing.T) {
 				"write the section data as YAML key: value pairs")},
 		},
 
+		// --- nullable -----------------------------------------------------
+		{
+			// A non-nullable field rejects an explicit null with the
+			// nullable-fields error, and no type, bound, format or membership
+			// check runs behind it.
+			name: "non-nullable field null rejected",
+			tmpl: nonNullableTmpl,
+			data: map[string]any{"title": nil},
+			want: []wantErr{we("nullable", "title", nil,
+				"got null", "this field isn't nullable")},
+		},
+		{
+			// A nullable field's null is accepted and skips every check: the
+			// text type, the number Min bound, the list MinItems bound, the
+			// enum membership and the date type all stay silent.
+			name: "nullable field null skips every check",
+			tmpl: nullableTmpl,
+			data: map[string]any{
+				"title": nil, "count": nil, "modes": nil, "mode": nil, "when": nil,
+			},
+		},
+		{
+			// Null is distinct from absent: a required nullable field is
+			// satisfied by a present null key.
+			name: "required nullable field present as null accepted",
+			tmpl: reqNullableTmpl,
+			data: map[string]any{"note": nil},
+		},
+		{
+			// The same required nullable field is still reported missing when
+			// its key is absent.
+			name: "required nullable field absent rejected",
+			tmpl: reqNullableTmpl,
+			data: map[string]any{},
+			want: []wantErr{we("required", "note", nil,
+				`required: field "note" is required but missing`, "add a note: value")},
+		},
+
+		// --- record items --------------------------------------------------
+		{
+			// A nullable record item accepts a null element and skips the
+			// record's fields entirely, so its required `title` is not
+			// reported.
+			name: "list item null skips record fields",
+			tmpl: recordTmpl,
+			data: map[string]any{"items": []any{nil}},
+		},
+		{
+			// A non-null record item still checks its record fields.
+			name: "record item missing required field",
+			tmpl: recordTmpl,
+			data: map[string]any{"items": []any{map[string]any{}}},
+			want: []wantErr{we("required", "items › [0] › title", nil,
+				`required: field "title" is required but missing`, "add a title: value")},
+		},
+		{
+			// record -> list -> record: the innermost violation carries the
+			// full `items › [i] › field` path.
+			name: "nested record list record violation carries full path",
+			tmpl: nestedRecordTmpl,
+			data: map[string]any{"items": []any{
+				map[string]any{"values": []any{
+					map[string]any{"n": -1},
+				}},
+			}},
+			want: []wantErr{we("min", "items › [0] › values › [0] › n", -1,
+				"min: -1 is below the minimum 0", "use a value of at least 0")},
+		},
+
+		// --- cross-field list bounds (max_items_from/min_items_from) ------
+		// A list field's cross-field bound is enforced against a named peer
+		// list and reported as one error naming both fields and both lengths
+		// (cross-field-list-constraints, plan.phase-03.task-7). A leading
+		// `/name` names a top-level field — even from inside a record — while
+		// a bare name names a sibling within the enclosing inline record.
+		{
+			name: "max_items_from over peer reports one two-field error",
+			tmpl: crossFromTmpl,
+			data: map[string]any{"a": []any{"x", "y", "z"}, "b": []any{"p", "q"}},
+			want: []wantErr{we("max_items_from", "a", []any{"x", "y", "z"},
+				`max_items_from: field "a" has 3 item(s), more than field "b" has 2`,
+				"remove items until at most 2 remain")},
+		},
+		{
+			name: "max_items_from equal to its peer accepted",
+			tmpl: crossFromTmpl,
+			data: map[string]any{"a": []any{"x", "y"}, "b": []any{"p", "q"}},
+		},
+		{
+			name: "min_items_from under peer reports one two-field error",
+			tmpl: crossMinTmpl,
+			data: map[string]any{"c": []any{"x"}, "d": []any{"p", "q"}},
+			want: []wantErr{we("min_items_from", "c", []any{"x"},
+				`min_items_from: field "c" has 1 item(s), fewer than field "d" has 2`,
+				"add items until at least 2 remain")},
+		},
+		{
+			name: "min_items_from equal to its peer accepted",
+			tmpl: crossMinTmpl,
+			data: map[string]any{"c": []any{"x", "y"}, "d": []any{"p", "q"}},
+		},
+		{
+			name: "bare name enforces against a record sibling",
+			tmpl: crossRecordTmpl,
+			data: map[string]any{"items": []any{map[string]any{
+				"a": []any{"x", "y", "z"}, "b": []any{"p", "q"},
+			}}},
+			want: []wantErr{we("max_items_from", "items › [0] › a", []any{"x", "y", "z"},
+				`max_items_from: field "a" has 3 item(s), more than field "b" has 2`,
+				"remove items until at most 2 remain")},
+		},
+		{
+			name: "slash name inside a record resolves the top-level field",
+			tmpl: crossSlashRecordTmpl,
+			data: map[string]any{"top": []any{"p", "q"}, "items": []any{map[string]any{
+				"a": []any{"x", "y", "z"},
+			}}},
+			want: []wantErr{we("max_items_from", "items › [0] › a", []any{"x", "y", "z"},
+				`max_items_from: field "a" has 3 item(s), more than field "top" has 2`,
+				"remove items until at most 2 remain")},
+		},
+		{
+			name: "absent peer and non-list peer are skipped",
+			tmpl: crossSkipTmpl,
+			data: map[string]any{"a": []any{"x", "y", "z"}, "mixed": "s"},
+		},
+
+		// --- text coercion -------------------------------------------------
+		{
+			// A coerce text field accepts a YAML number as its string form.
+			name: "coerce text number accepted",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": 42},
+		},
+		{
+			// A coerce text field accepts a YAML boolean as its string form.
+			name: "coerce text boolean accepted",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": true},
+		},
+		{
+			// The coerced string form is what the max_length check sees:
+			// true -> "true" is 4 characters, over the 2-character bound.
+			name: "coerce text boolean checked as its string form",
+			tmpl: coerceTmpl,
+			data: map[string]any{"short_coerced": true},
+			want: []wantErr{we("max_length", "short_coerced", "true",
+				"max_length: text is 4 characters, maximum is 2", "shorten the value")},
+		},
+		{
+			// A non-coerce text field still rejects a YAML number.
+			name: "non-coerce text rejects number",
+			tmpl: coerceTmpl,
+			data: map[string]any{"plain": 42},
+			want: []wantErr{we("type", "plain", 42,
+				"type: expected a text field, got a number", "quote the value as a string")},
+		},
+		{
+			// A non-coerce text field still rejects a YAML boolean.
+			name: "non-coerce text rejects boolean",
+			tmpl: coerceTmpl,
+			data: map[string]any{"plain": true},
+			want: []wantErr{we("type", "plain", true,
+				"type: expected a text field, got a boolean", "quote the value as a string")},
+		},
+		{
+			// Even a coerce text field rejects a mapping.
+			name: "coerce text rejects mapping",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": map[string]any{"a": 1}},
+			want: []wantErr{we("type", "coerced", map[string]any{"a": 1},
+				"type: expected a text field, got a mapping", "quote the value as a string")},
+		},
+		{
+			// Even a coerce text field rejects a list.
+			name: "coerce text rejects list",
+			tmpl: coerceTmpl,
+			data: map[string]any{"coerced": []any{"a"}},
+			want: []wantErr{we("type", "coerced", []any{"a"},
+				"type: expected a text field, got a list", "quote the value as a string")},
+		},
+
 		// --- unknown-field suggestions ------------------------------------
 		{
 			name: "unknown field suggests title",
@@ -699,6 +997,93 @@ func TestCheckValues(t *testing.T) {
 			want: []wantErr{we("format", "plain_format", "anything",
 				`field "plain" declares no formats; "anything" is not available`,
 				"remove the key or check the template definition")},
+		},
+
+		// --- every field type and rule, path-qualified and positioned -----
+		// The shared engine is recursive (a list item or a record field is
+		// validated by the same code as a top-level field), so these two cases
+		// place each type and each rule one level down — inside a record list
+		// item — and assert the same rule, full `items › [0] › …` path, what,
+		// fix and attached line the top-level cases assert. They are the
+		// unit-level reference the site tests (plan.phase-02.tasks 10-14)
+		// match.
+		{
+			name: "every field type error is path-qualified and positioned",
+			tmpl: allTypesTmpl,
+			data: map[string]any{"items": []any{map[string]any{
+				"t": 1, "n": true, "d": 1, "b": "yes", "e": 3, "i": 5, "l": 5,
+				"li": "notalist", "st": "notmap", "rec": []any{42},
+			}}},
+			opts: []Option{WithLineSource(func([]PathSegment) int { return 55 })},
+			want: []wantErr{
+				we("type", "items › [0] › t", 1,
+					"type: expected a text field, got a number", "quote the value as a string"),
+				we("type", "items › [0] › n", true,
+					"type: expected a number, got a boolean", "write the number without quotes"),
+				we("type", "items › [0] › d", 1,
+					"type: expected a YYYY-MM-DD date, got a number", "write the date as YYYY-MM-DD"),
+				we("type", "items › [0] › b", "yes",
+					"type: expected a boolean, got a quoted string", "write true or false without quotes"),
+				we("type", "items › [0] › e", 3,
+					"type: expected one of the enum variants, got a number", "use one of: a, b"),
+				we("type", "items › [0] › i", 5,
+					"type: expected an image path, got a number", "write the path as a string"),
+				we("type", "items › [0] › l", 5,
+					"type: expected a link, got a number", "write the link as a string"),
+				we("type", "items › [0] › li", "notalist",
+					"type: expected a list, got a quoted string", "write the value as a YAML sequence"),
+				we("type", "items › [0] › st", "notmap",
+					`type: expected a mapping for section template "col", got a quoted string`,
+					"write the section data as YAML key: value pairs"),
+				we("type", "items › [0] › rec › [0]", 42,
+					"type: expected a mapping for a record, got a number",
+					"write the record as YAML key: value pairs"),
+			},
+			wantLine: 55,
+		},
+		{
+			name: "every field rule error is path-qualified and positioned",
+			tmpl: allRulesTmpl,
+			data: map[string]any{"items": []any{map[string]any{
+				"long":     "abc",
+				"num_min":  -1,
+				"num_max":  11,
+				"date_min": "2019-01-01",
+				"date_max": "2026-01-01",
+				"mode":     "c",
+				"img":      "pic.png",
+				"url":      "mailto:x@example.com",
+				"min_list": []any{},
+				"max_list": []any{"a", "b", "c"},
+			}}},
+			opts: []Option{WithLineSource(func([]PathSegment) int { return 56 })},
+			want: []wantErr{
+				we("required", "items › [0] › req", nil,
+					`required: field "req" is required but missing`, "add a req: value"),
+				we("max_length", "items › [0] › long", "abc",
+					"max_length: text is 3 characters, maximum is 2", "shorten the value"),
+				we("min", "items › [0] › num_min", -1,
+					"min: -1 is below the minimum 0", "use a value of at least 0"),
+				we("max", "items › [0] › num_max", 11,
+					"max: 11 exceeds the maximum 10", "use a value of at most 10"),
+				we("min", "items › [0] › date_min", "2019-01-01",
+					"min: 2019-01-01 is below the minimum 2020-01-01", "use a date on or after 2020-01-01"),
+				we("max", "items › [0] › date_max", "2026-01-01",
+					"max: 2026-01-01 exceeds the maximum 2025-12-31", "use a date on or before 2025-12-31"),
+				we("enum", "items › [0] › mode", "c",
+					`enum: "c" is not one of the allowed variants (a, b)`, `did you mean "a"? use one of: a, b`),
+				we("image", "items › [0] › img", "pic.png",
+					`image: "pic.png" is not under assets/`,
+					"move the image into the deck's assets/ directory and reference it as assets/…"),
+				we("link", "items › [0] › url", "mailto:x@example.com",
+					`link: "mailto:x@example.com" is neither a #label anchor nor an http(s) URL`,
+					"use a #label anchor or an http(s) URL"),
+				we("min_items", "items › [0] › min_list", []any{},
+					"min_items: 0 item(s) is below the minimum 1", "add at least 1 item(s)"),
+				we("max_items", "items › [0] › max_list", []any{"a", "b", "c"},
+					"max_items: 3 item(s) exceeds the maximum 2", "remove items until at most 2 remain"),
+			},
+			wantLine: 56,
 		},
 	}
 
@@ -1032,6 +1417,13 @@ func TestCheckValuesCompositionRepeats(t *testing.T) {
 // when no selection is written and reports a *FormatError naming the valid
 // formats. CheckValues only sees the selection key; default_format and the
 // returned function are the Format unit's contract.
+//
+// It also pins that the shared engine (CheckValues) enforces the three
+// closed-set/limit rules — a `_format` selection, an enum's variants and a
+// list's min/max items — identically at every depth: a nested violation is the
+// top-level violation with only its path extended, so the rule, value, what and
+// fix cannot drift between a top-level field, a record list item and a nested
+// section template (plan.phase-02.task-9).
 func TestCheckValuesFormats(t *testing.T) {
 	amount := &Field{Name: "amount", Type: FieldNumber,
 		Formats: []string{"compact", "exact", "percent"}, DefaultFormat: "compact"}
@@ -1119,6 +1511,114 @@ func TestCheckValuesFormats(t *testing.T) {
 		}
 		if !reflect.DeepEqual(fe.Valid, []string{"compact", "exact", "percent"}) {
 			t.Errorf("FormatError.Valid = %v, want the sorted catalogue names", fe.Valid)
+		}
+	})
+
+	// The shared engine (CheckValues) enforces the three closed-set/limit
+	// rules — a `_format` selection, an enum's variants and a list's min/max
+	// items — through the same recursive code at every depth, so a nested
+	// violation is the top-level violation with only its path extended. These
+	// subtests pin that identity: the same rule, value, what and fix at the top
+	// level and inside a record list item, plus a `_format` selection reached
+	// inside a nested section template (plan.phase-02.task-9).
+	trioFields := func() []Field {
+		return []Field{
+			{Name: "amount", Type: FieldNumber, Formats: []string{"compact", "exact"}, DefaultFormat: "compact"},
+			{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}},
+			{Name: "tags", Type: FieldList, Item: &Field{Type: FieldText}, MinItems: 1, MaxItems: 2},
+		}
+	}
+	trioTmpl := newSlide("trio", trioFields()...)
+	trioTmpl.Fields = append(trioTmpl.Fields,
+		Field{Name: "rows", Type: FieldList, Item: &Field{Type: FieldRecord, Fields: trioFields()}})
+
+	t.Run("shared engine enforces selection, variants and limits identically at depth", func(t *testing.T) {
+		want := []wantErr{
+			we("format", "amount_format", "bogus",
+				`unknown format "bogus" for field "amount" (valid: compact, exact)`,
+				"use one of: compact, exact"),
+			we("enum", "mode", "c",
+				`enum: "c" is not one of the allowed variants (a, b)`,
+				`did you mean "a"? use one of: a, b`),
+			we("min_items", "tags", []any{},
+				"min_items: 0 item(s) is below the minimum 1", "add at least 1 item(s)"),
+		}
+
+		top := CheckValues(map[string]any{
+			"amount_format": "bogus",
+			"mode":          "c",
+			"tags":          []any{},
+		}, trioTmpl, nil)
+		if len(top.Errors) != len(want) {
+			t.Fatalf("top-level errors = %d, want %d\n got: %s", len(top.Errors), len(want), renderErrors(top.Errors))
+		}
+		for i, w := range want {
+			e := top.Errors[i]
+			if e.Rule != w.Rule || e.PathString() != w.Path || !reflect.DeepEqual(e.Value, w.Value) ||
+				e.What != w.What || e.Fix != w.Fix {
+				t.Errorf("top-level error[%d] = %+v, want %+v", i, e, w)
+			}
+		}
+
+		nested := CheckValues(map[string]any{
+			"rows": []any{map[string]any{
+				"amount_format": "bogus",
+				"mode":          "c",
+				"tags":          []any{},
+			}},
+		}, trioTmpl, nil)
+		if len(nested.Errors) != len(want) {
+			t.Fatalf("nested errors = %d, want %d\n got: %s", len(nested.Errors), len(want), renderErrors(nested.Errors))
+		}
+		for i, w := range want {
+			e := nested.Errors[i]
+			if e.Rule != w.Rule || !reflect.DeepEqual(e.Value, w.Value) || e.What != w.What || e.Fix != w.Fix {
+				t.Errorf("nested error[%d] = rule %q value %#v what %q fix %q, want the top-level rule %q value %#v what %q fix %q",
+					i, e.Rule, e.Value, e.What, e.Fix, w.Rule, w.Value, w.What, w.Fix)
+			}
+			if got, wantPath := e.PathString(), "rows › [0] › "+w.Path; got != wantPath {
+				t.Errorf("nested error[%d] path = %q, want the top-level path with the item prefix %q", i, got, wantPath)
+			}
+		}
+	})
+
+	t.Run("shared engine accepts a valid selection, variant and list at depth", func(t *testing.T) {
+		valid := map[string]any{
+			"amount":        1,
+			"amount_format": "exact",
+			"mode":          "a",
+			"tags":          []any{"x"},
+		}
+		if got := CheckValues(valid, trioTmpl, nil); len(got.Errors) != 0 {
+			t.Errorf("top-level errors = %s, want none", renderErrors(got.Errors))
+		}
+		nested := map[string]any{"rows": []any{map[string]any{
+			"amount":        1,
+			"amount_format": "exact",
+			"mode":          "a",
+			"tags":          []any{"x"},
+		}}}
+		if got := CheckValues(nested, trioTmpl, nil); len(got.Errors) != 0 {
+			t.Errorf("nested errors = %s, want none", renderErrors(got.Errors))
+		}
+	})
+
+	t.Run("format selection is enforced inside a nested section template", func(t *testing.T) {
+		inner := newSection("fmtinner", Field{Name: "amount", Type: FieldNumber,
+			Formats: []string{"compact", "exact"}, DefaultFormat: "compact"})
+		outer := newSlide("fmtouter", Field{Name: "block", Type: FieldSectionTemplate, SectionTemplate: "fmtinner"})
+
+		got := CheckValues(map[string]any{
+			"block": map[string]any{"amount_format": "bogus"},
+		}, outer, resolverFor(inner))
+		if len(got.Errors) != 1 {
+			t.Fatalf("errors = %s, want 1", renderErrors(got.Errors))
+		}
+		e := got.Errors[0]
+		if e.Rule != "format" || e.PathString() != "block › amount_format" ||
+			e.What != `unknown format "bogus" for field "amount" (valid: compact, exact)` ||
+			e.Fix != "use one of: compact, exact" {
+			t.Errorf("error = rule %q path %q what %q fix %q", e.Rule, e.PathString(), e.What, e.Fix)
 		}
 	})
 }

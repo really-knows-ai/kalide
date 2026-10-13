@@ -87,6 +87,38 @@ type LibraryMeta struct {
 	Format int
 }
 
+// LibraryDefinitions is the set of named, reusable definitions a
+// library.yaml may declare (named-library-definitions): the named accept-lists
+// (Groups), the named field groups (FieldSets) and the named field types
+// (Types). All three sections are optional and are resolved when the library
+// loads; each is additive to library.yaml format 1 and does not change the
+// `format:` value (domain.constraint.library-manifest-format-stable).
+//
+// A definition is referenced by name from a template and resolved in the
+// library layer that owns the referencing template: a section declaration's
+// `accepted:` entry `@<name>` names a Groups entry (combinable with literal
+// template names), a template's `fields:` sequence entry `- include: <name>`
+// names a FieldSets entry, and a field's `type: <name>` names a Types entry.
+// An unknown name is a templates error with a closest-match suggestion
+// (closest-match-suggestions). A nil LibraryDefinitions holds no definitions.
+type LibraryDefinitions struct {
+	// Groups maps a named accept-list to the section-template names it
+	// contains. A section declaration references the list as `@<name>` in its
+	// `accepted:`, combinable with literal template names.
+	Groups map[string][]string
+
+	// FieldSets maps a named field group to the fields it contributes. A
+	// template's `fields:` references the group as a sequence entry
+	// `- include: <name>`, which expands to the named set's fields in place.
+	FieldSets map[string][]Field
+
+	// Types maps a named field type to its descriptor. A field references the
+	// type as `type: <name>`, which expands the named descriptor (for example
+	// a `colour` enum and its variants) into the referencing field; the map
+	// key, not the descriptor's Name, is the type name.
+	Types map[string]Field
+}
+
 // LibraryTemplate is one slide or section template directory,
 // templates/<slides|sections>/<name>/, holding its three required files
 // (templates-dir-layout).
@@ -196,8 +228,8 @@ const (
 // A LibraryLayer carries the layer's own Root and RootPath, so its files are
 // read from that layer and an error raised while loading it names that layer's
 // root (error-reporting), alongside what was loaded from it: its metadata, its
-// slide and section templates, its themes and its media sub-filesystem. It is
-// the per-layer counterpart type of the merged Library.
+// named definitions, its slide and section templates, its themes and its media
+// sub-filesystem. It is the per-layer counterpart type of the merged Library.
 //
 // The deck-root local templates/ layer (LayerRoleLocal) is the merged
 // Library's primary layer: its metadata, root and media become the merged
@@ -227,6 +259,21 @@ type LibraryLayer struct {
 
 	// Meta is the parsed library.yaml metadata of this layer.
 	Meta LibraryMeta
+
+	// Definitions holds the named, reusable definitions this layer's
+	// library.yaml declares — its groups (named accept-lists), field sets
+	// and types (named-library-definitions) — parsed by
+	// loadLibraryDefinitions. It is nil when the layer declares none, and a
+	// nil *LibraryDefinitions holds no definitions.
+	//
+	// Definitions are scoped to the layer that declares them: a template
+	// resolves its `type:`/`include:`/`@group` names against the Definitions
+	// of the layer that OWNS it (resolveNamedDefinition), so a name declared
+	// in one layer is not visible to a template in another and the same name
+	// may be declared independently in each. They live here, on the layer,
+	// and never on LibraryMeta, which stays name/description/format only and
+	// comparable.
+	Definitions *LibraryDefinitions
 
 	// Slides holds the templates loaded from this layer's slides/ directory,
 	// keyed by name.
@@ -289,6 +336,17 @@ type Library struct {
 	// equal standing and neither overrides the other; each layer's own
 	// metadata is retained verbatim in Layers.
 	Meta LibraryMeta
+
+	// definitions is the load-time carrier of the named definitions the
+	// loading layer's library.yaml declares (its groups, field sets and
+	// types, parsed by loadLibraryDefinitions). loadLibraryMeta (step 1)
+	// fills it in on the single-layer *Library the loader body builds, and
+	// layerFromLibrary transfers it onto that layer's own
+	// LibraryLayer.Definitions field; a merged Library's per-layer
+	// definitions live on each LibraryLayer, never here, so this is a
+	// carrier and not a merged convenience field. It is nil when the
+	// manifest declares none.
+	definitions *LibraryDefinitions
 
 	// Slides holds the templates loaded from templates/slides, keyed by
 	// name.

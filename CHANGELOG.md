@@ -7,6 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `nullable: true` fields. A nullable field accepts an explicit YAML `null`
+  whatever its type — or a null entry on a record-item list — and a null skips
+  every bound, format and membership check. Null stays distinct from absent: a
+  `required` nullable field's key must still be present (it may be null), and
+  an explicit null never triggers the field's `default`.
+- Inline record list items. A `list` field's `item:` descriptor may declare
+  `type: record` with its own `fields:` —
+  `item: {type: record, fields: [...]}` — and is validated recursively with the
+  same field descriptors as a template's top-level fields, including
+  `nullable`, `coerce` and a nested `list`/`record`.
+- `coerce: true` on a `text` field: accepts a YAML number or boolean where a
+  string is expected and converts it to its string form (`42` becomes `"42"`,
+  `true` becomes `"true"`); a mapping or list is still a type error.
+- `max_items_from` / `min_items_from` on a `list` field: bound its length
+  against another list field's item count (at most, respectively at least). A
+  leading `/name` names a top-level field of the template; a bare name names a
+  sibling field within the same inline record. The named peer must itself be a
+  `list` field, and an unresolvable reference is a load-time error naming the
+  offending template.
+- Image path options `roots`, `dir` and `extensions`. `roots` names the trees
+  an `image` field's authored path is resolved against — `assets`, the deck's
+  `assets/` tree, or `media`, the `media/` tree of the library layer that owns
+  the field's template — with no `roots` resolving under `assets/`. `dir`
+  restricts the accepted path to a subdirectory within a root, and `extensions`
+  to a set of file-name extensions. A missing file is an error with a
+  closest-match suggestion.
+- `variants_from` on an `enum` field: a glob, written relative to the root of
+  the library layer that owns the field's template and naming files under that
+  layer's `media/`, whose matches become the field's value set (media-relative,
+  in sorted order). Declaring `variants` and `variants_from` together, or a
+  glob that matches no file, is an error.
+- Named reusables in `library.yaml`: `groups:` (named section accept-lists),
+  `field_sets:` (named field groups) and `types:` (named field descriptors),
+  referenced by a template as `@<name>` in a section's `accepted:`,
+  `- include: <name>` in `fields:`, and `type: <name>` respectively. Each
+  resolves in the layer that owns the referencing template, so a name declared
+  in one layer is not visible to a template in the other, and an unknown name
+  is an error with a closest-match suggestion. The sections are additive to
+  `format: 1` and never change the `format` value.
+- Internal templates: a `template.yaml` top-level `internal: true` hides a
+  template from the default `kalide templates` listing — `kalide templates
+  --all` includes it — while leaving it usable as a `section`-helper target and
+  as a `section-template` field type. An internal template cannot be named as a
+  slide's or a section instance's `template:`.
+- Bounded self-nesting: a section declaration's positive-integer `max_depth`
+  bound for a **self-nesting** or **cyclic** acceptance. An acceptance that
+  resolves to its own template with no `max_depth` stays a load-time reference
+  cycle; a bounded chain accepts one instance per level, and each instance
+  reads its count of enclosing instances that resolved to the same section
+  template as the reserved **`.item.depth`** (`0` at the outermost), beside the
+  existing `.item` fields. A `max_depth` that is not a positive integer is an
+  error naming the offending `template.yaml`.
+- `kalide check [--all] [--json]`: validates the whole deck — its slide files,
+  its resolved library layers and its theme — without serving it, loading
+  exactly what `kalide start` loads. It stops at the first problem and reports
+  it as `kalide start` would, or collects every problem in the fixed order with
+  `--all`; `--json` writes a machine-readable report (a `valid` boolean, a
+  summary and each error's file, line, path and message) on stdout, and the
+  text summary otherwise. A library or theme that cannot be loaded is reported
+  as the single check error and ends the report there even with `--all`,
+  because no registry exists to collect further errors from. Exit codes are `0`
+  when the deck is valid, `1` when something is wrong and `2` for a usage
+  error.
+- `kalide render [slide] [-o dir] [--full|--fragment]`: writes a slide's
+  rendered HTML without serving it. With a slide it prints to stdout (selected
+  by position label — `3` or `3a` — first, then by deck-unique label); without
+  one it writes one `<number>[letter]-<label>.html` file per slide into the
+  required `-o` directory, in deck order. `--full` (the default) writes the
+  complete standalone page and `--fragment` only the slide's `<section>`
+  markup; both build the slide from the whole deck's identity, so
+  `render --full <slide>` embeds exactly the `--fragment` output and
+  `.slide.number` / `.slide.total` count across the whole deck. The two flags
+  are mutually exclusive. Output is deterministic.
+
+### Changed
+
+- `kalide templates <name>` now lists an enum field's effective variants on
+  their own line beneath the field rather than inline among the field's other
+  attributes, and marks **every** nullable field `nullable`, top-level fields
+  included. An inline record field's own fields are nested under their list.
+
+### Fixed
+
+- YAML parse errors now name the offending source line and, for a parse failure
+  on a `:` inside a plain scalar or on a plain scalar beginning with `*`, `&`,
+  `%` or `@`, add a hint to quote the value. This covers a malformed
+  `library.yaml`, a malformed `template.yaml` manifest, malformed slide or
+  section frontmatter, and a malformed `kalide.yaml`.
+
 ## [0.12.3] - 2026-10-12
 
 0.12.0, 0.12.1 and 0.12.2 were tagged but never released; 0.12.3 is the first

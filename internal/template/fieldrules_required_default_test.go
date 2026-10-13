@@ -84,6 +84,15 @@ func TestCheckValuesRequiredDefaultIsSchemaOnly(t *testing.T) {
 // target's declared defaults filled in (applyFieldDefaults), including a
 // required field's default and a falsy default, and a caller-supplied value
 // overrides the default — even a falsy supplied value.
+//
+// It also pins applyFieldDefaults' copy-and-fill contract (field-rules): an
+// explicit null on a nullable field wins over that field's Default, a default
+// fills only a field the caller left absent (present falsy values included),
+// and the caller's map is never mutated. An absent optional field with no
+// Default is left unset BY applyFieldDefaults; the nil the context then reads
+// comes from the downstream builder (validateExampleBlockAt here, matching
+// renderer.values at render time), which this test asserts alongside the unset
+// result.
 func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 	target := &Template{
 		Name:  "footer",
@@ -97,7 +106,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 	resolve := resolveSectionCallResolver(target)
 
 	t.Run("an omitted required field's default is materialised into call.Values", func(t *testing.T) {
-		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil)
+		call, err := ResolveSectionCall(resolve, "footer", nil, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil: the required field carries a default", err)
 		}
@@ -119,7 +128,7 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 
 	t.Run("a caller-supplied value overrides the default", func(t *testing.T) {
 		call, err := ResolveSectionCall(resolve, "footer",
-			map[string]any{"title": "Given", "count": 0}, "", nil)
+			map[string]any{"title": "Given", "count": 0}, "", nil, nil)
 		if err != nil {
 			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
 		}
@@ -134,6 +143,137 @@ func TestResolveSectionCallMaterialisesRequiredDefault(t *testing.T) {
 		want := map[string]any{"title": "Given", "count": 0, "flag": false}
 		if !reflect.DeepEqual(call.Values, want) {
 			t.Errorf("call.Values = %v, want supplied values plus the omitted field's default %v", call.Values, want)
+		}
+	})
+
+	t.Run("an explicit null does not trigger the field's default", func(t *testing.T) {
+		// A nullable field's key present as null is DISTINCT from absent: it is a
+		// supplied value, so applyFieldDefaults leaves the caller's null in place
+		// rather than filling the default.
+		tmpl := &Template{
+			Name:  "footer",
+			Usage: UsageSection,
+			Fields: []Field{
+				{Name: "note", Type: FieldText, Nullable: true, Default: "NOTE-DEF"},
+				{Name: "title", Type: FieldText, Required: true, Default: "Untitled"},
+			},
+		}
+
+		effective := applyFieldDefaults(tmpl, map[string]any{"note": nil})
+		if got, present := effective["note"]; !present || got != nil {
+			t.Errorf("applyFieldDefaults[note] = %v (present=%v), want the explicit null preserved, not the default %q",
+				got, present, "NOTE-DEF")
+		}
+		if got := effective["title"]; got != "Untitled" {
+			t.Errorf("applyFieldDefaults[title] = %v, want the omitted required field's default %q", got, "Untitled")
+		}
+
+		// Through the section-helper context: the null is accepted (the field is
+		// nullable) and reaches call.Values as nil, while the omitted required
+		// field still materialises its default.
+		call, err := ResolveSectionCall(resolveSectionCallResolver(tmpl), "footer",
+			map[string]any{"note": nil}, "", nil, nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil: a nullable null is accepted", err)
+		}
+		if got, present := call.Values["note"]; !present || got != nil {
+			t.Errorf("call.Values[note] = %v (present=%v), want the explicit null as a nil entry", got, present)
+		}
+		if got := call.Values["title"]; got != "Untitled" {
+			t.Errorf("call.Values[title] = %v, want the materialised default %q", got, "Untitled")
+		}
+	})
+
+	t.Run("an absent optional field is left unset and reaches the context as nil", func(t *testing.T) {
+		tmpl := &Template{
+			Name:  "footer",
+			Usage: UsageSection,
+			Fields: []Field{
+				{Name: "title", Type: FieldText, Required: true, Default: "Untitled"},
+				{Name: "extra", Type: FieldText}, // optional, no Default
+			},
+		}
+
+		// applyFieldDefaults leaves the field unset: it fills only fields that
+		// carry a Default.
+		effective := applyFieldDefaults(tmpl, map[string]any{})
+		if _, present := effective["extra"]; present {
+			t.Errorf("applyFieldDefaults kept %q = %v, want an absent optional field with no Default left unset",
+				"extra", effective["extra"])
+		}
+		if got := effective["title"]; got != "Untitled" {
+			t.Errorf("applyFieldDefaults[title] = %v, want the default %q", got, "Untitled")
+		}
+
+		// The absence becomes the nil entry a layout reads in the load-time
+		// example context (validateExampleBlockAt), exactly as renderer.values
+		// does at render time.
+		block := &exampleBlock{Frontmatter: map[string]any{}}
+		ctx := map[string]any{}
+		if err := validateExampleBlockAt("example.md", tmpl, block, resolveSectionCallResolver(tmpl), nil, ctx, ""); err != nil {
+			t.Fatalf("validateExampleBlockAt() error = %v, want nil", err)
+		}
+		if got, present := ctx["extra"]; !present || got != nil {
+			t.Errorf("ctx[extra] = %v (present=%v), want an absent optional field to reach the context as a nil entry",
+				got, present)
+		}
+	})
+
+	t.Run("the caller's map is never mutated", func(t *testing.T) {
+		tmpl := &Template{
+			Name:  "footer",
+			Usage: UsageSection,
+			Fields: []Field{
+				{Name: "title", Type: FieldText, Required: true, Default: "Untitled"},
+				{Name: "count", Type: FieldNumber, Default: 5},
+			},
+		}
+		supplied := map[string]any{"title": "Given"}
+		want := map[string]any{"title": "Given"}
+
+		effective := applyFieldDefaults(tmpl, supplied)
+		if !reflect.DeepEqual(supplied, want) {
+			t.Errorf("applyFieldDefaults mutated the caller's map to %v, want it unchanged at %v", supplied, want)
+		}
+		if _, present := supplied["count"]; present {
+			t.Errorf("the caller's map gained %q = %v; applyFieldDefaults must fill a fresh copy",
+				"count", supplied["count"])
+		}
+		if got := effective["count"]; got != 5 {
+			t.Errorf("the returned copy's count = %v, want the default 5", got)
+		}
+
+		// The same holds when ResolveSectionCall drives it, and the call's Source
+		// stays the caller's original, unmutated map.
+		call, err := ResolveSectionCall(resolveSectionCallResolver(tmpl), "footer", supplied, "", nil, nil)
+		if err != nil {
+			t.Fatalf("ResolveSectionCall() error = %v, want nil", err)
+		}
+		if !reflect.DeepEqual(supplied, want) {
+			t.Errorf("ResolveSectionCall mutated the caller's fields map to %v, want it unchanged at %v", supplied, want)
+		}
+		if !reflect.DeepEqual(call.Source, want) {
+			t.Errorf("call.Source = %v, want the caller's original map %v", call.Source, want)
+		}
+	})
+
+	t.Run("a default fills only a field that is absent", func(t *testing.T) {
+		tmpl := &Template{
+			Name:  "footer",
+			Usage: UsageSection,
+			Fields: []Field{
+				{Name: "title", Type: FieldText, Default: "Untitled"},
+				{Name: "count", Type: FieldNumber, Default: 5},
+			},
+		}
+		// Present values — a falsy 0 and an empty string included — are the
+		// caller's, so no default is applied to them.
+		effective := applyFieldDefaults(tmpl, map[string]any{"count": 0, "title": ""})
+		if got := effective["count"]; got != 0 {
+			t.Errorf("effective[count] = %v, want the supplied 0 (a default fills only an absent field)", got)
+		}
+		if got := effective["title"]; got != "" {
+			t.Errorf("effective[title] = %v, want the supplied empty string (a default fills only an absent field)", got)
 		}
 	})
 }

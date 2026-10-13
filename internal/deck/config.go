@@ -133,8 +133,12 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		// yaml.v3 already reports the offending line in its error text.
-		return nil, fmt.Errorf("%s: %w", path, err)
+		// A malformed kalide.yaml is reported through yamlErrorWithLine
+		// (yamlerror.go): the offending source line, resolved from yaml.v3's
+		// own text, in the same <file>:<line>: <problem> form as every other
+		// config error, plus the quoting hint when the failure is the classic
+		// plain-scalar one. Config-key validation is unchanged.
+		return nil, yamlErrorWithLine(path, data, err)
 	}
 
 	mapping := documentMapping(&doc)

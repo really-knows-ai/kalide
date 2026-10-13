@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "item-context",
-  "body": "The `.item` sibling descriptor available to every slide layout and section template at every nesting depth: the current instance's index (0-based), number (1-based), count, first/last flags, section name, resolved template, and its parent instance's fields. It is nil/absent for a slide, which has no siblings. A section invoked by the `section` helper gets a one-item descriptor: `section`/`template` are the target name, index 0, count 1, first/last true, and `parent` is the calling instance's fields (nil when the call is made from a slide layout) (section-helper). A child section passed to the `section` helper gets its own sibling descriptor among the target's children (child-constructor). Data, not a helper.",
+  "body": "The `.item` sibling descriptor available to every slide layout and section template at every nesting depth: the current instance's index (0-based), number (1-based), count, first/last flags, section name, resolved template, self-nesting depth, and its parent instance's fields. The self-nesting depth is the number of enclosing instances whose resolved template is the same template — 0 at the outermost instance of that template in the containment chain and +1 at each self-nested level (bounded-self-nesting). It is nil/absent for a slide, which has no siblings. A section invoked by the `section` helper gets a one-item descriptor: `section`/`template` are the target name, index 0, count 1, first/last true, and `parent` is the calling instance's fields (nil when the call is made from a slide layout) (section-helper). A child section passed to the `section` helper gets its own sibling descriptor among the target's children (child-constructor). Data, not a helper.",
   "properties": {},
   "out": [],
   "in": [
@@ -14,6 +14,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.item-context",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.bounded-self-nesting",
       "properties": {}
     }
   ]

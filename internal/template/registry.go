@@ -103,7 +103,11 @@ func NewRegistry(content fs.FS) *Registry {
 // and must not depend on registration order. The built-ins loader registers
 // every template and then calls Validate once.
 func (r *Registry) Register(t *Template) error {
-	if err := checkDefinition(t); err != nil {
+	// No layer root is known at registration: a template's owning layer is
+	// recorded only after registration (NewRegistryFromLibrary's setLayer),
+	// so an enum `variants_from:` glob is not expanded here. The owning
+	// layer's root is supplied by the caller that knows it.
+	if err := checkDefinition(t, nil); err != nil {
 		return err
 	}
 	if r.content != nil {
@@ -206,7 +210,20 @@ func LoadTemplate(content fs.FS, t *Template) error {
 // offending template.yaml.
 func (r *Registry) Validate() error {
 	for _, t := range r.Templates() {
-		if err := checkDefinition(t); err != nil {
+		// Supply each template's owning-layer root so an enum
+		// `variants_from:` glob expands against the layer that owns the
+		// template (enum-variants-from): an external layer's glob resolves
+		// within the external library alone. The provenance is recorded at
+		// registry build (NewRegistryFromLibrary's setLayer) and, for the
+		// single-layer library the loader body builds, by checkLibraryBuild
+		// before this call. A template with no recorded layer — a registry
+		// built with NewRegistry/Register alone — passes a nil root, so the
+		// glob stays unexpanded (a no-op, not a rejection).
+		var root fs.FS
+		if layer := r.LayerOf(t.Name); layer != nil {
+			root = layer.Root
+		}
+		if err := checkDefinition(t, root); err != nil {
 			return err
 		}
 	}
@@ -383,15 +400,29 @@ func (r *Registry) Templates() []*Template {
 	return out
 }
 
-// LookupSlideTemplate reports how the named template may be used and whether it
-// exists at all: usage is "slide" or "section", and ok is false when no
-// template has that name. It is part of the slide.Catalogue contract.
-func (r *Registry) LookupSlideTemplate(name string) (usage string, ok bool) {
+// checkInternalTemplate is the single internal-template rule (internal-templates):
+// it reports whether t is hidden from the default listing by its manifest's
+// `internal: true` (Template.Internal). It is the one answer the registry's
+// Catalogue surface and the slide parser's Markdown-template-target checks
+// consult, so the rule cannot drift between them. The read is nil-safe: a nil
+// *Template is not internal, matching an unknown name.
+func checkInternalTemplate(t *Template) bool {
+	return t != nil && t.Internal
+}
+
+// LookupSlideTemplate reports how the named template may be used, whether it is
+// internal, and whether it exists at all: usage is "slide" or "section",
+// internal is the named template's Internal flag (false when no template has
+// that name), and ok is false when no template has that name. An internal
+// template is still returned here with ok true — the caller distinguishes it
+// from an unknown name — and the Catalogue surface refuses it as a Markdown
+// target. It is part of the slide.Catalogue contract.
+func (r *Registry) LookupSlideTemplate(name string) (usage string, internal bool, ok bool) {
 	t, ok := r.Lookup(name)
 	if !ok || t == nil {
-		return "", false
+		return "", false, false
 	}
-	return string(t.Usage), true
+	return string(t.Usage), checkInternalTemplate(t), true
 }
 
 // TemplateNames returns every registered template name, sorted, so callers can
@@ -430,25 +461,27 @@ func (r *Registry) SectionNames(tmpl string) []string {
 }
 
 // SectionDecl returns the declaration for section section of the template tmpl:
-// the section-usage templates it accepts and the min and max number of times it
-// may repeat. ok is false when tmpl is unknown or declares no such section. The
-// accepted slice is a fresh copy. It is part of the slide.Catalogue contract.
+// the section-usage templates it accepts, the min and max number of times it may
+// repeat, and the declaration's max_depth bound. ok is false when tmpl is
+// unknown or declares no such section. The accepted slice is a fresh copy.
+// maxDepth is the declaration's positive-integer `max_depth` bound (0 when
+// unbounded). It is part of the slide.Catalogue contract.
 //
 // A `template:` key is required on a section instance iff len(accepted) > 1:
 // with exactly one accepted template the instance resolves to it, and with
 // several the author must choose one.
-func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, max int, ok bool) {
+func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, max, maxDepth int, ok bool) {
 	t, found := r.Lookup(tmpl)
 	if !found || t == nil {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
 	d, found := declaredSection(t, section)
 	if !found {
-		return nil, 0, 0, false
+		return nil, 0, 0, 0, false
 	}
 	out := make([]string, len(d.Accepted))
 	copy(out, d.Accepted)
-	return out, d.Min, d.Max, true
+	return out, d.Min, d.Max, d.MaxDepth, true
 }
 
 // checkDefinition validates a template's local definition: it must be non-nil
@@ -456,7 +489,22 @@ func (r *Registry) SectionDecl(tmpl, section string) (accepted []string, min, ma
 // so a partially built fixture can exercise the other checks), and its declared
 // field and section names must be non-empty, unique, and free of the reserved
 // `body`, `notes`, `deck`, `slide`, `item`, `raw` and `data` names.
-func checkDefinition(t *Template) error {
+//
+// It also validates every list field's cross-field bound
+// (cross-field-list-constraints): a max_items_from/min_items_from must name a
+// declared list field — a leading `/name` a top-level field of the template, a
+// bare name a peer in the field's own scope — recursing into an inline record's
+// item fields so a bound declared inside a record resolves against that
+// record's siblings. A reference that names no field, or a field that is not a
+// list, is rejected here before any content is validated.
+//
+// root is the owning library layer's root filesystem (media as a direct
+// entry), threaded to checkFieldVariants so an enum field's `variants_from:`
+// glob expands against the layer that owns the template (enum-variants-from).
+// A nil root leaves such a glob unexpanded (and unchecked): the caller that
+// knows the owning layer supplies it, and a registry built with no layer
+// provenance passes nil.
+func checkDefinition(t *Template, root fs.FS) error {
 	if t == nil {
 		return errors.New("template: definition must not be nil")
 	}
@@ -492,18 +540,115 @@ func checkDefinition(t *Template) error {
 	}
 
 	for i := range t.Fields {
-		if err := checkFieldVariants(t.Name, &t.Fields[i]); err != nil {
+		if err := checkFieldVariants(t.Name, &t.Fields[i], root); err != nil {
 			return err
 		}
+	}
+
+	// cross-field-list-constraints: each list field's max_items_from and
+	// min_items_from must name a declared list field — a leading `/name` a
+	// top-level field of the template, a bare name a peer in the field's own
+	// scope (a sibling within the enclosing inline record, or a top-level field
+	// for a top-level field). The reference is resolved here, at load, so a
+	// broken bound is rejected before any content is validated; an unresolvable
+	// name is a templates error carrying a closest-match suggestion. Record item
+	// fields are walked recursively, each record's own fields forming the scope
+	// its bare names resolve against, while a `/name` always names a top-level
+	// field.
+	var checkListRefs func(scope []Field) error
+	checkListRefs = func(scope []Field) error {
+		for i := range scope {
+			f := &scope[i]
+			for _, ref := range []struct{ key, val string }{
+				{"max_items_from", f.MaxItemsFrom},
+				{"min_items_from", f.MinItemsFrom},
+			} {
+				if ref.val == "" {
+					continue
+				}
+				name := ref.val
+				lookup := scope
+				if strings.HasPrefix(name, "/") {
+					name = strings.TrimPrefix(name, "/")
+					lookup = t.Fields
+				}
+				var found *Field
+				candidates := make([]string, 0, len(lookup))
+				for j := range lookup {
+					candidates = append(candidates, lookup[j].Name)
+					if lookup[j].Name == name {
+						found = &lookup[j]
+					}
+				}
+				if found == nil {
+					msg := fmt.Sprintf("template %q: field %q: key %q names %q, which is not a declared field", t.Name, f.Name, ref.key, ref.val)
+					if closest := suggest.Closest(name, candidates); closest != "" {
+						msg = fmt.Sprintf("%s: did you mean %q?", msg, closest)
+					}
+					return errors.New(msg)
+				}
+				if found.Type != FieldList {
+					return fmt.Errorf("template %q: field %q: key %q names %q, which is not a list field", t.Name, f.Name, ref.key, ref.val)
+				}
+			}
+			if f.Item != nil && f.Item.Type == FieldRecord {
+				if err := checkListRefs(f.Item.Fields); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := checkListRefs(t.Fields); err != nil {
+		return err
 	}
 	return nil
 }
 
 // checkFieldVariants rejects an enum field with no declared variants, and a
 // Default that is not one of them (template-variants), recursing into a
-// list's single item type.
-func checkFieldVariants(tmpl string, f *Field) error {
+// list's single item type and into an inline record item's fields. An enum
+// field's variants are the only variant mechanism at every nesting depth, so
+// the same two errors fire for an enum field declared inside a record item
+// (record-item-type), however deeply the record is nested.
+//
+// A field that declares its variants with a `variants_from:` glob instead of
+// an inline `variants:` set has the glob expanded through expandVariantsFrom
+// into its effective Variants before those two checks run
+// (enum-variants-from): root is the owning library layer's root filesystem
+// (media as a direct entry), so the glob resolves in the layer that owns the
+// template. The expanded, sorted set is written into f.Variants — the
+// effective variants validateEnum and `kalide templates <name>` read — and
+// f.VariantsFrom is cleared so a second pass over the same field (Register
+// then Validate both call checkDefinition) is a no-op rather than a false
+// "declares both" error. Declaring both `variants:` and `variants_from:` on
+// one field is rejected here without consulting root.
+//
+// A nil root (a registry built without layer provenance) cannot expand a
+// glob: the field's effective variants are then unknown, so the glob is left
+// unexpanded and neither the no-variants nor the default-membership check
+// runs — it is a sensible no-op, not a rejection. Wiring the owning layer's
+// root through checkDefinition is what makes the glob checkable.
+func checkFieldVariants(tmpl string, f *Field, root fs.FS) error {
 	if f.Type == FieldEnum {
+		if f.VariantsFrom != "" {
+			if len(f.Variants) > 0 {
+				return fmt.Errorf("template %q: field %q declares both %q and %q", tmpl, f.Name, "variants", "variants_from")
+			}
+			if root == nil {
+				// No root: the glob cannot be expanded, so the effective
+				// variants are not knowable here. Leave them unexpanded and
+				// run no membership check. An enum field declares no child
+				// descriptors, so there is nothing to recurse into.
+				return nil
+			}
+			variants, err := expandVariantsFrom(f, root)
+			if err != nil {
+				return fmt.Errorf("template %q: field %q: %w", tmpl, f.Name, err)
+			}
+			f.Variants = variants
+			f.VariantsFrom = ""
+		}
 		if len(f.Variants) == 0 {
 			return fmt.Errorf("template %q: field %q is an enum field with no variants", tmpl, f.Name)
 		}
@@ -512,8 +657,17 @@ func checkFieldVariants(tmpl string, f *Field) error {
 				tmpl, f.Name, def, strings.Join(f.Variants, ", "))
 		}
 	}
-	if f.Type == FieldList && f.Item != nil {
-		return checkFieldVariants(tmpl, f.Item)
+	switch f.Type {
+	case FieldList:
+		if f.Item != nil {
+			return checkFieldVariants(tmpl, f.Item, root)
+		}
+	case FieldRecord:
+		for i := range f.Fields {
+			if err := checkFieldVariants(tmpl, &f.Fields[i], root); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

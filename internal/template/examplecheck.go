@@ -100,7 +100,10 @@ func checkLibraryExamples(lib *Library) error {
 // resolves against, so a template contributed by a non-primary layer resolves
 // its own `{{ media … }}` reference in that layer's media rather than the
 // merged Library's primary media (library-layer-references); a nil layer falls
-// back to lib.Media, the pre-layer behaviour.
+// back to lib.Media, the pre-layer behaviour. The same layer's media (and the
+// lib.Media fallback) is the tree the load-time image-field existence resolver
+// closes over — with a nil assets filesystem, since no deck exists yet — so only
+// a media-root image field is existence-checked at step 7 (image-field-roots).
 func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer) error {
 	if lt == nil || lt.Definition == nil {
 		return nil
@@ -126,12 +129,38 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	// instance's template selector, not a field, so it is dropped here exactly
 	// as validateExampleBlock drops it from the executed context.
 	var callerFields map[string]any
+	// callerChain is the example instance's own chain of resolved template
+	// names — the resolved templates enclosing the instance whose layout
+	// executes, with its own resolved template name appended. A section
+	// template's example is the OUTERMOST instance of its own template —
+	// example.md belongs to lt, and nothing encloses it — so its chain is just
+	// lt's name, and the layout's `{{ section … }}` calls pass it as the target's
+	// enclosing chain (a target resolving to the same template reads
+	// `.item.depth` 1), exactly as the render side computes it through the shared
+	// InstanceDepth helper (item-context, bounded-self-nesting). The example's
+	// authored children are enclosed by the same instance, so `.data` walks them
+	// with the same chain. A slide template's example is the slide itself, not an
+	// instance of any template, so its top-level instances keep an empty
+	// enclosing chain and a call from its layout carries no caller.
+	var callerChain []string
 	if len(def.Fields) > 0 || len(def.Sections) > 0 {
 		block, err := parseExampleBlock(string(lt.ExampleBytes), lt.Kind, 1)
 		if err != nil {
 			return withPath(err, lt.ExamplePath)
 		}
-		if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, ctx); err != nil {
+		// The load-time image-field existence resolver (image-field-roots):
+		// no deck exists yet, so the assets filesystem is nil and only the
+		// owning layer's media/ tree is resolvable — the same lib.Media
+		// fallback the layout's `media` helper uses below. A media-root image
+		// field is existence-checked against that tree; an assets/no-roots
+		// field has no resolvable root and so stays unchecked, exactly as
+		// before (checkImageRoots reports "not checkable").
+		mediaFS := lib.Media
+		if layer != nil {
+			mediaFS = layer.Media
+		}
+		imageExists := ImageExistsFunc(nil, mediaFS)
+		if err := validateExampleBlock(lt.ExamplePath, def, block, resolve, imageExists, ctx); err != nil {
 			return err
 		}
 
@@ -147,13 +176,18 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 			source[k] = v
 		}
 		ctx["raw"] = RawContext(source, def, block.Body)
-		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), nil)
+		if lt.Kind == KindSection {
+			callerChain = []string{lt.Name}
+		}
+		ctx["data"] = DataContext(exampleContextNodes(block.Sections, def, resolve), callerChain, nil)
 
 		if lt.Kind == KindSection {
 			// A section template's own layout is a section instance, so its
 			// `.item` descriptor mirrors a one-item section-helper invocation:
-			// section and template are the template's own name, parent nil
-			// (item-context). A slide template's item stays absent.
+			// section and template are the template's own name, depth 0 (it is
+			// the outermost instance of its template, the shared InstanceDepth
+			// of an empty enclosing chain), parent nil (item-context). A slide
+			// template's item stays absent.
 			callerFields = source
 			ctx["item"] = map[string]any{
 				"index":    0,
@@ -163,6 +197,7 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 				"last":     true,
 				"section":  lt.Name,
 				"template": lt.Name,
+				"depth":    InstanceDepth(nil, lt.Name),
 				// A typed nil map, matching the shape itemContext,
 				// ResolveSectionCall and DataContext publish for an
 				// absent parent: `{{if .parent}}` is false and a chained
@@ -180,15 +215,19 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 	// `media` helper bound to lt's own owning layer when one is known so an
 	// external-layer template's own `{{ media … }}` reference resolves in the
 	// external layer's media rather than the merged Library's primary media
-	// (templates-dir-validation step 7, library-layer-references). Parsing the
-	// whole set — rather than lt.LayoutText alone — keeps the shared namespace,
+	// (templates-dir-validation step 7, library-layer-references), and with the
+	// `section` helper bound to the example instance's own chain so a
+	// `{{ section … }}` call the layout makes computes its target's
+	// `.item.depth` through the shared InstanceDepth helper (item-context,
+	// bounded-self-nesting). Parsing the whole set — rather than lt.LayoutText
+	// alone — keeps the shared namespace,
 	// so a layout's `{{ template "<layout name>" . }}` composition call
 	// resolves too (example-layout-composition).
 	// The shared namespace holds every library layout, so an error prefix may
 	// name any of them; resolve each namespace name to its own on-disk path
 	// rather than assuming the invoking template's layout.
 	layoutPaths := libraryLayoutPathResolver(lib)
-	namespace, err := exampleLayoutNamespace(lib, layer, callerFields)
+	namespace, err := exampleLayoutNamespace(lib, layer, callerFields, callerChain...)
 	if err != nil {
 		return layoutTemplateError(lt.Definition.Layout, layoutPaths, "parse", err)
 	}
@@ -237,14 +276,23 @@ func checkLibraryExample(lib *Library, lt *LibraryTemplate, layer *LibraryLayer)
 // recorded owner — falls back to lib.Media, the pre-layer behaviour.
 // callerFields is the calling instance's field values, bound as the `section`
 // helper's parent exactly as checkLibraryExample binds it (item-context); a
-// slide template passes nil. Parsing re-parses the layout sources rather than
-// cloning an already-parsed namespace because html/template resolves a func map
-// at parse time and cannot rebind `media`/`section` on a parsed set.
+// slide template passes nil. callerChain is the calling instance's own chain of
+// resolved template names — the resolved templates enclosing the instance whose
+// layout executes, with the instance's own resolved template name appended (the
+// example instance is the outermost instance of its own template, so a section
+// template's chain is just its own name and a slide template, the slide itself,
+// has none) — forwarded to the `section` helper so a `{{ section … }}` call the
+// layout makes reads its target's `.item.depth` through the shared InstanceDepth
+// helper exactly as the render side does (item-context, bounded-self-nesting); a
+// caller with no instance to name passes none. Parsing re-parses the layout
+// sources rather than cloning an already-parsed namespace because html/template
+// resolves a func map at parse time and cannot rebind `media`/`section` on a
+// parsed set.
 //
 // The returned namespace's root template is "layouts"; a caller executes a
 // layout with ExecuteTemplate under that layout's name. A library template with
 // no layout text is an error, mirroring render.namespaceForLayer.
-func exampleLayoutNamespace(lib *Library, layer *LibraryLayer, callerFields map[string]any) (*htmltemplate.Template, error) {
+func exampleLayoutNamespace(lib *Library, layer *LibraryLayer, callerFields map[string]any, callerChain ...string) (*htmltemplate.Template, error) {
 	if lib == nil {
 		return nil, fmt.Errorf("example layout namespace: no library")
 	}
@@ -253,7 +301,7 @@ func exampleLayoutNamespace(lib *Library, layer *LibraryLayer, callerFields map[
 		mediaFS = layer.Media
 	}
 	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
-	funcMap["section"] = exampleSectionHelper(lib, callerFields)
+	funcMap["section"] = exampleSectionHelper(lib, callerFields, callerChain...)
 
 	namespace := htmltemplate.New("layouts").Funcs(funcMap)
 	add := func(lt *LibraryTemplate) error {
@@ -363,6 +411,18 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // internal/template cannot import internal/render; the render-time renderer
 // binds its own equivalent.
 //
+// callerChain is the calling instance's own chain of resolved template names —
+// the resolved templates enclosing the instance whose layout executes, with
+// that instance's own resolved template name appended (its ancestor chain plus
+// itself). It is the ancestor identity the call passes to
+// ResolveSectionCallLayered, so the resolved target's one-item `.item.depth`
+// counts its enclosing same-template ancestors through the shared InstanceDepth
+// helper exactly as the render-time helper computes it (item-context,
+// bounded-self-nesting): a call from a slide layout, which is not an instance
+// of any template, passes none and has depth 0, while a call whose caller (or
+// its ancestors) resolves to the target name counts each. A caller with no
+// instance to name passes none.
+//
 // The returned func parses the call's positional arguments — the optional
 // fields map, the optional body and the optional child arguments (each the
 // *ChildRequest a `child`/`children` constructor built, exampleSectionCallArgs)
@@ -382,10 +442,11 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // consistent shape: the effective field values as top-level entries, the
 // reserved `deck`/`slide` entries (the empty example stand-ins), the resolved
 // `.item` descriptor (index 0, number/count 1, first/last true, section/template
-// the target name, parent callerFields), the reserved `.raw` source view of what
-// the call supplied plus the supplied body (RawContext, the shared source-view
-// builder both halves use), and the reserved `.data` entry built by the shared
-// DataContext over the call's resolved children, so an unguarded
+// the target name, depth the shared InstanceDepth of the caller's own chain
+// against the target name, parent callerFields), the reserved `.raw` source view
+// of what the call supplied plus the supplied body (RawContext, the shared
+// source-view builder both halves use), and the reserved `.data` entry built by
+// the shared DataContext over the call's resolved children, so an unguarded
 // `{{ .data.<child> }}` and a nested `children "<section>" .data.<section>`
 // forwarding execute at load exactly as at render time (section-data-context,
 // children-forwarding). Each resolved child is rendered through that same runner
@@ -397,10 +458,13 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // one.
 //
 // The target's layout is re-parsed under LayoutFuncMap with the `section` entry
-// overridden by this same factory bound to the target's own effective values, so
-// a target layout that itself calls `{{ section … }}` both parses and executes —
-// the nested call's `.item.parent` is this target's values — and with the
-// `media` helper bound to the target's OWN owning layer (call.Layer.Media), so
+// overridden by this same factory bound to the target's own effective values and
+// own chain (the caller's chain with the target's resolved name appended), so a
+// target layout that itself calls `{{ section … }}` both parses and executes —
+// the nested call's `.item.parent` is this target's values and its `.item.depth`
+// counts the target (and any same-template ancestor) through the shared
+// InstanceDepth helper — and with the `media` helper bound to the target's OWN
+// owning layer (call.Layer.Media), so
 // an external-layer section's `{{ media … }}` reference resolves in the external
 // layer's media rather than the merged Library's primary media
 // (library-layer-references). When the target's owning layer is unknown
@@ -408,7 +472,7 @@ func exampleContextNodes(sections []exampleSection, def *Template, resolve func(
 // helper falls back to lib.Media, the pre-layer behaviour. The returned value
 // is the target's rendered HTML as html/template.HTML, trusted exactly as the
 // renderer returns it, so the caller's layout splices it unescaped.
-func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name string, args ...any) (htmltemplate.HTML, error) {
+func exampleSectionHelper(lib *Library, callerFields map[string]any, callerChain ...string) func(name string, args ...any) (htmltemplate.HTML, error) {
 	resolve := func(name string) (*Template, bool) {
 		other, _, ok := lib.TemplateByName(name)
 		if !ok || other == nil || other.Definition == nil {
@@ -426,7 +490,14 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 		return layer
 	}
 
-	runner := &exampleSectionRunner{lib: lib, resolve: resolve, layerOf: layerOf}
+	// callerChain is the calling instance's own chain of resolved template
+	// names (its ancestors plus its own resolved template name), handed to
+	// ResolveSectionCallLayered as the target's enclosing chain so the target's
+	// `.item.depth` counts its enclosing same-template ancestors through the
+	// shared InstanceDepth helper (item-context, bounded-self-nesting), and
+	// carried on the runner so a nested call it renders derives the target's own
+	// chain from it.
+	runner := &exampleSectionRunner{lib: lib, resolve: resolve, layerOf: layerOf, callerChain: append([]string(nil), callerChain...)}
 
 	return func(name string, args ...any) (htmltemplate.HTML, error) {
 		fields, body, children, err := exampleSectionCallArgs(name, args)
@@ -434,7 +505,7 @@ func exampleSectionHelper(lib *Library, callerFields map[string]any) func(name s
 			return "", err
 		}
 
-		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, callerFields, children...)
+		call, err := ResolveSectionCallLayered(resolve, layerOf, name, fields, body, runner.callerChain, callerFields, children...)
 		if err != nil {
 			return "", fmt.Errorf("section helper %q: %w", name, err)
 		}
@@ -507,20 +578,37 @@ type exampleSectionRunner struct {
 	lib     *Library
 	resolve func(name string) (*Template, bool)
 	layerOf func(name string) *LibraryLayer
+
+	// callerChain is the calling instance's own chain of resolved template
+	// names — the resolved templates enclosing the instance whose layout the
+	// runner renders, with that instance's own resolved template name appended
+	// (its ancestor chain plus itself). It is the enclosing chain a `section`
+	// call made from that layout passes as its target's ancestors, so the
+	// target's `.item.depth` is computed through the shared InstanceDepth helper
+	// exactly as at render time (item-context, bounded-self-nesting). A slide
+	// layout, which is not an instance of any template, carries none.
+	callerChain []string
 }
 
 // render executes call's target layout with the context the render-time helper
 // gives the same resolved call and returns its trusted HTML.
 //
 // The context mirrors checkLibraryExample's slide/section context so the target
-// sees a consistent shape: its effective field values as top-level entries, the
-// reserved `deck`/`slide` entries (the empty example stand-ins), the resolved
-// `.item` descriptor (parent callerFields, or the parent target's values for a
-// child), the reserved `.raw` source view built by the shared RawContext from
-// the call's AUTHORED Source — the supplied fields before the target's defaults,
-// so a default never leaks into `.raw` as an authored value
-// (raw-source-context) — and the reserved `.data` entry built by the shared
-// DataContext over the call's resolved children, so an unguarded
+// sees a consistent shape: its effective field values as top-level entries —
+// every declared field present, an absent optional field with no default as a
+// nil entry exactly as the render-time helper's values conversion presents it,
+// so a layout cannot tell an absent optional from an explicit null
+// (nullable-fields) — the reserved `deck`/`slide` entries (the empty example
+// stand-ins), the resolved `.item` descriptor (parent callerFields, or the
+// parent target's values for a child), the reserved `.raw` source view built by
+// the shared RawContext from the call's AUTHORED Source — the supplied fields
+// before the target's defaults, so a default never leaks into `.raw` as an
+// authored value (raw-source-context) — and the reserved `.data` entry built by
+// the shared DataContext over the call's resolved children with the target's own
+// resolved-template chain as their ancestors, so each `.data` item's depth
+// counts its enclosing same-template ancestors through the shared InstanceDepth
+// helper over exactly the chain the children were resolved with (item-context,
+// section-data-context) and an unguarded
 // `{{ .data.<child> }}` (and a nested `children "<section>" .data.<section>`
 // forwarding its entries) executes at load exactly as at render time
 // (section-data-context, children-forwarding). Each resolved child is rendered
@@ -530,20 +618,50 @@ type exampleSectionRunner struct {
 // set only when the call supplies one.
 //
 // The target's layout is re-parsed under LayoutFuncMap with the `section` entry
-// overridden by exampleSectionHelper bound to the target's own effective values,
-// so a target layout that itself calls `{{ section … }}` both parses and
-// executes, the nested call's `.item.parent` being this target's values, and
-// with the `media` helper bound to the target's OWN owning layer
+// overridden by exampleSectionHelper bound to the target's own effective values
+// and own chain — the runner's caller chain with the target's resolved name
+// appended — so a target layout that itself calls `{{ section … }}` both parses
+// and executes, the nested call's `.item.parent` being this target's values and
+// its `.item.depth` counting the target (and any same-template ancestor) through
+// the shared InstanceDepth helper, and with the `media` helper bound to the
+// target's OWN owning layer
 // (call.Layer.Media) when one is known (library-layer-references); a nil layer
 // falls back to lib.Media, the pre-layer behaviour.
 func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, error) {
-	ctx := make(map[string]any, len(call.Values)+6)
+	ctx := make(map[string]any, len(call.Values)+len(call.Template.Fields)+6)
 	for k, v := range call.Values {
 		ctx[k] = v
+	}
+	// Every declared field is present in the target's context, exactly as the
+	// render-time helper's values conversion presents it: an absent optional
+	// field with no default has no entry in call.Values (defaults-first
+	// resolution leaves it out), yet values exposes it as a nil entry, so a
+	// layout cannot tell an absent optional from an explicit null
+	// (nullable-fields). Mirror that here so the load-time and render-time
+	// target contexts agree.
+	for i := range call.Template.Fields {
+		if _, present := ctx[call.Template.Fields[i].Name]; !present {
+			ctx[call.Template.Fields[i].Name] = nil
+		}
 	}
 	ctx["deck"] = emptyExampleDeckContext()
 	ctx["slide"] = emptyExampleSlideContext()
 	ctx["item"] = call.Item
+	// The target is both the parent of the call's resolved children and the
+	// calling instance for any `{{ section … }}` call its own layout makes: its
+	// own chain of resolved template names is the runner's caller chain with the
+	// target's resolved name appended (its ancestor chain plus itself). Passing
+	// that chain as the children's ancestors makes each `.data` item's depth
+	// count its enclosing same-template ancestors through the shared
+	// InstanceDepth helper over exactly the chain ResolveSectionCallLayered
+	// resolved the children with, so a `.data` item and the child's own `.item`
+	// descriptor agree (item-context, section-data-context, bounded-self-nesting);
+	// giving it to the nested `section` helper lets a nested call compute its
+	// target's `.item.depth` identically.
+	targetChain := make([]string, 0, len(ex.callerChain)+1)
+	targetChain = append(targetChain, ex.callerChain...)
+	targetChain = append(targetChain, call.Template.Name)
+
 	// `.raw` is the instance's authored source view — RawContext over the
 	// call's Source (supplied fields, before defaults) — and, exactly as
 	// renderSection passes secCtx.raw, it is also the parent each child's
@@ -551,7 +669,7 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 	// data views agree (raw-source-context, section-data-context).
 	raw := RawContext(call.Source, call.Template, call.Body)
 	ctx["raw"] = raw
-	ctx["data"] = DataContext(exampleChildNodes(call.Children), raw)
+	ctx["data"] = DataContext(exampleChildNodes(call.Children), targetChain, raw)
 	if strings.TrimSpace(call.Body) != "" {
 		ctx["body"] = call.Body
 	}
@@ -564,7 +682,7 @@ func (ex *exampleSectionRunner) render(call *SectionCall) (htmltemplate.HTML, er
 		mediaFS = call.Layer.Media
 	}
 	funcMap := LayoutFuncMap(mediaFS, "/"+MediaDir)
-	funcMap["section"] = exampleSectionHelper(ex.lib, call.Values)
+	funcMap["section"] = exampleSectionHelper(ex.lib, call.Values, targetChain...)
 
 	layoutName := call.Template.Layout.Name
 	if layoutName == "" {
@@ -956,9 +1074,11 @@ func exampleTemplateName(fm map[string]any) (string, bool) {
 // field/body/section values a layout expects, and recurses into each declared
 // child instance. container is the instance's own containment path
 // (`columns[2]`) or "" at the root; child errors extend it and carry the full
-// path (nested-section-validation).
-func validateExampleBlock(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any) error {
-	return validateExampleBlockAt(path, def, block, resolve, ctx, "")
+// path (nested-section-validation). imageExists is the load-time image-field
+// existence resolver, forwarded unchanged to validateExampleBlockAt
+// (image-field-roots).
+func validateExampleBlock(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), imageExists func(f *Field, path string) (exists bool, candidates []string), ctx map[string]any) error {
+	return validateExampleBlockAt(path, def, block, resolve, imageExists, ctx, "")
 }
 
 // validateExampleBlockAt is validateExampleBlock with the owning instance's
@@ -967,14 +1087,30 @@ func validateExampleBlock(path string, def *Template, block *exampleBlock, resol
 // The author-supplied fields are validated with the schema-only CheckValues
 // (task-5), which treats an omitted required field that declares a Default as
 // satisfied; after it passes, applyFieldDefaults materialises each declared
-// field's Default into ctx alongside the supplied values, mirroring
-// renderer.values at render time, so the executed example context carries the
-// same values the renderer would. This happens at every composition depth,
-// because the recursion below runs each nested instance through this same
-// function. The `.raw` source view is built from the authored frontmatter, not
-// here, so a default never leaks into it (a default is not an authored source
-// value).
-func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), ctx map[string]any, container string) error {
+// field's Default and every declared field is converted into ctx through the
+// same nullable/record/coerce conversion renderer.values/fieldValue applies at
+// render time (nullable-fields, record-item-type, text-coercion), so the
+// executed example context carries the same values the renderer would. This
+// happens at every composition depth, because the recursion below runs each
+// nested instance through this same function. The `.raw` source view is built
+// from the authored frontmatter, not here, so a default never leaks into it (a
+// default is not an authored source value).
+//
+// imageExists is the load-time image-field existence resolver threaded into
+// CheckValues through WithImageExists (image-field-roots): checkLibraryExample
+// closes it over the owning layer's media/ tree with a nil assets filesystem,
+// because no deck exists at load, so only a media-root image field is
+// existence-checked and an assets/no-roots field stays unchecked. It is passed
+// unchanged into every recursive nested-instance call, so an image field at any
+// composition depth is resolved identically. A nil resolver leaves image
+// existence unchecked.
+//
+// When the first schema violation carries a closest-match suggestion — its Fix
+// is the engine's `did you mean "X"?` hint, as an image or enum violation
+// emits — X is carried onto the returned LibraryError's Suggestion so the
+// example-site message names the candidate. Every other Fix (a default
+// remediation, or none) is discarded, so those messages are unchanged.
+func validateExampleBlockAt(path string, def *Template, block *exampleBlock, resolve func(string) (*Template, bool), imageExists func(f *Field, path string) (exists bool, candidates []string), ctx map[string]any, container string) error {
 	fm := block.Frontmatter
 	if fm == nil {
 		fm = map[string]any{}
@@ -987,16 +1123,126 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 		fields[k] = v
 	}
 
-	if res := CheckValues(fields, def, resolve); len(res.Errors) > 0 {
+	if res := CheckValues(fields, def, resolve, WithImageExists(imageExists)); len(res.Errors) > 0 {
 		e := res.Errors[0]
-		return exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
+		err := exampleError(path, block.FrontmatterLine, container, "%s: %s", e.PathString(), e.What)
+		// The engine's Fix is dropped for most violations, because its default
+		// remediation ("add the file under assets/ or fix the path", "use one
+		// of: …") is a slide-site hint, not part of the example-site message,
+		// so those example errors stay byte-identical. The one part the
+		// example site keeps is a genuine closest-match suggestion, which
+		// validateImage and validateEnum emit as the hint `did you mean "X"?`
+		// (validateEnum following it with ` use one of: …` for its variants).
+		// When Fix has that shape, carry X onto the LibraryError, whose own
+		// rendering supplies the `: did you mean %q?` suffix, so a missing
+		// media-root image (image-field-roots) reports the candidate without
+		// the engine's default remediation leaking through.
+		if fix := e.Fix; strings.HasPrefix(fix, `did you mean "`) {
+			var closest string
+			if n, _ := fmt.Sscanf(fix, `did you mean %q`, &closest); n == 1 {
+				rest := strings.TrimPrefix(fix, fmt.Sprintf(`did you mean %q`, closest))
+				if rest == "?" || strings.HasPrefix(rest, "? use one of: ") {
+					if le, ok := err.(*LibraryError); ok {
+						le.Suggestion = closest
+					}
+				}
+			}
+		}
+		return err
 	}
 	// applyFieldDefaults is the same default-filling idiom ResolveSectionCall
 	// uses for a section-helper call and renderer.values mirrors at render time:
 	// a supplied value wins, an omitted declared field with a Default gets it,
 	// and the caller's map is copied. CheckValues stays schema-only.
-	for k, v := range applyFieldDefaults(def, fields) {
-		ctx[k] = v
+	//
+	// The defaulted values are then converted into the execution context through
+	// the same per-type conversion renderer.values/fieldValue applies at render
+	// time for the typed schema core (nullable-fields, record-item-type,
+	// text-coercion), so the load-time example context and the render-time
+	// context agree on those values. Every declared field is present in ctx: an
+	// explicit null and an absent optional field (with no Default) both reach the
+	// context as a nil entry; a nullable field's null converts to nil with no
+	// further per-type conversion; a coerce text field's YAML number or boolean
+	// becomes its string form; a list recurses into its item descriptor; and an
+	// inline record becomes one map per item with each declared field converted
+	// recursively by this same per-type conversion. The reserved `template:`
+	// selector and any `<field>_format` sibling are not declared fields, so
+	// neither reaches the context, matching renderer.values.
+	//
+	// A text field stays its authored string at load time: the renderer's
+	// inline-Markdown pre-rendering is render-side only, because a converted
+	// text field there is html/template.HTML, which is not the string a helper
+	// call's text-field validation accepts (a layout may pass a converted field
+	// straight into a `{{ section }}` call). The conversion is a local closure
+	// rather than a package symbol because no task owns a template-side
+	// conversion helper; it mirrors the renderer's FieldList/FieldRecord
+	// recursion and coerceText string form inline, as the render conversion
+	// repeats template.coerceText.
+	var convertExampleField func(f *Field, raw any) any
+	convertExampleField = func(f *Field, raw any) any {
+		if raw == nil && f.Nullable {
+			return nil
+		}
+		switch f.Type {
+		case FieldText:
+			if s, ok := raw.(string); ok {
+				return s
+			}
+			if f.Coerce {
+				if coerced, cok := coerceText(raw); cok {
+					return coerced
+				}
+			}
+			// A non-string value (already rejected by validation) is left as
+			// text for html/template to escape.
+			return raw
+		case FieldList:
+			items, ok := asSlice(raw)
+			if !ok || f.Item == nil {
+				return raw
+			}
+			out := make([]any, len(items))
+			for i, elem := range items {
+				out[i] = convertExampleField(f.Item, elem)
+			}
+			return out
+		case FieldRecord:
+			m, ok := asMap(raw)
+			if !ok {
+				return raw
+			}
+			out := make(map[string]any, len(f.Fields))
+			for i := range f.Fields {
+				sub := &f.Fields[i]
+				val, present := m[sub.Name]
+				if !present {
+					if sub.Default == nil {
+						out[sub.Name] = nil
+						continue
+					}
+					val = sub.Default
+				}
+				out[sub.Name] = convertExampleField(sub, val)
+			}
+			return out
+		default:
+			// boolean, enum, number, date, image, link and section-template
+			// values keep their typed value.
+			return raw
+		}
+	}
+	defaulted := applyFieldDefaults(def, fields)
+	for i := range def.Fields {
+		f := &def.Fields[i]
+		raw, present := defaulted[f.Name]
+		if !present {
+			// An absent optional field with no Default still reaches the
+			// context, as a nil entry, exactly as renderer.values does
+			// (nullable-fields).
+			ctx[f.Name] = nil
+			continue
+		}
+		ctx[f.Name] = convertExampleField(f, raw)
 	}
 
 	// The subheading gate carries whether this block's own enclosing template
@@ -1049,7 +1295,7 @@ func validateExampleBlockAt(path string, def *Template, block *exampleBlock, res
 			return exampleError(path, sec.Line, childPath, "example section %q uses template %q, which is not defined", sec.Name, chosen)
 		}
 		nestedCtx := map[string]any{}
-		if err := validateExampleBlockAt(path, nested, sec.exampleBlock, resolve, nestedCtx, childPath); err != nil {
+		if err := validateExampleBlockAt(path, nested, sec.exampleBlock, resolve, imageExists, nestedCtx, childPath); err != nil {
 			return err
 		}
 		sectionValues[sec.Name] = append(sectionValues[sec.Name], nestedCtx)

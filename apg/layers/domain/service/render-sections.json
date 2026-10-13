@@ -9,6 +9,11 @@
       "kind": "realised-by",
       "target": "solution.component.renderer",
       "properties": {}
+    },
+    {
+      "kind": "realised-by",
+      "target": "solution.component.cli-render",
+      "properties": {}
     }
   ],
   "in": [
@@ -39,12 +44,22 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.docs-cookbook",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.item-context",
       "properties": {}
     },
     {
       "kind": "drives",
       "source": "requirements.requirement.raw-source-context",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.record-item-type",
       "properties": {}
     },
     {
@@ -70,11 +85,6 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.template-language",
-      "properties": {}
-    },
-    {
-      "kind": "drives",
-      "source": "requirements.requirement.docs-cookbook",
       "properties": {}
     }
   ]

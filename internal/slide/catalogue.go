@@ -10,11 +10,21 @@ package slide
 // Catalogue is the read-only view of the slide/section template catalogue that
 // slide parsing consults.
 type Catalogue interface {
-	// LookupSlideTemplate reports how the named template may be used and
-	// whether it exists at all. usage is "slide" when the template describes a
-	// whole slide and "section" when it describes a section inside one. ok is
-	// false when no template has that name.
-	LookupSlideTemplate(name string) (usage string, ok bool)
+	// LookupSlideTemplate reports how the named template may be used, whether
+	// it is internal, and whether it exists at all. usage is "slide" when the
+	// template describes a whole slide and "section" when it describes a
+	// section inside one. internal reports the named template's Internal flag
+	// (the manifest's `internal: true`) and is false when no template has that
+	// name. ok is false when no template has that name.
+	//
+	// An internal template is refused as a Markdown `template:` target — a
+	// slide frontmatter `template:` or a section instance's `template:` — while
+	// its name stays in TemplateNames so a closest-match suggestion can still
+	// offer it. This surface does not affect the `section`-helper or
+	// `section_template` resolutions: those consult the registry's Lookup
+	// directly, not LookupSlideTemplate, and so still resolve an internal
+	// template.
+	LookupSlideTemplate(name string) (usage string, internal bool, ok bool)
 
 	// TemplateNames returns every template name, sorted, so callers can pass
 	// them to a closest-match "did you mean …?" helper.
@@ -27,12 +37,19 @@ type Catalogue interface {
 	SectionNames(tmpl string) []string
 
 	// SectionDecl returns the declaration for section section of slide template
-	// tmpl: the section templates it accepts and the min and max number of
-	// times the section may repeat. ok is false when the slide template does
-	// not declare that section.
+	// tmpl: the section templates it accepts, the min and max number of times
+	// the section may repeat, and the declaration's max_depth bound. ok is
+	// false when the slide template does not declare that section.
+	//
+	// maxDepth is the positive-integer `max_depth: N` bound the declaration
+	// carries on a self-nesting/cyclic acceptance, or 0 when the declaration
+	// is unbounded. It bounds how many times this declaration's section may
+	// recur in one containment chain: an instance it produces has at most N
+	// enclosing instances resolving to the same template it does, so its
+	// `.item.depth` is at most N (bounded-self-nesting).
 	//
 	// A template: key is required on a section instance iff len(accepted) > 1:
 	// with exactly one accepted template the instance resolves to it, and with
 	// several the author must choose one.
-	SectionDecl(tmpl, section string) (accepted []string, min, max int, ok bool)
+	SectionDecl(tmpl, section string) (accepted []string, min, max, maxDepth int, ok bool)
 }

@@ -1,5 +1,7 @@
 // Package validate contains the kalide deck validator: it walks a deck in
-// a fixed deterministic order and reports exactly the first error found.
+// a fixed deterministic order and reports the first error found (Validate, the
+// fail-fast entry) or every error found in that order (ValidateAll, the
+// collect-all entry behind kalide check --all).
 //
 // This file defines the single author-facing error shape, ValidationError, and
 // the one Format function that renders it. The rendered text is shared
@@ -33,7 +35,8 @@ const fixSeparator = " — "
 //
 //	slides/3-team.md:12 › column[1] › people[0] › name: required — add a name: value
 //
-// Validation is fail-fast, so at most one of these is ever reported for a deck.
+// Validation is fail-fast by default, so at most one of these is reported for a
+// deck by Validate; the collect-all entry, ValidateAll, reports every one.
 type ValidationError struct {
 	// File is the deck-relative path the error belongs to, for example
 	// "kalide.yaml" or "slides/3-team.md".

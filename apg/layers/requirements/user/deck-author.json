@@ -59,6 +59,16 @@
       "kind": "represents",
       "target": "domain.entity.deck-author",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-check",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.cli-render",
+      "properties": {}
     }
   ],
   "in": []

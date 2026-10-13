@@ -224,6 +224,269 @@ func TestRenderSlide(t *testing.T) {
 			t.Errorf("section-as-slide: error %q does not reject the usage", err)
 		}
 	})
+
+	// The subtests below pin render.go's field conversion directly, at the
+	// fieldValue/values boundary the layouts execute on: a nullable null
+	// reaching the context as nil (nullable-fields), a coerce text field's YAML
+	// number/boolean rendered as its string form (text-coercion), an inline
+	// record item converted to one map per item with every declared field
+	// present (record-item-type), the nested list-of-record recursion, and
+	// values exposing an absent optional field as a present nil entry.
+	// A bare renderer carries only the format catalogue these text/record/list
+	// paths need; no registry or layout is involved.
+	t.Run("nullable null converts to a nil context value", func(t *testing.T) {
+		r := &renderer{formats: template.BuiltinFormats}
+
+		f := &template.Field{Name: "subtitle", Type: template.FieldText, Nullable: true}
+		got, err := r.fieldValue(f, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("fieldValue(nullable null): %v", err)
+		}
+		if got != nil {
+			t.Errorf("nullable null = %#v, want nil", got)
+		}
+
+		// A record item's explicitly null nullable field reaches the per-item
+		// map as nil too, through the same recursion.
+		rec := &template.Field{
+			Type: template.FieldRecord,
+			Fields: []template.Field{
+				{Name: "label", Type: template.FieldText},
+				{Name: "note", Type: template.FieldText, Nullable: true},
+			},
+		}
+		got, err = r.fieldValue(rec, map[string]any{"label": "L", "note": nil}, nil, nil)
+		if err != nil {
+			t.Fatalf("fieldValue(record with nullable null): %v", err)
+		}
+		m, ok := got.(map[string]any)
+		if !ok {
+			t.Fatalf("record value = %#v, want map[string]any", got)
+		}
+		if m["note"] != nil {
+			t.Errorf("record nullable null field = %#v, want nil", m["note"])
+		}
+	})
+
+	t.Run("coerce text renders a YAML number or boolean as its string form", func(t *testing.T) {
+		r := &renderer{formats: template.BuiltinFormats}
+		coerce := &template.Field{Name: "id", Type: template.FieldText, Coerce: true}
+
+		for _, tc := range []struct {
+			name string
+			raw  any
+			want htmltmpl.HTML
+		}{
+			{"integer", 42, htmltmpl.HTML("42")},
+			{"boolean", true, htmltmpl.HTML("true")},
+			{"float", 3.5, htmltmpl.HTML("3.5")},
+			{"string is unchanged", "42", htmltmpl.HTML("42")},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				got, err := r.fieldValue(coerce, tc.raw, nil, nil)
+				if err != nil {
+					t.Fatalf("fieldValue(%#v): %v", tc.raw, err)
+				}
+				if got != tc.want {
+					t.Errorf("fieldValue(%#v) = %#v, want %#v", tc.raw, got, tc.want)
+				}
+			})
+		}
+
+		// A coerce text field inside a record item is converted by the same
+		// per-type rule, not only at the template's top level.
+		rec := &template.Field{
+			Type:   template.FieldRecord,
+			Fields: []template.Field{{Name: "count", Type: template.FieldText, Coerce: true}},
+		}
+		got, err := r.fieldValue(rec, map[string]any{"count": 7}, nil, nil)
+		if err != nil {
+			t.Fatalf("fieldValue(coerce record field): %v", err)
+		}
+		if m, ok := got.(map[string]any); !ok || m["count"] != htmltmpl.HTML("7") {
+			t.Errorf("coerce record field = %#v, want a record map with count \"7\"", got)
+		}
+	})
+
+	t.Run("a record item converts to one map with every declared field present", func(t *testing.T) {
+		r := &renderer{formats: template.BuiltinFormats}
+		rec := &template.Field{
+			Type: template.FieldRecord,
+			Fields: []template.Field{
+				{Name: "name", Type: template.FieldText, Required: true},
+				{Name: "role", Type: template.FieldText, Default: "member"},
+				// Omitted with no default: it must still be present, as nil.
+				{Name: "note", Type: template.FieldText},
+			},
+		}
+		got, err := r.fieldValue(rec, map[string]any{"name": "Ada"}, nil, nil)
+		if err != nil {
+			t.Fatalf("fieldValue(record item): %v", err)
+		}
+		m, ok := got.(map[string]any)
+		if !ok {
+			t.Fatalf("record value = %#v, want map[string]any", got)
+		}
+		if len(m) != 3 {
+			t.Errorf("record map has %d fields, want 3 (every declared field present): %#v", len(m), m)
+		}
+		if m["name"] != htmltmpl.HTML("Ada") {
+			t.Errorf("record name = %#v, want \"Ada\"", m["name"])
+		}
+		if m["role"] != htmltmpl.HTML("member") {
+			t.Errorf("record omitted field with default = %#v, want \"member\"", m["role"])
+		}
+		if note, present := m["note"]; !present || note != nil {
+			t.Errorf("record omitted optional field = (%#v, present=%v), want (nil, present=true)", note, present)
+		}
+	})
+
+	t.Run("a nested list-of-record recurses through the same conversion", func(t *testing.T) {
+		r := &renderer{formats: template.BuiltinFormats}
+		rec := &template.Field{
+			Type: template.FieldRecord,
+			Fields: []template.Field{
+				{Name: "title", Type: template.FieldText},
+				{
+					Name: "tags",
+					Type: template.FieldList,
+					Item: &template.Field{
+						Type:   template.FieldRecord,
+						Fields: []template.Field{{Name: "label", Type: template.FieldText, Coerce: true}},
+					},
+				},
+			},
+		}
+		got, err := r.fieldValue(rec, map[string]any{
+			"title": "T",
+			"tags": []any{
+				map[string]any{"label": "a"},
+				map[string]any{"label": 2},
+				map[string]any{},
+			},
+		}, nil, nil)
+		if err != nil {
+			t.Fatalf("fieldValue(nested list-of-record): %v", err)
+		}
+		m, ok := got.(map[string]any)
+		if !ok {
+			t.Fatalf("outer record = %#v, want map[string]any", got)
+		}
+		items, ok := m["tags"].([]any)
+		if !ok || len(items) != 3 {
+			t.Fatalf("nested tags = %#v, want a 3-element []any", m["tags"])
+		}
+		if first, ok := items[0].(map[string]any); !ok || first["label"] != htmltmpl.HTML("a") {
+			t.Errorf("tags[0] = %#v, want a record map with label \"a\"", items[0])
+		}
+		if second, ok := items[1].(map[string]any); !ok || second["label"] != htmltmpl.HTML("2") {
+			t.Errorf("tags[1] = %#v, want a record map with coerced label \"2\"", items[1])
+		}
+		third, ok := items[2].(map[string]any)
+		if !ok {
+			t.Fatalf("tags[2] = %#v, want a record map", items[2])
+		}
+		if label, present := third["label"]; !present || label != nil {
+			t.Errorf("tags[2].label = (%#v, present=%v), want (nil, present=true)", label, present)
+		}
+	})
+
+	t.Run("values exposes an absent optional field as a nil entry", func(t *testing.T) {
+		r := &renderer{formats: template.BuiltinFormats}
+		tmpl := &template.Template{
+			Name: "probe",
+			Fields: []template.Field{
+				{Name: "title", Type: template.FieldText, Required: true},
+				{Name: "opt", Type: template.FieldText},
+				{Name: "withDefault", Type: template.FieldText, Default: "d"},
+			},
+		}
+		out, err := r.values(map[string]any{"title": "Hello"}, tmpl, nil)
+		if err != nil {
+			t.Fatalf("values: %v", err)
+		}
+		if out["title"] != htmltmpl.HTML("Hello") {
+			t.Errorf("values title = %#v, want \"Hello\"", out["title"])
+		}
+		if opt, present := out["opt"]; !present || opt != nil {
+			t.Errorf("absent optional field = (%#v, present=%v), want (nil, present=true)", opt, present)
+		}
+		if out["withDefault"] != htmltmpl.HTML("d") {
+			t.Errorf("omitted field with default = %#v, want \"d\"", out["withDefault"])
+		}
+
+		// An explicit null and an absent optional field reach the layout
+		// identically: a present nil entry.
+		null, err := r.values(map[string]any{"title": "Hello", "opt": nil}, tmpl, nil)
+		if err != nil {
+			t.Fatalf("values(explicit null): %v", err)
+		}
+		if opt, present := null["opt"]; !present || opt != nil {
+			t.Errorf("explicit null field = (%#v, present=%v), want (nil, present=true)", opt, present)
+		}
+	})
+
+	// An image field resolves its value to the URL its layout receives
+	// (image-field-roots): a `media` root through the owning layer's `media`
+	// helper — the same URL a `{{ media … }}` reference in that template's
+	// layout produces — while an `assets` root, and a field with no roots,
+	// keep the written deck-relative `assets/…` value the deck page serves.
+	// A field declaring BOTH roots lets the media helper's own existence check
+	// decide: a path present in the layer's media/ resolves to the media URL,
+	// and any other path keeps the written assets/ value.
+	t.Run("image field roots resolve to the layout media helper URL", func(t *testing.T) {
+		reg, funcMap := mustImageRootsRegistry(t)
+
+		// The layout func map's own `media` helper — the exact func a
+		// `{{ media … }}` reference in this template's layout executes with —
+		// supplies the expected URL, so the media root is pinned against the
+		// helper itself rather than a hardcoded string.
+		mediaFn, ok := funcMap["media"].(func(string) (string, error))
+		if !ok {
+			t.Fatalf("funcMap[media] has an unexpected type %T", funcMap["media"])
+		}
+		wantMedia, err := mediaFn("pic.png")
+		if err != nil {
+			t.Fatalf(`layout media helper("pic.png"): %v`, err)
+		}
+		if wantMedia != "/media/pic.png" {
+			t.Errorf("layout media helper = %q, want the served /media/… URL \"/media/pic.png\"", wantMedia)
+		}
+
+		parsed := &slide.Slide{
+			File:     "slides/1-img.md",
+			Template: "imgslide",
+			Frontmatter: map[string]any{
+				"hero":        "pic.png",
+				"assetimg":    "assets/photo.png",
+				"plainimg":    "assets/photo.png",
+				"eithermedia": "pic.png",
+				"eitherasset": "assets/photo.png",
+			},
+		}
+		got := renderSlideString(t, parsed, "img",
+			&deck.Config{Title: "Images"}, deck.Slide{Number: 1, Label: "img"}, 1, reg, funcMap)
+
+		// A media root resolves to exactly the layout media helper's URL.
+		if want := `<img class="hero" src="` + wantMedia + `">`; !strings.Contains(got, want) {
+			t.Errorf("media-root image field did not resolve to the layout media helper URL:\nwant %q\ngot  %s", want, got)
+		}
+		// An assets-only root and a field with no roots keep the written
+		// deck-relative value, which the deck page serves under the assets URL.
+		for _, class := range []string{"asset", "plain"} {
+			if want := `<img class="` + class + `" src="assets/photo.png">`; !strings.Contains(got, want) {
+				t.Errorf("assets/no-roots image field (%s) did not keep the written assets/ value:\nwant %q\ngot  %s", class, want, got)
+			}
+		}
+		// Both roots: media wins when the path exists in the owning layer's
+		// media/, and the written assets/ value is kept otherwise.
+		if want := `<img class="eithermedia" src="` + wantMedia + `">`; !strings.Contains(got, want) {
+			t.Errorf("both-roots image field with a media file did not resolve to the media URL:\nwant %q\ngot  %s", want, got)
+		}
+		if want := `<img class="eitherasset" src="assets/photo.png">`; !strings.Contains(got, want) {
+			t.Errorf("both-roots image field with no media file did not keep the written assets/ value:\nwant %q\ngot  %s", want, got)
+		}
+	})
 }
 
 // renderSlideString renders one slide with the library's layout func map
@@ -237,6 +500,82 @@ func renderSlideString(t *testing.T, parsed *slide.Slide, label string, cfg *dec
 		t.Fatalf("RenderSlide(%q): %v", label, err)
 	}
 	return string(out)
+}
+
+// mustImageRootsRegistry loads the image-roots fixture library and returns the
+// registry plus the layout func map bound to the served "/media" base — the
+// same func map a real project's layout executes with, whose `media` helper
+// resolves the sole layer's templates/media tree (the "owning layer's media/"
+// of image-field-roots).
+func mustImageRootsRegistry(t *testing.T) (*template.Registry, htmltmpl.FuncMap) {
+	t.Helper()
+	lib, err := template.LoadLibrary(os.DirFS(writeImageRootsLibrary(t)), template.TemplatesDir)
+	if err != nil {
+		t.Fatalf("template.LoadLibrary: %v", err)
+	}
+	reg, err := template.NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("template.NewRegistryFromLibrary: %v", err)
+	}
+	return reg, template.LayoutFuncMap(lib.Media, "/media")
+}
+
+// writeImageRootsLibrary writes a fresh single-layer deck library whose
+// `imgslide` slide template declares one image field per root declaration — a
+// media root, an assets root, no roots, and both roots — alongside a single
+// templates/media/pic.png (the sole layer's media tree). Its layout emits each
+// converted field as an `<img src>` so the test reads the exact URL the layout
+// receives. The example supplies each field a value satisfying the load-time
+// image check (a media-root value must exist in the layer's media/, while an
+// assets-only/no-roots field is unchecked because no deck exists at load), so
+// the library loads; the render assertions use their own frontmatter. It
+// returns the deck root.
+func writeImageRootsLibrary(t *testing.T) string {
+	t.Helper()
+	deckRoot := t.TempDir()
+	root := filepath.Join(deckRoot, template.TemplatesDir)
+	writeLayerManifest(t, root, "img-lib")
+
+	dir := filepath.Join(root, template.SlidesDir, "imgslide")
+	writeLayerFile(t, filepath.Join(dir, template.ManifestFile), `name: imgslide
+fields:
+  - name: hero
+    type: image
+    roots: [media]
+  - name: assetimg
+    type: image
+    roots: [assets]
+  - name: plainimg
+    type: image
+  - name: eithermedia
+    type: image
+    roots: [assets, media]
+  - name: eitherasset
+    type: image
+    roots: [assets, media]
+body:
+  mode: optional
+`)
+	writeLayerFile(t, filepath.Join(dir, template.LayoutFile),
+		`<section class="img-slide">`+
+			`<img class="hero" src="{{.hero}}">`+
+			`<img class="asset" src="{{.assetimg}}">`+
+			`<img class="plain" src="{{.plainimg}}">`+
+			`<img class="eithermedia" src="{{.eithermedia}}">`+
+			`<img class="eitherasset" src="{{.eitherasset}}">`+
+			`</section>`)
+	writeLayerFile(t, filepath.Join(dir, template.ExampleFile), `---
+template: imgslide
+hero: pic.png
+assetimg: assets/photo.png
+plainimg: assets/photo.png
+eithermedia: pic.png
+eitherasset: pic.png
+---
+An image slide.
+`)
+	writeLayerMedia(t, root, "pic.png", "<svg/>")
+	return deckRoot
 }
 
 // The section-composition probe library is an in-code, two-level template set

@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "internal-templates",
+  "body": "A `template.yaml` may declare the top-level key `internal: true`. An internal template is hidden from the `kalide templates` listing unless `--all` is passed (cli-templates-list). An internal template is rejected as the target of a Markdown `template:` key — a slide's frontmatter `template:` (slide-template-required) or a section instance's `template:` — with a clear error. An internal template stays usable as the target of the `section` helper in a layout (section-helper) and as a `section_template` field type (field-types).",
+  "properties": {
+    "feature": "project-templates"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.validate-deck",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.entity.template",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.template-manifest",
+      "properties": {}
+    }
+  ]
+}

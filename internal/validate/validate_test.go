@@ -153,10 +153,47 @@ func testOrdering(t *testing.T) {
 		wantError(t, preg, deckFiles("kalide.yaml", "title: T\n", "slides/1-first.md", "---\ntemplate: plain\n---\n\nSee [x](#zzz).\n", "slides/1a-second.md", "---\ntemplate: plain\n---\n\nSee [y](#yyy).\n"),
 			displayFile("slides/1-first.md")+`:5: unknown link label "zzz" — use the label of one of the deck's slides`)
 	})
+
+	// Collect-all: the multi-fault deck below trips the config pass (an unknown
+	// navigation mode), two slides' frontmatter fields (a missing required
+	// heading) and the link pass (an unknown #label in each body).
+	// ValidateAll reports all five in the fixed order config -> slides ->
+	// links, while Validate still reports only the earliest.
+	t.Run("collect-all reports every error in the fixed order", func(t *testing.T) {
+		files := deckFiles(
+			"kalide.yaml", "navigation: diagonal\n",
+			"slides/1-a.md", "---\ntemplate: content\n---\n\nSee [x](#nope).\n",
+			"slides/2-b.md", "---\ntemplate: content\n---\n\nSee [y](#nada).\n",
+		)
+		wantAllErrors(t, reg, files, []string{
+			displayFile("kalide.yaml") + `:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
+			displayFile("slides/1-a.md") + ` › heading: required: field "heading" is required but missing — add a heading: value`,
+			displayFile("slides/2-b.md") + ` › heading: required: field "heading" is required but missing — add a heading: value`,
+			displayFile("slides/1-a.md") + `:5: unknown link label "nope" — use the label of one of the deck's slides`,
+			displayFile("slides/2-b.md") + `:5: unknown link label "nada" — use the label of one of the deck's slides`,
+		})
+	})
+
+	// A filename fault is collected right after the config fault, before the
+	// (unreachable) slide and link passes: deck.LoadSlides yields no deck when
+	// a filename is malformed, so ValidateAll reports exactly the two
+	// independent faults and fabricates no slide error for the unreadable
+	// tree.
+	t.Run("collect-all reports the filename fault after the config fault", func(t *testing.T) {
+		files := deckFiles(
+			"kalide.yaml", "navigation: diagonal\n",
+			"slides/notaslide.md", "not a slide\n",
+		)
+		wantAllErrors(t, reg, files, []string{
+			displayFile("kalide.yaml") + `:1: key "navigation": unknown navigation mode "diagonal" (valid values: default, linear, grid)`,
+			displayFile("slides/notaslide.md") + ": filename must be <number>[letter]-<label>.md",
+		})
+	})
 }
 
 // testDeterminism asserts repeated runs over the same invalid deck yield the
-// same single error.
+// same single error fail-fast, and the same ordered list of Format-ed errors
+// collect-all.
 func testDeterminism(t *testing.T) {
 	reg := mustBuiltins(t)
 	files := deckFiles("kalide.yaml", "title: T\n", "slides/1-a.md", "---\ntemplate: content\n---\n\n# columns\n\nA\n\n# columns\n\nB\n")
@@ -176,6 +213,27 @@ func testDeterminism(t *testing.T) {
 			first = got
 		} else if got != first {
 			t.Fatalf("run %d: error = %q, previous = %q", i, got, first)
+		}
+	}
+
+	// Collect-all determinism: the same multi-fault deck yields the identical
+	// ordered list of Format-ed errors on every run.
+	multi := deckFiles(
+		"kalide.yaml", "navigation: diagonal\n",
+		"slides/1-a.md", "---\ntemplate: content\n---\n\nSee [x](#nope).\n",
+	)
+	var firstAll []string
+	for i := 0; i < 5; i++ {
+		got := formatAll(ValidateAll(mapDeck(multi), reg, exampleThemeRegistry()))
+		if len(got) == 0 {
+			t.Fatalf("run %d: ValidateAll() returned no errors, want a non-empty list", i)
+		}
+		if i == 0 {
+			firstAll = got
+			continue
+		}
+		if !reflect.DeepEqual(got, firstAll) {
+			t.Fatalf("run %d: ValidateAll() errors =\n  %q\nprevious\n  %q", i, got, firstAll)
 		}
 	}
 }
@@ -222,6 +280,47 @@ func testLinks(t *testing.T) {
 		// With the link field valid, the inline text link is the first offender.
 		wantError(t, mustRegistry(t, refs), deckFiles("kalide.yaml", "title: T\n", "slides/1-refs.md", "---\ntemplate: refs\ntarget: \"https://example.com\"\nnote: \"see [x](#nope2)\"\n---\n"),
 			displayFile("slides/1-refs.md")+` › note: unknown link label "nope2" — use the label of one of the deck's slides`)
+	})
+
+	// Collect-all: every link error of the deck is reported once, in document
+	// order. The slide's frontmatter fields come first (they sit at the top of
+	// the file) and carry their paths but no line; then the body's links in
+	// source order, each carrying its line. A bad-scheme destination is
+	// reported as that link's own error when its document position is reached,
+	// between the unknown labels around it.
+	t.Run("collect-all reports every link error in document order", func(t *testing.T) {
+		refs := &template.Template{Name: "refs", Usage: template.UsageSlide,
+			Fields: []template.Field{{Name: "target", Type: template.FieldLink}, {Name: "note", Type: template.FieldText}},
+			Body:   template.BodyRule{Mode: template.BodyOptional}}
+
+		files := deckFiles(
+			"kalide.yaml", "title: T\n",
+			"slides/1-a.md", "---\ntemplate: refs\ntarget: \"#nope\"\nnote: \"see [x](#nope2)\"\n---\n\nSee [a](#missing) then [b](ftp://example.com) and [c](#alsomissing).\n",
+		)
+		wantAllErrors(t, mustRegistry(t, refs), files, []string{
+			displayFile("slides/1-a.md") + ` › target: unknown link label "nope" — use the label of one of the deck's slides`,
+			displayFile("slides/1-a.md") + ` › note: unknown link label "nope2" — use the label of one of the deck's slides`,
+			displayFile("slides/1-a.md") + `:7: unknown link label "missing" — use the label of one of the deck's slides`,
+			displayFile("slides/1-a.md") + `:7: link destination "ftp://example.com" uses the unsupported "ftp" scheme — use a #label link or an http(s) URL, for example [text](#label) or [text](https://example.com)`,
+			displayFile("slides/1-a.md") + `:7: unknown link label "alsomissing" — use the label of one of the deck's slides`,
+		})
+	})
+
+	// The collect-all link pass resolves only `#label` destinations, so a
+	// bad-scheme link in a `link` field — already reported once by the step-3
+	// field pass — is not reported a second time by the link pass.
+	t.Run("collect-all reports a bad-scheme field link once", func(t *testing.T) {
+		refs := &template.Template{Name: "refs", Usage: template.UsageSlide,
+			Fields: []template.Field{{Name: "target", Type: template.FieldLink}},
+			Body:   template.BodyRule{Mode: template.BodyOptional}}
+
+		files := deckFiles(
+			"kalide.yaml", "title: T\n",
+			"slides/1-a.md", "---\ntemplate: refs\ntarget: \"ftp://example.com\"\n---\n",
+		)
+		wantAllErrors(t, mustRegistry(t, refs), files, []string{
+			displayFile("slides/1-a.md") + ` › target: link: "ftp://example.com" is neither a #label anchor nor an http(s) URL — use a #label anchor or an http(s) URL`,
+		})
 	})
 }
 
@@ -440,4 +539,38 @@ func wantError(t *testing.T, reg *template.Registry, files map[string]string, wa
 	if got := Format(verr); got != want {
 		t.Fatalf("Validate() error =\n  %q\nwant\n  %q", got, want)
 	}
+}
+
+// wantAllErrors asserts the deck's collect-all walk reports exactly the wanted
+// errors, rendered by Format, in the given fixed order, and that the fail-fast
+// Validate entry reports only the first of them (the earliest fault).
+func wantAllErrors(t *testing.T, reg *template.Registry, files map[string]string, want []string) {
+	t.Helper()
+	fsys := mapDeck(files)
+	all := ValidateAll(fsys, reg, exampleThemeRegistry())
+	if len(all) != len(want) {
+		t.Fatalf("ValidateAll() returned %d error(s), want %d: %q", len(all), len(want), formatAll(all))
+	}
+	for i, e := range all {
+		if got := Format(e); got != want[i] {
+			t.Fatalf("ValidateAll()[%d] =\n  %q\nwant\n  %q", i, got, want[i])
+		}
+	}
+
+	verr, invalid := Validate(fsys, reg, exampleThemeRegistry())
+	if !invalid {
+		t.Fatalf("Validate() invalid = false, want the earliest error %q", want[0])
+	}
+	if !reflect.DeepEqual(verr, all[0]) {
+		t.Fatalf("Validate() error = %#v, want ValidateAll()[0] = %#v", verr, all[0])
+	}
+}
+
+// formatAll renders each ValidationError with Format, preserving order.
+func formatAll(errs []ValidationError) []string {
+	out := make([]string, len(errs))
+	for i, e := range errs {
+		out[i] = Format(e)
+	}
+	return out
 }

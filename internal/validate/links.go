@@ -16,8 +16,9 @@ import (
 
 // This file implements the step-(4) inter-slide link pass (inter-slide-links),
 // the last step of the fixed deterministic order defined by
-// whole-deck-validation. It runs only once every slide has passed steps 1–3,
-// so every slide label in the deck is known.
+// whole-deck-validation. It runs after the per-slide step, once every slide
+// label in the deck is known from the loaded deck; a slide that could not be
+// read or parsed was already reported by that step and is skipped here.
 //
 // Links come from three places, collected in slide/line order within each slide
 // and in the deck's number/letter order across slides:
@@ -38,24 +39,27 @@ import (
 //   - an http or https URL is allowed;
 //   - any other destination is an error.
 //
-// checkLinks is fail-fast like the rest of the validator: it returns the first
-// offending link in that order and whether one was found.
+// checkLinks is collect-all like every step the fixed-order walk drives: it
+// returns every offending link in that order, not only the first.
 
 // checkLinks runs the inter-slide link pass over the loaded deck d. d must be
 // the deck model deck.LoadSlides produced; reg must be the same populated
-// registry Validate used for the structural steps. It returns the first link
-// error and whether one was found.
+// registry Validate used for the structural steps. It returns every link error
+// in the deck's number/letter order — each slide in order, and within it its
+// fields, body, sections recursively then its notes — rather than only the
+// first.
 //
 // Every slide is re-parsed through internal/slide to recover the bodies and
 // section structure that carry the links; this is cheap for a deck-sized input
 // and keeps the pass self-contained rather than threading state out of the
 // step-3 loop.
-func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationError, bool) {
+func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) []ValidationError {
 	if d == nil {
-		return ValidationError{}, false
+		return nil
 	}
 	labels, candidates := knownLabels(d)
 
+	var errs []ValidationError
 	for _, stack := range d.Stacks {
 		ordered := make([]deck.Slide, 0, 1+len(stack.Vertical))
 		ordered = append(ordered, stack.Slide)
@@ -63,73 +67,60 @@ func checkLinks(fsys fs.FS, d *deck.Deck, reg *template.Registry) (ValidationErr
 		for _, s := range ordered {
 			src, err := fs.ReadFile(fsys, s.Path)
 			if err != nil {
-				return New(s.Path, 0, nil,
-					fmt.Sprintf("cannot read slide: %v", err),
-					"check that the slide file exists and is readable"), true
+				// Step 3 already reported the unreadable slide, and its links
+				// cannot be collected; skip it rather than duplicate the error
+				// under collect-all. The link pass runs only from collectErrors,
+				// after step 3 has walked every slide.
+				continue
 			}
-			// Step 3 already parsed every slide successfully, so a parse error
-			// here is unreachable; the guard keeps the pass fail-fast rather
-			// than dereferencing a nil slide.
 			ps, err := slide.Parse(s.Path, src, reg)
 			if err != nil {
-				return adaptParseError(err), true
+				// Likewise, a slide that does not parse was already reported by
+				// step 3; there are no links to collect from it.
+				continue
 			}
-			if verr, invalid := checkSlideLinks(s.Path, ps, reg, labels, candidates); invalid {
-				return verr, true
-			}
+			errs = append(errs, checkSlideLinks(s.Path, ps, reg, labels, candidates)...)
 		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkSlideLinks checks one parsed slide's links in the same top-to-bottom
 // order the structural steps use: the slide frontmatter's fields (they sit at
 // the top of the file), the slide body, then each section's frontmatter fields
-// followed by its body, then the reserved notes body. It returns the first
-// error and whether one was found.
-func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// followed by its body, then the reserved notes body. It returns every error in
+// that top-to-bottom order, rather than only the first.
+func checkSlideLinks(file string, ps *slide.Slide, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
 	tmpl, _ := reg.Lookup(ps.Template)
 
-	if verr, invalid := checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates); invalid {
-		return verr, true
-	}
-	if verr, invalid := checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates); invalid {
-		return verr, true
-	}
-
-	if verr, invalid := checkSectionLinks(file, ps.Sections, reg, labels, candidates); invalid {
-		return verr, true
-	}
-
+	var errs []ValidationError
+	errs = append(errs, checkFieldLinks(file, ps.Frontmatter, tmpl, reg, labels, candidates)...)
+	errs = append(errs, checkBodyLinks(file, ps.Body, ps.BodyLine, labels, candidates)...)
+	errs = append(errs, checkSectionLinks(file, ps.Sections, reg, labels, candidates)...)
 	if ps.Notes != nil {
-		if verr, invalid := checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates); invalid {
-			return verr, true
-		}
+		errs = append(errs, checkBodyLinks(file, ps.Notes.Body, ps.Notes.BodyLine, labels, candidates)...)
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkSectionLinks checks the links of each section instance in source order —
 // its frontmatter fields then its body — recursing into nested instances
-// (slide-sections). It returns the first error and whether one was found.
-func checkSectionLinks(file string, sections []slide.Section, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// (slide-sections). It returns every link error of every instance, each
+// instance's fields then its body then its nested children, rather than only
+// the first.
+func checkSectionLinks(file string, sections []slide.Section, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
+	var errs []ValidationError
 	for i := range sections {
 		sec := &sections[i]
 		var secTmpl *template.Template
 		if sec.Template != "" {
 			secTmpl, _ = reg.Lookup(sec.Template)
 		}
-		if verr, invalid := checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates); invalid {
-			return verr, true
-		}
-		if verr, invalid := checkSectionLinks(file, sec.Children, reg, labels, candidates); invalid {
-			return verr, true
-		}
+		errs = append(errs, checkFieldLinks(file, sec.Frontmatter, secTmpl, reg, labels, candidates)...)
+		errs = append(errs, checkBodyLinks(file, sec.Body, sec.BodyLine, labels, candidates)...)
+		errs = append(errs, checkSectionLinks(file, sec.Children, reg, labels, candidates)...)
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkFieldLinks resolves the `#label` targets CheckValues collected from one
@@ -139,50 +130,70 @@ func checkSectionLinks(file string, sections []slide.Section, reg *template.Regi
 // A field has no retained source line (the phase-2 parser keeps only the
 // section/field structure, not per-value YAML positions), so a link error in a
 // field carries the field's path but no line, exactly as the field errors of
-// step 3 do. Non-http(s) field destinations never reach here: template's
-// validateLink/validateText already reject them in step 3, and the deck must
-// have passed step 3 for this pass to run. It returns the first error and
-// whether one was found.
-func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, reg *template.Registry, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// step 3 do. Only `#label` targets are resolved here: an http(s) destination is
+// allowed, and a non-#, non-http(s) destination was already reported by the
+// step-3 CheckValues pass as a field error (validateLink / validateText), so
+// the link pass would only duplicate it under collect-all. It returns every
+// error of every `#label` target CheckValues collected from the data map — link
+// fields and inline text fields alike — in declaration order with their paths,
+// rather than only the first.
+func checkFieldLinks(file string, data map[string]any, tmpl *template.Template, reg *template.Registry, labels map[string]struct{}, candidates []string) []ValidationError {
 	if tmpl == nil || len(data) == 0 {
-		return ValidationError{}, false
+		return nil
 	}
 	res := template.CheckValues(withoutSelector(data), tmpl, reg.Lookup)
+	var errs []ValidationError
 	for _, lr := range res.Links {
+		// res.Links carries every inline link of a text field, including an
+		// http(s) or bad-scheme one; only a `#label` reference is this pass's
+		// to resolve.
+		if !strings.HasPrefix(strings.TrimSpace(lr.Destination), "#") {
+			continue
+		}
 		if verr, invalid := checkLabelRef(file, lr.Label, lr.Destination, valuePath(lr.Path), 0, labels, candidates); invalid {
-			return verr, true
+			errs = append(errs, verr)
 		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // checkBodyLinks collects the inline links of one Markdown body and checks them
 // in source order. startLine is the body's 1-based line in the file, so a
 // body link error is positioned absolutely.
 //
-// mdcheck.ExtractLinks reports two streams: the links themselves (a bad-scheme
-// link is still a Link, with an empty Label) and a positioned Issue for every
-// destination that is neither `#label` nor http(s). The two are merged by
-// source position so the first offender is chosen deterministically; an Issue
-// is the scheme error for its link and is checked first at the same position.
-// It returns the first error and whether one was found.
-func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}, candidates []string) (ValidationError, bool) {
+// mdcheck.ExtractLinks reports two streams: the links themselves and a
+// positioned Issue for every destination that is neither `#label` nor http(s).
+// A bad-scheme link appears in both, so the Issue is taken as that link's error
+// and the Link is not judged again; only a `#label` destination is this pass's
+// to resolve. The two streams are merged by source position so the errors are
+// reported in document order. Every offending link of the body is returned, in
+// that order, rather than only the first.
+func checkBodyLinks(file, body string, startLine int, labels map[string]struct{}, candidates []string) []ValidationError {
 	if body == "" {
-		return ValidationError{}, false
+		return nil
 	}
 	links, issues := mdcheck.ExtractLinks(file, []byte(body), mdcheck.Options{
 		Mode:      mdcheck.BodyMode,
 		StartLine: startLine,
 	})
+	var errs []ValidationError
 	for _, ev := range mergeLinkEvents(links, issues) {
 		if ev.issue != nil {
-			return adaptIssue(*ev.issue, nil), true
+			errs = append(errs, adaptIssue(*ev.issue, nil))
+			continue
+		}
+		// An http(s) Link is allowed and a non-#, non-http(s) one was already
+		// reported by its Issue above, so only a `#label` destination is
+		// resolved here; re-judging the others would duplicate an error under
+		// collect-all.
+		if !strings.HasPrefix(strings.TrimSpace(ev.link.Destination), "#") {
+			continue
 		}
 		if verr, invalid := checkLabelRef(file, ev.link.Label, ev.link.Destination, nil, ev.link.Line, labels, candidates); invalid {
-			return verr, true
+			errs = append(errs, verr)
 		}
 	}
-	return ValidationError{}, false
+	return errs
 }
 
 // linkEvent is one link or link-scheme Issue from a body, placed by source

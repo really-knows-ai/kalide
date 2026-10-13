@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "value",
   "name": "validation-error",
-  "body": "A validation error: file, optional line, path (e.g. column[1] › people[0] › name), message, fix hint, optional suggestion.",
+  "body": "A validation error: file, optional line, path (e.g. column[1] › people[0] › name), message, fix hint. A YAML parse error carries the offending source line and, when the cause is a `:` or a leading `*`, `&`, `%` or `@` in a plain scalar, a quoting suggestion (yaml-error-messages).",
   "properties": {},
   "out": [],
   "in": [
@@ -24,6 +24,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.native-display-paths",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.yaml-error-messages",
       "properties": {}
     }
   ]

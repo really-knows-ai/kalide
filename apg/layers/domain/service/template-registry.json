@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "service",
   "name": "template-registry",
-  "body": "Template registry: hold the merged library's loaded templates (kind by directory: slides/ or sections/), run the load-time checks (cycles — a reference is a declared `sections:` acceptance, a `section` helper call in a layout, or a `child` constructor's target, section-helper-load-checks, child-constructor —, directory-kind checks, cross-kind name uniqueness, reserved names including `raw`/`data`, references — including theme CSS references: relative theme `url()`/`@import`, the reserved `media:` prefix resolving under the layer's `media/`, and the reserved `theme:<name>/` prefix resolving under another theme, theme-media-references — and examples), enforce that no name is carried by both library layers (library-layer-uniqueness), resolve a local template's `section` helper call against the merged template set (library-layer-references), execute each template's example layout against the merged layout namespace built from every library layout text keyed by its layer-relative layout name, with the template's own layer function map, so `{{ template \"<name>\" . }}` composition resolves per layer while `media` binds to the template's own layer (example-layout-composition), own the central layout function set (exactly six helpers: `media`, `section`, `dict`, `list`, `child`, `children` — template-language, section-helper, dict-list-helpers, child-constructor, children-forwarding), look up templates, describe them for CLI/gallery.",
+  "body": "Template registry: hold the merged library's loaded templates (kind by directory: slides/ or sections/), run the load-time checks (cycles — a reference is a declared `sections:` acceptance, a `section` helper call in a layout, or a `child` constructor's target, section-helper-load-checks, child-constructor; a declared-section cycle bounded by a declaration's `max_depth` is accepted and walked bounded, bounded-self-nesting —, directory-kind checks, cross-kind name uniqueness, reserved names including `raw`/`data`, a `max_depth` that is not a positive integer, references — including theme CSS references: relative theme `url()`/`@import`, the reserved `media:` prefix resolving under the layer's `media/`, and the reserved `theme:<name>/` prefix resolving under another theme, theme-media-references — and examples), enforce that no name is carried by both library layers (library-layer-uniqueness), resolve a local template's `section` helper call against the merged template set (library-layer-references), execute each template's example layout against the merged layout namespace built from every library layout text keyed by its layer-relative layout name, with the template's own layer function map, so `{{ template \"<name>\" . }}` composition resolves per layer while `media` binds to the template's own layer (example-layout-composition), own the central layout function set (exactly six helpers: `media`, `section`, `dict`, `list`, `child`, `children` — template-language, section-helper, dict-list-helpers, child-constructor, children-forwarding), look up templates, describe them for CLI/gallery.",
   "properties": {},
   "out": [
     {
@@ -59,6 +59,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.cross-field-list-constraints",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.dict-list-helpers",
       "properties": {}
     },
@@ -84,6 +89,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.internal-templates",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.library-layer-references",
       "properties": {}
     },
@@ -94,7 +104,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.native-display-paths",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.nested-section-validation",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.nullable-fields",
       "properties": {}
     },
     {
@@ -105,6 +125,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.portable-layout-names",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.record-item-type",
       "properties": {}
     },
     {
@@ -124,12 +149,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.text-coercion",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.theme-media-references",
       "properties": {}
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.native-display-paths",
+      "source": "requirements.requirement.bounded-self-nesting",
       "properties": {}
     }
   ]

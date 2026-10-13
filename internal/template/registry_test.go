@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"gopkg.in/yaml.v3"
 )
 
 // This file is the unit-test deliverable for phase-04.task-8: the Registry
@@ -63,10 +65,17 @@ func manifestLibraryTemplate(name string, kind TemplateKind, manifestYAML string
 }
 
 // mustParseManifest parses manifestYAML for a template named name of kind
-// kind and fails the test on error.
-func mustParseManifest(t *testing.T, name string, kind TemplateKind, manifestYAML string) *Template {
+// kind and fails the test on error. An optional defs supplies the fixture's
+// parsed LibraryDefinitions, so the manifest's type:/include:/@group names
+// resolve against its owning layer; a caller whose fixture declares no
+// definitions omits it (nil).
+func mustParseManifest(t *testing.T, name string, kind TemplateKind, manifestYAML string, defs ...*LibraryDefinitions) *Template {
 	t.Helper()
-	def, err := parseManifest(manifestLibraryTemplate(name, kind, manifestYAML))
+	var defsArg *LibraryDefinitions
+	if len(defs) > 0 {
+		defsArg = defs[0]
+	}
+	def, err := parseManifest(manifestLibraryTemplate(name, kind, manifestYAML), defsArg)
 	if err != nil {
 		t.Fatalf("parseManifest(%s) error = %v, want nil", name, err)
 	}
@@ -356,24 +365,75 @@ func TestRegistry(t *testing.T) {
 		}
 	})
 
-	t.Run("LookupSlideTemplate reports usage", func(t *testing.T) {
+	t.Run("LookupSlideTemplate reports usage and internal", func(t *testing.T) {
 		r := mustFixtureRegistry(t)
 		tests := []struct {
-			name      string
-			wantUsage string
-			wantOK    bool
+			name         string
+			wantUsage    string
+			wantInternal bool
+			wantOK       bool
 		}{
-			{"title", "slide", true},
-			{"content", "slide", true},
-			{"column", "section", true},
-			{"missing", "", false},
+			{"title", "slide", false, true},
+			{"content", "slide", false, true},
+			{"column", "section", false, true},
+			{"missing", "", false, false},
 		}
 		for _, tt := range tests {
-			usage, ok := r.LookupSlideTemplate(tt.name)
-			if usage != tt.wantUsage || ok != tt.wantOK {
-				t.Errorf("LookupSlideTemplate(%q) = (%q, %v), want (%q, %v)",
-					tt.name, usage, ok, tt.wantUsage, tt.wantOK)
+			usage, internal, ok := r.LookupSlideTemplate(tt.name)
+			if usage != tt.wantUsage || internal != tt.wantInternal || ok != tt.wantOK {
+				t.Errorf("LookupSlideTemplate(%q) = (%q, %v, %v), want (%q, %v, %v)",
+					tt.name, usage, internal, ok, tt.wantUsage, tt.wantInternal, tt.wantOK)
 			}
+		}
+	})
+
+	// internal-templates: an internal template (a manifest's `internal: true`)
+	// stays resolvable through the registry's Lookup and through the two
+	// resolution paths that do not consult the Catalogue surface — a
+	// `section`-helper call and a `section_template` field type — while
+	// LookupSlideTemplate reports the Internal flag beside usage and ok, so a
+	// caller can distinguish an internal template from an unknown name (which
+	// reports ("", false, false)). Refusing an internal template as a Markdown
+	// `template:` target is the slide parser's rule (internal/slide), not the
+	// registry's, so it is exercised there.
+	t.Run("internal templates stay resolvable but report internal", func(t *testing.T) {
+		hidden := mustParseManifest(t, "hidden", KindSection, "internal: true\n")
+		if !hidden.Internal {
+			t.Fatalf("hidden.Internal = false, want true from the `internal: true` manifest")
+		}
+
+		// A `section`-helper call to the internal template resolves at
+		// Validate, and a section_template field naming it resolves through
+		// checkFieldTypes: neither consults LookupSlideTemplate, so an internal
+		// template stays a valid section-helper target and field type.
+		helperHost := regLayout("helperhost", `{{ section "hidden" }}`)
+		fieldHost := regSlide("fieldhost", Field{Name: "block", Type: FieldSectionTemplate, SectionTemplate: "hidden"})
+
+		r := NewRegistry(nil)
+		for _, tmpl := range []*Template{hidden, helperHost, fieldHost} {
+			if err := r.Register(tmpl); err != nil {
+				t.Fatalf("Register(%q) error = %v, want nil", tmpl.Name, err)
+			}
+		}
+		if err := r.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want nil (an internal template stays resolvable)", err)
+		}
+
+		// Lookup still resolves the internal template.
+		if got, ok := r.Lookup("hidden"); !ok || got != hidden {
+			t.Errorf("Lookup(hidden) = (%v, %v), want the internal template and true", got, ok)
+		}
+
+		// The Catalogue surface carries the Internal flag beside usage and ok.
+		usage, internal, ok := r.LookupSlideTemplate("hidden")
+		if usage != string(UsageSection) || !internal || !ok {
+			t.Errorf("LookupSlideTemplate(hidden) = (%q, %v, %v), want (%q, true, true)", usage, internal, ok, UsageSection)
+		}
+
+		// An unknown name reports no usage, not internal, and not found.
+		usage, internal, ok = r.LookupSlideTemplate("missing")
+		if usage != "" || internal || ok {
+			t.Errorf(`LookupSlideTemplate(missing) = (%q, %v, %v), want ("", false, false)`, usage, internal, ok)
 		}
 	})
 
@@ -426,7 +486,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("SectionDecl returns accepted, min, max and a fresh copy", func(t *testing.T) {
 		r := mustFixtureRegistry(t)
 
-		accepted, min, max, ok := r.SectionDecl("content", "columns")
+		accepted, min, max, maxDepth, ok := r.SectionDecl("content", "columns")
 		if !ok {
 			t.Fatal(`SectionDecl("content", "columns") ok = false, want true`)
 		}
@@ -434,11 +494,14 @@ func TestRegistry(t *testing.T) {
 		if min != 2 || max != 4 {
 			t.Errorf("SectionDecl min/max = %d/%d, want 2/4", min, max)
 		}
+		if maxDepth != 0 {
+			t.Errorf("SectionDecl maxDepth = %d, want 0 (unbounded)", maxDepth)
+		}
 
 		// The accepted slice is a fresh copy: mutating it does not corrupt
 		// the registry.
 		accepted[0] = "mutated"
-		again, _, _, _ := r.SectionDecl("content", "columns")
+		again, _, _, _, _ := r.SectionDecl("content", "columns")
 		assertStringSlice(t, "SectionDecl accepted after mutation", again, []string{"column"})
 
 		for _, tt := range []struct {
@@ -447,9 +510,77 @@ func TestRegistry(t *testing.T) {
 			{"content", "missing"},
 			{"missing", "columns"},
 		} {
-			if _, _, _, ok := r.SectionDecl(tt.tmpl, tt.section); ok {
+			if _, _, _, _, ok := r.SectionDecl(tt.tmpl, tt.section); ok {
 				t.Errorf("SectionDecl(%q, %q) ok = true, want false", tt.tmpl, tt.section)
 			}
+		}
+	})
+
+	// bounded-self-nesting / section-depth-limit: the Catalogue's SectionDecl
+	// exposes a declaration's `max_depth` bound beside accepted/min/max, and the
+	// build-time walk accepts a declared self-accepting chain up to the six
+	// heading levels the content syntax allows, refusing one heading level more
+	// as *SectionDepthError naming the chain and the max_depth that produced it
+	// (requirements.requirement.bounded-self-nesting,
+	// requirements.constraint.section-depth-limit). The spec's worked example is
+	// one template T declaring a `loop` section that accepts T at `max_depth: N`,
+	// so the self-accepting declaration below stands in for it: it yields six
+	// heading levels (the root plus five bounded levels) at max_depth: 5, which
+	// loads, and seven at max_depth: 6, which crosses the bound.
+	t.Run("SectionDecl exposes a declaration's max_depth", func(t *testing.T) {
+		r := NewRegistry(nil)
+		if err := r.Register(selfAcceptingSection("loop", 3)); err != nil {
+			t.Fatalf("Register(loop) error = %v, want nil", err)
+		}
+
+		accepted, min, max, maxDepth, ok := r.SectionDecl("loop", "loop")
+		if !ok {
+			t.Fatal(`SectionDecl("loop", "loop") ok = false, want true`)
+		}
+		assertStringSlice(t, "SectionDecl accepted", accepted, []string{"loop"})
+		if min != 0 || max != 0 {
+			t.Errorf("SectionDecl min/max = %d/%d, want 0/0 (max_depth does not change the repeat limits)", min, max)
+		}
+		if maxDepth != 3 {
+			t.Errorf("SectionDecl maxDepth = %d, want 3 (the declaration's max_depth)", maxDepth)
+		}
+	})
+
+	t.Run("a self-accepting walk at max_depth: 5 (six heading levels) loads", func(t *testing.T) {
+		if err := buildAndValidate(selfAcceptingSection("loop", 5)); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: max_depth: 5 produces six heading levels, within the six-level bound", err)
+		}
+	})
+
+	t.Run("a self-accepting walk at max_depth: 6 (seven heading levels) is refused", func(t *testing.T) {
+		err := buildAndValidate(selfAcceptingSection("loop", 6))
+		if err == nil {
+			t.Fatal("Validate() = nil, want *SectionDepthError")
+		}
+		var depth *SectionDepthError
+		if !errors.As(err, &depth) {
+			t.Fatalf("Validate() error = %v, want *SectionDepthError", err)
+		}
+		if depth.Limit != sectionDepthLimit {
+			t.Errorf("depth.Limit = %d, want %d", depth.Limit, sectionDepthLimit)
+		}
+		if depth.MaxDepth != 6 {
+			t.Errorf("depth.MaxDepth = %d, want 6 (the max_depth that produced the chain)", depth.MaxDepth)
+		}
+		// The bounded walk produces the root plus one heading per bounded level:
+		// max_depth: 6 gives seven levels, one past the six-heading-level bound.
+		wantPath := []string{"loop", "loop", "loop", "loop", "loop", "loop", "loop"}
+		if !reflect.DeepEqual(depth.Path, wantPath) {
+			t.Errorf("depth.Path = %v, want %v", depth.Path, wantPath)
+		}
+
+		// The depth-limit templates error names the over-deep chain and the
+		// max_depth that produced it (requirements.constraint.section-depth-limit).
+		wantMsg := `template "loop": section template composition is 7 levels deep, exceeding the 6-heading-level limit: ` +
+			`sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop ` +
+			`— the bounded self-nesting declaration max_depth: 6 produces this chain; lower max_depth or flatten the composition`
+		if err.Error() != wantMsg {
+			t.Errorf("Validate() error = %q, want %q", err.Error(), wantMsg)
 		}
 	})
 
@@ -573,11 +704,11 @@ func TestRegistry(t *testing.T) {
 		if err := reg.Validate(); err != nil {
 			t.Fatalf("Validate() error = %v, want nil", err)
 		}
-		if usage, ok := reg.LookupSlideTemplate("deck"); !ok || usage != string(UsageSlide) {
-			t.Errorf("LookupSlideTemplate(deck) = (%q, %v), want (%q, true)", usage, ok, UsageSlide)
+		if usage, internal, ok := reg.LookupSlideTemplate("deck"); !ok || internal || usage != string(UsageSlide) {
+			t.Errorf("LookupSlideTemplate(deck) = (%q, %v, %v), want (%q, false, true)", usage, internal, ok, UsageSlide)
 		}
-		if usage, ok := reg.LookupSlideTemplate("column"); !ok || usage != string(UsageSection) {
-			t.Errorf("LookupSlideTemplate(column) = (%q, %v), want (%q, true)", usage, ok, UsageSection)
+		if usage, internal, ok := reg.LookupSlideTemplate("column"); !ok || internal || usage != string(UsageSection) {
+			t.Errorf("LookupSlideTemplate(column) = (%q, %v, %v), want (%q, false, true)", usage, internal, ok, UsageSection)
 		}
 		assertStringSlice(t, `SectionNames("deck")`, reg.SectionNames("deck"), []string{"columns"})
 
@@ -586,6 +717,149 @@ func TestRegistry(t *testing.T) {
 		// step 7) against the column template's own field schema — proven
 		// by LoadLibrary having already returned no error above.
 	})
+
+	// parseManifestField accepts the nullable and coerce keys on any
+	// descriptor and the inline `type: record` form as a list's `item:`: the
+	// record's own `fields:` recurse through parseManifestFields, so a record
+	// field may itself be a list whose item is a record (record-item-type).
+	// Administering the isItem flag directly pins the two halves of the
+	// contract the notes call out — a record is rejected as a field's own
+	// `type:` (it is valid only as an item descriptor) and a record item
+	// descriptor needs no `name`, while a non-record item still does.
+	t.Run("parseManifestField accepts nullable, coerce and an inline record item", func(t *testing.T) {
+		const manifestPath = "templates/slides/x/template.yaml"
+		parseField := func(t *testing.T, src string, isItem bool) (*Field, error) {
+			t.Helper()
+			var doc yaml.Node
+			if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
+				t.Fatalf("yaml.Unmarshal(%q) error = %v", src, err)
+			}
+			return parseManifestField(manifestPath, libraryDocumentMapping(&doc), isItem, nil)
+		}
+
+		t.Run("nullable and coerce on a field", func(t *testing.T) {
+			f, err := parseField(t, "name: label\ntype: text\nnullable: true\ncoerce: true\n", false)
+			if err != nil {
+				t.Fatalf("parseManifestField() error = %v, want nil", err)
+			}
+			if f.Name != "label" || f.Type != FieldText {
+				t.Errorf("field = %+v, want name=label type=text", f)
+			}
+			if !f.Nullable {
+				t.Error("Nullable = false, want true")
+			}
+			if !f.Coerce {
+				t.Error("Coerce = false, want true")
+			}
+		})
+
+		t.Run("inline record item recurses its fields", func(t *testing.T) {
+			const src = `type: record
+fields:
+  - name: label
+    type: text
+  - name: entries
+    type: list
+    item:
+      type: record
+      fields:
+        - name: key
+          type: text
+          nullable: true
+        - name: value
+          type: text
+          coerce: true
+`
+			f, err := parseField(t, src, true)
+			if err != nil {
+				t.Fatalf("parseManifestField() error = %v, want nil", err)
+			}
+			// A record item descriptor needs no `name`: it is described by
+			// its `fields:`.
+			if f.Name != "" {
+				t.Errorf("Name = %q, want empty for a record item descriptor", f.Name)
+			}
+			if f.Type != FieldRecord {
+				t.Fatalf("Type = %q, want %q", f.Type, FieldRecord)
+			}
+			if len(f.Fields) != 2 {
+				t.Fatalf("len(Fields) = %d, want 2", len(f.Fields))
+			}
+			if got := f.Fields[0]; got.Name != "label" || got.Type != FieldText {
+				t.Errorf("Fields[0] = %+v, want name=label type=text", got)
+			}
+			entries := f.Fields[1]
+			if entries.Name != "entries" || entries.Type != FieldList || entries.Item == nil {
+				t.Fatalf("Fields[1] = %+v, want name=entries type=list with an item", entries)
+			}
+			// The list item recurses into a record — itself unnamed — whose
+			// own fields carry the nullable/coerce keys.
+			inner := entries.Item
+			if inner.Name != "" {
+				t.Errorf("inner record item Name = %q, want empty", inner.Name)
+			}
+			if inner.Type != FieldRecord {
+				t.Fatalf("inner record item Type = %q, want %q", inner.Type, FieldRecord)
+			}
+			if len(inner.Fields) != 2 {
+				t.Fatalf("len(inner.Fields) = %d, want 2", len(inner.Fields))
+			}
+			if k := inner.Fields[0]; k.Name != "key" || k.Type != FieldText || !k.Nullable {
+				t.Errorf("inner.Fields[0] = %+v, want name=key type=text nullable=true", k)
+			}
+			if v := inner.Fields[1]; v.Name != "value" || v.Type != FieldText || !v.Coerce {
+				t.Errorf("inner.Fields[1] = %+v, want name=value type=text coerce=true", v)
+			}
+		})
+
+		t.Run("record is rejected as a field type", func(t *testing.T) {
+			_, err := parseField(t, "name: x\ntype: record\nfields:\n  - name: y\n    type: text\n", false)
+			if err == nil {
+				t.Fatal("parseManifestField() error = nil, want a record-as-field-type rejection")
+			}
+			if want := `field "x": type "record" is only valid as a list item descriptor`; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want it to contain %q", err, want)
+			}
+		})
+
+		t.Run("record item requires fields and a non-record item requires a name", func(t *testing.T) {
+			_, err := parseField(t, "type: record\n", true)
+			if err == nil {
+				t.Fatal("parseManifestField() error = nil, want a missing-fields rejection")
+			}
+			if want := `field "": type "record" requires key "fields"`; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want it to contain %q", err, want)
+			}
+
+			_, err = parseField(t, "type: text\n", true)
+			if err == nil {
+				t.Fatal("parseManifestField() error = nil, want a missing-name rejection")
+			}
+			if want := `field: missing required key "name"`; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want it to contain %q", err, want)
+			}
+		})
+	})
+}
+
+// mustParseDefinitions parses a library.yaml document carrying the optional
+// named-definition sections (groups:, field_sets:, types:) into the
+// *LibraryDefinitions a template's type:/include:/@group references resolve
+// against at parseManifest time (named-library-definitions). It reads only
+// those three sections, so the rest of the document (name, format, …) is
+// irrelevant to it; a malformed section fails the test. A document with none
+// of the three sections yields a nil *LibraryDefinitions.
+func mustParseDefinitions(t *testing.T, libraryYAML string) *LibraryDefinitions {
+	t.Helper()
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(libraryYAML), &doc); err != nil {
+		t.Fatalf("yaml.Unmarshal(library.yaml) error = %v, want nil", err)
+	}
+	defs, err := loadLibraryDefinitions(LibraryFile, &doc)
+	if err != nil {
+		t.Fatalf("loadLibraryDefinitions() error = %v, want nil", err)
+	}
+	return defs
 }
 
 // TestRegistryRejections gives one failing fixture registry per build-time
@@ -751,7 +1025,7 @@ func TestRegistryRejections(t *testing.T) {
 	// a positioned *LibraryError instead of a plain Registry error.
 
 	t.Run("malformed manifest is positioned", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields: [\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields: [\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Path == "" {
 			t.Error("Path is empty, want the offending template.yaml")
@@ -759,7 +1033,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("unknown top-level manifest key suggests a valid one", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "descriptoin: x\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "descriptoin: x\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "description" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "description")
@@ -768,7 +1042,7 @@ func TestRegistryRejections(t *testing.T) {
 
 	t.Run("unknown field type suggests a valid one", func(t *testing.T) {
 		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide,
-			"fields:\n  - name: title\n    type: txet\n"))
+			"fields:\n  - name: title\n    type: txet\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "text" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "text")
@@ -779,7 +1053,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("field missing required name", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - type: text\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - type: text\n"), nil)
 		libErr := asLibraryError(t, err)
 		if !strings.Contains(libErr.Message, `missing required key "name"`) {
 			t.Errorf("Message = %q, want it to say name is missing", libErr.Message)
@@ -787,7 +1061,7 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("field missing required type", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - name: title\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "fields:\n  - name: title\n"), nil)
 		libErr := asLibraryError(t, err)
 		if !strings.Contains(libErr.Message, `missing required key "type"`) {
 			t.Errorf("Message = %q, want it to say type is missing", libErr.Message)
@@ -795,10 +1069,149 @@ func TestRegistryRejections(t *testing.T) {
 	})
 
 	t.Run("unknown body mode suggests a valid one", func(t *testing.T) {
-		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "body:\n  mode: requird\n"))
+		_, err := parseManifest(manifestLibraryTemplate("bad", KindSlide, "body:\n  mode: requird\n"), nil)
 		libErr := asLibraryError(t, err)
 		if libErr.Suggestion != "required" {
 			t.Errorf("Suggestion = %q, want %q", libErr.Suggestion, "required")
+		}
+	})
+
+	// named-library-definitions (plan.phase-04.task-15): a template's `type:`
+	// and `- include:` references and a section's `@group` `accepted:` entry
+	// resolve against the OWNING layer's parsed LibraryDefinitions
+	// (parseManifest's defs argument), and an unknown name of any of the three
+	// kinds is a positioned templates error carrying a closest-match
+	// suggestion. defs mirrors the sections a library.yaml declares: groups
+	// (accept-lists), field_sets and types.
+	defs := mustParseDefinitions(t, `name: rej
+format: 1
+groups:
+  accents:
+    - emphasis
+    - note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants: [red, green, blue]
+    description: a named colour
+`)
+
+	t.Run("a named type expands into the referencing field", func(t *testing.T) {
+		def := mustParseManifest(t, "host", KindSlide,
+			"fields:\n  - name: accent\n    type: colour\n    required: true\n    description: the slide accent\n"+
+				"  - name: tint\n    type: colour\n", defs)
+		if len(def.Fields) != 2 {
+			t.Fatalf("len(Fields) = %d, want 2 (both reference the named type colour)", len(def.Fields))
+		}
+		accent := def.Fields[0]
+		if accent.Name != "accent" {
+			t.Errorf("Fields[0].Name = %q, want the referencing field's name %q (the named type's own name is not kept)", accent.Name, "accent")
+		}
+		if accent.Type != FieldEnum {
+			t.Errorf("Fields[0].Type = %q, want %q (the named type's type)", accent.Type, FieldEnum)
+		}
+		if !reflect.DeepEqual(accent.Variants, []string{"red", "green", "blue"}) {
+			t.Errorf("Fields[0].Variants = %v, want the named type's variants", accent.Variants)
+		}
+		if !accent.Required {
+			t.Error("Fields[0].Required = false, want true: the referencing field's own required key overrides")
+		}
+		if accent.Description != "the slide accent" {
+			t.Errorf("Fields[0].Description = %q, want the referencing field's own description (it overrides)", accent.Description)
+		}
+		tint := def.Fields[1]
+		if tint.Name != "tint" || tint.Type != FieldEnum {
+			t.Errorf("Fields[1] = %+v, want name=tint type=enum", tint)
+		}
+		if tint.Description != "a named colour" {
+			t.Errorf("Fields[1].Description = %q, want the named type's description (the referencing field omits it)", tint.Description)
+		}
+		if tint.Required {
+			t.Error("Fields[1].Required = true, want false: the named type's own required is kept when the referencing field omits it")
+		}
+	})
+
+	t.Run("an include expands the named field set in place", func(t *testing.T) {
+		def := mustParseManifest(t, "host", KindSlide,
+			"fields:\n  - include: meta\n  - name: title\n    type: text\n", defs)
+		if len(def.Fields) != 3 {
+			t.Fatalf("len(Fields) = %d, want 3 (two from the meta field set, then title)", len(def.Fields))
+		}
+		if def.Fields[0].Name != "subtitle" || def.Fields[0].Type != FieldText {
+			t.Errorf("Fields[0] = %+v, want the field set's subtitle:text", def.Fields[0])
+		}
+		if def.Fields[1].Name != "weight" || def.Fields[1].Type != FieldNumber {
+			t.Errorf("Fields[1] = %+v, want the field set's weight:number", def.Fields[1])
+		}
+		if def.Fields[2].Name != "title" || def.Fields[2].Type != FieldText {
+			t.Errorf("Fields[2] = %+v, want the literal title:text after the expanded set", def.Fields[2])
+		}
+	})
+
+	t.Run("an @group expands into accepted in place with literal names", func(t *testing.T) {
+		def := mustParseManifest(t, "host", KindSlide,
+			"sections:\n  - name: asides\n    accepted: [\"@accents\", literal]\n", defs)
+		if len(def.Sections) != 1 {
+			t.Fatalf("len(Sections) = %d, want 1", len(def.Sections))
+		}
+		want := []string{"emphasis", "note", "literal"}
+		if got := def.Sections[0].Accepted; !reflect.DeepEqual(got, want) {
+			t.Errorf("Accepted = %v, want the group expanded in place then the literal name, %v", got, want)
+		}
+	})
+
+	t.Run("a named type used as a list item descriptor still requires a name", func(t *testing.T) {
+		// A named type expanded into a top-level field takes the referencing
+		// field's `name:`, and a record item needs none; a non-record item
+		// descriptor (here naming the type colour) is still a field and still
+		// needs its own `name:`.
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: colour\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `missing required key "name"`) {
+			t.Errorf("Message = %q, want it to require a name on the non-record item descriptor", libErr.Message)
+		}
+	})
+
+	t.Run("unknown named type suggests the closest type", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"fields:\n  - name: accent\n    type: colur\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `unknown type "colur"`) {
+			t.Errorf("Message = %q, want it to name the unknown type", libErr.Message)
+		}
+		if libErr.Suggestion != "colour" {
+			t.Errorf("Suggestion = %q, want the declared named type %q", libErr.Suggestion, "colour")
+		}
+	})
+
+	t.Run("unknown include suggests the closest field set", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"fields:\n  - include: metaa\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `unknown field set "metaa"`) {
+			t.Errorf("Message = %q, want it to name the unknown field set", libErr.Message)
+		}
+		if libErr.Suggestion != "meta" {
+			t.Errorf("Suggestion = %q, want the declared field set %q", libErr.Suggestion, "meta")
+		}
+	})
+
+	t.Run("unknown @group suggests the closest group", func(t *testing.T) {
+		_, err := parseManifest(manifestLibraryTemplate("host", KindSlide,
+			"sections:\n  - name: asides\n    accepted: [\"@acents\"]\n"), defs)
+		libErr := asLibraryError(t, err)
+		if !strings.Contains(libErr.Message, `unknown group "acents"`) {
+			t.Errorf("Message = %q, want it to name the unknown group", libErr.Message)
+		}
+		if libErr.Suggestion != "accents" {
+			t.Errorf("Suggestion = %q, want the declared group %q", libErr.Suggestion, "accents")
 		}
 	})
 
@@ -1018,6 +1431,111 @@ func TestRegistryRejections(t *testing.T) {
 		libErr := libraryRejection(t, "fields:\n  - name: mode\n    type: enum\n", "")
 		if !strings.Contains(libErr.Message, "no variants") {
 			t.Errorf("Message = %q, want it to say the enum field has no variants", libErr.Message)
+		}
+	})
+
+	// enum-variants-from (plan.phase-08.task-13): an enum field's
+	// `variants_from:` glob is expanded at build against the root of the
+	// layer that owns the template — checkLibraryBuild supplies the
+	// single-layer library's root to Registry.Validate — so a glob matching
+	// no file under that layer's media/ tree is a step-4 templates error,
+	// while declaring both `variants:` and the glob on one field is rejected
+	// at registration. Each is a positioned *LibraryError naming the
+	// offending template.yaml, exactly as the loader reports it.
+
+	t.Run("variants_from: a glob matching no media file is rejected", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: mode\n    type: enum\n    variants_from: media/nope/*.jpg\n", "")
+		if want := "templates/slides/badslide/template.yaml"; libErr.Path != want {
+			t.Errorf("Path = %q, want %q", libErr.Path, want)
+		}
+		if want := `template "badslide": field "mode": variants_from "media/nope/*.jpg" matches no file under the library layer's media/ tree`; libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
+	t.Run("variants_from: declaring both variants and variants_from is rejected", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: mode\n    type: enum\n    variants: [a, b]\n    variants_from: media/*.jpg\n", "")
+		if want := "templates/slides/badslide/template.yaml"; libErr.Path != want {
+			t.Errorf("Path = %q, want %q", libErr.Path, want)
+		}
+		if want := `template "badslide": field "mode" declares both "variants" and "variants_from"`; libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
+	// The bad-variant and cross-field-bound build-time checks reach a field
+	// inside an inline record item exactly as they do at the top level
+	// (plan.phase-03.task-8, record-item-type): checkFieldVariants recurses
+	// into a record item's fields, so a nested enum's variants remain the only
+	// variant mechanism at that depth; and checkDefinition resolves each list
+	// bound in the field's own scope — a leading `/name` against the template's
+	// top-level fields, a bare name against the enclosing record's siblings —
+	// rejecting an unresolvable reference, or one naming a non-list field, as a
+	// positioned templates error.
+
+	t.Run("a nested enum inside an inline record item is accepted", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                 {Data: []byte("name: rec\nformat: 1\n")},
+			"slides/host/template.yaml":    {Data: []byte("fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: mode\n          type: enum\n          variants: [a, b]\n")},
+			"slides/host/layout.html.tmpl": {Data: []byte("<section></section>")},
+			"slides/host/example.md":       {Data: []byte("---\n---\n")},
+		}
+		if _, err := LoadLibrary(rootedFS(fsys), TemplatesDir); err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: an enum inside a record item with variants is accepted", err)
+		}
+	})
+
+	t.Run("bad variant: enum inside a record item with no variants", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: mode\n          type: enum\n", "")
+		if !strings.Contains(libErr.Message, "no variants") {
+			t.Errorf("Message = %q, want it to say the nested enum field has no variants", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `field "mode"`) {
+			t.Errorf("Message = %q, want it to name the nested field %q", libErr.Message, "mode")
+		}
+	})
+
+	t.Run("bad variant: nested enum default not among its variants", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: mode\n          type: enum\n          variants: [a, b]\n          default: c\n", "")
+		if !strings.Contains(libErr.Message, "not one of its variants") {
+			t.Errorf("Message = %q, want it to say the nested enum default is not among its variants", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `field "mode"`) {
+			t.Errorf("Message = %q, want it to name the nested field %q", libErr.Message, "mode")
+		}
+	})
+
+	t.Run("unresolvable max_items_from: /name names no top-level field", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: a\n          type: list\n          item:\n            name: i\n            type: text\n          max_items_from: /ghost\n", "")
+		if !strings.Contains(libErr.Message, "not a declared field") {
+			t.Errorf("Message = %q, want it to say /ghost names no top-level field", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `"/ghost"`) {
+			t.Errorf("Message = %q, want it to quote the unresolvable reference %q", libErr.Message, "/ghost")
+		}
+	})
+
+	t.Run("unresolvable min_items_from: bare name names no record sibling", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: a\n          type: list\n          item:\n            name: i\n            type: text\n          min_items_from: ghost\n", "")
+		if !strings.Contains(libErr.Message, "not a declared field") {
+			t.Errorf("Message = %q, want it to say ghost names no sibling in the enclosing record", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `"ghost"`) {
+			t.Errorf("Message = %q, want it to quote the unresolvable reference %q", libErr.Message, "ghost")
+		}
+	})
+
+	t.Run("max_items_from names a field that is not a list", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: a\n          type: list\n          item:\n            name: i\n            type: text\n          max_items_from: b\n        - name: b\n          type: text\n", "")
+		if !strings.Contains(libErr.Message, "not a list field") {
+			t.Errorf("Message = %q, want it to say the referenced field b is not a list", libErr.Message)
 		}
 	})
 
@@ -1802,7 +2320,7 @@ func TestRegistryCheckSectionsChildChecksAcrossMergedLayers(t *testing.T) {
 		// Resolution agrees with the load check: the child instantiates the
 		// local template and carries the local layer on its own SectionCall,
 		// independently of the external target's layer.
-		call, err := ResolveSectionCallLayered(reg.Lookup, reg.LayerOf, "ext-parent", nil, "", nil, &ChildRequest{Section: "widgets"})
+		call, err := ResolveSectionCallLayered(reg.Lookup, reg.LayerOf, "ext-parent", nil, "", nil, nil, &ChildRequest{Section: "widgets"})
 		if err != nil {
 			t.Fatalf("ResolveSectionCallLayered() error = %v, want nil", err)
 		}

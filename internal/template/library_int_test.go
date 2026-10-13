@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -96,7 +98,16 @@ func containsHint(hint string) bool {
 
 // TestLoadLibraryIntFullLibrary proves a complete on-disk library — slides,
 // sections, a theme with an owned font file, and media including a video —
-// loads cleanly via os.DirFS.
+// loads cleanly via os.DirFS. Its record-field subtest adds a template whose
+// list item is an inline record carrying a coerce text field, plus an example
+// that exercises a nullable null, a coerce number and list-of-record values, so
+// a full load both validates the record schema end to end and converts the
+// example into the step-7 execution context (nullable-fields, record-item-type,
+// text-coercion). An image-field-roots / enum-variants-from subtest adds a
+// template whose image field declares media-root path options and whose enum
+// field takes its variants from a `variants_from:` glob, so its media tree
+// resolves the image value at load and its effective variants are the sorted
+// media-relative glob matches, identical across repeated loads.
 func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -177,6 +188,788 @@ func TestLoadLibraryIntFullLibrary(t *testing.T) {
 	if _, err := fs.Stat(lib.Media, "video/intro.mp4"); err != nil {
 		t.Errorf("media video/intro.mp4 not present in Library.Media: %v", err)
 	}
+
+	// A library whose slide template declares a list field whose item is an
+	// inline record, beside a nullable field and a coerce text field, loaded
+	// through the real loader: step 7 must VALIDATE the example against the
+	// record schema and CONVERT it into the execution context through the same
+	// nullable/record/coerce conversion the renderer applies
+	// (nullable-fields, record-item-type, text-coercion). LoadLibrary itself
+	// discards the bytes it executes, so — exactly as
+	// fieldrules_default_int_test.go does — the step-7 binding is repeated
+	// in-package and the layout is executed against the context
+	// validateExampleBlock builds, making the conversion observable.
+	t.Run("record-field template and example validate and convert end to end", func(t *testing.T) {
+		const catalogueManifest = `name: catalogue
+fields:
+  - name: heading
+    type: text
+    nullable: true
+  - name: code
+    type: text
+    coerce: true
+  - name: items
+    type: list
+    item:
+      type: record
+      fields:
+        - name: name
+          type: text
+          required: true
+        - name: id
+          type: text
+          coerce: true
+        - name: note
+          type: text
+`
+		// The `len` reads make the coercion observable: a coerce text field left
+		// a YAML number would fail `len` at execution, and a record item left
+		// unconverted would fail `len .id` likewise, so the conversion cannot be
+		// silently skipped.
+		const catalogueLayout = `<div class="catalogue">` +
+			`<span class="catalogue-heading">{{ if .heading }}present{{ else }}nil{{ end }}</span>` +
+			`<span class="catalogue-code">{{ .code }}</span>` +
+			`<span class="catalogue-code-len">{{ len .code }}</span>` +
+			`<span class="catalogue-count">{{ len .items }}</span>` +
+			`{{ range .items }}` +
+			`<span class="catalogue-item" data-name="{{ .name }}" data-id="{{ .id }}" data-id-len="{{ len .id }}" data-note="{{ if .note }}present{{ else }}nil{{ end }}"></span>` +
+			`{{ end }}` +
+			`</div>`
+		const catalogueExample = "---\n" +
+			"template: catalogue\n" +
+			"heading: null\n" +
+			"code: 7\n" +
+			"items:\n" +
+			"  - name: Ada\n" +
+			"    id: 7\n" +
+			"  - name: Grace\n" +
+			"    id: 42\n" +
+			"---\n" +
+			"A catalogue of items.\n"
+
+		// writeCatalogue writes the four required files of a full on-disk
+		// library whose only template is the record-field slide above, with the
+		// given example.md, and returns the project root for os.DirFS. The
+		// manifest and layout are fixed; only the example varies, so the positive
+		// and negative cases differ solely in the example's authored values.
+		writeCatalogue := func(t *testing.T, example string) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+			writeFile(t, filepath.Join(root, SlidesDir, "catalogue", ManifestFile), []byte(catalogueManifest))
+			writeFile(t, filepath.Join(root, SlidesDir, "catalogue", LayoutFile), []byte(catalogueLayout))
+			writeFile(t, filepath.Join(root, SlidesDir, "catalogue", ExampleFile), []byte(example))
+			return projectDir
+		}
+
+		t.Run("the record example validates and converts", func(t *testing.T) {
+			projectDir := writeCatalogue(t, catalogueExample)
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: a valid record-field example must load", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+
+			got, execErr := executeStep7ExampleInt(t, lib, "catalogue", nil)
+			if execErr != nil {
+				t.Fatalf("step-7 example execution error = %v, want nil: the converted record context must execute", execErr)
+			}
+			// The nullable null reads nil, the coerce number reads its string form
+			// (whose `len` would fail if it were still a YAML number), and the
+			// list-of-record reads as one per-item map with its coerce `id` a
+			// string and its omitted optional `note` nil.
+			for _, want := range []string{
+				`<span class="catalogue-heading">nil</span>`,
+				`<span class="catalogue-code">7</span>`,
+				`<span class="catalogue-code-len">1</span>`,
+				`<span class="catalogue-count">2</span>`,
+				`<span class="catalogue-item" data-name="Ada" data-id="7" data-id-len="1" data-note="nil"></span>`,
+				`<span class="catalogue-item" data-name="Grace" data-id="42" data-id-len="2" data-note="nil"></span>`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("step-7 rendered catalogue layout does not contain %q:\n%s", want, got)
+				}
+			}
+		})
+
+		// The validation half is real: a record item that omits its required
+		// field is rejected by LoadLibrary, positioned at the template's
+		// example.md and carrying the full `items › [0] › name` path.
+		t.Run("a violating record item fails the load at the example.md site", func(t *testing.T) {
+			projectDir := writeCatalogue(t,
+				"---\n"+
+					"template: catalogue\n"+
+					"code: 7\n"+
+					"items:\n"+
+					"  - id: 7\n"+
+					"---\n")
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err == nil {
+				t.Fatalf("LoadLibrary() = %+v, nil; want the record item's missing required field to fail the example check", lib)
+			}
+			if lib != nil {
+				t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+			}
+			libErr := asLibraryError(t, err)
+			if want := filepath.Join(TemplatesDir, SlidesDir, "catalogue", ExampleFile); libErr.Path != want {
+				t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
+			}
+			if !strings.Contains(libErr.Message, "items › [0] › name") || !strings.Contains(libErr.Message, "required") {
+				t.Errorf("Message = %q, want a path-qualified required error naming the record field", libErr.Message)
+			}
+		})
+	})
+
+	// A library whose slide template declares list fields carrying a
+	// cross-field bound (max_items_from/min_items_from) loads and validates end
+	// to end: step 4 resolves each reference against a declared list field, and
+	// step 7 enforces the bound against the example's own peer list, so an
+	// example within both bounds loads cleanly while an out-of-bounds one fails
+	// the load with the single two-field error naming both fields and both
+	// lengths (cross-field-list-constraints).
+	t.Run("cross-field list bounds validate end to end", func(t *testing.T) {
+		// Two bound directions against one shared peer list: `capped` is bounded
+		// above by `/peer` and `floored` below by `/peer`, so one example can
+		// satisfy both and a single-authored violation exercises either.
+		const crossFieldManifest = `name: crossfield
+fields:
+  - name: capped
+    type: list
+    max_items_from: /peer
+    item:
+      name: entry
+      type: text
+  - name: floored
+    type: list
+    min_items_from: /peer
+    item:
+      name: entry
+      type: text
+  - name: peer
+    type: list
+    item:
+      name: entry
+      type: text
+`
+		// The `len` reads make the converted lists observable: the very context
+		// the bound was checked against is the one the layout executes.
+		const crossFieldLayout = `<div class="crossfield">` +
+			`<span class="capped-count">{{ len .capped }}</span>` +
+			`<span class="floored-count">{{ len .floored }}</span>` +
+			`<span class="peer-count">{{ len .peer }}</span>` +
+			`</div>`
+
+		// writeCrossField writes the four required files of a full on-disk
+		// library whose only template is the bounded-list slide above, with the
+		// given example.md, and returns the project root for os.DirFS. The
+		// manifest and layout are fixed; only the example varies, so the positive
+		// and negative cases differ solely in the authored list lengths.
+		writeCrossField := func(t *testing.T, example string) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+			writeFile(t, filepath.Join(root, SlidesDir, "crossfield", ManifestFile), []byte(crossFieldManifest))
+			writeFile(t, filepath.Join(root, SlidesDir, "crossfield", LayoutFile), []byte(crossFieldLayout))
+			writeFile(t, filepath.Join(root, SlidesDir, "crossfield", ExampleFile), []byte(example))
+			return projectDir
+		}
+
+		t.Run("an example within both bounds loads", func(t *testing.T) {
+			// peer has 3 items, so capped (2) satisfies max_items_from and
+			// floored (4) satisfies min_items_from.
+			projectDir := writeCrossField(t,
+				"---\n"+
+					"template: crossfield\n"+
+					"peer:\n"+
+					"  - p\n"+
+					"  - q\n"+
+					"  - r\n"+
+					"capped:\n"+
+					"  - a\n"+
+					"  - b\n"+
+					"floored:\n"+
+					"  - a\n"+
+					"  - b\n"+
+					"  - c\n"+
+					"  - d\n"+
+					"---\n"+
+					"A cross-field example.\n")
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: an example within both bounds must load", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+			if _, _, ok := lib.TemplateByName("crossfield"); !ok {
+				t.Error("slide template crossfield not loaded")
+			}
+		})
+
+		// The negative half: each bound direction is enforced at the example
+		// site and reported as ONE error naming both fields and both lengths.
+		cases := []struct {
+			name      string
+			example   string
+			wantField string
+			wantRule  string
+			wantMsg   string
+		}{
+			{
+				name: "a list over its max_items_from peer fails the load",
+				example: "---\n" +
+					"template: crossfield\n" +
+					"peer:\n" +
+					"  - p\n" +
+					"  - q\n" +
+					"  - r\n" +
+					"capped:\n" +
+					"  - a\n" +
+					"  - b\n" +
+					"  - c\n" +
+					"  - d\n" +
+					"floored:\n" +
+					"  - a\n" +
+					"  - b\n" +
+					"  - c\n" +
+					"---\n",
+				wantField: "capped",
+				wantRule:  "max_items_from",
+				wantMsg:   `max_items_from: field "capped" has 4 item(s), more than field "peer" has 3`,
+			},
+			{
+				name: "a list under its min_items_from peer fails the load",
+				example: "---\n" +
+					"template: crossfield\n" +
+					"peer:\n" +
+					"  - p\n" +
+					"  - q\n" +
+					"  - r\n" +
+					"capped:\n" +
+					"  - a\n" +
+					"  - b\n" +
+					"floored:\n" +
+					"  - a\n" +
+					"---\n",
+				wantField: "floored",
+				wantRule:  "min_items_from",
+				wantMsg:   `min_items_from: field "floored" has 1 item(s), fewer than field "peer" has 3`,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				projectDir := writeCrossField(t, tc.example)
+				lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+				if err == nil {
+					t.Fatalf("LoadLibrary() = %+v, nil; want the out-of-bounds example to fail the load", lib)
+				}
+				if lib != nil {
+					t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+				}
+				libErr := asLibraryError(t, err)
+				if want := filepath.Join(TemplatesDir, SlidesDir, "crossfield", ExampleFile); libErr.Path != want {
+					t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
+				}
+				if !strings.Contains(libErr.Message, tc.wantField) || !strings.Contains(libErr.Message, tc.wantRule) {
+					t.Errorf("Message = %q, want a path-qualified %s error naming the field %q", libErr.Message, tc.wantRule, tc.wantField)
+				}
+				if !strings.Contains(libErr.Message, tc.wantMsg) {
+					t.Errorf("Message = %q, want the two-field error %q", libErr.Message, tc.wantMsg)
+				}
+			})
+		}
+	})
+
+	// A full on-disk library whose library.yaml carries the three
+	// named-definition sections — groups:, field_sets: and types: — loads
+	// through os.DirFS, and a template's `type:` (a named type), `- include:`
+	// (a named field set) and `@group` `accepted:` entry all resolve against
+	// the library's OWN definitions; its example then validates end to end
+	// against the expanded schema (named-library-definitions). This is the
+	// single-layer LoadLibrary path: loadLibraryMeta parses the sections onto
+	// the loader's unexported carrier, layerFromLibrary copies them onto the
+	// loading layer's Definitions, and NewRegistryFromLibrary (step 4)
+	// threads every template's owning-layer Definitions through
+	// registerLibraryTemplate into parseManifest — the layerless step-4
+	// *Library's fallback — so the references resolve while the example is
+	// validated.
+	t.Run("named definitions (groups, field_sets, types) resolve and validate end to end", func(t *testing.T) {
+		// The three sections are additive to format 1: the library still
+		// declares `format: 1`. callouts is the named accept-list (referenced
+		// as `@callouts`), meta the named field set (`- include: meta`) and
+		// colour the named field type (`type: colour`).
+		const namedLibraryYAML = `name: demo
+format: 1
+groups:
+  callouts:
+    - note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants:
+      - red
+      - green
+      - blue
+`
+		// The report slide references each kind: `- include: meta` expands the
+		// field set's subtitle/weight in place, `type: colour` expands the
+		// named enum under the referencing name accent, and the asides section
+		// accepts the named group `@callouts` combinable with the literal
+		// template name tip.
+		const reportManifest = `name: report
+fields:
+  - include: meta
+  - name: accent
+    type: colour
+    required: true
+sections:
+  - name: asides
+    accepted:
+      - "@callouts"
+      - tip
+    max: 4
+`
+		const reportLayout = `<section class="report">` +
+			`<span class="report-subtitle">{{ .subtitle }}</span>` +
+			`<span class="report-weight">{{ .weight }}</span>` +
+			`<span class="report-accent">{{ .accent }}</span>` +
+			`{{ range .asides }}<span class="report-aside">{{ .text }}</span>{{ end }}` +
+			`</section>`
+
+		const noteManifest = "name: note\nfields:\n  - name: text\n    type: text\n"
+		const noteLayout = `<aside class="note">{{ .text }}</aside>`
+		const noteExample = "A note.\n"
+		const tipManifest = "name: tip\nfields:\n  - name: text\n    type: text\n"
+		const tipLayout = `<aside class="tip">{{ .text }}</aside>`
+		const tipExample = "A tip.\n"
+
+		// The report example supplies the included fields, a variant of the
+		// named enum, and nests a note child (accepted only via `@callouts`)
+		// and a tip child (accepted via the literal name), so BOTH the field
+		// references and the group expansion reach the example-validation
+		// site, not just the parsed declaration.
+		const reportExample = "---\n" +
+			"template: report\n" +
+			"subtitle: Quarterly\n" +
+			"weight: 3\n" +
+			"accent: red\n" +
+			"---\n" +
+			"Report body.\n" +
+			"# asides\n" +
+			"```\n" +
+			"template: note\n" +
+			"text: hello\n" +
+			"```\n" +
+			"# asides\n" +
+			"```\n" +
+			"template: tip\n" +
+			"text: bye\n" +
+			"```\n"
+
+		// writeNamedLibrary writes library.yaml plus the three templates to a
+		// fresh temp dir, returning the project root for os.DirFS. Only the
+		// report example varies, so the positive and negative cases differ
+		// solely in the authored accent value.
+		writeNamedLibrary := func(t *testing.T, reportEx string) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte(namedLibraryYAML))
+			files := mergeIntFiles(
+				templateIntFiles(SlidesDir, "report", reportManifest, reportLayout, reportEx),
+				templateIntFiles(SectionsDir, "note", noteManifest, noteLayout, noteExample),
+				templateIntFiles(SectionsDir, "tip", tipManifest, tipLayout, tipExample),
+			)
+			for rel, data := range files {
+				writeFile(t, filepath.Join(root, filepath.FromSlash(rel)), []byte(data))
+			}
+			return projectDir
+		}
+
+		t.Run("the template resolves type:/include:/@group and its example executes", func(t *testing.T) {
+			projectDir := writeNamedLibrary(t, reportExample)
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: named references must resolve at load", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+
+			report, kind, ok := lib.TemplateByName("report")
+			if !ok || kind != KindSlide {
+				t.Fatalf("TemplateByName(report) = (%v, %q, %v), want (non-nil, %q, true)", report, kind, ok, KindSlide)
+			}
+			if report.Definition == nil {
+				t.Fatal("checkLibraryBuild left report.Definition nil")
+			}
+			def := report.Definition
+
+			// `- include: meta` expanded the named field set in place, ahead of
+			// the literal accent field.
+			if len(def.Fields) != 3 {
+				t.Fatalf("report.Fields = %+v, want subtitle, weight (from include: meta) then accent", def.Fields)
+			}
+			if def.Fields[0].Name != "subtitle" || def.Fields[0].Type != FieldText {
+				t.Errorf("Fields[0] = %+v, want the field set's subtitle:text", def.Fields[0])
+			}
+			if def.Fields[1].Name != "weight" || def.Fields[1].Type != FieldNumber {
+				t.Errorf("Fields[1] = %+v, want the field set's weight:number", def.Fields[1])
+			}
+			// `type: colour` expanded the named enum under the referencing name
+			// accent, keeping the named variants and the referencing field's own
+			// required key.
+			if def.Fields[2].Name != "accent" || def.Fields[2].Type != FieldEnum || !def.Fields[2].Required {
+				t.Errorf("Fields[2] = %+v, want the named type colour expanded as accent:enum required", def.Fields[2])
+			}
+			assertStringSlice(t, "accent.Variants", def.Fields[2].Variants, []string{"red", "green", "blue"})
+
+			// `@callouts` expanded the named group in place, then the literal tip
+			// name, so the section's accepted list is the group's members plus the
+			// literal.
+			if len(def.Sections) != 1 {
+				t.Fatalf("report.Sections = %+v, want one asides section", def.Sections)
+			}
+			assertStringSlice(t, "asides.Accepted", def.Sections[0].Accepted, []string{"note", "tip"})
+
+			// The resolved schema is the one the example was validated against
+			// and the one the layout executes: subtitle/weight from the field set
+			// and accent from the named enum read their authored values, and both
+			// the `@callouts` note child and the literal tip child materialise.
+			got, execErr := executeStep7ExampleInt(t, lib, "report", nil)
+			if execErr != nil {
+				t.Fatalf("step-7 example execution error = %v, want nil", execErr)
+			}
+			for _, want := range []string{
+				`<span class="report-subtitle">Quarterly</span>`,
+				`<span class="report-weight">3</span>`,
+				`<span class="report-accent">red</span>`,
+				`<span class="report-aside">hello</span>`,
+				`<span class="report-aside">bye</span>`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("step-7 rendered report layout does not contain %q:\n%s", want, got)
+				}
+			}
+		})
+
+		// The resolved named enum is enforced end to end: an example accent
+		// outside the named type's variants fails the load at report's
+		// example.md, so the loader really validated the example against the
+		// EXPANDED schema, not just recorded it.
+		t.Run("the resolved named enum is enforced at the example site", func(t *testing.T) {
+			projectDir := writeNamedLibrary(t,
+				"---\n"+
+					"template: report\n"+
+					"subtitle: Quarterly\n"+
+					"weight: 3\n"+
+					"accent: purple\n"+
+					"---\n")
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err == nil {
+				t.Fatalf("LoadLibrary() = %+v, nil; want the named enum's out-of-variants value to fail the load", lib)
+			}
+			if lib != nil {
+				t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+			}
+			libErr := asLibraryError(t, err)
+			if want := filepath.Join(TemplatesDir, SlidesDir, "report", ExampleFile); libErr.Path != want {
+				t.Errorf("Path = %q, want the example.md site %q", libErr.Path, want)
+			}
+			if !strings.Contains(libErr.Message, `accent: enum: "purple" is not one of the allowed variants (red, green, blue)`) {
+				t.Errorf("Message = %q, want the named enum's variant error", libErr.Message)
+			}
+		})
+	})
+
+	// A full on-disk library carrying an internal template — a section whose
+	// manifest declares `internal: true` — loads and validates end to end
+	// through os.DirFS, and the internal template stays usable wherever a
+	// template is resolved through the registry's Lookup rather than the
+	// Catalogue surface: as a `section`-helper target and as a
+	// `section_template` field type. Its Internal flag reaches the loaded
+	// library's parsed definition, so a lister (`kalide templates`) can hide
+	// it while those two resolution paths still find it (internal-templates).
+	t.Run("an internal template loads and stays resolvable", func(t *testing.T) {
+		// The internal section template: hidden from the default listing but a
+		// valid section-usage target. anchor declares one optional text field
+		// so its example is parsed and validated, and its layout is renderable
+		// so a caller observes the resolution execute, not merely parse.
+		const anchorManifest = "name: anchor\ninternal: true\nfields:\n  - name: label\n    type: text\n"
+		const anchorLayout = `<aside class="anchor">{{ .label }}</aside>`
+		const anchorExample = "```\nlabel: Anchor\n```\n"
+
+		// The section-helper caller: a slide whose layout calls the internal
+		// template through the `section` helper, which resolves through Lookup
+		// and so accepts an internal target.
+		const helperHostManifest = "name: helperhost\nfields:\n  - name: title\n    type: text\n"
+		const helperHostLayout = `<section class="helperhost"><h1>{{ .title }}</h1>{{ section "anchor" (dict "label" "Hi") }}</section>`
+		const helperHostExample = "---\ntemplate: helperhost\ntitle: Host\n---\n"
+
+		// The section_template field-type caller: a slide declaring a
+		// section-template field naming the internal template, resolved by
+		// checkFieldTypes through Lookup.
+		const fieldHostManifest = "name: fieldhost\nfields:\n  - name: block\n    type: section-template\n    section_template: anchor\n"
+		const fieldHostLayout = `<article class="fieldhost">{{ .block.label }}</article>`
+		const fieldHostExample = "---\ntemplate: fieldhost\nblock:\n  label: Card\n---\n"
+
+		projectDir := t.TempDir()
+		root := filepath.Join(projectDir, TemplatesDir)
+		writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+		files := mergeIntFiles(
+			templateIntFiles(SectionsDir, "anchor", anchorManifest, anchorLayout, anchorExample),
+			templateIntFiles(SlidesDir, "helperhost", helperHostManifest, helperHostLayout, helperHostExample),
+			templateIntFiles(SlidesDir, "fieldhost", fieldHostManifest, fieldHostLayout, fieldHostExample),
+		)
+		for rel, data := range files {
+			writeFile(t, filepath.Join(root, filepath.FromSlash(rel)), []byte(data))
+		}
+
+		lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: an internal template is a valid section-helper target and section_template field type", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadLibrary() returned nil Library with nil error")
+		}
+
+		// The Internal flag reaches the loaded library's parsed definition, so
+		// a lister can hide the template while it stays resolvable.
+		anchor, kind, ok := lib.TemplateByName("anchor")
+		if !ok || kind != KindSection {
+			t.Fatalf("TemplateByName(anchor) = (%v, %q, %v), want (non-nil, %q, true)", anchor, kind, ok, KindSection)
+		}
+		if anchor.Definition == nil {
+			t.Fatal("checkLibraryBuild left anchor.Definition nil")
+		}
+		if !anchor.Definition.Internal {
+			t.Errorf("anchor.Definition.Internal = false, want true from the `internal: true` manifest")
+		}
+
+		// The `section`-helper target resolved: the loaded host definition
+		// carries the call, and executing the step-7 example renders the
+		// internal template's own layout.
+		helperHost, _, ok := lib.TemplateByName("helperhost")
+		if !ok || helperHost == nil || helperHost.Definition == nil {
+			t.Fatal(`TemplateByName("helperhost") definition not loaded`)
+		}
+		calls, err := NewSection(nil).HelperCalls(helperHost.Definition)
+		if err != nil {
+			t.Fatalf("HelperCalls(helperhost) error = %v, want nil", err)
+		}
+		if len(calls) != 1 || calls[0].Name != "anchor" {
+			t.Fatalf("HelperCalls(helperhost) = %+v, want one call to anchor", calls)
+		}
+		got, execErr := executeStep7ExampleInt(t, lib, "helperhost", nil)
+		if execErr != nil {
+			t.Fatalf("step-7 example execution error = %v, want nil: the internal template must execute as a helper target", execErr)
+		}
+		if !strings.Contains(got, `<aside class="anchor">Hi</aside>`) {
+			t.Errorf("step-7 rendered helperhost layout does not contain the internal template's HTML:\n%s", got)
+		}
+
+		// The `section_template` field type resolved: the loaded field
+		// definition carries the field, and executing the step-7 example reads
+		// the structured value through it.
+		fieldHost, _, ok := lib.TemplateByName("fieldhost")
+		if !ok || fieldHost == nil || fieldHost.Definition == nil {
+			t.Fatal(`TemplateByName("fieldhost") definition not loaded`)
+		}
+		if len(fieldHost.Definition.Fields) != 1 {
+			t.Fatalf("fieldhost.Fields = %+v, want one block field", fieldHost.Definition.Fields)
+		}
+		if f := fieldHost.Definition.Fields[0]; f.Type != FieldSectionTemplate || f.SectionTemplate != "anchor" {
+			t.Errorf("fieldhost.Fields[0] = %+v, want a section-template field naming anchor", f)
+		}
+		got, execErr = executeStep7ExampleInt(t, lib, "fieldhost", nil)
+		if execErr != nil {
+			t.Fatalf("step-7 example execution error = %v, want nil: the internal template must execute as a section_template field type", execErr)
+		}
+		if !strings.Contains(got, `<article class="fieldhost">Card</article>`) {
+			t.Errorf("step-7 rendered fieldhost layout does not contain the section_template field value:\n%s", got)
+		}
+	})
+
+	// A full on-disk library carrying an image field with declared path options
+	// (roots/dir/extensions) and an enum field whose variants come from a
+	// `variants_from:` glob loads through os.DirFS. The image value resolves in
+	// the declared media root — a missing one fails with the closest accepted
+	// candidate — the enum's effective variants are the glob's matches written
+	// relative to the owning layer's media/ and sorted, and two fresh loads
+	// expand identical media-relative Variants (image-field-roots,
+	// enum-variants-from).
+	t.Run("an image field's roots/dir/extensions and an enum variants_from resolve on disk", func(t *testing.T) {
+		// cover declares the media root with a bgs/ dir filter and a jpg
+		// extension filter; effect takes its closed value set from the
+		// layer-root-relative glob media/bgs/*.jpg, so its effective variants
+		// are the media-relative bgs/*.jpg paths.
+		const galleryManifest = `name: gallery
+fields:
+  - name: cover
+    type: image
+    roots:
+      - media
+    dir: bgs
+    extensions:
+      - jpg
+  - name: effect
+    type: enum
+    variants_from: media/bgs/*.jpg
+`
+		const galleryLayout = `<section class="gallery">` +
+			`<span class="gallery-cover">{{ .cover }}</span>` +
+			`<span class="gallery-effect">{{ .effect }}</span>` +
+			`</section>`
+		// The example names a media-relative file that exists under bgs/ with a
+		// jpg extension and is one of the expanded variants, so the load
+		// exercises both the image existence check and the enum membership
+		// check against the on-disk media tree.
+		const galleryExample = "---\n" +
+			"template: gallery\n" +
+			"cover: bgs/right-8.jpg\n" +
+			"effect: bgs/right-8.jpg\n" +
+			"---\n" +
+			"A gallery.\n"
+
+		// The glob's matched set, written media-relative (the media/ prefix
+		// dropped) and sorted. right-10 sorts before right-8 lexicographically,
+		// so the order is observable; the directory media/bgs/sub and the
+		// non-jpg notes.txt are present but excluded — the glob does not recurse
+		// into sub and matches only *.jpg.
+		wantVariants := []string{"bgs/right-10.jpg", "bgs/right-8.jpg", "bgs/right-9.jpg"}
+
+		// writeGallery writes a fresh on-disk library whose only template is
+		// the image/enum slide above, with the media/ tree the image root and
+		// the variants_from glob resolve in, and returns the project root for
+		// os.DirFS. Each call is an independent load input, so two calls prove
+		// the expansion is stable across loads.
+		writeGallery := func(t *testing.T) string {
+			t.Helper()
+			projectDir := t.TempDir()
+			root := filepath.Join(projectDir, TemplatesDir)
+			writeFile(t, filepath.Join(root, LibraryFile), []byte("name: demo\nformat: 1\n"))
+			writeFile(t, filepath.Join(root, SlidesDir, "gallery", ManifestFile), []byte(galleryManifest))
+			writeFile(t, filepath.Join(root, SlidesDir, "gallery", LayoutFile), []byte(galleryLayout))
+			writeFile(t, filepath.Join(root, SlidesDir, "gallery", ExampleFile), []byte(galleryExample))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "right-8.jpg"), []byte("8"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "right-9.jpg"), []byte("9"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "right-10.jpg"), []byte("10"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "notes.txt"), []byte("n"))
+			writeFile(t, filepath.Join(root, MediaDir, "bgs", "sub", "deep.jpg"), []byte("d"))
+			writeFile(t, filepath.Join(root, MediaDir, "logo.png"), []byte("l"))
+			return projectDir
+		}
+
+		// fieldNamed returns the loaded definition's field by name.
+		fieldNamed := func(t *testing.T, def *Template, name string) *Field {
+			t.Helper()
+			if def == nil {
+				t.Fatalf("loaded definition is nil, want one carrying field %q", name)
+			}
+			for i := range def.Fields {
+				if def.Fields[i].Name == name {
+					return &def.Fields[i]
+				}
+			}
+			t.Fatalf("field %q not found in the loaded definition (fields: %+v)", name, def.Fields)
+			return nil
+		}
+
+		// loadGallery loads a fresh library and returns it along with its
+		// gallery definition, so the single-layer library's media/ tree is
+		// available as lib.Media.
+		loadGallery := func(t *testing.T) (*Library, *Template) {
+			t.Helper()
+			projectDir := writeGallery(t)
+			lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+			if err != nil {
+				t.Fatalf("LoadLibrary() error = %v, want nil: the image root and the variants_from glob must resolve on disk", err)
+			}
+			if lib == nil {
+				t.Fatal("LoadLibrary() returned nil Library with nil error")
+			}
+			gallery, kind, ok := lib.TemplateByName("gallery")
+			if !ok || kind != KindSlide {
+				t.Fatalf("TemplateByName(gallery) = (%v, %q, %v), want (non-nil, %q, true)", gallery, kind, ok, KindSlide)
+			}
+			if gallery.Definition == nil {
+				t.Fatal("checkLibraryBuild left gallery.Definition nil")
+			}
+			return lib, gallery.Definition
+		}
+
+		lib, def := loadGallery(t)
+
+		// The image field's declared path options reached the loaded schema:
+		// the media root, the bgs/ dir and the jpg extension filter.
+		cover := fieldNamed(t, def, "cover")
+		if !reflect.DeepEqual(cover.Roots, []string{"media"}) {
+			t.Errorf("cover.Roots = %#v, want [media]", cover.Roots)
+		}
+		if cover.Dir != "bgs" {
+			t.Errorf("cover.Dir = %q, want %q", cover.Dir, "bgs")
+		}
+		if !reflect.DeepEqual(cover.Extensions, []string{"jpg"}) {
+			t.Errorf("cover.Extensions = %#v, want [jpg]", cover.Extensions)
+		}
+
+		// The enum's effective variants are the glob's matches, written
+		// media-relative (the media/ prefix dropped) and sorted; the glob is
+		// cleared once expanded.
+		effect := fieldNamed(t, def, "effect")
+		if effect.Type != FieldEnum {
+			t.Fatalf("effect.Type = %q, want %q", effect.Type, FieldEnum)
+		}
+		if effect.VariantsFrom != "" {
+			t.Errorf("effect.VariantsFrom = %q after load, want cleared", effect.VariantsFrom)
+		}
+		if !reflect.DeepEqual(effect.Variants, wantVariants) {
+			t.Errorf("effect.Variants = %#v, want the sorted media-relative %#v", effect.Variants, wantVariants)
+		}
+		if !sort.StringsAreSorted(effect.Variants) {
+			t.Errorf("effect.Variants = %#v, want sorted", effect.Variants)
+		}
+
+		// CheckValues with the owning layer's media root closed over by
+		// ImageExistsFunc resolves the image value: an existing media-relative
+		// file passes with no error...
+		imgExists := WithImageExists(ImageExistsFunc(nil, lib.Media))
+		got := CheckValues(map[string]any{"cover": "bgs/right-8.jpg"}, def, nil, imgExists)
+		if len(got.Errors) != 0 {
+			t.Fatalf("CheckValues(existing image) errors = %s, want none", renderErrors(got.Errors))
+		}
+
+		// ...while a missing file fails with the image error naming the path
+		// and the closest accepted candidate.
+		got = CheckValues(map[string]any{"cover": "bgs/right-7.jpg"}, def, nil, imgExists)
+		if len(got.Errors) != 1 {
+			t.Fatalf("CheckValues(missing image) errors = %s, want exactly 1", renderErrors(got.Errors))
+		}
+		if e := got.Errors[0]; e.Rule != "image" || e.PathString() != "cover" ||
+			e.What != `image: "bgs/right-7.jpg" does not exist` ||
+			e.Fix != `did you mean "bgs/right-8.jpg"?` {
+			t.Errorf("missing-image error = rule %q path %q what %q fix %q, want the image error suggesting bgs/right-8.jpg",
+				e.Rule, e.PathString(), e.What, e.Fix)
+		}
+
+		// A second, independent load expands the identical media-relative
+		// Variants: the expansion is deterministic across loads.
+		_, def2 := loadGallery(t)
+		effect2 := fieldNamed(t, def2, "effect")
+		if !reflect.DeepEqual(effect2.Variants, effect.Variants) {
+			t.Errorf("repeated load effect.Variants = %#v, want the first load's %#v", effect2.Variants, effect.Variants)
+		}
+	})
 }
 
 // TestLoadDeckLibraryMergedThemeAndMediaLayers covers LoadDeckLibrary's merged
@@ -303,6 +1096,292 @@ func TestLoadDeckLibraryMergedThemeAndMediaLayers(t *testing.T) {
 		// the layers have equal standing (library-layer-uniqueness).
 		assertLayerDuplicateError(t, err, "media path", "dup.png",
 			filepath.Join(external, MediaDir, "dup.png"), filepath.Join(localRoot, MediaDir, "dup.png"))
+	})
+
+	// A deck whose local and external layers each carry the SAME relative
+	// media/ tree (media/bgs/*.jpg) but a different file proves a layer's
+	// template resolves its references in ITS OWN layer, never the other
+	// layer's or the merged primary's: the external template's
+	// `variants_from: media/bgs/*.jpg` glob expands only against the external
+	// layer's media/, and an image field with roots [media] on the external
+	// template existence-checks against the external layer's media/ alone
+	// (enum-variants-from, image-field-roots, library-layer-references).
+	t.Run("a layer's template expands variants_from and resolves image media in its own layer", func(t *testing.T) {
+		// Both layers declare the same image/enum slide schema and the same
+		// layer-root-relative glob media/bgs/*.jpg, so an expansion against
+		// the wrong layer is observable purely from the differing file names.
+		const layerLayout = `<section class="layer">` +
+			`<span class="cover">{{ .cover }}</span>` +
+			`<span class="effect">{{ .effect }}</span>` +
+			`</section>`
+
+		// writeLayerWithMediaTemplate writes a one-slide library at dir whose
+		// slide declares the image/enum schema above and whose media/ tree
+		// holds exactly one bgs/*.jpg — the given mediaFile — so each layer's
+		// glob has a distinct, layer-local match.
+		writeLayerWithMediaTemplate := func(dir, name, mediaFile string) {
+			t.Helper()
+			manifest := "name: " + name + "\nfields:\n" +
+				"  - name: cover\n" +
+				"    type: image\n" +
+				"    roots:\n" +
+				"      - media\n" +
+				"    dir: bgs\n" +
+				"    extensions:\n" +
+				"      - jpg\n" +
+				"  - name: effect\n" +
+				"    type: enum\n" +
+				"    variants_from: media/bgs/*.jpg\n"
+			writeFile(t, filepath.Join(dir, LibraryFile), []byte("name: "+name+"\nformat: 1\n"))
+			writeFile(t, filepath.Join(dir, SlidesDir, name, ManifestFile), []byte(manifest))
+			writeFile(t, filepath.Join(dir, SlidesDir, name, LayoutFile), []byte(layerLayout))
+			writeFile(t, filepath.Join(dir, SlidesDir, name, ExampleFile),
+				[]byte("---\ntemplate: "+name+"\n---\nA "+name+".\n"))
+			writeFile(t, filepath.Join(dir, MediaDir, "bgs", mediaFile), []byte(mediaFile))
+		}
+
+		// fieldNamed returns a loaded definition's field by name.
+		fieldNamed := func(t *testing.T, def *Template, name string) *Field {
+			t.Helper()
+			if def == nil {
+				t.Fatalf("loaded definition is nil, want one carrying field %q", name)
+			}
+			for i := range def.Fields {
+				if def.Fields[i].Name == name {
+					return &def.Fields[i]
+				}
+			}
+			t.Fatalf("field %q not found in the loaded definition (fields: %+v)", name, def.Fields)
+			return nil
+		}
+
+		deckRoot := t.TempDir()
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+		external := t.TempDir()
+		writeLayerWithMediaTemplate(localRoot, "local-slide", "right-9.jpg")
+		writeLayerWithMediaTemplate(external, "ext-slide", "right-8.jpg")
+
+		lib, err := LoadDeckLibrary(deckRoot, external)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary: %v", err)
+		}
+
+		// The external template's owning layer is the external layer, so its
+		// glob and its media-root image field resolve in the external library
+		// (the layer whose file is right-8.jpg, not the local right-9.jpg).
+		reg, err := NewRegistryFromLibrary(lib)
+		if err != nil {
+			t.Fatalf("NewRegistryFromLibrary: %v", err)
+		}
+		extLayer := reg.LayerOf("ext-slide")
+		if extLayer == nil {
+			t.Fatal("LayerOf(ext-slide) = nil, want the external owning layer so its glob and media resolve there")
+		}
+		if extLayer.RootPath != external {
+			t.Fatalf("LayerOf(ext-slide).RootPath = %q, want the external layer %q", extLayer.RootPath, external)
+		}
+		if localLayer := reg.LayerOf("local-slide"); localLayer == nil || localLayer.RootPath != localRoot {
+			t.Errorf("LayerOf(local-slide) = %+v, want the local layer %q", localLayer, localRoot)
+		}
+
+		ext, _, ok := lib.TemplateByName("ext-slide")
+		if !ok || ext == nil || ext.Definition == nil {
+			t.Fatal(`TemplateByName("ext-slide") definition not loaded`)
+		}
+
+		// The external template's glob expanded against the external layer's
+		// media alone: only bgs/right-8.jpg, never the local layer's
+		// bgs/right-9.jpg, and the glob is cleared once expanded.
+		effect := fieldNamed(t, ext.Definition, "effect")
+		if effect.VariantsFrom != "" {
+			t.Errorf("ext effect.VariantsFrom = %q after load, want cleared (expanded against the owning layer)", effect.VariantsFrom)
+		}
+		if !reflect.DeepEqual(effect.Variants, []string{"bgs/right-8.jpg"}) {
+			t.Errorf("ext effect.Variants = %#v, want [bgs/right-8.jpg] (the external layer's media only)", effect.Variants)
+		}
+
+		// The local template, declaring the same relative glob, expands against
+		// the local layer's media alone: the expansion is per-layer, never
+		// merged across the layers.
+		local, _, ok := lib.TemplateByName("local-slide")
+		if !ok || local == nil || local.Definition == nil {
+			t.Fatal(`TemplateByName("local-slide") definition not loaded`)
+		}
+		localEffect := fieldNamed(t, local.Definition, "effect")
+		if !reflect.DeepEqual(localEffect.Variants, []string{"bgs/right-9.jpg"}) {
+			t.Errorf("local effect.Variants = %#v, want [bgs/right-9.jpg] (the local layer's media only)", localEffect.Variants)
+		}
+
+		// The whole-deck validator resolves a media-root image field against
+		// the owning layer's media (validate.checkFields closes over
+		// reg.LayerOf(tmpl.Name).Media); here that is the external layer's.
+		imgExists := WithImageExists(ImageExistsFunc(nil, extLayer.Media))
+
+		// A file that exists only in the external layer's media is accepted...
+		if got := CheckValues(map[string]any{"cover": "bgs/right-8.jpg"}, ext.Definition, nil, imgExists); len(got.Errors) != 0 {
+			t.Errorf("CheckValues(external-only image) errors = %s, want none", renderErrors(got.Errors))
+		}
+		// ...and one that exists only in the local layer's media is rejected,
+		// with candidates drawn from the external layer alone: the suggestion
+		// names the external bgs/right-8.jpg, never the local bgs/right-9.jpg.
+		got := CheckValues(map[string]any{"cover": "bgs/right-9.jpg"}, ext.Definition, nil, imgExists)
+		if len(got.Errors) != 1 {
+			t.Fatalf("CheckValues(local-only image) errors = %s, want exactly 1", renderErrors(got.Errors))
+		}
+		if e := got.Errors[0]; e.Rule != "image" || e.PathString() != "cover" ||
+			e.What != `image: "bgs/right-9.jpg" does not exist` ||
+			e.Fix != `did you mean "bgs/right-8.jpg"?` {
+			t.Errorf("local-only-image error = rule %q path %q what %q fix %q, want the image error suggesting the external layer's bgs/right-8.jpg",
+				e.Rule, e.PathString(), e.What, e.Fix)
+		}
+	})
+}
+
+// TestLoadDeckLibraryRegistryVariantsExpandedInt is the regression coverage for
+// NewRegistryFromLibrary expanding an enum field's `variants_from:` glob on the
+// runtime registry it returns (feedback-53). Before that fix the expansion
+// happened only on the throwaway registry checkLibraryBuild builds and
+// validates, so a runtime registry's own template — the one `kalide
+// templates <name>`, the render/example paths and the whole-deck validator
+// read through reg.Lookup — kept VariantsFrom set and Variants empty.
+//
+// It loads a real external + local two-layer deck whose two slides declare the
+// SAME layer-root-relative glob (`media/bgs/*.jpg`) over distinct per-layer
+// media files, builds the runtime registry, and pins that each registry
+// template's enum field carries the effective Variants — sorted, media-relative
+// and drawn from its OWN owning layer alone, never the other layer's or a merge
+// — with VariantsFrom cleared. It then drives CheckValues against that registry
+// template exactly as the whole-deck validator does: an expanded variant is
+// accepted and a non-member is rejected with the closest suggestion.
+//
+// Real filesystem I/O, so it is skipped under `go test -short`.
+func TestLoadDeckLibraryRegistryVariantsExpandedInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: real filesystem")
+	}
+
+	// The shared schema: an image field cover with a media root (dir bgs, jpg
+	// extension) and an enum field effect whose closed value set comes from the
+	// same layer-root-relative glob in both layers.
+	const layerLayout = `<section class="layer">` +
+		`<span class="cover">{{ .cover }}</span>` +
+		`<span class="effect">{{ .effect }}</span>` +
+		`</section>`
+
+	// writeLayer writes a one-slide library at dir whose slide declares the
+	// image/enum schema above and whose media/ tree holds exactly mediaFiles
+	// under bgs/. Each layer is given a distinct set, so a glob expanded against
+	// the wrong layer is observable purely from the resulting Variants.
+	writeLayer := func(dir, name string, mediaFiles ...string) {
+		t.Helper()
+		manifest := "name: " + name + "\nfields:\n" +
+			"  - name: cover\n" +
+			"    type: image\n" +
+			"    roots:\n" +
+			"      - media\n" +
+			"    dir: bgs\n" +
+			"    extensions:\n" +
+			"      - jpg\n" +
+			"  - name: effect\n" +
+			"    type: enum\n" +
+			"    variants_from: media/bgs/*.jpg\n"
+		writeFile(t, filepath.Join(dir, LibraryFile), []byte("name: "+name+"\nformat: 1\n"))
+		writeFile(t, filepath.Join(dir, SlidesDir, name, ManifestFile), []byte(manifest))
+		writeFile(t, filepath.Join(dir, SlidesDir, name, LayoutFile), []byte(layerLayout))
+		writeFile(t, filepath.Join(dir, SlidesDir, name, ExampleFile),
+			[]byte("---\ntemplate: "+name+"\n---\nA "+name+".\n"))
+		for _, mf := range mediaFiles {
+			writeFile(t, filepath.Join(dir, MediaDir, "bgs", mf), []byte(mf))
+		}
+	}
+
+	// fieldNamed returns a registry template's field by name.
+	fieldNamed := func(t *testing.T, def *Template, name string) *Field {
+		t.Helper()
+		if def == nil {
+			t.Fatalf("registry template is nil, want one carrying field %q", name)
+		}
+		for i := range def.Fields {
+			if def.Fields[i].Name == name {
+				return &def.Fields[i]
+			}
+		}
+		t.Fatalf("field %q not found in the registry template (fields: %+v)", name, def.Fields)
+		return nil
+	}
+
+	deckRoot := t.TempDir()
+	localRoot := filepath.Join(deckRoot, TemplatesDir)
+	external := t.TempDir()
+	writeLayer(localRoot, "local-slide", "right-1.jpg", "right-9.jpg")
+	writeLayer(external, "ext-slide", "right-2.jpg", "right-8.jpg")
+
+	lib, err := LoadDeckLibrary(deckRoot, external)
+	if err != nil {
+		t.Fatalf("LoadDeckLibrary: %v", err)
+	}
+	reg, err := NewRegistryFromLibrary(lib)
+	if err != nil {
+		t.Fatalf("NewRegistryFromLibrary: %v", err)
+	}
+
+	// The registry's own template (not the library's load-time definition)
+	// carries the expanded, sorted, media-relative variants, per owning layer,
+	// with VariantsFrom cleared.
+	t.Run("the runtime registry's enum variants are expanded per owning layer", func(t *testing.T) {
+		extTmpl, ok := reg.Lookup("ext-slide")
+		if !ok || extTmpl == nil {
+			t.Fatal(`reg.Lookup("ext-slide") not found`)
+		}
+		extEffect := fieldNamed(t, extTmpl, "effect")
+		if extEffect.VariantsFrom != "" {
+			t.Errorf("registry ext effect.VariantsFrom = %q, want cleared (expanded against the registry's owning layer)", extEffect.VariantsFrom)
+		}
+		if want := []string{"bgs/right-2.jpg", "bgs/right-8.jpg"}; !reflect.DeepEqual(extEffect.Variants, want) {
+			t.Errorf("registry ext effect.Variants = %#v, want %#v (sorted, media-relative, the external layer alone)", extEffect.Variants, want)
+		}
+
+		localTmpl, ok := reg.Lookup("local-slide")
+		if !ok || localTmpl == nil {
+			t.Fatal(`reg.Lookup("local-slide") not found`)
+		}
+		localEffect := fieldNamed(t, localTmpl, "effect")
+		if localEffect.VariantsFrom != "" {
+			t.Errorf("registry local effect.VariantsFrom = %q, want cleared", localEffect.VariantsFrom)
+		}
+		if want := []string{"bgs/right-1.jpg", "bgs/right-9.jpg"}; !reflect.DeepEqual(localEffect.Variants, want) {
+			t.Errorf("registry local effect.Variants = %#v, want %#v (the local layer alone, never merged with the external layer)", localEffect.Variants, want)
+		}
+	})
+
+	t.Run("CheckValues against the registry template accepts an expanded value", func(t *testing.T) {
+		extTmpl, ok := reg.Lookup("ext-slide")
+		if !ok || extTmpl == nil {
+			t.Fatal(`reg.Lookup("ext-slide") not found`)
+		}
+		got := CheckValues(map[string]any{"effect": "bgs/right-8.jpg"}, extTmpl, nil)
+		if len(got.Errors) != 0 {
+			t.Errorf("CheckValues(expanded variant) errors = %s, want none", renderErrors(got.Errors))
+		}
+	})
+
+	t.Run("CheckValues rejects a non-member with the closest suggestion", func(t *testing.T) {
+		extTmpl, ok := reg.Lookup("ext-slide")
+		if !ok || extTmpl == nil {
+			t.Fatal(`reg.Lookup("ext-slide") not found`)
+		}
+		got := CheckValues(map[string]any{"effect": "bgs/right-88.jpg"}, extTmpl, nil)
+		if len(got.Errors) != 1 {
+			t.Fatalf("CheckValues(non-member) errors = %s, want exactly 1", renderErrors(got.Errors))
+		}
+		e := got.Errors[0]
+		want := we("enum", "effect", "bgs/right-88.jpg",
+			`enum: "bgs/right-88.jpg" is not one of the allowed variants (bgs/right-2.jpg, bgs/right-8.jpg)`,
+			`did you mean "bgs/right-8.jpg"? use one of: bgs/right-2.jpg, bgs/right-8.jpg`)
+		if e.Rule != want.Rule || e.PathString() != want.Path || e.What != want.What || e.Fix != want.Fix {
+			t.Errorf("error = rule %q path %q what %q fix %q, want rule %q path %q what %q fix %q",
+				e.Rule, e.PathString(), e.What, e.Fix, want.Rule, want.Path, want.What, want.Fix)
+		}
 	})
 }
 

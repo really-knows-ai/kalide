@@ -1,0 +1,28 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "cli-check",
+  "body": "`kalide check [--all] [--json]` validates a deck without serving it: it loads and validates the resolved template library layers (templates-dir-validation) and the deck's theme, and applies the whole-deck validation rules to the deck's slides (whole-deck-validation) — config, filenames, frontmatter, sections, fields, bodies, links and images. It opens no server, binds no port and reaches no network (single-binary). It prints a clear summary of the outcome. Exit codes are 0 when the deck is valid, 1 when a validation error is found, and 2 for a usage error; the codes are the same with and without `--json`. By default check is fail-fast: it reports the first error in the fixed whole-deck-validation order. With `--all` it collects every error instead, reporting them all in that same fixed order. Every error has the error-reporting format (error-reporting) — file, line when known, path, what is wrong and how to fix it, with a closest-match suggestion where one applies (closest-match-suggestions) — and the report uses the same text terminal and browser show. With `--json` the report is machine-readable: a valid boolean, a summary, and each error as an object carrying its file, line, path and message (what is wrong and how to fix it). `--json` follows the same collection mode: without `--all` the report holds at most one error (the first), and with `--all` every error. In text mode the summary goes to stdout and the errors go to stderr; with `--json` the report goes to stdout. A usage error is a plain-text message on stderr even with `--json`, and produces no report. The command is the non-serving validation entry point for a pre-commit hook or CI, usable to validate a library's example files and a deck.\n\nAC:\n- on a valid deck `kalide check` prints a summary and exits 0;\n- on a broken deck it prints the first error in the error-reporting format (error-reporting) and exits 1;\n- `kalide check --all` on a deck carrying several errors reports every error, in the fixed whole-deck-validation order, and exits 1;\n- `kalide check --json` on a valid deck emits a report with `valid: true` and exits 0; on a deck carrying several errors it emits at most one error (the first) and exits 1;\n- `kalide check --json --all` emits a report with every error, in the fixed whole-deck-validation order, and exits 1;\n- exit codes are the same with and without `--json` (0 valid, 1 validation error, 2 usage error);\n- with `--json` the report goes to stdout; in text mode the summary goes to stdout and the errors go to stderr;\n- a usage error with `--json` writes a plain-text message to stderr, produces no report, and exits 2;\n- a malformed flag or an unexpected argument is a usage error, exit 2;\n- `kalide check` binds no port and opens no browser.",
+  "properties": {
+    "feature": "cli"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.validate-deck",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.deck-creators",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "source": "requirements.user.deck-author",
+      "properties": {}
+    }
+  ]
+}

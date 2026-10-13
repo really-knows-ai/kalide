@@ -109,6 +109,162 @@ func TestLoadLibraryValid(t *testing.T) {
 	if lib.HasMedia {
 		t.Error("HasMedia = true, want false: fixture has no media/ directory")
 	}
+
+	// named-library-definitions (plan.phase-04.task-14): a library.yaml that
+	// also declares the optional named-definition sections — groups:,
+	// field_sets: and types: — loads them onto the loading layer's
+	// LibraryLayer.Definitions. The sections are additive to format 1:
+	// loadLibraryDefinitions never inspects the format key, so the library
+	// still declares `format: 1` and LibraryMeta stays name/description/format
+	// only (it is untouched and stays comparable).
+	t.Run("named definitions land on the layer and leave LibraryMeta alone", func(t *testing.T) {
+		const defsLibraryYAML = `name: demo
+description: a demo library
+format: 1
+groups:
+  accents:
+    - emphasis
+    - note
+field_sets:
+  meta:
+    - name: subtitle
+      type: text
+    - name: weight
+      type: number
+types:
+  colour:
+    type: enum
+    variants:
+      - red
+      - green
+      - blue
+`
+		fsys := baseLibraryFS()
+		fsys["library.yaml"] = &fstest.MapFile{Data: []byte(defsLibraryYAML)}
+
+		lib, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil", err)
+		}
+
+		// The named-definition sections do not change format 1, and they never
+		// reach LibraryMeta, which stays name/description/format only.
+		wantMeta := LibraryMeta{Name: "demo", Description: "a demo library", Format: 1}
+		if lib.Meta != wantMeta {
+			t.Errorf("Meta = %+v, want %+v (name/description/format only, format unchanged at 1)", lib.Meta, wantMeta)
+		}
+
+		// layerFromLibrary copies the parsed definitions onto the loading
+		// layer's Definitions (the single-layer load path).
+		if len(lib.Layers) != 1 {
+			t.Fatalf("Layers = %d, want exactly 1", len(lib.Layers))
+		}
+		defs := lib.Layers[0].Definitions
+		if defs == nil {
+			t.Fatal("Layers[0].Definitions = nil, want the parsed named definitions")
+		}
+		assertStringSlice(t, `Definitions.Groups["accents"]`, defs.Groups["accents"], []string{"emphasis", "note"})
+		if got := defs.FieldSets["meta"]; len(got) != 2 ||
+			got[0].Name != "subtitle" || got[0].Type != FieldText ||
+			got[1].Name != "weight" || got[1].Type != FieldNumber {
+			t.Errorf(`Definitions.FieldSets["meta"] = %+v, want subtitle:text then weight:number`, got)
+		}
+		colour := defs.Types["colour"]
+		if colour.Name != "colour" || colour.Type != FieldEnum {
+			t.Errorf(`Definitions.Types["colour"] = %+v, want name=colour type=enum`, colour)
+		}
+		assertStringSlice(t, `Definitions.Types["colour"].Variants`, colour.Variants, []string{"red", "green", "blue"})
+
+		// loadLibraryMeta parses the sections through loadLibraryDefinitions
+		// and keeps the result on the single-layer *Library's unexported
+		// definitions carrier — the fallback NewRegistryFromLibrary consults
+		// for the layerless Library step 4 builds, while layerFromLibrary also
+		// copies them onto the layer asserted above.
+		single := &Library{}
+		if err := loadLibraryMeta(fsys, "templates", single); err != nil {
+			t.Fatalf("loadLibraryMeta() error = %v, want nil", err)
+		}
+		if single.definitions == nil {
+			t.Fatal("loadLibraryMeta left the single-layer *Library's definitions carrier nil")
+		}
+		assertStringSlice(t, `single.definitions.Groups["accents"]`, single.definitions.Groups["accents"], []string{"emphasis", "note"})
+		if single.Meta != wantMeta {
+			t.Errorf("loadLibraryMeta Meta = %+v, want %+v", single.Meta, wantMeta)
+		}
+	})
+
+	// bounded-self-nesting (plan.phase-07.task-15): a section declaration's
+	// `max_depth: N` key is decoded into SectionDecl.MaxDepth, and a value that
+	// is not a positive integer is a step-4 templates error naming the
+	// offending template.yaml. A self-accepting declaration is a reference
+	// cycle unless a declaration on the cycle carries max_depth, so the valid
+	// fixture is a `loop` section template whose `loop` section accepts itself
+	// with max_depth: 1.
+	const loopManifest = `name: loop
+sections:
+  - name: loop
+    accepted: [loop]
+    max_depth: 1
+`
+
+	// loopLibraryFS is a valid library carrying the self-accepting `loop`
+	// section template. maxDepth, when non-empty, replaces the manifest's
+	// max_depth value so each case can break exactly that one key.
+	loopLibraryFS := func(maxDepth string) fstest.MapFS {
+		manifest := loopManifest
+		if maxDepth != "" {
+			manifest = strings.Replace(manifest, "max_depth: 1", "max_depth: "+maxDepth, 1)
+		}
+		fsys := baseLibraryFS()
+		fsys["sections/loop/template.yaml"] = &fstest.MapFile{Data: []byte(manifest)}
+		fsys["sections/loop/layout.html.tmpl"] = &fstest.MapFile{Data: []byte("<div>{{range .loop}}<span>{{.}}</span>{{end}}</div>")}
+		fsys["sections/loop/example.md"] = &fstest.MapFile{Data: []byte("# loop\n")}
+		return fsys
+	}
+
+	t.Run("a section declaration's valid max_depth loads and decodes", func(t *testing.T) {
+		lib, err := LoadLibrary(rootedFS(loopLibraryFS("")), TemplatesDir)
+		if err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: max_depth: 1 bounds the self-accepting declaration", err)
+		}
+		loop, kind, ok := lib.TemplateByName("loop")
+		if !ok || kind != KindSection {
+			t.Fatalf("TemplateByName(loop) = (%v, %q, %v), want (non-nil, %q, true)", loop, kind, ok, KindSection)
+		}
+		if loop.Definition == nil {
+			t.Fatal("checkLibraryBuild left loop.Definition nil")
+		}
+		got := loop.Definition.Sections
+		if len(got) != 1 || got[0].Name != "loop" || len(got[0].Accepted) != 1 ||
+			got[0].Accepted[0] != "loop" || got[0].MaxDepth != 1 {
+			t.Errorf("loop.Sections = %+v, want one self-accepting %q section with MaxDepth=1", got, "loop")
+		}
+	})
+
+	t.Run("a max_depth that is not a positive integer is refused naming the template.yaml", func(t *testing.T) {
+		wantPath := displaypath.Display(TemplatesDir, path.Join(SectionsDir, "loop", ManifestFile))
+		const wantMsg = `key "max_depth": expected a positive integer`
+		for _, tt := range []struct {
+			name     string
+			maxDepth string
+		}{
+			{name: "zero", maxDepth: "0"},
+			{name: "negative", maxDepth: "-1"},
+			{name: "non-integer string", maxDepth: `"abc"`},
+			{name: "numeric string", maxDepth: `"1"`},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := LoadLibrary(rootedFS(loopLibraryFS(tt.maxDepth)), TemplatesDir)
+				libErr := asLibraryError(t, err)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want %q (the offending template.yaml)", libErr.Path, wantPath)
+				}
+				if !strings.Contains(libErr.Message, wantMsg) {
+					t.Errorf("Message = %q, want it to contain %q", libErr.Message, wantMsg)
+				}
+			})
+		}
+	})
 }
 
 // rootedFS nests every entry of fsys one level under TemplatesDir, so
@@ -220,7 +376,15 @@ func TestLoadLibraryStep1BadName(t *testing.T) {
 }
 
 // TestLoadLibraryStep1BadFormat proves step 1 rejects an unsupported
-// library.yaml format value.
+// library.yaml format value, and that a malformed library.yaml (step 1) or
+// template.yaml manifest (step 3) is reported as a positioned *LibraryError
+// carrying the offending source line and — when the offending line is a plain
+// scalar YAML mis-read (a `:` inside it, or a first character of `*`/`&`/`%`/`@`
+// that YAML reads as an alias, anchor, directive or reserved indicator) — the
+// quoting hint (requirements.requirement.yaml-error-messages). A named alias
+// such as `*foo`, which yaml.v3 rejects with a lineless "unknown anchor"
+// message, still resolves to its source line through the loader's error
+// helper, so it too is positioned and hinted.
 func TestLoadLibraryStep1BadFormat(t *testing.T) {
 	fsys := baseLibraryFS()
 	fsys["library.yaml"] = &fstest.MapFile{Data: []byte("name: demo\nformat: 2\n")}
@@ -232,6 +396,202 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 	}
 	if !strings.Contains(libErr.Message, "unsupported library format") {
 		t.Errorf("Message = %q, want it to say the format is unsupported", libErr.Message)
+	}
+
+	// yaml-error-messages: a library.yaml document that is not well-formed YAML
+	// fails at step 1 before any key validation and is reported through
+	// parseLibraryErrorLine, so the step-1 error is positioned at the offending
+	// source line and, for a plain-scalar mis-read, carries the quoting hint.
+	t.Run("malformed library.yaml reports the line and the quoting hint", func(t *testing.T) {
+		cases := []struct {
+			name        string
+			yaml        string
+			wantLine    int
+			wantMessage string
+			wantHint    bool
+		}{
+			{
+				name:        "colon inside a plain scalar",
+				yaml:        "name: demo\nformat: 1\ndescription: Hello: world\n",
+				wantLine:    3,
+				wantMessage: "mapping values are not allowed in this context",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an alias indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: *\n",
+				wantLine:    3,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with no matching anchor",
+				yaml:        "name: demo\nformat: 1\ndescription: *foo\n",
+				wantLine:    3,
+				wantMessage: "unknown anchor 'foo' referenced",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with trailing text",
+				yaml:        "name: demo\nformat: 1\ndescription: *foo bar\n",
+				wantLine:    3,
+				wantMessage: "unknown anchor 'foo' referenced",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an anchor indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: &\n",
+				wantLine:    3,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a directive indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: %example.com\n",
+				wantLine:    3,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a reserved indicator",
+				yaml:        "name: demo\nformat: 1\ndescription: @example.com\n",
+				wantLine:    3,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "malformed YAML that is not a plain-scalar mis-read carries no hint",
+				yaml:        "name: demo\nformat: 1\ndescription: \"unterminated\n",
+				wantLine:    3,
+				wantMessage: "found unexpected end of stream",
+				wantHint:    false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				fsys := baseLibraryFS()
+				fsys["library.yaml"] = &fstest.MapFile{Data: []byte(tc.yaml)}
+				_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+				libErr := asLibraryError(t, err)
+				if want := displaypath.Display(TemplatesDir, LibraryFile); libErr.Path != want {
+					t.Errorf("Path = %q, want %q", libErr.Path, want)
+				}
+				if libErr.Line != tc.wantLine {
+					t.Errorf("Line = %d, want %d (the offending source line)", libErr.Line, tc.wantLine)
+				}
+				if !strings.Contains(libErr.Message, tc.wantMessage) {
+					t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantMessage)
+				}
+				assertQuotingHint(t, libErr, tc.wantHint)
+			})
+		}
+	})
+
+	// The same treatment applies to a malformed template.yaml manifest, caught
+	// at step 3 and reported at the manifest's own path and line.
+	t.Run("malformed template.yaml manifest reports the line and the quoting hint", func(t *testing.T) {
+		cases := []struct {
+			name        string
+			manifest    string
+			wantLine    int
+			wantMessage string
+			wantHint    bool
+		}{
+			{
+				name:        "colon inside a plain scalar",
+				manifest:    "name: hello\ndescription: Hello: world\n",
+				wantLine:    2,
+				wantMessage: "mapping values are not allowed in this context",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an alias indicator",
+				manifest:    "name: hello\ndescription: *\n",
+				wantLine:    2,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with no matching anchor",
+				manifest:    "name: hello\ndescription: *foo\n",
+				wantLine:    2,
+				wantMessage: "unknown anchor 'foo' referenced",
+				wantHint:    true,
+			},
+			{
+				name:        "named alias with trailing text",
+				manifest:    "name: hello\ndescription: *foo bar\n",
+				wantLine:    2,
+				wantMessage: "unknown anchor 'foo' referenced",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with an anchor indicator",
+				manifest:    "name: hello\ndescription: &\n",
+				wantLine:    2,
+				wantMessage: "did not find expected alphabetic or numeric character",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a directive indicator",
+				manifest:    "name: hello\ndescription: %example.com\n",
+				wantLine:    2,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "plain scalar beginning with a reserved indicator",
+				manifest:    "name: hello\ndescription: @example.com\n",
+				wantLine:    2,
+				wantMessage: "found character that cannot start any token",
+				wantHint:    true,
+			},
+			{
+				name:        "malformed YAML that is not a plain-scalar mis-read carries no hint",
+				manifest:    "name: hello\ndescription: \"unterminated\n",
+				wantLine:    2,
+				wantMessage: "found unexpected end of stream",
+				wantHint:    false,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				fsys := baseLibraryFS()
+				fsys["slides/hello/template.yaml"] = &fstest.MapFile{Data: []byte(tc.manifest)}
+				_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
+				libErr := asLibraryError(t, err)
+				wantPath := displaypath.Display(TemplatesDir, "slides/hello/"+ManifestFile)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
+				}
+				if libErr.Line != tc.wantLine {
+					t.Errorf("Line = %d, want %d (the offending source line)", libErr.Line, tc.wantLine)
+				}
+				if !strings.Contains(libErr.Message, tc.wantMessage) {
+					t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantMessage)
+				}
+				assertQuotingHint(t, libErr, tc.wantHint)
+			})
+		}
+	})
+}
+
+// assertQuotingHint checks a *LibraryError's quoting hint against want: when
+// want is true the error carries exactly the plain-scalar quoting hint the
+// loader shares with the field checker, and when false it carries no hint at
+// all. It pins the literal hint text, so the assertion is independent of the
+// yamlQuotingHint constant.
+func assertQuotingHint(t *testing.T, libErr *LibraryError, want bool) {
+	t.Helper()
+	const wantHint = "quote the value as a string"
+	if !want {
+		if libErr.Hint != "" {
+			t.Errorf("Hint = %q, want none (the offending line is not a plain-scalar mis-read)", libErr.Hint)
+		}
+		return
+	}
+	if libErr.Hint != wantHint {
+		t.Errorf("Hint = %q, want %q", libErr.Hint, wantHint)
 	}
 }
 

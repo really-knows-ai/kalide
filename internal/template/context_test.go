@@ -40,6 +40,11 @@ import (
 // when non-empty, treats an explicitly present nil as an authored value, copies
 // no fields under a nil template, and never mutates its source map. The
 // LoadLibrary-driven reading of the same contract is in examplecontext_test.go.
+//
+// In particular it pins the raw-source-context null contract: because the copy
+// is keyed on key PRESENCE, an explicitly null declared field is present as a
+// nil `.raw` entry while an omitted declared field is absent, so `.raw`
+// distinguishes an explicit null from an absent optional field.
 func TestRawContextSourceView(t *testing.T) {
 	def := &Template{
 		Name:  "sourceview",
@@ -87,6 +92,30 @@ func TestRawContextSourceView(t *testing.T) {
 		}
 	})
 
+	t.Run("an explicit null is a present nil entry while an omitted field is absent", func(t *testing.T) {
+		// The same declared, optional field: `count` (no default) supplied as
+		// an explicit null versus omitted entirely.
+		nulled := RawContext(map[string]any{"count": nil}, def, "")
+		v, has := nulled["count"]
+		if !has {
+			t.Fatalf("RawContext() = %v, want the explicit null count present as a nil entry", nulled)
+		}
+		if v != nil {
+			t.Errorf(`raw["count"] = %v, want nil for an explicit null`, v)
+		}
+
+		omitted := RawContext(map[string]any{}, def, "")
+		if _, has := omitted["count"]; has {
+			t.Errorf("RawContext() = %v, want an omitted count absent from raw", omitted)
+		}
+		// The distinction holds even when the other declared field is supplied,
+		// so `count`'s absence is not merely an empty source map.
+		partial := RawContext(map[string]any{"title": "Authored"}, def, "")
+		if _, has := partial["count"]; has {
+			t.Errorf("RawContext() = %v, want an omitted count absent from raw", partial)
+		}
+	})
+
 	t.Run("a nil template copies no source fields but still carries a body", func(t *testing.T) {
 		got := RawContext(map[string]any{"title": "Authored"}, nil, "Body.")
 		want := map[string]any{"body": "Body."}
@@ -111,7 +140,12 @@ func TestRawContextSourceView(t *testing.T) {
 // the sibling descriptor derives number/first/last from the per-name count, a
 // nil-template node labels `template` "" and copies only its body, the top-level
 // `parent` is a typed nil map, and the recursion threads the enclosing instance's
-// raw to its children's `parent`.
+// raw and ancestor chain to its children.
+//
+// It also pins the per-level `item.depth` (item-context): 0 at the top level,
+// and the shared InstanceDepth of the enclosing chain at each self-nested level,
+// so a node of template X with an X child is depth 1 and the A→B→A→B chain —
+// which revisits templates — is 0, 0, 1, 1, not the immediate parent alone.
 func TestDataContextLiteralNodes(t *testing.T) {
 	block := newSection("block", Field{Name: "text", Type: FieldText})
 
@@ -136,7 +170,7 @@ func TestDataContextLiteralNodes(t *testing.T) {
 		{Name: "blocks", Index: 1, Template: block, Source: map[string]any{"text": "B"}},
 	}
 
-	got := DataContext(nodes, nil)
+	got := DataContext(nodes, nil, nil)
 	if len(got) != 2 {
 		t.Fatalf("DataContext() keys = %v, want exactly blocks and widgets", contextKeys(got))
 	}
@@ -154,14 +188,14 @@ func TestDataContextLiteralNodes(t *testing.T) {
 
 	wantBlock0 := map[string]any{
 		"index": 0, "number": 1, "count": 2, "first": true, "last": false,
-		"section": "blocks", "template": "block", "parent": map[string]any(nil),
+		"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 	}
 	if !reflect.DeepEqual(blocks[0]["item"], wantBlock0) {
 		t.Errorf("data[blocks][0].item = %v, want %v", blocks[0]["item"], wantBlock0)
 	}
 	wantBlock1 := map[string]any{
 		"index": 1, "number": 2, "count": 2, "first": false, "last": true,
-		"section": "blocks", "template": "block", "parent": map[string]any(nil),
+		"section": "blocks", "template": "block", "depth": 0, "parent": map[string]any(nil),
 	}
 	if !reflect.DeepEqual(blocks[1]["item"], wantBlock1) {
 		t.Errorf("data[blocks][1].item = %v, want %v", blocks[1]["item"], wantBlock1)
@@ -180,6 +214,11 @@ func TestDataContextLiteralNodes(t *testing.T) {
 	if want := blocks[0]["raw"]; !reflect.DeepEqual(nestedItem["parent"], want) {
 		t.Errorf("nested item.parent = %v, want the enclosing instance's raw %v", nestedItem["parent"], want)
 	}
+	// The child resolves to the same template as its parent, so its enclosing
+	// chain is ["block"] and its depth is the shared InstanceDepth value, 1.
+	if got := nestedItem["depth"]; got != 1 {
+		t.Errorf("nested item.depth = %v, want 1 (one same-template ancestor)", got)
+	}
 
 	// A nil-template node labels its template "" and copies no declared fields,
 	// but still carries the raw body.
@@ -192,18 +231,65 @@ func TestDataContextLiteralNodes(t *testing.T) {
 	}
 	wantWidget := map[string]any{
 		"index": 0, "number": 1, "count": 1, "first": true, "last": true,
-		"section": "widgets", "template": "", "parent": map[string]any(nil),
+		"section": "widgets", "template": "", "depth": 0, "parent": map[string]any(nil),
 	}
 	if !reflect.DeepEqual(widgets[0]["item"], wantWidget) {
 		t.Errorf("data[widgets][0].item = %v, want %v", widgets[0]["item"], wantWidget)
 	}
 
-	t.Run("nil and empty nodes yield a non-nil empty map", func(t *testing.T) {
-		if got := DataContext(nil, nil); got == nil || len(got) != 0 {
-			t.Errorf("DataContext(nil, nil) = %v, want a non-nil empty map", got)
+	t.Run("the A→B→A→B chain carries per-level depth from the full chain", func(t *testing.T) {
+		// Each level resolves to its own template, revisiting names: depth
+		// counts the FULL enclosing chain's same-template ancestors, not the
+		// immediate parent alone, so the inner a and the second b are each 1
+		// (one earlier a and one earlier b), while the outer a and first b are
+		// each 0.
+		a := newSection("a")
+		b := newSection("b")
+		chain := []ContextNode{{
+			Name: "chain", Index: 0, Template: a,
+			Children: []ContextNode{{
+				Name: "chain", Index: 0, Template: b,
+				Children: []ContextNode{{
+					Name: "chain", Index: 0, Template: a,
+					Children: []ContextNode{{
+						Name: "chain", Index: 0, Template: b,
+					}},
+				}},
+			}},
+		}}
+
+		// level asserts the single `chain` entry at this level carries the
+		// wanted item.depth, then descends into its own `.data`.
+		level := func(parent map[string]any, wantDepth int) map[string]any {
+			t.Helper()
+			entries := contextEntryList(t, parent["chain"], `data["chain"]`)
+			if len(entries) != 1 {
+				t.Fatalf(`len(data["chain"]) = %d, want 1`, len(entries))
+			}
+			item := contextMap(t, entries[0]["item"], "chain item")
+			if got := item["depth"]; got != wantDepth {
+				t.Errorf("item.depth = %v, want %d", got, wantDepth)
+			}
+			return contextMap(t, entries[0]["data"], "chain data")
 		}
-		if got := DataContext([]ContextNode{}, nil); got == nil || len(got) != 0 {
-			t.Errorf("DataContext([], nil) = %v, want a non-nil empty map", got)
+
+		top := DataContext(chain, nil, nil)
+		// Level 0: the outer a.
+		toB := level(top, 0)
+		// Level 1: the first b.
+		toA := level(toB, 0)
+		// Level 2: the inner a, one enclosing a.
+		toB2 := level(toA, 1)
+		// Level 3: the second b, one enclosing b.
+		_ = level(toB2, 1)
+	})
+
+	t.Run("nil and empty nodes yield a non-nil empty map", func(t *testing.T) {
+		if got := DataContext(nil, nil, nil); got == nil || len(got) != 0 {
+			t.Errorf("DataContext(nil, nil, nil) = %v, want a non-nil empty map", got)
+		}
+		if got := DataContext([]ContextNode{}, nil, nil); got == nil || len(got) != 0 {
+			t.Errorf("DataContext([], nil, nil) = %v, want a non-nil empty map", got)
 		}
 	})
 }
@@ -292,7 +378,7 @@ func TestExampleContextNodesAdapter(t *testing.T) {
 		}
 		// DataContext then produces the `.raw` source view: the declared field
 		// only, never the reserved `template:` selector.
-		data := DataContext(nodes, nil)
+		data := DataContext(nodes, nil, nil)
 		widgets := contextEntryList(t, data["widgets"], `data["widgets"]`)
 		if want := map[string]any{"name": "W"}; !reflect.DeepEqual(widgets[0]["raw"], want) {
 			t.Errorf("data[widgets][0].raw = %v, want %v (selector excluded)", widgets[0]["raw"], want)
@@ -315,7 +401,7 @@ func TestExampleContextNodesAdapter(t *testing.T) {
 		if nodes[0].Template.Name != "ghost" || len(nodes[0].Template.Fields) != 0 {
 			t.Errorf("node.Template = %+v, want a name-only %q template", nodes[0].Template, "ghost")
 		}
-		data := DataContext(nodes, nil)
+		data := DataContext(nodes, nil, nil)
 		widgets := contextEntryList(t, data["widgets"], `data["widgets"]`)
 		if raw := contextMap(t, widgets[0]["raw"], "widgets raw"); len(raw) != 0 {
 			t.Errorf("data[widgets][0].raw = %v, want empty for a name-only template", raw)

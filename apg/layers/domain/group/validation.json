@@ -2,7 +2,7 @@
   "layer": "domain",
   "type": "group",
   "name": "validation",
-  "body": "Validation: checking a deck against templates and rules fail-fast, producing a single path-qualified validation error (the first found).",
+  "body": "Validation: checking a deck against templates and rules in a fixed deterministic order, producing a path-qualified validation error per failure — the first found by default, and every failure in that order when every error is collected — with a closest-match suggestion where one applies.",
   "properties": {
     "attribute": "supporting"
   },

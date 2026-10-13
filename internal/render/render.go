@@ -116,6 +116,32 @@ func mediaBaseForLayer(layer *template.LibraryLayer) string {
 	return mediaURLPrefix
 }
 
+// imageRootMedia is the image field `roots:` entry naming the library layer's
+// media/ tree (image-field-roots): a field declaring it takes a media-relative
+// path and resolves to the same URL the layout `media` helper produces for the
+// owning layer's media/. It mirrors internal/template's unexported
+// imageRootMedia — the two packages cannot share the constant directly, and the
+// manifest parser is the source of truth for the accepted root names, rejecting
+// any other — exactly as mediaURLPrefix mirrors internal/server.MediaPath.
+const imageRootMedia = "media"
+
+// imageFieldAllowsMedia reports whether f declares a media root, so an image
+// field that declares one takes a media-relative path resolving to the layout
+// media helper's URL for its owning layer (image-field-roots). A field with no
+// roots — or only an assets root — keeps the written deck-relative `assets/…`
+// value, exactly as before.
+func imageFieldAllowsMedia(f *template.Field) bool {
+	if f == nil {
+		return false
+	}
+	for _, root := range f.Roots {
+		if root == imageRootMedia {
+			return true
+		}
+	}
+	return false
+}
+
 // RenderSlide renders one parsed, validated slide as a single reveal.js
 // <section> fragment, ready to be placed directly inside the deck page's
 // `.reveal > .slides` container.
@@ -305,10 +331,13 @@ func RenderSlide(parsed *slide.Slide, label string, cfg *deck.Config, meta deck.
 // helper — bound once into the shared layout namespace — can resolve a
 // `{{ section … }}` call made while some layout executes: the calling
 // instance's field values, which the target reads as `.item.parent`
-// (item-context), and the deck/slide context the helper-rendered target
-// template executes with (template-context). The slide layout has no section
-// parent, so callerFields is nil there; callerCtx is set for the slide too,
-// carrying its deck/slide context.
+// (item-context), the calling instance's own chain of resolved template names,
+// which the target reads as its enclosing ancestors so its `.item.depth` is
+// computed through the shared InstanceDepth helper (item-context), and the
+// deck/slide context the helper-rendered target template executes with
+// (template-context). The slide layout has no section parent, so callerFields
+// and callerChain are nil there; callerCtx is set for the slide too, carrying
+// its deck/slide context.
 type renderer struct {
 	reg     *template.Registry
 	formats *template.Format
@@ -341,6 +370,20 @@ type renderer struct {
 	// carries the slide's context.
 	callerCtx *sectionCtx
 
+	// callerChain is the calling instance's own chain of resolved template
+	// names — the resolved templates enclosing the instance whose layout is
+	// currently executing, with that instance's own resolved template name
+	// appended (its sectionCtx.ancestors plus its own template name). It is the
+	// ancestor identity a `{{ section … }}` call made there passes to
+	// template.ResolveSectionCallLayered, so the resolved target's one-item
+	// `.item.depth` counts its enclosing same-template ancestors through the
+	// shared template.InstanceDepth helper identically to the load-time example
+	// side's exampleSectionHelper (item-context, bounded-self-nesting,
+	// section-helper). It is nil while the slide layout executes, whose
+	// instance is the slide, not a section, so a call made from a slide layout
+	// passes no caller chain and its target's depth is 0.
+	callerChain []string
+
 	// funcMap is the caller's layout func map — the helpers `media`/`section`/
 	// `dict`/`list` plus the number/date format functions
 	// (template.LayoutFuncMap). parseLayouts stores it here so the render-time
@@ -349,6 +392,19 @@ type renderer struct {
 	// (funcMapForLayer), so a media reference inside a called section resolves
 	// in the layer that owns it (section-helper, library-layer-references).
 	funcMap htmltmpl.FuncMap
+
+	// fieldMedia is the `media` helper of the template whose fields values is
+	// currently converting — the owning layer's media resolver, exactly the
+	// func that template's layout `{{ media … }}` references execute with
+	// (funcMapForLayer). values sets it for the duration of one template's
+	// field conversion and restores it afterwards, so an image field's media
+	// root resolves in the layer that owns the field's template, and a nested
+	// section-template-as-type value, whose values call sets it for ITS own
+	// template, does not leak its layer into the enclosing template
+	// (image-field-roots). It is nil when no owning-layer media helper is
+	// known (a renderer without a registry, or a bare layout), in which case a
+	// media-root image field keeps its written value.
+	fieldMedia func(string) (string, error)
 
 	// layerMediaBase maps a *template.LibraryLayer to the served media URL base
 	// its `media` helper resolves under. It is the renderer's per-layer URL hook:
@@ -423,7 +479,10 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// (template-language). Each instance executes with the reserved
 	// `.deck`/`.slide`/`.item` context (template-context,
 	// section-template-context, item-context); a top-level instance's
-	// `.item.parent` is nil, since its parent is the slide, not a section.
+	// `.item.parent` is nil, since its parent is the slide, not a section, and
+	// its `.item.depth` is 0, since the slide is not an instance of any
+	// template and so contributes no enclosing same-template ancestor
+	// (item-context).
 	counts := make(map[string]int, len(s.Sections))
 	for i := range s.Sections {
 		counts[s.Sections[i].Name]++
@@ -441,7 +500,7 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 			cfg:   cfg,
 			meta:  meta,
 			total: total,
-			item:  itemContext(sec.Index, counts[sec.Name], sec.Name, sec.Template, nil),
+			item:  itemContext(sec.Index, counts[sec.Name], 0, sec.Name, sec.Template, nil),
 		}
 		rendered, err := r.renderSection(sec, secTmpl, secCtx)
 		if err != nil {
@@ -465,12 +524,14 @@ func (r *renderer) slideData(s *slide.Slide, tmpl *template.Template, cfg *deck.
 	// values and rendered body the same map already carries under its own
 	// names; the reserved `.data` entry is the slide's authored top-level
 	// sections as data, one entry per authored instance, parented on the slide
-	// (nil) (section-data-context). Both reflect AUTHORED instances only: a
-	// `{{ section … }}` call is a direct render call, never part of the parsed
-	// tree, so its sectionHelper render contributes no entry to `.data` and no
-	// element to the rendered-HTML section list built above.
+	// (nil) with an empty enclosing-ancestors chain — the slide is not an
+	// instance of any template, so each entry's `item.depth` is 0
+	// (section-data-context, item-context). Both reflect AUTHORED instances
+	// only: a `{{ section … }}` call is a direct render call, never part of the
+	// parsed tree, so its sectionHelper render contributes no entry to `.data`
+	// and no element to the rendered-HTML section list built above.
 	data["raw"] = template.RawContext(s.Frontmatter, tmpl, s.Body)
-	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil)
+	data["data"] = template.DataContext(r.contextNodes(s.Sections), nil, nil)
 	return data, nil
 }
 
@@ -502,7 +563,14 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 	// by the same shared builders the load-time example execution uses, so the
 	// two halves cannot drift (template-context).
 	secCtx.raw = template.RawContext(sec.Frontmatter, tmpl, sec.Body)
-	secCtx.data = template.DataContext(r.contextNodes(sec.Children), secCtx.raw)
+	// The instance's own ancestor chain: the enclosing chain it inherited with
+	// its own resolved template appended — the same value renderInstance
+	// threads onto each child context. Passing it as the shared builder's
+	// ancestor identity makes each authored child's `.data` item descriptor
+	// carry the per-level depth the render side's executed item descriptors
+	// use (item-context, bounded-self-nesting).
+	instanceAncestors := append(append([]string{}, secCtx.ancestors...), tmpl.Name)
+	secCtx.data = template.DataContext(r.contextNodes(sec.Children), instanceAncestors, secCtx.raw)
 	return r.renderInstance(sec, tmpl, r.reg.LayerOf(tmpl.Name), secCtx)
 }
 
@@ -551,10 +619,13 @@ func (r *renderer) renderSection(sec *slide.Section, tmpl *template.Template, se
 // the top level the parent is the slide, so the descriptor carries nil.
 //
 // The instance's field values are also published as the renderer's caller
-// context for the duration of its layout execution and restored afterwards, so
-// a `{{ section … }}` call the layout makes resolves its target's `.item.parent`
-// from this instance and inherits its deck/slide context (item-context,
-// template-context). A call made from a slide layout sees a nil parent, since
+// context — together with the instance's own chain of resolved template names —
+// for the duration of its layout execution and restored afterwards, so a
+// `{{ section … }}` call the layout makes resolves its target's `.item.parent`
+// from this instance, computes the target's `.item.depth` against this
+// instance's own chain through the shared InstanceDepth helper, and inherits its
+// deck/slide context (item-context, bounded-self-nesting, template-context). A
+// call made from a slide layout sees a nil parent and no caller chain, since
 // RenderSlide publishes the slide context with no calling instance.
 //
 // The instance's layout executes with the `media` helper bound to layer when
@@ -590,6 +661,21 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 	// each child's resolved descriptor. The two are mutually exclusive, so an
 	// authored instance and its equivalent helper instance each render through
 	// the same instance path with the child lists assembled the same way.
+	//
+	// This instance's own ancestor chain: the enclosing chain it inherited with
+	// its own resolved template appended. Each authored child's depth counts
+	// this instance among its enclosing same-template ancestors, and the child
+	// context carries the same chain as the enclosing chain it passes on, so a
+	// bounded self-nested authored chain reads `item.depth` at every level
+	// (item-context, bounded-self-nesting). The child's `item.section` and
+	// `item.parent` stay as before; only depth is computed here rather than
+	// mechanically 0. The same chain is published as the renderer's caller
+	// chain for the duration of this instance's layout execution, so a
+	// `{{ section … }}` call the layout makes passes it as the target's
+	// enclosing chain and the target's `.item.depth` counts this instance (and
+	// any same-template ancestor) through the shared InstanceDepth helper
+	// exactly as the load-time example side does (section-helper).
+	instanceAncestors := append(append([]string{}, secCtx.ancestors...), tmpl.Name)
 	if secCtx != nil && len(secCtx.resolvedChildren) > 0 {
 		lists, _, err := r.renderChildren(secCtx.resolvedChildren, secCtx)
 		if err != nil {
@@ -617,11 +703,12 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 				continue
 			}
 			childCtx := &sectionCtx{
-				cfg:    secCtx.cfg,
-				meta:   secCtx.meta,
-				total:  secCtx.total,
-				item:   itemContext(child.Index, counts[child.Name], child.Name, child.Template, data),
-				parent: data,
+				cfg:       secCtx.cfg,
+				meta:      secCtx.meta,
+				total:     secCtx.total,
+				item:      itemContext(child.Index, counts[child.Name], template.InstanceDepth(instanceAncestors, child.Template), child.Name, child.Template, data),
+				parent:    data,
+				ancestors: instanceAncestors,
 			}
 			rendered, err := r.renderSection(child, childTmpl, childCtx)
 			if err != nil {
@@ -634,16 +721,20 @@ func (r *renderer) renderInstance(sec *slide.Section, tmpl *template.Template, l
 
 	// Publish this instance as the caller context for the duration of its
 	// layout execution: a nested `{{ section … }}` call the layout makes reads
-	// these field values as its target's `.item.parent` and inherits this
-	// instance's deck/slide context (item-context, template-context). The
-	// previous context is restored once the layout returns, so an enclosing
-	// layout keeps resolving against itself.
-	prevFields, prevCtx := r.callerFields, r.callerCtx
+	// these field values as its target's `.item.parent`, computes the target's
+	// `.item.depth` against this instance's own chain (instanceAncestors)
+	// through the shared InstanceDepth helper, and inherits this instance's
+	// deck/slide context (item-context, bounded-self-nesting,
+	// template-context). The previous context is restored once the layout
+	// returns, so an enclosing layout keeps resolving against itself.
+	prevFields, prevCtx, prevChain := r.callerFields, r.callerCtx, r.callerChain
 	r.callerFields = data
 	r.callerCtx = secCtx
+	r.callerChain = instanceAncestors
 	defer func() {
 		r.callerFields = prevFields
 		r.callerCtx = prevCtx
+		r.callerChain = prevChain
 	}()
 
 	var buf bytes.Buffer
@@ -734,8 +825,34 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 
 	// The target's own `.data` view is built by the same shared builder the
 	// load-time example runner uses, over the neutral child-node tree, so the
-	// two views cannot drift (section-data-context).
-	data := template.DataContext(childNodes(children), secCtx.raw)
+	// two views cannot drift (section-data-context). The ancestor identity the
+	// builder walks is the target's OWN chain of resolved template names — the
+	// enclosing chain with the target's resolved name appended — so each of the
+	// target's resolved children's `.data` item descriptors carries the
+	// per-level `item.depth` its executed `.item` does, exactly as
+	// exampleSectionRunner.render passes targetChain = callerChain +
+	// call.Template.Name (item-context, bounded-self-nesting).
+	//
+	// Its base is the renderer's current caller chain: at this point
+	// r.callerChain still holds the CALLING instance's own chain, because the
+	// target's own chain is published only AFTER its children are rendered —
+	// sectionHelper sets r.callerChain = targetChain below, after this call,
+	// and renderInstance likewise publishes its own chain after its resolved
+	// children render — so appending the target's resolved name yields the
+	// target's own chain. The target's resolved name is its sectionCtx `.item`
+	// descriptor's `template` entry, the same value
+	// ResolveSectionCallLayered/ResolveChildCall recorded there. From a slide
+	// layout r.callerChain is nil and the target is not an instance of any
+	// template, so its own chain is just its resolved name, identically to the
+	// load-time example side.
+	targetName := ""
+	if secCtx.item != nil {
+		if name, ok := secCtx.item["template"].(string); ok {
+			targetName = name
+		}
+	}
+	targetAncestors := append(append([]string{}, r.callerChain...), targetName)
+	data := template.DataContext(childNodes(children), targetAncestors, secCtx.raw)
 
 	lists := make(map[string][]htmltmpl.HTML, len(children))
 	for _, child := range children {
@@ -760,6 +877,33 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 // section-data-context). parent supplies the deck/slide execution context
 // (cfg/meta/total) the child inherits.
 //
+// The child's reserved `.data` view over its own nested children is built with
+// the child's OWN chain of resolved template names as the ancestor identity — the
+// chain it inherited with its resolved template appended — so each grandchild's
+// `.data` item descriptor carries per-level `item.depth` through the shared
+// template.InstanceDepth helper, exactly as renderSection passes an instance's
+// own chain to the same builder (item-context, section-data-context,
+// bounded-self-nesting).
+//
+// The inherited chain is the enclosing chain the section-helper call that
+// materialised the child was resolved under: the renderer's current caller chain
+// (r.callerChain), which is the calling instance's own chain and the render-time
+// counterpart of the load-time example runner's callerChain. It is deliberately
+// the caller chain rather than the child's parent instance chain, because
+// exampleSectionRunner.renderChildLists renders each child from the runner whose
+// callerChain is the CALLING instance's own chain, so a helper child's own chain
+// is runner.callerChain + the child's resolved template name; threading the same
+// value here keeps a nested renderInstance/sectionHelper call the child's layout
+// makes computing its target's `.item.depth` identically to the load-time side
+// (section-helper, item-context, bounded-self-nesting).
+//
+// The inherited chain is also stored on the child's sectionCtx.ancestors — the
+// enclosing resolved template names ABOVE the child, by the same convention
+// renderSection/renderInstance take — so renderInstance derives the child's own
+// chain as that chain with the child's resolved template name appended, both for
+// the child's `.data` and for the chain it publishes to a nested call its layout
+// makes.
+//
 // renderInstance consumes only the adapted section's effective field source
 // (Frontmatter) and body; every other input — the resolved template, layer,
 // `.item` and the resolved child tree — is carried directly, so the adapter
@@ -769,13 +913,16 @@ func (r *renderer) renderChildren(children []*template.ResolvedChild, secCtx *se
 func (r *renderer) renderChild(child *template.ResolvedChild, parent *sectionCtx) (htmltmpl.HTML, error) {
 	call := child.Call
 	raw := template.RawContext(child.Source, call.Template, call.Body)
+	inherited := r.callerChain
+	childAncestors := append(append([]string{}, inherited...), call.Template.Name)
 	childCtx := &sectionCtx{
 		cfg:              parent.cfg,
 		meta:             parent.meta,
 		total:            parent.total,
 		item:             call.Item,
 		raw:              raw,
-		data:             template.DataContext(childNodes(child.Children), raw),
+		data:             template.DataContext(childNodes(child.Children), childAncestors, raw),
+		ancestors:        inherited,
 		resolvedChildren: child.Children,
 	}
 	sec := &slide.Section{
@@ -885,7 +1032,14 @@ func childIndex(call *template.SectionCall) int {
 // values (renderer.callerFields) are passed as the call's parent, so the
 // target's one-item `.item.parent` is the calling instance's fields; it is nil
 // when the call is made from a slide layout, whose parent is the slide
-// (item-context). A `children "<section>" .data.<section>` argument forwards the
+// (item-context). The caller's own chain of resolved template names
+// (renderer.callerChain) is passed as the call's ancestors, so the target's
+// one-item `.item.depth` counts its enclosing same-template ancestors through
+// the shared template.InstanceDepth helper identically to the load-time example
+// side's exampleSectionHelper; it is nil when the call is made from a slide
+// layout, which is not an instance of any template, so the target's depth is 0
+// (item-context, bounded-self-nesting, section-helper). A
+// `children "<section>" .data.<section>` argument forwards the
 // caller's authored `.data` entries for that section, which ResolveChildren
 // expands into child instances keeping each entry's own template, raw fields,
 // raw body and nested data (children-forwarding).
@@ -961,10 +1115,14 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 	// target's body rule, resolves the child arguments with ResolveChildren
 	// against the target's declared sections (defaults-first, accepted-template
 	// and min/max, recursively), builds the one-item .item descriptor whose
-	// parent is the calling instance's fields (nil from a slide layout), and
-	// records the target's owning layer (via r.reg.LayerOf) so its layout
-	// executes with that layer's media helper (library-layer-references).
-	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, r.callerFields, children...)
+	// parent is the calling instance's fields (nil from a slide layout) and
+	// whose depth counts the target's enclosing same-template ancestors along
+	// the calling instance's own chain (r.callerChain, nil from a slide layout)
+	// through the shared InstanceDepth helper, and records the target's owning
+	// layer (via r.reg.LayerOf) so its layout executes with that layer's media
+	// helper (item-context, bounded-self-nesting, section-helper,
+	// library-layer-references).
+	call, err := template.ResolveSectionCallLayered(r.reg.Lookup, r.reg.LayerOf, name, fields, body, r.callerChain, r.callerFields, children...)
 	if err != nil {
 		return "", fmt.Errorf("section helper %q: %w", name, err)
 	}
@@ -1036,14 +1194,24 @@ func (r *renderer) sectionHelper(name string, args ...any) (htmltmpl.HTML, error
 
 	// A nested {{ section … }} call in the target's layout reads this
 	// instance's field values as its .item.parent and inherits the same
-	// deck/slide context. Restore the previous context once it returns, so
-	// the caller's own layout keeps resolving against itself.
-	prevFields, prevCtx := r.callerFields, r.callerCtx
+	// deck/slide context. The target is also the calling instance for such a
+	// nested call, so its own chain of resolved template names — the calling
+	// instance's chain this call was resolved with, with the target's resolved
+	// name appended — is published as the caller chain, letting the nested
+	// call's target `.item.depth` count the target (and any same-template
+	// ancestor) through the shared InstanceDepth helper exactly as the
+	// load-time example runner does (item-context, bounded-self-nesting). The
+	// previous context is restored once the layout returns, so the caller's own
+	// layout keeps resolving against itself.
+	targetChain := append(append([]string{}, r.callerChain...), call.Template.Name)
+	prevFields, prevCtx, prevChain := r.callerFields, r.callerCtx, r.callerChain
 	r.callerFields = call.Values
 	r.callerCtx = secCtx
+	r.callerChain = targetChain
 	defer func() {
 		r.callerFields = prevFields
 		r.callerCtx = prevCtx
+		r.callerChain = prevChain
 	}()
 
 	var buf bytes.Buffer
@@ -1171,6 +1339,23 @@ func (r *renderer) funcMapForLayer(layer *template.LibraryLayer) htmltmpl.FuncMa
 	return fm
 }
 
+// mediaForTemplate returns the `media` helper the layout of t executes with —
+// the owning layer's media resolver — or nil when the renderer holds no
+// registry or t is nil. It is funcMapForLayer's `media` entry, so an image
+// field's media root produces exactly the URL a `{{ media … }}` reference in
+// the same template's layout produces: a two-layer deck's external layer
+// resolves under its own prefix and media filesystem, while a sole-layer deck
+// (or a registry with no provenance) keeps the caller's `media` helper, whose
+// base the deck supplied to RenderSlide (image-field-roots,
+// library-layer-references).
+func (r *renderer) mediaForTemplate(t *template.Template) func(string) (string, error) {
+	if r == nil || r.reg == nil || t == nil {
+		return nil
+	}
+	fn, _ := r.funcMapForLayer(r.reg.LayerOf(t.Name))["media"].(func(string) (string, error))
+	return fn
+}
+
 // deckContext builds the reserved `deck` execution context
 // (deck-data-in-templates): the deck-wide config values under title, author
 // and date, plus the author-declared properties under properties. title is
@@ -1212,18 +1397,21 @@ func slideContext(s deck.Slide, total int) map[string]any {
 // itemContext builds the reserved `.item` descriptor a section instance is
 // executed with (item-context): the instance's zero-based `index` and one-based
 // `number` among the sibling instances of the same declared section name, the
-// `count` of those siblings, whether it is `first` or `last`, the declared
-// `section` name, the resolved `template` name, and `parent` — the enclosing
-// section instance's field values, or nil at the top level. A slide layout has
-// no sibling place, so no descriptor is built for it and its execution context
-// carries no `item` entry (template-context, section-template-context).
-func itemContext(index, count int, section, tmpl string, parent map[string]any) map[string]any {
+// `count` of those siblings, whether it is `first` or `last`, the instance's
+// self-nesting `depth` (the number of enclosing instances whose resolved
+// template is the same as this instance's), the declared `section` name, the
+// resolved `template` name, and `parent` — the enclosing section instance's
+// field values, or nil at the top level. A slide layout has no sibling place,
+// so no descriptor is built for it and its execution context carries no `item`
+// entry (template-context, section-template-context).
+func itemContext(index, count, depth int, section, tmpl string, parent map[string]any) map[string]any {
 	return map[string]any{
 		"index":    index,
 		"number":   index + 1,
 		"count":    count,
 		"first":    index == 0,
 		"last":     index == count-1,
+		"depth":    depth,
 		"section":  section,
 		"template": tmpl,
 		"parent":   parent,
@@ -1253,6 +1441,18 @@ type sectionCtx struct {
 	// (item-context). It is nil at the top level, where the parent is the
 	// slide, not a section instance.
 	parent map[string]any
+
+	// ancestors is the chain of resolved template names of the enclosing
+	// instances ABOVE the instance this context belongs to — its section
+	// template's ancestors — empty at the top level, where the slide is not an
+	// instance of any template (item-context, bounded-self-nesting). The
+	// instance's OWN chain, the one its authored children's depth is computed
+	// against, is this chain with its own resolved template appended
+	// (renderInstance); renderInstance threads that own chain onto each child
+	// context, so a bounded self-nested authored chain reads `item.depth` at
+	// every level. renderSection/renderChildren pass the instance's own chain
+	// to the shared template.DataContext on the same convention.
+	ancestors []string
 
 	// raw is the instance's reserved `.raw` context (raw-source-context): the
 	// source view of the author's original values, built by the caller with
@@ -1289,9 +1489,12 @@ type sectionCtx struct {
 // values converts one map of validated field data against t's field schema,
 // returning the layout-ready map. It is used for a slide's frontmatter, a
 // section instance's frontmatter, and a nested section-template-as-type value,
-// so the same rules apply at every depth. The reserved `template:` selector and
-// any unknown key are simply absent from the field schema and are ignored here;
-// validation already rejected an unknown key.
+// so the same rules apply at every depth. Every declared field is present in
+// the returned map: an explicit null and an absent optional field (no default)
+// both reach the context as a nil entry (nullable-fields), so an absent
+// optional and an explicit null are indistinguishable to a layout. The reserved
+// `template:` selector and any unknown key are simply absent from the field
+// schema and are ignored here; validation already rejected an unknown key.
 //
 // secCtx is non-nil exactly when out is a SECTION INSTANCE map (top-level or
 // nested): the reserved `deck`/`slide` entries are merged into it and, when
@@ -1308,12 +1511,29 @@ type sectionCtx struct {
 // entry. A section-template-as-type field value keeps `deck`/`slide` but is
 // data-only and carries no `item`, `raw` or `data`.
 func (r *renderer) values(data map[string]any, t *template.Template, secCtx *sectionCtx) (map[string]any, error) {
+	// The fields converted below belong to t, so an image field's media root
+	// resolves through the media helper of t's OWNING layer for the duration
+	// of this call (image-field-roots). Saving and restoring the resolver lets
+	// a nested section-template-as-type value — which recurses through values
+	// for its own template — resolve in its own layer without leaking that
+	// layer into the enclosing template's remaining fields.
+	prevMedia := r.fieldMedia
+	r.fieldMedia = r.mediaForTemplate(t)
+	defer func() { r.fieldMedia = prevMedia }()
+
 	out := make(map[string]any, len(t.Fields))
 	for i := range t.Fields {
 		f := &t.Fields[i]
 		raw, present := data[f.Name]
 		if !present {
+			// An absent field with no default still reaches the context, as a
+			// nil entry: an explicit null and an absent optional field both
+			// read as nil (nullable-fields), mirroring the inline-record
+			// conversion below. A field with a default takes it instead, and a
+			// missing required field never reaches here (validation rejects it
+			// first).
 			if f.Default == nil {
+				out[f.Name] = nil
 				continue
 			}
 			raw = f.Default
@@ -1405,10 +1625,55 @@ func (r *renderer) contextNodes(sections []slide.Section) []template.ContextNode
 // instance it lives in, at every composition depth (section-template-context).
 // Such a value is data-only and its layout is never executed, so it carries no
 // `.item` descriptor (template-language).
+//
+// A nullable field's explicit null converts to nil with no per-type conversion
+// — no format, bound or membership step runs on a null (nullable-fields) — so a
+// null text or date field reaches a layout as nil rather than as "" or a raw
+// value. This also covers a nullable record field and a nullable list item
+// descriptor, because every recursion reaches here. A coerce text field
+// (text-coercion) renders its YAML number or boolean as its string form ("42",
+// "true"). An inline record (record-item-type) is a list's item descriptor: a
+// mapping of typed values, each converted field by field through this same
+// per-type conversion, so a record's text fields arrive pre-rendered and its
+// other fields typed, exactly like a template's top-level fields.
+//
+// An image field (image-field-roots) resolves to the URL of the file it names
+// in its declared roots: a media root through the owning template's `media`
+// helper (renderer.fieldMedia, set by values for the template being
+// converted), so the layout receives the same URL a `{{ media … }}` reference
+// in that template's layout produces; an assets root — and a field with no
+// roots — keeps the written deck-relative `assets/…` value, which the deck page
+// serves under the assets URL exactly as before.
 func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, secCtx *sectionCtx) (any, error) {
+	if raw == nil && f.Nullable {
+		return nil, nil
+	}
 	switch f.Type {
 	case template.FieldText:
 		s, ok := raw.(string)
+		if !ok && f.Coerce {
+			// internal/template's coerceText is unexported, so the render
+			// conversion repeats its number/boolean-to-string form here: the
+			// number 42 becomes "42" and the boolean true becomes "true". A
+			// string is handled above and any other non-string value (already
+			// rejected by validation) keeps the raw passthrough below.
+			switch v := raw.(type) {
+			case bool:
+				s, ok = strconv.FormatBool(v), true
+			default:
+				rv := reflect.ValueOf(raw)
+				if rv.IsValid() {
+					switch rv.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						s, ok = strconv.FormatInt(rv.Int(), 10), true
+					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+						s, ok = strconv.FormatUint(rv.Uint(), 10), true
+					case reflect.Float32, reflect.Float64:
+						s, ok = formatNumber(rv.Float()), true
+					}
+				}
+			}
+		}
 		if !ok {
 			// A non-string value (already rejected by validation) is left as
 			// text for html/template to escape.
@@ -1461,8 +1726,75 @@ func (r *renderer) fieldValue(f *template.Field, raw any, data map[string]any, s
 		}
 		return r.values(m, nested, nestedCtx)
 
+	case template.FieldRecord:
+		// An inline record (record-item-type) is a list's item descriptor: a
+		// mapping of typed field values, converted field by field through this
+		// same per-type conversion so a record's text fields arrive pre-rendered
+		// and its other fields typed, exactly like a template's top-level
+		// fields. Every declared field is present in the result — an explicit
+		// null is nil (a nullable field; a non-nullable null was rejected), and
+		// an omitted field takes its Default or, with none, is nil — mirroring
+		// renderer.values. The record's own mapping is the `data` a nested
+		// number or date field reads its `<field>_format` sibling from. A record
+		// nests because one of its fields may itself be a list whose item is a
+		// record, which recurses here.
+		m, ok := asMap(raw)
+		if !ok {
+			// A non-mapping value (already rejected by validation) is passed
+			// through unchanged.
+			return raw, nil
+		}
+		out := make(map[string]any, len(f.Fields))
+		for i := range f.Fields {
+			sub := &f.Fields[i]
+			val, present := m[sub.Name]
+			if !present {
+				if sub.Default == nil {
+					out[sub.Name] = nil
+					continue
+				}
+				val = sub.Default
+			}
+			v, err := r.fieldValue(sub, val, m, secCtx)
+			if err != nil {
+				return nil, err
+			}
+			out[sub.Name] = v
+		}
+		return out, nil
+
+	case template.FieldImage:
+		// An image field renders as the resolved URL of the file it names in
+		// its declared roots (image-field-roots). A field that declares a
+		// `media` root takes a media-relative path, so it resolves through the
+		// owning template's `media` helper — the very func its layout's
+		// `{{ media … }}` references execute with (imageFieldAllowsMedia,
+		// mediaForTemplate) — and reaches the layout as that helper's URL.
+		// When the roots include both `assets` and `media`, the helper's own
+		// existence check decides: a path that exists in the owning layer's
+		// media/ resolves to the media URL, and any other path (an assets
+		// value) keeps the written `assets/…` value, which the deck page
+		// serves under the assets URL exactly as before (server.AssetsPath). A
+		// field with no roots, or an assets-only root, never consults media
+		// and keeps the written value byte-identically.
+		if !imageFieldAllowsMedia(f) {
+			return raw, nil
+		}
+		s, ok := raw.(string)
+		if !ok {
+			return raw, nil
+		}
+		if r.fieldMedia != nil {
+			if url, err := r.fieldMedia(s); err == nil && url != "" {
+				return url, nil
+			}
+		}
+		// No owning-layer media helper, or the path names no file in a
+		// declared media root: keep the written value (the assets behaviour).
+		return raw, nil
+
 	default:
-		// boolean, enum, link and image values render as written.
+		// boolean, enum and link values render as written.
 		return raw, nil
 	}
 }

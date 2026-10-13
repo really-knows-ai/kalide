@@ -1,9 +1,11 @@
 package template
 
 import (
+	"errors"
 	htmltemplate "html/template"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -114,6 +116,17 @@ const (
 // offending template's template.yaml and whose Message is exactly the
 // Registry.Validate helper error (with its `template "<name>":` prefix). That
 // is the path-qualification checkLibraryBuild performs at step 4.
+//
+// typed-records/plan.phase-02.task-12 extends it with the field-types/
+// field-rules deliverable at the section-helper site: the site
+// (ResolveSectionCallLayered, the function exampleSectionHelper and the
+// render-time sectionHelper call) applies every field type and rule through the
+// same template.CheckValues engine the slide-frontmatter, section-instance and
+// load-time example sites use, defaults-first. The "every field type and rule"
+// subtest drives the site function directly over the engine's whole schema
+// (rules, paths and author-facing what text), and the "loader applies …" subtest
+// proves the loader runs the site at step 7, so a literal helper value that
+// violates the target's schema fails the whole load.
 func TestLoadLibrarySectionHelperChecksInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -220,6 +233,381 @@ func TestLoadLibrarySectionHelperChecksInt(t *testing.T) {
 			}
 		})
 	}
+
+	// --- every field type and rule through the shared engine ---------------
+	//
+	// The section-helper site is ResolveSectionCallLayered: the function
+	// exampleSectionHelper (step 7) and the render-time sectionHelper call once
+	// a `{{ section … }}` call's arguments are parsed. It is a thin adapter over
+	// the shared template.CheckValues engine — the same engine the
+	// slide-frontmatter and section-instance sites (internal/validate.checkFields)
+	// and the load-time example site (validateExampleBlockAt) call — so its
+	// field-schema coverage is the engine's whole schema: every field type and
+	// every value rule.
+	//
+	// Each case drives the site function directly (as the load-time example test
+	// drives validateExampleBlock) with the same in-process fixtures the engine's
+	// own unit table (checkvalues_test.go) uses, asserting the exact rule, path
+	// and author-facing what of the shared engine's first error — proving the
+	// site neither re-implements nor weakens a check. The accepted cases
+	// additionally pin that the site applies the target's defaults first (a
+	// default is published, a supplied value wins). The loader-wiring half is the
+	// "loader applies …" subtest below and the step-7 case in
+	// TestLoadLibrarySectionHelpersHappyPathInt.
+	t.Run("every field type and rule is enforced through the shared engine", func(t *testing.T) {
+		zero := 0.0
+		col := newSection("col", Field{Name: "title", Type: FieldText, Required: true})
+
+		textTmpl := newSection("site-text", Field{Name: "text", Type: FieldText})
+		numTmpl := newSection("site-num", Field{Name: "num", Type: FieldNumber})
+		numMinTmpl := newSection("site-num-min", Field{Name: "num", Type: FieldNumber, Min: &zero})
+		numMaxTmpl := newSection("site-num-max", Field{Name: "num", Type: FieldNumber, Max: float64Ptr(10)})
+		dateTmpl := newSection("site-date", Field{Name: "date", Type: FieldDate})
+		dateMinTmpl := newSection("site-date-min", Field{Name: "date", Type: FieldDate, MinDate: "2020-01-01"})
+		dateMaxTmpl := newSection("site-date-max", Field{Name: "date", Type: FieldDate, MaxDate: "2025-12-31"})
+		boolTmpl := newSection("site-bool", Field{Name: "flag", Type: FieldBoolean})
+		enumTmpl := newSection("site-enum", Field{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}})
+		imageTmpl := newSection("site-image", Field{Name: "img", Type: FieldImage})
+		linkTmpl := newSection("site-link", Field{Name: "url", Type: FieldLink})
+		listTmpl := newSection("site-list", Field{
+			Name: "items", Type: FieldList, Item: &Field{Type: FieldText},
+			MinItems: 1, MaxItems: 2,
+		})
+		reqTmpl := newSection("site-req", Field{Name: "req", Type: FieldText, Required: true})
+		longTmpl := newSection("site-long", Field{Name: "long", Type: FieldText, MaxLength: 2})
+		suggestTmpl := newSection("site-suggest", Field{Name: "title", Type: FieldText})
+		nullableTmpl := newSection("site-nullable", Field{Name: "title", Type: FieldText, Nullable: true})
+		coerceTmpl := newSection("site-coerce", Field{Name: "coerced", Type: FieldText, Coerce: true})
+		defTmpl := newSection("site-def", Field{Name: "title", Type: FieldText, Required: true, Default: "Untitled"})
+		sectionTmpl := newSection("site-section", Field{
+			Name: "block", Type: FieldSectionTemplate, SectionTemplate: "col",
+		})
+		// sectionResolve must resolve both the helper target and the nested
+		// section template its `block` field instantiates.
+		sectionResolve := resolverFor(sectionTmpl, col)
+		recordTmpl := newSection("site-record", Field{
+			Name: "items", Type: FieldList,
+			Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "title", Type: FieldText, Required: true},
+			}},
+		})
+		recordScalarTmpl := newSection("site-record-scalar", Field{
+			Name: "items", Type: FieldList,
+			Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "n", Type: FieldNumber, Min: &zero},
+			}},
+		})
+		nestedRecordTmpl := newSection("site-nested-record", Field{
+			Name: "items", Type: FieldList,
+			Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "values", Type: FieldList, Item: &Field{
+					Type: FieldRecord, Fields: []Field{
+						{Name: "n", Type: FieldNumber, Min: &zero},
+					},
+				}},
+			}},
+		})
+
+		cases := []struct {
+			name     string
+			target   *Template
+			resolve  func(string) (*Template, bool)
+			fields   map[string]any
+			valid    bool
+			wantRule string
+			wantPath string
+			wantWhat string
+			wantKey  string
+			wantVal  any
+		}{
+			// --- every field type: reject a value of the wrong type -------
+			{name: "text rejects a number", target: textTmpl,
+				fields:   map[string]any{"text": 42},
+				wantRule: "type", wantPath: "text",
+				wantWhat: `type: expected a text field, got a number`},
+			{name: "number rejects a boolean", target: numTmpl,
+				fields:   map[string]any{"num": true},
+				wantRule: "type", wantPath: "num",
+				wantWhat: `type: expected a number, got a boolean`},
+			{name: "number rejects a quoted value", target: numTmpl,
+				fields:   map[string]any{"num": "42"},
+				wantRule: "type", wantPath: "num",
+				wantWhat: `type: expected a number, got the quoted value "42"`},
+			{name: "date rejects a number", target: dateTmpl,
+				fields:   map[string]any{"date": 1},
+				wantRule: "type", wantPath: "date",
+				wantWhat: `type: expected a YYYY-MM-DD date, got a number`},
+			{name: "boolean rejects a quoted string", target: boolTmpl,
+				fields:   map[string]any{"flag": "yes"},
+				wantRule: "type", wantPath: "flag",
+				wantWhat: `type: expected a boolean, got a quoted string`},
+			{name: "enum rejects a number", target: enumTmpl,
+				fields:   map[string]any{"mode": 3},
+				wantRule: "type", wantPath: "mode",
+				wantWhat: `type: expected one of the enum variants, got a number`},
+			{name: "image rejects a number", target: imageTmpl,
+				fields:   map[string]any{"img": 5},
+				wantRule: "type", wantPath: "img",
+				wantWhat: `type: expected an image path, got a number`},
+			{name: "link rejects a number", target: linkTmpl,
+				fields:   map[string]any{"url": 5},
+				wantRule: "type", wantPath: "url",
+				wantWhat: `type: expected a link, got a number`},
+			{name: "list rejects a quoted string", target: listTmpl,
+				fields:   map[string]any{"items": "notalist"},
+				wantRule: "type", wantPath: "items",
+				wantWhat: `type: expected a list, got a quoted string`},
+			{name: "section-template rejects a quoted string", target: sectionTmpl, resolve: sectionResolve,
+				fields:   map[string]any{"block": "notmap"},
+				wantRule: "type", wantPath: "block",
+				wantWhat: `type: expected a mapping for section template "col", got a quoted string`},
+			{name: "coerce text still rejects a mapping", target: coerceTmpl,
+				fields:   map[string]any{"coerced": map[string]any{"a": 1}},
+				wantRule: "type", wantPath: "coerced",
+				wantWhat: `type: expected a text field, got a mapping`},
+			{name: "record item rejects a non-mapping", target: recordScalarTmpl,
+				fields:   map[string]any{"items": []any{7}},
+				wantRule: "type", wantPath: "items › [0]",
+				wantWhat: `type: expected a mapping for a record, got a number`},
+
+			// --- every field rule: reject a violating value ---------------
+			{name: "required absent is rejected", target: reqTmpl,
+				fields:   map[string]any{},
+				wantRule: "required", wantPath: "req",
+				wantWhat: `required: field "req" is required but missing`},
+			{name: "max_length is enforced", target: longTmpl,
+				fields:   map[string]any{"long": "abc"},
+				wantRule: "max_length", wantPath: "long",
+				wantWhat: `max_length: text is 3 characters, maximum is 2`},
+			{name: "number min is enforced", target: numMinTmpl,
+				fields:   map[string]any{"num": -1},
+				wantRule: "min", wantPath: "num",
+				wantWhat: `min: -1 is below the minimum 0`},
+			{name: "number max is enforced", target: numMaxTmpl,
+				fields:   map[string]any{"num": 11},
+				wantRule: "max", wantPath: "num",
+				wantWhat: `max: 11 exceeds the maximum 10`},
+			{name: "date min is enforced", target: dateMinTmpl,
+				fields:   map[string]any{"date": "2019-01-01"},
+				wantRule: "min", wantPath: "date",
+				wantWhat: `min: 2019-01-01 is below the minimum 2020-01-01`},
+			{name: "date max is enforced", target: dateMaxTmpl,
+				fields:   map[string]any{"date": "2026-01-01"},
+				wantRule: "max", wantPath: "date",
+				wantWhat: `max: 2026-01-01 exceeds the maximum 2025-12-31`},
+			{name: "malformed date is rejected", target: dateTmpl,
+				fields:   map[string]any{"date": "25/09/2026"},
+				wantRule: "date", wantPath: "date",
+				wantWhat: `date: "25/09/2026" is not a YYYY-MM-DD date`},
+			{name: "enum membership is enforced", target: enumTmpl,
+				fields:   map[string]any{"mode": "c"},
+				wantRule: "enum", wantPath: "mode",
+				wantWhat: `enum: "c" is not one of the allowed variants (a, b)`},
+			{name: "image must be under assets", target: imageTmpl,
+				fields:   map[string]any{"img": "pic.png"},
+				wantRule: "image", wantPath: "img",
+				wantWhat: `image: "pic.png" is not under assets/`},
+			{name: "link must be a label or an http URL", target: linkTmpl,
+				fields:   map[string]any{"url": "mailto:x@example.com"},
+				wantRule: "link", wantPath: "url",
+				wantWhat: `link: "mailto:x@example.com" is neither a #label anchor nor an http(s) URL`},
+			{name: "link label must be non-empty", target: linkTmpl,
+				fields:   map[string]any{"url": "#"},
+				wantRule: "link", wantPath: "url",
+				wantWhat: `link: "#" has an empty label`},
+			{name: "list min_items is enforced", target: listTmpl,
+				fields:   map[string]any{"items": []any{}},
+				wantRule: "min_items", wantPath: "items",
+				wantWhat: `min_items: 0 item(s) is below the minimum 1`},
+			{name: "list max_items is enforced", target: listTmpl,
+				fields:   map[string]any{"items": []any{"a", "b", "c"}},
+				wantRule: "max_items", wantPath: "items",
+				wantWhat: `max_items: 3 item(s) exceeds the maximum 2`},
+			{name: "unknown field is rejected", target: suggestTmpl,
+				fields:   map[string]any{"titel": "x"},
+				wantRule: "unknown-field", wantPath: "titel",
+				wantWhat: `unknown field "titel"`},
+			{name: "non-nullable null is rejected", target: suggestTmpl,
+				fields:   map[string]any{"title": nil},
+				wantRule: "nullable", wantPath: "title",
+				wantWhat: `got null`},
+
+			// --- path qualification through nesting -----------------------
+			{name: "record item required field carries the full path", target: recordTmpl,
+				fields:   map[string]any{"items": []any{map[string]any{}}},
+				wantRule: "required", wantPath: "items › [0] › title",
+				wantWhat: `required: field "title" is required but missing`},
+			{name: "record-list-record violation carries the full path", target: nestedRecordTmpl,
+				fields:   map[string]any{"items": []any{map[string]any{"values": []any{map[string]any{"n": -1}}}}},
+				wantRule: "min", wantPath: "items › [0] › values › [0] › n",
+				wantWhat: `min: -1 is below the minimum 0`},
+			{name: "section-template field violation carries the nested path", target: sectionTmpl, resolve: sectionResolve,
+				fields:   map[string]any{"block": map[string]any{}},
+				wantRule: "required", wantPath: "block › title",
+				wantWhat: `required: field "title" is required but missing`},
+
+			// --- every field type accepts a valid value -------------------
+			{name: "text accepts a string", target: textTmpl,
+				fields: map[string]any{"text": "hello"}, valid: true},
+			{name: "number accepts a number", target: numMinTmpl,
+				fields: map[string]any{"num": 3}, valid: true},
+			{name: "date accepts a date", target: dateTmpl,
+				fields: map[string]any{"date": "2026-09-25"}, valid: true},
+			{name: "boolean accepts a boolean", target: boolTmpl,
+				fields: map[string]any{"flag": true}, valid: true},
+			{name: "enum accepts a variant", target: enumTmpl,
+				fields: map[string]any{"mode": "a"}, valid: true},
+			{name: "image accepts an assets path", target: imageTmpl,
+				fields: map[string]any{"img": "assets/pic.png"}, valid: true},
+			{name: "link accepts a #label", target: linkTmpl,
+				fields: map[string]any{"url": "#summary"}, valid: true},
+			{name: "list accepts its items", target: listTmpl,
+				fields: map[string]any{"items": []any{"a"}}, valid: true},
+			{name: "section-template accepts a mapping", target: sectionTmpl, resolve: sectionResolve,
+				fields: map[string]any{"block": map[string]any{"title": "x"}}, valid: true},
+			{name: "nullable accepts null", target: nullableTmpl,
+				fields: map[string]any{"title": nil}, valid: true,
+				wantKey: "title", wantVal: nil},
+
+			// --- defaults-first: the site materialises the default -------
+			{name: "coerce text accepts a number", target: coerceTmpl,
+				fields: map[string]any{"coerced": 42}, valid: true},
+			{name: "required with a default accepts omission", target: defTmpl,
+				fields: map[string]any{}, valid: true,
+				wantKey: "title", wantVal: "Untitled"},
+			{name: "a supplied value wins over the default", target: defTmpl,
+				fields: map[string]any{"title": "explicit"}, valid: true,
+				wantKey: "title", wantVal: "explicit"},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				resolve := tt.resolve
+				if resolve == nil {
+					resolve = resolverFor(tt.target)
+				}
+				call, err := ResolveSectionCallLayered(resolve, nil, tt.target.Name, tt.fields, "", nil, nil)
+
+				if tt.valid {
+					if err != nil {
+						t.Fatalf("ResolveSectionCallLayered() error = %v, want nil: the value is valid for its type and rules", err)
+					}
+					if call == nil {
+						t.Fatal("ResolveSectionCallLayered() returned a nil call with a nil error")
+					}
+					if tt.wantKey != "" {
+						got, present := call.Values[tt.wantKey]
+						if !present {
+							t.Fatalf("call.Values has no %q entry; the site must publish every declared field", tt.wantKey)
+						}
+						if got != tt.wantVal {
+							t.Errorf("call.Values[%q] = %#v, want %#v", tt.wantKey, got, tt.wantVal)
+						}
+					}
+					return
+				}
+
+				if err == nil {
+					t.Fatalf("ResolveSectionCallLayered() error = nil, want the %s violation at %s", tt.wantRule, tt.wantPath)
+				}
+				var ve ValueError
+				if !errors.As(err, &ve) {
+					t.Fatalf("ResolveSectionCallLayered() error = %v (%T), want a ValueError from the shared engine", err, err)
+				}
+				if ve.Rule != tt.wantRule {
+					t.Errorf("error Rule = %q, want %q", ve.Rule, tt.wantRule)
+				}
+				if got := ve.PathString(); got != tt.wantPath {
+					t.Errorf("error Path = %q, want %q", got, tt.wantPath)
+				}
+				if ve.What != tt.wantWhat {
+					t.Errorf("error What = %q, want %q", ve.What, tt.wantWhat)
+				}
+			})
+		}
+	})
+
+	// --- the site is wired into the loader ---------------------------------
+	//
+	// The cases above pin the site function directly; this subtest proves the
+	// loader actually runs it. checkLibraryExamples (step 7) executes the host
+	// slide's layout through exampleSectionHelper, so a literal helper call whose
+	// value violates the target's field type or rule fails the whole load,
+	// path-qualified to the calling layout — while the step-4 static check (the
+	// table at the top of this function) sees only the literal keys, so a
+	// wrong-typed or out-of-range value reaches step 7. A valid call loads.
+	t.Run("the loader applies the target's field types and rules at step 7", func(t *testing.T) {
+		cases := []struct {
+			name           string
+			targetManifest string
+			targetExample  string
+			call           string
+			valid          bool
+			want           string
+		}{
+			{
+				name:           "a wrong-typed literal value fails the load",
+				targetManifest: "name: footer\nfields:\n  - name: title\n    type: text\n",
+				targetExample:  "```\ntitle: ok\n```\n",
+				call:           `(dict "title" 42)`,
+				want:           `title: type: expected a text field, got a number`,
+			},
+			{
+				name:           "an out-of-range number fails the load",
+				targetManifest: "name: footer\nfields:\n  - name: count\n    type: number\n    min: 0\n",
+				targetExample:  "```\ncount: 1\n```\n",
+				call:           `(dict "count" -1)`,
+				want:           `count: min: -1 is below the minimum 0`,
+			},
+			{
+				name:           "a valid literal value loads",
+				targetManifest: "name: footer\nfields:\n  - name: title\n    type: text\n",
+				targetExample:  "```\ntitle: ok\n```\n",
+				call:           `(dict "title" "ok")`,
+				valid:          true,
+			},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				files := mergeIntFiles(
+					templateIntFiles(SlidesDir, "host", "name: host\n",
+						`<section>{{ section "footer" `+tt.call+` }}</section>`, "# host\n"),
+					templateIntFiles(SectionsDir, "footer", tt.targetManifest, "<footer></footer>", tt.targetExample),
+				)
+				projectDir := writeSectionHelperIntLibrary(t, files)
+				lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+
+				if tt.valid {
+					if err != nil {
+						t.Fatalf("LoadLibrary() error = %v, want nil: the literal value is valid for its type and rules", err)
+					}
+					if lib == nil {
+						t.Fatal("LoadLibrary() returned nil Library with nil error")
+					}
+					return
+				}
+
+				if err == nil {
+					t.Fatalf("LoadLibrary() = %+v, nil; want the field violation to fail step 7", lib)
+				}
+				if lib != nil {
+					t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+				}
+				libErr := asLibraryError(t, err)
+				wantPath := filepath.Join(TemplatesDir, SlidesDir, "host", LayoutFile)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want the calling layout %q", libErr.Path, wantPath)
+				}
+				if !strings.Contains(libErr.Message, "execute:") {
+					t.Errorf("Message = %q, want a step-7 execute failure", libErr.Message)
+				}
+				if !strings.Contains(libErr.Message, tt.want) {
+					t.Errorf("Message = %q, want it to contain the shared engine's error %q", libErr.Message, tt.want)
+				}
+			})
+		}
+	})
 }
 
 // TestLoadLibrarySectionHelpersHappyPathInt proves a library whose host slide
@@ -680,6 +1068,19 @@ func TestLoadLibraryAtExternalStandaloneInt(t *testing.T) {
 // and an external-internal cycle, caught at the external layer's own full load
 // — plus a local declared-section chain deeper than the six-heading-level limit,
 // likewise caught by the merged pass.
+//
+// plan.phase-07.task-19 extends it with the bounded-self-nesting half
+// (requirements.requirement.bounded-self-nesting,
+// requirements.constraint.section-depth-limit). A declared-section cycle whose
+// declarations carry max_depth is a finite walk the merge accepts rather than
+// the reference cycle its unbounded form reports: the A→B→A cycle with a's
+// acceptance of b bounded by max_depth: 1 loads at the merged pass, and a
+// local self-accepting `loop` chain at max_depth: 5 (six heading levels, the
+// syntax bound) loads. One heading level past the bound — a self-accepting
+// chain at max_depth: 6 (seven heading levels) — is refused at the merged pass
+// with the depth-limit templates error naming the over-deep chain and the
+// max_depth that produced it, and the same A→B→A cycle with no max_depth keeps
+// its `section template reference cycle: sections/…` chain error.
 func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test: real filesystem")
@@ -763,6 +1164,126 @@ func TestLoadDeckLibraryCrossLayerCycleAndDepthInt(t *testing.T) {
 			t.Errorf("Message = %q, want it to name the six-heading-level limit", libErr.Message)
 		}
 	})
+
+	t.Run("a local declared A→B→A cycle bounded by max_depth: 1 loads at the merged pass", func(t *testing.T) {
+		// a declares a `b` section accepting b at max_depth: 1; b declares an
+		// `a` section accepting a with no bound. A declaration on the cycle
+		// carries max_depth, so the declared-section acceptance is a finite,
+		// bounded walk the merged pass accepts instead of the reference cycle
+		// the unbounded form reports
+		// (requirements.requirement.bounded-self-nesting). The local layer's
+		// own per-layer load defers step 4, so this is the merged pass's
+		// verdict. Each example authors the nested instance its declaration
+		// accepts, so step 7 validates them too.
+		const aManifest = "name: a\nsections:\n  - name: b\n    accepted: [b]\n    max_depth: 1\n"
+		const bManifest = "name: b\nsections:\n  - name: a\n    accepted: [a]\n"
+		localFiles := mergeIntFiles(
+			templateIntFiles(SectionsDir, "a", aManifest, "<div></div>", "# b\n"),
+			templateIntFiles(SectionsDir, "b", bManifest, "<div></div>", "# a\n"),
+		)
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t, localFiles,
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary() error = %v, want nil: a declaration on the cycle carries max_depth: 1, bounding it into a finite walk", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadDeckLibrary() returned nil Library with nil error")
+		}
+		for _, name := range []string{"a", "b", "ext-section"} {
+			if _, _, ok := lib.TemplateByName(name); !ok {
+				t.Errorf("merged library is missing template %q", name)
+			}
+		}
+	})
+
+	t.Run("a local declared A→B→A cycle without max_depth keeps its chain error at the merged pass", func(t *testing.T) {
+		// The same A→B→A declared-section cycle with no max_depth on either
+		// declaration is an unbounded reference cycle, so the merged pass keeps
+		// the requirements.constraint.section-cycle-error-chain chain error,
+		// path-qualified to the cycle root's manifest.
+		const aManifest = "name: a\nsections:\n  - name: b\n    accepted: [b]\n"
+		const bManifest = "name: b\nsections:\n  - name: a\n    accepted: [a]\n"
+		localFiles := mergeIntFiles(
+			templateIntFiles(SectionsDir, "a", aManifest, "<div></div>", "# b\n"),
+			templateIntFiles(SectionsDir, "b", bManifest, "<div></div>", "# a\n"),
+		)
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t, localFiles,
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if lib != nil {
+			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
+		}
+		libErr := asLibraryError(t, err)
+		if wantPath := filepath.Join(localRoot, SectionsDir, "a", ManifestFile); libErr.Path != wantPath {
+			t.Errorf("Path = %q, want the local cycle root's manifest %q", libErr.Path, wantPath)
+		}
+		const want = `template "a": section template reference cycle: sections/a → sections/b → sections/a`
+		if libErr.Message != want {
+			t.Errorf("Message = %q, want %q", libErr.Message, want)
+		}
+	})
+
+	t.Run("a local self-accepting chain at max_depth: 5 loads at the merged pass", func(t *testing.T) {
+		// A self-accepting `loop` declaration bounded at max_depth: 5 produces
+		// six heading levels (the root plus five bounded levels), exactly the
+		// six-heading-level syntax bound, so the merged pass accepts it.
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t,
+			selfAcceptingLoopIntFiles(5),
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if err != nil {
+			t.Fatalf("LoadDeckLibrary() error = %v, want nil: max_depth: 5 produces six heading levels, within the six-level bound", err)
+		}
+		if lib == nil {
+			t.Fatal("LoadDeckLibrary() returned nil Library with nil error")
+		}
+		if _, _, ok := lib.TemplateByName("loop"); !ok {
+			t.Error(`merged library is missing template "loop"`)
+		}
+	})
+
+	t.Run("a local self-accepting chain at max_depth: 6 is refused with the depth-limit error at the merged pass", func(t *testing.T) {
+		// One heading level past the bound: max_depth: 6 asks for seven heading
+		// levels, so the merged pass refuses the walk with the depth-limit
+		// templates error naming the over-deep chain and the max_depth that
+		// produced it (requirements.constraint.section-depth-limit).
+		deckRoot, externalRoot := writeSectionHelperIntLayeredDeck(t,
+			selfAcceptingLoopIntFiles(6),
+			sectionIntFiles("ext-section", "name: ext-section\n", "<footer>external</footer>"))
+		localRoot := filepath.Join(deckRoot, TemplatesDir)
+
+		lib, err := LoadDeckLibrary(deckRoot, externalRoot)
+		if lib != nil {
+			t.Fatalf("LoadDeckLibrary() Library = %+v, want nil on error", lib)
+		}
+		libErr := asLibraryError(t, err)
+		if wantPath := filepath.Join(localRoot, SectionsDir, "loop", ManifestFile); libErr.Path != wantPath {
+			t.Errorf("Path = %q, want the local over-deep chain's manifest %q", libErr.Path, wantPath)
+		}
+		wantMsg := `template "loop": section template composition is 7 levels deep, exceeding the 6-heading-level limit: ` +
+			`sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop → sections/loop ` +
+			`— the bounded self-nesting declaration max_depth: 6 produces this chain; lower max_depth or flatten the composition`
+		if libErr.Message != wantMsg {
+			t.Errorf("Message = %q, want %q", libErr.Message, wantMsg)
+		}
+	})
+}
+
+// selfAcceptingLoopIntFiles returns the on-disk files of a `loop` section
+// template whose single `loop` section accepts itself at max_depth. A positive
+// bound makes the declared-section self-acceptance a finite, accepted walk:
+// max_depth: 5 stays within the six-heading-level syntax bound while max_depth:
+// 6 crosses it (requirements.requirement.bounded-self-nesting,
+// requirements.constraint.section-depth-limit). The example authors one nested
+// `loop` instance, the section the declaration accepts.
+func selfAcceptingLoopIntFiles(maxDepth int) map[string]string {
+	manifest := "name: loop\nsections:\n  - name: loop\n    accepted: [loop]\n    max_depth: " + strconv.Itoa(maxDepth) + "\n"
+	return templateIntFiles(SectionsDir, "loop", manifest, "<div></div>", "# loop\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -1054,6 +1575,406 @@ func TestLoadLibraryChildLoadChecksInt(t *testing.T) {
 		}
 		if got := rendered.String(); !strings.Contains(got, `<i class="ext-column">E1</i>`) {
 			t.Errorf("merged example execution rendered %q, want the external child's HTML <i class=\"ext-column\">E1</i>", got)
+		}
+	})
+
+	// --- plan.phase-02.task-13: every field type and rule through the shared
+	// engine at the child-argument site -----------------------------------
+	//
+	// A literal `child "<section>" (dict …)` argument carries its own field
+	// values, and the child-argument site resolves them against the
+	// instantiated template exactly as an authored instance's frontmatter: the
+	// site is ResolveChildCall (called for one literal child by ResolveChildren,
+	// which ResolveSectionCallLayered — the section-helper site — invokes for
+	// the call's whole child set, at load and at render). It is a thin adapter
+	// over the same shared template.CheckValues engine the slide-frontmatter,
+	// section-instance, load-time example and section-helper sites use, so its
+	// field-schema coverage is the engine's whole schema: every field type and
+	// every value rule, path-qualified and reported at the child's own position
+	// (field-types, field-rules, child-constructor,
+	// requirements.requirement.section-helper-load-checks). Each case below
+	// drives ResolveChildCall (the site function) directly with the same
+	// in-process fixtures the engine's own unit table (checkvalues_test.go)
+	// uses, asserting the exact rule, path and author-facing what of the shared
+	// engine's first error — proving the site neither re-implements nor weakens
+	// a check — and that the accepted cases publish the instantiated template's
+	// defaults first (a default is materialised, a supplied value wins). The
+	// loader-wiring half is the "loader applies …" subtest below.
+	t.Run("every field type and rule is enforced through the shared engine", func(t *testing.T) {
+		zero := 0.0
+		col := newSection("col", Field{Name: "title", Type: FieldText, Required: true})
+
+		textTmpl := newSection("child-text", Field{Name: "text", Type: FieldText})
+		numTmpl := newSection("child-num", Field{Name: "num", Type: FieldNumber})
+		numMinTmpl := newSection("child-num-min", Field{Name: "num", Type: FieldNumber, Min: &zero})
+		numMaxTmpl := newSection("child-num-max", Field{Name: "num", Type: FieldNumber, Max: float64Ptr(10)})
+		dateTmpl := newSection("child-date", Field{Name: "date", Type: FieldDate})
+		dateMinTmpl := newSection("child-date-min", Field{Name: "date", Type: FieldDate, MinDate: "2020-01-01"})
+		dateMaxTmpl := newSection("child-date-max", Field{Name: "date", Type: FieldDate, MaxDate: "2025-12-31"})
+		boolTmpl := newSection("child-bool", Field{Name: "flag", Type: FieldBoolean})
+		enumTmpl := newSection("child-enum", Field{Name: "mode", Type: FieldEnum, Variants: []string{"a", "b"}})
+		imageTmpl := newSection("child-image", Field{Name: "img", Type: FieldImage})
+		linkTmpl := newSection("child-link", Field{Name: "url", Type: FieldLink})
+		listTmpl := newSection("child-list", Field{
+			Name: "items", Type: FieldList, Item: &Field{Type: FieldText},
+			MinItems: 1, MaxItems: 2,
+		})
+		reqTmpl := newSection("child-req", Field{Name: "req", Type: FieldText, Required: true})
+		longTmpl := newSection("child-long", Field{Name: "long", Type: FieldText, MaxLength: 2})
+		suggestTmpl := newSection("child-suggest", Field{Name: "title", Type: FieldText})
+		nullableTmpl := newSection("child-nullable", Field{Name: "title", Type: FieldText, Nullable: true})
+		coerceTmpl := newSection("child-coerce", Field{Name: "coerced", Type: FieldText, Coerce: true})
+		defTmpl := newSection("child-def", Field{Name: "title", Type: FieldText, Required: true, Default: "Untitled"})
+		sectionTmpl := newSection("child-section", Field{
+			Name: "block", Type: FieldSectionTemplate, SectionTemplate: "col",
+		})
+		// sectionResolve must resolve both the child template and the nested
+		// section template its `block` field instantiates.
+		sectionResolve := resolverFor(sectionTmpl, col)
+		recordTmpl := newSection("child-record", Field{
+			Name: "items", Type: FieldList,
+			Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "title", Type: FieldText, Required: true},
+			}},
+		})
+		recordScalarTmpl := newSection("child-record-scalar", Field{
+			Name: "items", Type: FieldList,
+			Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "n", Type: FieldNumber, Min: &zero},
+			}},
+		})
+		nestedRecordTmpl := newSection("child-nested-record", Field{
+			Name: "items", Type: FieldList,
+			Item: &Field{Type: FieldRecord, Fields: []Field{
+				{Name: "values", Type: FieldList, Item: &Field{
+					Type: FieldRecord, Fields: []Field{
+						{Name: "n", Type: FieldNumber, Min: &zero},
+					},
+				}},
+			}},
+		})
+
+		cases := []struct {
+			name     string
+			target   *Template
+			resolve  func(string) (*Template, bool)
+			fields   map[string]any
+			valid    bool
+			wantRule string
+			wantPath string
+			wantWhat string
+			wantKey  string
+			wantVal  any
+		}{
+			// --- every field type: reject a value of the wrong type -------
+			{name: "text rejects a number", target: textTmpl,
+				fields:   map[string]any{"text": 42},
+				wantRule: "type", wantPath: "text",
+				wantWhat: `type: expected a text field, got a number`},
+			{name: "number rejects a boolean", target: numTmpl,
+				fields:   map[string]any{"num": true},
+				wantRule: "type", wantPath: "num",
+				wantWhat: `type: expected a number, got a boolean`},
+			{name: "number rejects a quoted value", target: numTmpl,
+				fields:   map[string]any{"num": "42"},
+				wantRule: "type", wantPath: "num",
+				wantWhat: `type: expected a number, got the quoted value "42"`},
+			{name: "date rejects a number", target: dateTmpl,
+				fields:   map[string]any{"date": 1},
+				wantRule: "type", wantPath: "date",
+				wantWhat: `type: expected a YYYY-MM-DD date, got a number`},
+			{name: "boolean rejects a quoted string", target: boolTmpl,
+				fields:   map[string]any{"flag": "yes"},
+				wantRule: "type", wantPath: "flag",
+				wantWhat: `type: expected a boolean, got a quoted string`},
+			{name: "enum rejects a number", target: enumTmpl,
+				fields:   map[string]any{"mode": 3},
+				wantRule: "type", wantPath: "mode",
+				wantWhat: `type: expected one of the enum variants, got a number`},
+			{name: "image rejects a number", target: imageTmpl,
+				fields:   map[string]any{"img": 5},
+				wantRule: "type", wantPath: "img",
+				wantWhat: `type: expected an image path, got a number`},
+			{name: "link rejects a number", target: linkTmpl,
+				fields:   map[string]any{"url": 5},
+				wantRule: "type", wantPath: "url",
+				wantWhat: `type: expected a link, got a number`},
+			{name: "list rejects a quoted string", target: listTmpl,
+				fields:   map[string]any{"items": "notalist"},
+				wantRule: "type", wantPath: "items",
+				wantWhat: `type: expected a list, got a quoted string`},
+			{name: "section-template rejects a quoted string", target: sectionTmpl, resolve: sectionResolve,
+				fields:   map[string]any{"block": "notmap"},
+				wantRule: "type", wantPath: "block",
+				wantWhat: `type: expected a mapping for section template "col", got a quoted string`},
+			{name: "coerce text still rejects a mapping", target: coerceTmpl,
+				fields:   map[string]any{"coerced": map[string]any{"a": 1}},
+				wantRule: "type", wantPath: "coerced",
+				wantWhat: `type: expected a text field, got a mapping`},
+			{name: "record item rejects a non-mapping", target: recordScalarTmpl,
+				fields:   map[string]any{"items": []any{7}},
+				wantRule: "type", wantPath: "items › [0]",
+				wantWhat: `type: expected a mapping for a record, got a number`},
+
+			// --- every field rule: reject a violating value ---------------
+			{name: "required absent is rejected", target: reqTmpl,
+				fields:   map[string]any{},
+				wantRule: "required", wantPath: "req",
+				wantWhat: `required: field "req" is required but missing`},
+			{name: "max_length is enforced", target: longTmpl,
+				fields:   map[string]any{"long": "abc"},
+				wantRule: "max_length", wantPath: "long",
+				wantWhat: `max_length: text is 3 characters, maximum is 2`},
+			{name: "number min is enforced", target: numMinTmpl,
+				fields:   map[string]any{"num": -1},
+				wantRule: "min", wantPath: "num",
+				wantWhat: `min: -1 is below the minimum 0`},
+			{name: "number max is enforced", target: numMaxTmpl,
+				fields:   map[string]any{"num": 11},
+				wantRule: "max", wantPath: "num",
+				wantWhat: `max: 11 exceeds the maximum 10`},
+			{name: "date min is enforced", target: dateMinTmpl,
+				fields:   map[string]any{"date": "2019-01-01"},
+				wantRule: "min", wantPath: "date",
+				wantWhat: `min: 2019-01-01 is below the minimum 2020-01-01`},
+			{name: "date max is enforced", target: dateMaxTmpl,
+				fields:   map[string]any{"date": "2026-01-01"},
+				wantRule: "max", wantPath: "date",
+				wantWhat: `max: 2026-01-01 exceeds the maximum 2025-12-31`},
+			{name: "malformed date is rejected", target: dateTmpl,
+				fields:   map[string]any{"date": "25/09/2026"},
+				wantRule: "date", wantPath: "date",
+				wantWhat: `date: "25/09/2026" is not a YYYY-MM-DD date`},
+			{name: "enum membership is enforced", target: enumTmpl,
+				fields:   map[string]any{"mode": "c"},
+				wantRule: "enum", wantPath: "mode",
+				wantWhat: `enum: "c" is not one of the allowed variants (a, b)`},
+			{name: "image must be under assets", target: imageTmpl,
+				fields:   map[string]any{"img": "pic.png"},
+				wantRule: "image", wantPath: "img",
+				wantWhat: `image: "pic.png" is not under assets/`},
+			{name: "link must be a label or an http URL", target: linkTmpl,
+				fields:   map[string]any{"url": "mailto:x@example.com"},
+				wantRule: "link", wantPath: "url",
+				wantWhat: `link: "mailto:x@example.com" is neither a #label anchor nor an http(s) URL`},
+			{name: "link label must be non-empty", target: linkTmpl,
+				fields:   map[string]any{"url": "#"},
+				wantRule: "link", wantPath: "url",
+				wantWhat: `link: "#" has an empty label`},
+			{name: "list min_items is enforced", target: listTmpl,
+				fields:   map[string]any{"items": []any{}},
+				wantRule: "min_items", wantPath: "items",
+				wantWhat: `min_items: 0 item(s) is below the minimum 1`},
+			{name: "list max_items is enforced", target: listTmpl,
+				fields:   map[string]any{"items": []any{"a", "b", "c"}},
+				wantRule: "max_items", wantPath: "items",
+				wantWhat: `max_items: 3 item(s) exceeds the maximum 2`},
+			{name: "unknown field is rejected", target: suggestTmpl,
+				fields:   map[string]any{"titel": "x"},
+				wantRule: "unknown-field", wantPath: "titel",
+				wantWhat: `unknown field "titel"`},
+			{name: "non-nullable null is rejected", target: suggestTmpl,
+				fields:   map[string]any{"title": nil},
+				wantRule: "nullable", wantPath: "title",
+				wantWhat: `got null`},
+
+			// --- path qualification through nesting -----------------------
+			{name: "record item required field carries the full path", target: recordTmpl,
+				fields:   map[string]any{"items": []any{map[string]any{}}},
+				wantRule: "required", wantPath: "items › [0] › title",
+				wantWhat: `required: field "title" is required but missing`},
+			{name: "record-list-record violation carries the full path", target: nestedRecordTmpl,
+				fields:   map[string]any{"items": []any{map[string]any{"values": []any{map[string]any{"n": -1}}}}},
+				wantRule: "min", wantPath: "items › [0] › values › [0] › n",
+				wantWhat: `min: -1 is below the minimum 0`},
+			{name: "section-template field violation carries the nested path", target: sectionTmpl, resolve: sectionResolve,
+				fields:   map[string]any{"block": map[string]any{}},
+				wantRule: "required", wantPath: "block › title",
+				wantWhat: `required: field "title" is required but missing`},
+
+			// --- every field type accepts a valid value -------------------
+			{name: "text accepts a string", target: textTmpl,
+				fields: map[string]any{"text": "hello"}, valid: true},
+			{name: "number accepts a number", target: numMinTmpl,
+				fields: map[string]any{"num": 3}, valid: true},
+			{name: "date accepts a date", target: dateTmpl,
+				fields: map[string]any{"date": "2026-09-25"}, valid: true},
+			{name: "boolean accepts a boolean", target: boolTmpl,
+				fields: map[string]any{"flag": true}, valid: true},
+			{name: "enum accepts a variant", target: enumTmpl,
+				fields: map[string]any{"mode": "a"}, valid: true},
+			{name: "image accepts an assets path", target: imageTmpl,
+				fields: map[string]any{"img": "assets/pic.png"}, valid: true},
+			{name: "link accepts a #label", target: linkTmpl,
+				fields: map[string]any{"url": "#summary"}, valid: true},
+			{name: "list accepts its items", target: listTmpl,
+				fields: map[string]any{"items": []any{"a"}}, valid: true},
+			{name: "section-template accepts a mapping", target: sectionTmpl, resolve: sectionResolve,
+				fields: map[string]any{"block": map[string]any{"title": "x"}}, valid: true},
+			{name: "nullable accepts null", target: nullableTmpl,
+				fields: map[string]any{"title": nil}, valid: true,
+				wantKey: "title", wantVal: nil},
+
+			// --- defaults-first: the site materialises the default -------
+			{name: "coerce text accepts a number", target: coerceTmpl,
+				fields: map[string]any{"coerced": 42}, valid: true},
+			{name: "required with a default accepts omission", target: defTmpl,
+				fields: map[string]any{}, valid: true,
+				wantKey: "title", wantVal: "Untitled"},
+			{name: "a supplied value wins over the default", target: defTmpl,
+				fields: map[string]any{"title": "explicit"}, valid: true,
+				wantKey: "title", wantVal: "explicit"},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				resolve := tt.resolve
+				if resolve == nil {
+					resolve = resolverFor(tt.target)
+				}
+				// The parent declares exactly the one section the child fills:
+				// the section name is the instantiated template's own name,
+				// accepted by itself, so the child resolves as a single-accepted
+				// declaration with no `template` selector required.
+				parent := &Template{
+					Name:  "child-site-parent",
+					Usage: UsageSection,
+					Sections: []SectionDecl{
+						{Name: tt.target.Name, Accepted: []string{tt.target.Name}},
+					},
+				}
+				call, err := ResolveChildCall(resolve, nil, parent,
+					&ChildRequest{Section: tt.target.Name, Fields: tt.fields}, 0, 1, nil, nil)
+
+				if tt.valid {
+					if err != nil {
+						t.Fatalf("ResolveChildCall() error = %v, want nil: the value is valid for its type and rules", err)
+					}
+					if call == nil {
+						t.Fatal("ResolveChildCall() returned a nil call with a nil error")
+					}
+					if tt.wantKey != "" {
+						got, present := call.Values[tt.wantKey]
+						if !present {
+							t.Fatalf("call.Values has no %q entry; the site must publish every declared field", tt.wantKey)
+						}
+						if got != tt.wantVal {
+							t.Errorf("call.Values[%q] = %#v, want %#v", tt.wantKey, got, tt.wantVal)
+						}
+					}
+					return
+				}
+
+				if err == nil {
+					t.Fatalf("ResolveChildCall() error = nil, want the %s violation at %s", tt.wantRule, tt.wantPath)
+				}
+				var ve ValueError
+				if !errors.As(err, &ve) {
+					t.Fatalf("ResolveChildCall() error = %v (%T), want a ValueError from the shared engine", err, err)
+				}
+				if ve.Rule != tt.wantRule {
+					t.Errorf("error Rule = %q, want %q", ve.Rule, tt.wantRule)
+				}
+				if got := ve.PathString(); got != tt.wantPath {
+					t.Errorf("error Path = %q, want %q", got, tt.wantPath)
+				}
+				if ve.What != tt.wantWhat {
+					t.Errorf("error What = %q, want %q", ve.What, tt.wantWhat)
+				}
+			})
+		}
+	})
+
+	// --- the child-argument site is wired into the loader -------------------
+	//
+	// The cases above pin the site function directly; this subtest proves the
+	// loader actually runs it at load. checkLibraryExamples (step 7) executes
+	// the host slide's layout, whose
+	// `section "columns" nil nil (child "column" (dict …))` call is resolved by
+	// exampleSectionHelper through ResolveSectionCallLayered → ResolveChildren →
+	// ResolveChildCall, so a literal child value that violates the instantiated
+	// template's field type or rule fails the whole load, path-qualified to the
+	// calling layout. The step-4 static check (the child check in the table
+	// above) sees only the literal keys — a declared key supplying a
+	// wrong-typed or out-of-range value passes it — so the violation reaches
+	// step 7. A valid child value loads, its child rendered into the target.
+	t.Run("the loader applies the child template's field types and rules at step 7", func(t *testing.T) {
+		const (
+			loaderColumnsManifest = "name: columns\nsections:\n  - name: column\n    accepted: [column]\n"
+			loaderColumnsLayout   = `<div class="columns">{{ range .column }}{{ . }}{{ end }}</div>`
+			loaderColumnLayout    = `<span class="column"></span>`
+		)
+
+		cases := []struct {
+			name           string
+			columnManifest string
+			columnExample  string
+			call           string
+			valid          bool
+			want           string
+		}{
+			{
+				name:           "a wrong-typed child literal value fails the load",
+				columnManifest: "name: column\nfields:\n  - name: title\n    type: text\n",
+				columnExample:  "```\ntitle: ok\n```\n",
+				call:           `(dict "title" 42)`,
+				want:           `title: type: expected a text field, got a number`,
+			},
+			{
+				name:           "an out-of-range child number fails the load",
+				columnManifest: "name: column\nfields:\n  - name: count\n    type: number\n    min: 0\n",
+				columnExample:  "```\ncount: 1\n```\n",
+				call:           `(dict "count" -1)`,
+				want:           `count: min: -1 is below the minimum 0`,
+			},
+			{
+				name:           "a valid child literal value loads",
+				columnManifest: "name: column\nfields:\n  - name: title\n    type: text\n",
+				columnExample:  "```\ntitle: ok\n```\n",
+				call:           `(dict "title" "ok")`,
+				valid:          true,
+			},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				files := mergeIntFiles(
+					templateIntFiles(SlidesDir, "host", "name: host\n",
+						`<section>{{ section "columns" nil nil (child "column" `+tt.call+`) }}</section>`, "# host\n"),
+					templateIntFiles(SectionsDir, "columns", loaderColumnsManifest, loaderColumnsLayout, ""),
+					templateIntFiles(SectionsDir, "column", tt.columnManifest, loaderColumnLayout, tt.columnExample),
+				)
+				projectDir := writeSectionHelperIntLibrary(t, files)
+				lib, err := LoadLibrary(os.DirFS(projectDir), TemplatesDir)
+
+				if tt.valid {
+					if err != nil {
+						t.Fatalf("LoadLibrary() error = %v, want nil: the child value is valid for its type and rules", err)
+					}
+					if lib == nil {
+						t.Fatal("LoadLibrary() returned nil Library with nil error")
+					}
+					return
+				}
+
+				if err == nil {
+					t.Fatalf("LoadLibrary() = %+v, nil; want the child field violation to fail step 7", lib)
+				}
+				if lib != nil {
+					t.Fatalf("LoadLibrary() Library = %+v, want nil with the error", lib)
+				}
+				libErr := asLibraryError(t, err)
+				wantPath := filepath.Join(TemplatesDir, SlidesDir, "host", LayoutFile)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want the calling layout %q", libErr.Path, wantPath)
+				}
+				if !strings.Contains(libErr.Message, "execute:") {
+					t.Errorf("Message = %q, want a step-7 execute failure", libErr.Message)
+				}
+				if !strings.Contains(libErr.Message, tt.want) {
+					t.Errorf("Message = %q, want it to contain the shared engine's error %q", libErr.Message, tt.want)
+				}
+			})
 		}
 	})
 }

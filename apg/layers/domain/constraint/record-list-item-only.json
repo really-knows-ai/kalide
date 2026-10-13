@@ -1,0 +1,9 @@
+{
+  "layer": "domain",
+  "type": "constraint",
+  "name": "record-list-item-only",
+  "body": "A `record` is a list's item descriptor, never a field's `type:`. An inline record is declared in a list's `item:` descriptor — `item: {type: record, fields: [...]}` (record-item-type) — and a field descriptor whose `type:` is `record`, at a template's top level or inside a record's `fields:`, is a templates error naming the field path. A record nests by making one of its fields a list whose item is a record.",
+  "properties": {},
+  "out": [],
+  "in": []
+}

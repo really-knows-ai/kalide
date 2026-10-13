@@ -18,13 +18,13 @@
   ],
   "in": [
     {
-      "kind": "contains",
-      "source": "domain.group.authoring",
+      "kind": "calls",
+      "source": "domain.service.validate-deck",
       "properties": {}
     },
     {
-      "kind": "calls",
-      "source": "domain.service.validate-deck",
+      "kind": "contains",
+      "source": "domain.group.authoring",
       "properties": {}
     },
     {
@@ -35,6 +35,11 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.vertical-slides",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.yaml-error-messages",
       "properties": {}
     }
   ]

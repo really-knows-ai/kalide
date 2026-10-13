@@ -80,12 +80,43 @@ func mixedCycle(helperFirst bool) []*Template {
 	return []*Template{a, b}
 }
 
+// selfAcceptingSection returns a section template named name whose single
+// declared section, also named name, accepts name itself. A positive maxDepth
+// bounds the self-nesting into a finite declared-section acceptance walk
+// (requirements.requirement.bounded-self-nesting); 0 leaves it an unbounded
+// reference cycle.
+func selfAcceptingSection(name string, maxDepth int) *Template {
+	tmpl := regSection(name)
+	tmpl.Sections = []SectionDecl{{Name: name, Accepted: []string{name}, MaxDepth: maxDepth}}
+	return tmpl
+}
+
+// declaredCycle returns two section templates, a and b, that close a declared-
+// section reference cycle: a declares a `b` section accepting b, and b declares
+// an `a` section accepting a. aMaxDepth bounds a's acceptance of b into a finite
+// walk; 0 leaves the cycle unbounded, so b's own acceptance of a carries no
+// max_depth and neither does a's.
+func declaredCycle(aMaxDepth int) []*Template {
+	a := regSection("a")
+	a.Sections = []SectionDecl{{Name: "b", Accepted: []string{"b"}, MaxDepth: aMaxDepth}}
+	b := regSection("b")
+	b.Sections = []SectionDecl{{Name: "a", Accepted: []string{"a"}}}
+	return []*Template{a, b}
+}
+
 // TestSectionHelperCompositionCycle proves a helper-closed reference cycle and
 // a mixed declared/helper cycle are rejected at load as *SectionCycleError, and
 // that the error's chain names every template on the cycle — including the
 // repeated name that closes it. A layout calling its own template is the
 // shortest cycle. Each case registers cleanly and only Validate reports the
 // cycle, so the exact rendered message is asserted as well as the parsed chain.
+//
+// The final four subtests cover the declared-section half of the same walk: a
+// declared-section acceptance that recurs to a template already on the
+// composition path is a reference cycle unless a declaration on the cycle
+// carries max_depth, which bounds it into a finite walk Section.Walk accepts
+// (requirements.requirement.bounded-self-nesting,
+// requirements.constraint.section-cycle-error-chain).
 func TestSectionHelperCompositionCycle(t *testing.T) {
 	const cycleAB = `template "a": section template reference cycle: sections/a → sections/b → sections/a`
 
@@ -144,6 +175,60 @@ func TestSectionHelperCompositionCycle(t *testing.T) {
 			}
 		})
 	}
+
+	// A declared-section acceptance that recurs to a template already on the
+	// composition path is a declared-section reference cycle. When a declaration
+	// on the cycle carries max_depth, the walk is bounded and accepted; without
+	// one it stays the requirements.constraint.section-cycle-error-chain error
+	// (requirements.requirement.bounded-self-nesting).
+
+	t.Run("a self-accepting loop declaration with max_depth: 1 loads", func(t *testing.T) {
+		if err := buildAndValidate(selfAcceptingSection("loop", 1)); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: a self-accepting declaration bounded by max_depth: 1 is not a reference cycle", err)
+		}
+	})
+
+	t.Run("a self-accepting loop declaration without max_depth is refused", func(t *testing.T) {
+		err := buildAndValidate(selfAcceptingSection("loop", 0))
+		if err == nil {
+			t.Fatal("Validate() = nil, want *SectionCycleError")
+		}
+		var cycle *SectionCycleError
+		if !errors.As(err, &cycle) {
+			t.Fatalf("Validate() error = %v, want *SectionCycleError", err)
+		}
+		if want := []string{"loop", "loop"}; !reflect.DeepEqual(cycle.Path, want) {
+			t.Errorf("cycle.Path = %v, want %v", cycle.Path, want)
+		}
+		const want = `template "loop": section template reference cycle: sections/loop → sections/loop`
+		if err.Error() != want {
+			t.Errorf("Validate() error = %q, want %q", err.Error(), want)
+		}
+	})
+
+	t.Run("the A→B→A cycle with a max_depth on one declaration loads", func(t *testing.T) {
+		if err := buildAndValidate(declaredCycle(1)...); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: a's max_depth: 1 bounds the declared-section cycle", err)
+		}
+	})
+
+	t.Run("the A→B→A cycle without max_depth is refused", func(t *testing.T) {
+		err := buildAndValidate(declaredCycle(0)...)
+		if err == nil {
+			t.Fatal("Validate() = nil, want *SectionCycleError")
+		}
+		var cycle *SectionCycleError
+		if !errors.As(err, &cycle) {
+			t.Fatalf("Validate() error = %v, want *SectionCycleError", err)
+		}
+		if want := []string{"a", "b", "a"}; !reflect.DeepEqual(cycle.Path, want) {
+			t.Errorf("cycle.Path = %v, want %v", cycle.Path, want)
+		}
+		const want = `template "a": section template reference cycle: sections/a → sections/b → sections/a`
+		if err.Error() != want {
+			t.Errorf("Validate() error = %q, want %q", err.Error(), want)
+		}
+	})
 }
 
 // TestSectionHelperDepthBoundNotExtendedByHelpers proves the depth half of the
@@ -366,6 +451,88 @@ func TestSectionHelperChildDepthBoundNotExtendedByChildren(t *testing.T) {
 		}
 		if want := []string{"a", "b", "c", "d", "e", "f", "g"}; !reflect.DeepEqual(depth.Path, want) {
 			t.Errorf("depth.Path = %v, want %v", depth.Path, want)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// typed-records feedback-52: a bounded self-nesting's heading depth is measured
+// by heading levels, not by the length of the composition chain that reaches it.
+//
+// commit 91f8fca2 changed Section.Walk (section.go) so a bounded chain's depth
+// is the heading level of the repeated name's first occurrence plus one per
+// bounded declared-section level: helper-reached path entries sit at the
+// caller's level and add no heading level
+// (requirements.constraint.section-depth-limit). Before that change Walk
+// compared len(chain) against the bound, so a legal bounded cycle with a helper
+// edge above it — one extra chain entry that is a composition reference, not a
+// heading — was wrongly refused. The cases below are the regression: with the
+// old len(chain) measure the load case fails by exactly one entry.
+
+// helperAboveBoundedLoop returns the fixture for a `section` helper call placed
+// above a bounded self-nesting: a root slide template whose layout calls
+// `{{ section "loop" }}`, plus the self-accepting section template named "loop"
+// that accepts itself with max_depth maxDepth (selfAcceptingSection). The helper
+// edge is a composition reference, not a heading, so loop sits at the root's
+// heading level (one): the bounded chain carries the helper-reached root as an
+// extra entry, so len(chain) is one longer than its heading depth.
+func helperAboveBoundedLoop(maxDepth int) (*Template, *Template) {
+	return regLayout("root", `{{ section "loop" }}`), selfAcceptingSection("loop", maxDepth)
+}
+
+// TestSectionHelperAboveBoundedSelfNesting proves a `section` helper call above
+// a bounded accepted self-nesting does not count toward the six-heading-level
+// bound (requirements.constraint.section-depth-limit; typed-records
+// feedback-52). The loop self-accepts with max_depth 5, so its chain is the loop
+// at heading level one plus five bounded declared-section levels — exactly six
+// heading levels — while the root's helper edge adds a seventh path entry but no
+// level. It loads. The same loop at max_depth 6 crosses the bound and is refused
+// as *SectionDepthError. The load case is the regression: before commit 91f8fca2
+// Section.Walk measured len(chain) — seven here — and wrongly refused it.
+func TestSectionHelperAboveBoundedSelfNesting(t *testing.T) {
+	t.Run("a helper call above a six-heading-level bounded cycle loads", func(t *testing.T) {
+		root, loop := helperAboveBoundedLoop(5)
+		if err := buildAndValidate(root, loop); err != nil {
+			t.Fatalf("Validate() error = %v, want nil: the helper edge adds no heading level, so the bounded chain's six heading levels sit exactly at the bound", err)
+		}
+
+		// Prove the helper edge is traversed and the bounded walk is accepted,
+		// not skipped: the walk from the root reaches the self-nesting loop with
+		// no depth failure.
+		r := NewRegistry(nil)
+		for _, tmpl := range []*Template{root, loop} {
+			if err := r.Register(tmpl); err != nil {
+				t.Fatalf("Register(%q) error = %v, want nil", tmpl.Name, err)
+			}
+		}
+		got, err := NewSection(r.Lookup).Walk(root)
+		if err != nil {
+			t.Fatalf("Walk(%q) error = %v, want nil", root.Name, err)
+		}
+		found := false
+		for _, tmpl := range got {
+			if tmpl.Name == loop.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Walk(%q) did not reach %q; reached %v", root.Name, loop.Name, got)
+		}
+	})
+
+	t.Run("the same cycle at max_depth 6 still fails as *SectionDepthError", func(t *testing.T) {
+		root, loop := helperAboveBoundedLoop(6)
+		err := buildAndValidate(root, loop)
+		var depth *SectionDepthError
+		if !errors.As(err, &depth) {
+			t.Fatalf("Validate() error = %v, want *SectionDepthError", err)
+		}
+		if depth.Limit != sectionDepthLimit {
+			t.Errorf("depth.Limit = %d, want %d", depth.Limit, sectionDepthLimit)
+		}
+		if depth.MaxDepth != 6 {
+			t.Errorf("depth.MaxDepth = %d, want 6: the max_depth declaration that stopped the bounded walk", depth.MaxDepth)
 		}
 	})
 }

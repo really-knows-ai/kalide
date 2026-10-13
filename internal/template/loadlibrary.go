@@ -309,14 +309,15 @@ func loadLibrary(fsys fs.FS, fsRoot, displayRoot string, mode libraryLayerMode) 
 // LibraryLayer it returns.
 func layerFromLibrary(lib *Library) *LibraryLayer {
 	return &LibraryLayer{
-		Root:     lib.Root,
-		RootPath: lib.RootPath,
-		Meta:     lib.Meta,
-		Slides:   lib.Slides,
-		Sections: lib.Sections,
-		Themes:   lib.Themes,
-		HasMedia: lib.HasMedia,
-		Media:    lib.Media,
+		Root:        lib.Root,
+		RootPath:    lib.RootPath,
+		Meta:        lib.Meta,
+		Definitions: lib.definitions,
+		Slides:      lib.Slides,
+		Sections:    lib.Sections,
+		Themes:      lib.Themes,
+		HasMedia:    lib.HasMedia,
+		Media:       lib.Media,
 	}
 }
 
@@ -462,10 +463,36 @@ func mergeLibraryLayers(layers []*LibraryLayer) *Library {
 // Definition, or step 7 could not resolve that nested child. This is checked
 // here so the build fails fast, positioned at the offending container's
 // template.yaml, rather than surfacing mid-recursion later.
+//
+// It also supplies each template's owning library layer to the registry build,
+// so an enum field's `variants_from:` glob expands against the root of the
+// layer that owns the template (enum-variants-from). NewRegistryFromLibrary
+// already records that provenance for a merged Library — its Layers carry each
+// template's own root — and this supplies the one layer of the single-layer
+// *Library the loader body builds here (whose Layers is not populated until the
+// caller wraps it), before Validate reads it back through LayerOf. An external
+// layer's glob therefore resolves within the external library alone.
 func checkLibraryBuild(lib *Library) error {
 	reg, err := NewRegistryFromLibrary(lib)
 	if err != nil {
 		return err
+	}
+	// The single-layer *Library the loader body builds carries no Layers, so
+	// NewRegistryFromLibrary recorded no provenance for it. Register its one
+	// layer — the layer root, with media as a direct entry — for every
+	// template it carries, so Validate expands a `variants_from:` glob against
+	// that layer's root. A Library that resolved no root records no usable
+	// provenance and leaves the glob unexpanded, exactly as an unknown owning
+	// layer does.
+	if lib != nil && len(lib.Layers) == 0 {
+		if layer := layerFromLibrary(lib); layer.Root != nil {
+			for name := range lib.Slides {
+				reg.setLayer(name, layer)
+			}
+			for name := range lib.Sections {
+				reg.setLayer(name, layer)
+			}
+		}
 	}
 	if err := reg.Validate(); err != nil {
 		if name, ok := manifestTemplateErrorName(err); ok {
@@ -534,13 +561,20 @@ func checkLibraryBuildNested(lib *Library) error {
 }
 
 // libraryMetaKeys is the complete set of library.yaml keys loadLibraryMeta
-// handles, in declaration order. It is both the accepted-key set and the
-// candidate list for closest-match suggestions.
-var libraryMetaKeys = []string{"name", "description", "format"}
+// handles, in declaration order: the required `name` and `format`, the optional
+// `description`, and the optional named-definition sections `groups`,
+// `field_sets` and `types` (named-library-definitions), which are accepted
+// here and parsed in one pass by loadLibraryDefinitions below. It is both the
+// accepted-key set and the candidate list for closest-match suggestions, so it
+// stays in step with the switch in loadLibraryMeta.
+var libraryMetaKeys = []string{"name", "description", "format", "groups", "field_sets", "types"}
 
 // LibraryMetaKeys returns the sorted accepted library.yaml keys loadLibraryMeta
-// handles — description, format and name. It is the single source of truth for
-// the library metadata vocabulary. The returned slice is a fresh allocation.
+// handles — description, field_sets, format, groups, name and types. It is the
+// single source of truth for the library.yaml key vocabulary, covering the
+// metadata keys (name, description, format) and the optional named-definition
+// sections (groups, field_sets, types) admitted by the loader. The returned
+// slice is a fresh allocation.
 func LibraryMetaKeys() []string {
 	out := make([]string, len(libraryMetaKeys))
 	copy(out, libraryMetaKeys)
@@ -551,6 +585,21 @@ func LibraryMetaKeys() []string {
 // loadLibraryMeta reads and parses root/library.yaml (step 1): name must
 // match the library naming convention, description is optional, and format
 // is a required integer whose only currently accepted value is 1.
+//
+// A malformed YAML document is reported through parseLibraryErrorLine as the
+// step-1 templates error, carrying the offending source line and, for an
+// offending plain scalar, the quoting hint
+// (requirements.requirement.yaml-error-messages).
+//
+// It also accepts the optional named-definition sections — groups:,
+// field_sets: and types: (named-library-definitions) — and parses them
+// through loadLibraryDefinitions into lib's load-time definitions carrier.
+// The loader body transfers those onto the loading layer's
+// LibraryLayer.Definitions (layerFromLibrary), so a template resolves its
+// `type:`/`include:`/`@group` names in its own owning layer; they are
+// additive to format 1 and never change LibraryMeta, which stays
+// name/description/format only. A malformed section is a positioned error
+// at its own line; an unknown key is still rejected with a suggestion.
 func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	metaPath := displaypath.Display(root, LibraryFile)
 	data, err := fs.ReadFile(sub, LibraryFile)
@@ -561,7 +610,7 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return libraryErrorf(metaPath, 0, "%s: %v", LibraryFile, err)
+		return parseLibraryErrorLine(metaPath, data, err)
 	}
 	mapping := libraryDocumentMapping(&doc)
 	if mapping == nil || mapping.Kind != yaml.MappingNode {
@@ -606,6 +655,13 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 			lib.Meta.Format = format
 			haveFormat = true
 
+		case "groups", "field_sets", "types":
+			// The optional named-definition sections are parsed in one pass
+			// by loadLibraryDefinitions below. They are accepted here so the
+			// unknown-key check does not reject them; their shape is
+			// validated by that pass, which reports a malformed section as a
+			// positioned error at the section's own line.
+
 		default:
 			e := libraryErrorf(metaPath, line, "unknown key %q", key.Value)
 			return e.withSuggestion(key.Value, libraryMetaKeys)
@@ -618,7 +674,161 @@ func loadLibraryMeta(sub fs.FS, root string, lib *Library) error {
 	if !haveFormat {
 		return libraryErrorf(metaPath, nodeLineOr(mapping, 1), `missing required key "format"`)
 	}
+
+	// The optional named-definition sections (groups:, field_sets:, types:)
+	// are additive to format 1: they never change the `format:` value, and
+	// this never inspects the format key, so a library that declares them
+	// still declares `format: 1`
+	// (domain.constraint.library-manifest-format-stable). The parsed
+	// definitions are carried on lib and transferred to the loading layer's
+	// LibraryLayer.Definitions by layerFromLibrary.
+	defs, err := loadLibraryDefinitions(metaPath, &doc)
+	if err != nil {
+		return err
+	}
+	lib.definitions = defs
 	return nil
+}
+
+// loadLibraryDefinitions parses the optional named-definition sections of a
+// library.yaml document — `groups:`, `field_sets:` and `types:`
+// (named-library-definitions) — from doc, the already-unmarshalled YAML
+// document (or its top-level mapping), and returns them as a
+// *LibraryDefinitions. It reads only those three keys and ignores the rest, so
+// a caller may hand it the same document it parsed the metadata from; every
+// other key (name, description, format, and any unknown key) is the caller's
+// concern. A document with none of the three sections yields a nil
+// *LibraryDefinitions — a nil LibraryDefinitions holds no definitions.
+//
+// The three sections are additive to library.yaml format 1: a library that
+// declares them still declares `format: 1`, and this function never inspects
+// the format key (domain.constraint.library-manifest-format-stable). Each
+// section maps a definition name to its value:
+//
+//   - groups maps a name to a sequence of accepted section-template names
+//     (the named accept-lists a section declaration references as `@<name>`);
+//   - field_sets maps a name to a sequence of field descriptors, decoded by
+//     the manifest field parser parseManifestFields (a template references the
+//     set from its `fields:` as `- include: <name>`);
+//   - types maps a name to a single field descriptor, decoded by
+//     parseManifestField. The map key — not any `name:` the descriptor carries —
+//     is the type name, so a descriptor without a `name:` is given its map key
+//     as the name before parsing.
+//
+// A malformed section (not a mapping of named entries, or an entry whose value
+// has the wrong shape) is a positioned *LibraryError at the offending
+// library.yaml line.
+func loadLibraryDefinitions(metaPath string, doc *yaml.Node) (*LibraryDefinitions, error) {
+	mapping := libraryDocumentMapping(doc)
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+
+	// definitionName validates a definition's mapping key: a non-empty string.
+	definitionName := func(section string, node *yaml.Node) (string, error) {
+		if node.Kind != yaml.ScalarNode || node.ShortTag() != "!!str" || node.Value == "" {
+			return "", libraryErrorf(metaPath, nodeLineOr(node, 0), "%s: expected a non-empty name", section)
+		}
+		return node.Value, nil
+	}
+
+	// namedFieldDescriptor returns node with the definition key prepended as a
+	// `name:` entry when it does not already declare one. A `types:` descriptor
+	// is a field descriptor and is decoded by parseManifestField, which requires
+	// a name; the map key supplies that name. node is copied, never mutated.
+	namedFieldDescriptor := func(node *yaml.Node, name string) *yaml.Node {
+		if node == nil || node.Kind != yaml.MappingNode {
+			return node
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == "name" {
+				return node
+			}
+		}
+		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "name", Line: node.Line}
+		val := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: name, Line: node.Line}
+		out := *node
+		out.Content = append([]*yaml.Node{key, val}, node.Content...)
+		return &out
+	}
+
+	var defs *LibraryDefinitions
+	ensure := func() {
+		if defs == nil {
+			defs = &LibraryDefinitions{}
+		}
+	}
+
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		key := mapping.Content[i]
+		val := mapping.Content[i+1]
+		sectionLine := nodeLineOr(val, nodeLineOr(key, 1))
+
+		switch key.Value {
+		case "groups":
+			if val.Kind != yaml.MappingNode {
+				return nil, libraryErrorf(metaPath, sectionLine,
+					`key "groups": expected a mapping of named accept-lists`)
+			}
+			groups := make(map[string][]string, len(val.Content)/2)
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				name, err := definitionName("group", val.Content[j])
+				if err != nil {
+					return nil, err
+				}
+				names, err := scalarStringList(val.Content[j+1], metaPath, nodeLineOr(val.Content[j], sectionLine), name)
+				if err != nil {
+					return nil, err
+				}
+				groups[name] = names
+			}
+			ensure()
+			defs.Groups = groups
+
+		case "field_sets":
+			if val.Kind != yaml.MappingNode {
+				return nil, libraryErrorf(metaPath, sectionLine,
+					`key "field_sets": expected a mapping of named field groups`)
+			}
+			sets := make(map[string][]Field, len(val.Content)/2)
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				name, err := definitionName("field_set", val.Content[j])
+				if err != nil {
+					return nil, err
+				}
+				fields, err := parseManifestFields(metaPath, val.Content[j+1], nil)
+				if err != nil {
+					return nil, err
+				}
+				sets[name] = fields
+			}
+			ensure()
+			defs.FieldSets = sets
+
+		case "types":
+			if val.Kind != yaml.MappingNode {
+				return nil, libraryErrorf(metaPath, sectionLine,
+					`key "types": expected a mapping of named field types`)
+			}
+			types := make(map[string]Field, len(val.Content)/2)
+			for j := 0; j+1 < len(val.Content); j += 2 {
+				name, err := definitionName("type", val.Content[j])
+				if err != nil {
+					return nil, err
+				}
+				f, err := parseManifestField(metaPath, namedFieldDescriptor(val.Content[j+1], name), false, nil)
+				if err != nil {
+					return nil, err
+				}
+				// The map key, not any descriptor Name, is the type name.
+				f.Name = name
+				types[name] = *f
+			}
+			ensure()
+			defs.Types = types
+		}
+	}
+	return defs, nil
 }
 
 // templateDirNames lists the directory names directly under root/kindDir,
@@ -677,6 +887,14 @@ var usageKeyPattern = regexp.MustCompile(`(?m)^usage\s*:`)
 // root/kindDir/name: the three required files must be present, the manifest
 // must be well-formed YAML with no `usage:` key, and the layout must parse as
 // html/template with only the documented func set.
+//
+// A malformed template.yaml manifest is reported through parseLibraryErrorLine
+// as the step-3 templates error, carrying the offending source line and, for
+// an offending plain scalar, the quoting hint
+// (requirements.requirement.yaml-error-messages) — the same treatment
+// loadLibraryMeta gives a malformed library.yaml. The required-file checks
+// (each step-3 file present), the reserved `usage:` key check and the layout
+// parse are unchanged.
 func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, name string, funcMap htmltemplate.FuncMap) (*LibraryTemplate, error) {
 	dir := path.Join(kindDir, name)
 	displayDir := displaypath.Display(root, dir)
@@ -701,7 +919,7 @@ func loadLibraryTemplate(sub fs.FS, root, kindDir string, kind TemplateKind, nam
 
 	var probe yaml.Node
 	if err := yaml.Unmarshal(manifest, &probe); err != nil {
-		return nil, libraryErrorf(displaypath.Display(root, manifestRel), 0, "%s: %v", ManifestFile, err)
+		return nil, parseLibraryErrorLine(displaypath.Display(root, manifestRel), manifest, err)
 	}
 	if loc := usageKeyPattern.FindIndex(manifest); loc != nil {
 		line := 1 + strings.Count(string(manifest[:loc[0]]), "\n")

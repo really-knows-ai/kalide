@@ -394,6 +394,70 @@ func TestStartAndTemplates(t *testing.T) {
 			t.Errorf("Lookup(ext-theme) = error %v, want the theme contributed only by the external layer", err)
 		}
 	})
+
+	t.Run("templates hides an internal template by default and lists it with --all", func(t *testing.T) {
+		// An `internal: true` template is resolvable and usable, but the
+		// default listing omits it; the `--all` listing mode includes it with
+		// its name, usage and description (internal-templates,
+		// cli-templates-list).
+		dir := chdirFixtureLibrary(t)
+		writeInternalFixture(t, dir)
+
+		code, stdout, stderr := runCLI("templates")
+		if code != 0 {
+			t.Fatalf("Run(templates) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates) stderr = %q, want empty", stderr)
+		}
+		if strings.Contains(stdout, "hidden") {
+			t.Errorf("Run(templates) stdout = %q, want the internal template hidden by default", stdout)
+		}
+
+		code, stdout, stderr = runCLI("templates", "--all")
+		if code != 0 {
+			t.Fatalf("Run(templates --all) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates --all) stderr = %q, want empty", stderr)
+		}
+		row := templateListRow(stdout, "hidden")
+		if row == "" {
+			t.Fatalf("Run(templates --all) stdout = %q, want the internal template listed", stdout)
+		}
+		if !strings.Contains(row, "slide") {
+			t.Errorf("Run(templates --all) row = %q, want the internal template's usage", row)
+		}
+	})
+
+	t.Run("templates show prints a record field's nested fields and an enum's variants", func(t *testing.T) {
+		// A list field whose item is an inline record prints that record's
+		// nested fields indented beneath it — recursively, including a
+		// nullable field — and an enum field prints its effective variants
+		// beneath its own line (record-item-type).
+		dir := chdirFixtureLibrary(t)
+		writeRecordFixture(t, dir)
+
+		code, stdout, stderr := runCLI("templates", "recorded")
+		if code != 0 {
+			t.Fatalf("Run(templates recorded) exit = %d, want 0 (stderr = %q)", code, stderr)
+		}
+		if stderr != "" {
+			t.Fatalf("Run(templates recorded) stderr = %q, want empty", stderr)
+		}
+		for _, want := range []string{
+			"widgets (type: list; optional)",
+			"    label (type: text; required)",
+			"    note (type: text; optional; nullable)",
+			"    parts (type: list; optional)",
+			"      depth (type: number; optional)",
+			"    one of fast, slow",
+		} {
+			if !strings.Contains(stdout, want) {
+				t.Errorf("Run(templates recorded) stdout = %q, want %q", stdout, want)
+			}
+		}
+	})
 }
 
 // mustFixtureRegistry loads the phase-3 fixture library from the current
@@ -528,5 +592,64 @@ func writeCLIFile(t *testing.T, path string, data []byte) {
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// writeInternalFixture adds an `internal: true` slide template to the copied
+// fixture library at dir, so a lister can prove it is hidden from the default
+// listing and shown with `--all` (internal-templates).
+func writeInternalFixture(t *testing.T, dir string) {
+	t.Helper()
+	const manifest = "description: an internal helper slide\ninternal: true\nbody:\n  mode: optional\n"
+	const example = "---\ntemplate: hidden\n---\n"
+	for _, f := range []struct{ path, data string }{
+		{"templates/slides/hidden/template.yaml", manifest},
+		{"templates/slides/hidden/layout.html.tmpl", "<section>internal</section>"},
+		{"templates/slides/hidden/example.md", example},
+	} {
+		writeCLIFile(t, filepath.Join(dir, f.path), []byte(f.data))
+	}
+}
+
+// writeRecordFixture adds a slide template to the copied fixture library at dir
+// whose list field's item is an inline record — carrying a required field, a
+// nullable field and a nested list-of-record — and which declares an enum
+// field, so `templates <name>` can print the record's nested fields recursively
+// and the enum's effective variants (record-item-type).
+func writeRecordFixture(t *testing.T, dir string) {
+	t.Helper()
+	const manifest = `description: a template with a record list and an enum
+fields:
+  - name: widgets
+    type: list
+    item:
+      type: record
+      fields:
+        - name: label
+          type: text
+          required: true
+        - name: note
+          type: text
+          nullable: true
+        - name: parts
+          type: list
+          item:
+            type: record
+            fields:
+              - name: depth
+                type: number
+  - name: mode
+    type: enum
+    variants: [fast, slow]
+body:
+  mode: optional
+`
+	const example = "---\ntemplate: recorded\nwidgets:\n  - label: one\n    parts:\n      - depth: 1\nmode: fast\n---\n"
+	for _, f := range []struct{ path, data string }{
+		{"templates/slides/recorded/template.yaml", manifest},
+		{"templates/slides/recorded/layout.html.tmpl", "<section><h1>{{.mode}}</h1></section>"},
+		{"templates/slides/recorded/example.md", example},
+	} {
+		writeCLIFile(t, filepath.Join(dir, f.path), []byte(f.data))
 	}
 }
