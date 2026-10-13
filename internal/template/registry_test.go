@@ -1146,6 +1146,80 @@ func TestRegistryRejections(t *testing.T) {
 		}
 	})
 
+	// The bad-variant and cross-field-bound build-time checks reach a field
+	// inside an inline record item exactly as they do at the top level
+	// (plan.phase-03.task-8, record-item-type): checkFieldVariants recurses
+	// into a record item's fields, so a nested enum's variants remain the only
+	// variant mechanism at that depth; and checkDefinition resolves each list
+	// bound in the field's own scope — a leading `/name` against the template's
+	// top-level fields, a bare name against the enclosing record's siblings —
+	// rejecting an unresolvable reference, or one naming a non-list field, as a
+	// positioned templates error.
+
+	t.Run("a nested enum inside an inline record item is accepted", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"library.yaml":                 {Data: []byte("name: rec\nformat: 1\n")},
+			"slides/host/template.yaml":    {Data: []byte("fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: mode\n          type: enum\n          variants: [a, b]\n")},
+			"slides/host/layout.html.tmpl": {Data: []byte("<section></section>")},
+			"slides/host/example.md":       {Data: []byte("---\n---\n")},
+		}
+		if _, err := LoadLibrary(rootedFS(fsys), TemplatesDir); err != nil {
+			t.Fatalf("LoadLibrary() error = %v, want nil: an enum inside a record item with variants is accepted", err)
+		}
+	})
+
+	t.Run("bad variant: enum inside a record item with no variants", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: mode\n          type: enum\n", "")
+		if !strings.Contains(libErr.Message, "no variants") {
+			t.Errorf("Message = %q, want it to say the nested enum field has no variants", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `field "mode"`) {
+			t.Errorf("Message = %q, want it to name the nested field %q", libErr.Message, "mode")
+		}
+	})
+
+	t.Run("bad variant: nested enum default not among its variants", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: mode\n          type: enum\n          variants: [a, b]\n          default: c\n", "")
+		if !strings.Contains(libErr.Message, "not one of its variants") {
+			t.Errorf("Message = %q, want it to say the nested enum default is not among its variants", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `field "mode"`) {
+			t.Errorf("Message = %q, want it to name the nested field %q", libErr.Message, "mode")
+		}
+	})
+
+	t.Run("unresolvable max_items_from: /name names no top-level field", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: a\n          type: list\n          item:\n            name: i\n            type: text\n          max_items_from: /ghost\n", "")
+		if !strings.Contains(libErr.Message, "not a declared field") {
+			t.Errorf("Message = %q, want it to say /ghost names no top-level field", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `"/ghost"`) {
+			t.Errorf("Message = %q, want it to quote the unresolvable reference %q", libErr.Message, "/ghost")
+		}
+	})
+
+	t.Run("unresolvable min_items_from: bare name names no record sibling", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: a\n          type: list\n          item:\n            name: i\n            type: text\n          min_items_from: ghost\n", "")
+		if !strings.Contains(libErr.Message, "not a declared field") {
+			t.Errorf("Message = %q, want it to say ghost names no sibling in the enclosing record", libErr.Message)
+		}
+		if !strings.Contains(libErr.Message, `"ghost"`) {
+			t.Errorf("Message = %q, want it to quote the unresolvable reference %q", libErr.Message, "ghost")
+		}
+	})
+
+	t.Run("max_items_from names a field that is not a list", func(t *testing.T) {
+		libErr := libraryRejection(t,
+			"fields:\n  - name: items\n    type: list\n    item:\n      type: record\n      fields:\n        - name: a\n          type: list\n          item:\n            name: i\n            type: text\n          max_items_from: b\n        - name: b\n          type: text\n", "")
+		if !strings.Contains(libErr.Message, "not a list field") {
+			t.Errorf("Message = %q, want it to say the referenced field b is not a list", libErr.Message)
+		}
+	})
+
 	t.Run("bad example: violates the field schema", func(t *testing.T) {
 		fsys := fstest.MapFS{
 			"library.yaml":                 {Data: []byte("name: rej\nformat: 1\n")},
