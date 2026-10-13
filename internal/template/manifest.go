@@ -212,6 +212,11 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 	f := &Field{}
 	var haveName, haveType bool
 	var typeStr string
+	// A cross-field list bound is decoded into a local until the field's type
+	// is known, so it can be rejected on a non-list field (list-only).
+	var maxItemsFrom, minItemsFrom string
+	var haveMaxItemsFrom, haveMinItemsFrom bool
+	var maxItemsFromLine, minItemsFromLine int
 
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i]
@@ -287,6 +292,22 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 				return nil, err
 			}
 			f.MaxItems = n
+		case "max_items_from":
+			s, err := scalarString(val, manifestPath, kl, "max_items_from")
+			if err != nil {
+				return nil, err
+			}
+			maxItemsFrom = s
+			maxItemsFromLine = kl
+			haveMaxItemsFrom = true
+		case "min_items_from":
+			s, err := scalarString(val, manifestPath, kl, "min_items_from")
+			if err != nil {
+				return nil, err
+			}
+			minItemsFrom = s
+			minItemsFromLine = kl
+			haveMinItemsFrom = true
 		case "min":
 			n, err := scalarFloat(val, manifestPath, kl, "min")
 			if err != nil {
@@ -352,10 +373,28 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 			return nil, e.withSuggestion(key.Value, []string{
 				"name", "type", "nullable", "coerce", "plain", "required",
 				"default", "description", "max_length", "min_items", "max_items",
+				"max_items_from", "min_items_from",
 				"min", "max", "min_date", "max_date", "variants", "formats",
 				"default_format", "section_template", "item", "fields",
 			})
 		}
+	}
+
+	// A cross-field list bound (max_items_from/min_items_from) names another
+	// list field and so is meaningful only on a list field; on any other type
+	// the key is rejected, just as `fields` is rejected on a non-record
+	// (cross-field-list-constraints).
+	checkListOnlyKeys := func(ft FieldType) error {
+		if ft == FieldList {
+			return nil
+		}
+		if haveMaxItemsFrom {
+			return libraryErrorf(manifestPath, maxItemsFromLine, "field %q: key %q is only valid on a list field", f.Name, "max_items_from")
+		}
+		if haveMinItemsFrom {
+			return libraryErrorf(manifestPath, minItemsFromLine, "field %q: key %q is only valid on a list field", f.Name, "min_items_from")
+		}
+		return nil
 	}
 
 	// A record item descriptor needs no `name`: it is described by its
@@ -376,6 +415,9 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 		if f.Fields == nil {
 			return nil, libraryErrorf(manifestPath, line, "field %q: type %q requires key %q", f.Name, typeStr, "fields")
 		}
+		if err := checkListOnlyKeys(FieldRecord); err != nil {
+			return nil, err
+		}
 		f.Type = FieldRecord
 		return f, nil
 	}
@@ -391,6 +433,11 @@ func parseManifestField(manifestPath string, node *yaml.Node, isItem bool) (*Fie
 	if f.Fields != nil {
 		return nil, libraryErrorf(manifestPath, line, "field %q: key %q is only valid on a record item descriptor", f.Name, "fields")
 	}
+	if err := checkListOnlyKeys(ft); err != nil {
+		return nil, err
+	}
+	f.MaxItemsFrom = maxItemsFrom
+	f.MinItemsFrom = minItemsFrom
 	f.Type = ft
 	return f, nil
 }
