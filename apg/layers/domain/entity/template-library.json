@@ -66,6 +66,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.readme-templates-key",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.template-media",
       "properties": {}
     },
@@ -86,7 +91,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.readme-templates-key",
+      "source": "requirements.requirement.dead-code-removal",
       "properties": {}
     }
   ]
