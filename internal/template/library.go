@@ -405,24 +405,6 @@ func (l *Library) TemplateByName(name string) (*LibraryTemplate, TemplateKind, b
 	return nil, "", false
 }
 
-// Names returns every slide and section template name in the library,
-// sorted. It is the candidate list for a closest-match "did you mean …?"
-// suggestion over template names.
-func (l *Library) Names() []string {
-	if l == nil {
-		return nil
-	}
-	names := make([]string, 0, len(l.Slides)+len(l.Sections))
-	for name := range l.Slides {
-		names = append(names, name)
-	}
-	for name := range l.Sections {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
 // ThemeNames returns every theme name in the library, sorted.
 func (l *Library) ThemeNames() []string {
 	if l == nil {
