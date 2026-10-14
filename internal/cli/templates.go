@@ -34,12 +34,9 @@ package cli
 import (
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
@@ -79,18 +76,12 @@ func runTemplates(args []string, stdout, stderr io.Writer) int {
 	// a templates error naming the path, with no fallback
 	// (templates-dir-required).
 	//
-	// The raw `templates:` value is read directly here because deck.LoadConfig
-	// needs a theme registry, which comes from the not-yet-resolved library;
-	// this mirrors the reload pipeline. An unreadable config yields "" and the
-	// loader then looks for the local templates/ directory.
-	deckFS := os.DirFS(root)
-	configured := ""
-	if data, readErr := fs.ReadFile(deckFS, deck.ConfigFile); readErr == nil {
-		var raw map[string]any
-		if yaml.Unmarshal(data, &raw) == nil {
-			configured, _ = raw["templates"].(string)
-		}
-	}
+	// The raw `templates:` value is read through the shared
+	// deck.ConfiguredTemplates because deck.LoadConfig needs a theme registry,
+	// which comes from the not-yet-resolved library; this mirrors the reload
+	// pipeline. An unreadable config yields "" and the loader then looks for the
+	// local templates/ directory.
+	configured := deck.ConfiguredTemplates(os.DirFS(root))
 
 	library, err := template.LoadDeckLibrary(root, configured)
 	if err != nil {
