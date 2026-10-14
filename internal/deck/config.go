@@ -269,6 +269,29 @@ func LoadConfig(fsys fs.FS, path string, themes *theme.Registry) (*Config, error
 	return cfg, nil
 }
 
+// ConfiguredTemplates returns the deck's raw top-level `templates:` value as
+// written in kalide.yaml (external-template-library), or "" when the file
+// cannot be read, cannot be decoded, or the key is absent or not a string. The
+// empty value selects the deck-root templates/ layer.
+//
+// It deliberately does not validate the config: callers read the raw key
+// before a theme registry exists, since deck.LoadConfig needs one and the
+// registry itself comes from the not-yet-resolved library. The whole-deck
+// validator reports any config error afterwards, through the themes loaded from
+// the resolved root.
+func ConfiguredTemplates(fsys fs.FS) string {
+	data, err := fs.ReadFile(fsys, ConfigFile)
+	if err != nil {
+		return ""
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return ""
+	}
+	configured, _ := raw["templates"].(string)
+	return configured
+}
+
 // TemplatesPath returns the configured top-level `templates:` path from a
 // deck's Config exactly as it was written in kalide.yaml, or "" when the key
 // is absent or empty (external-template-library).
