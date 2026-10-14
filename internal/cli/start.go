@@ -154,7 +154,7 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	themeReg, err := loadLibraryThemeRegistry(library)
+	themeReg, err := template.LoadThemeRegistry(library)
 	if err != nil {
 		fmt.Fprintf(stderr, "kalide start: %v\n", err)
 		return 1
