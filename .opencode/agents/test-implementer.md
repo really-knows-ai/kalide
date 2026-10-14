@@ -51,6 +51,8 @@ permission:
     "*": deny
     "apg/.worktrees/*/**/*_test.go": allow
     "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/internal/yamlpos/*_test.go": allow
+    "apg/.worktrees/*/internal/yamlpos/**/*_test.go": allow
     "cmd/**": deny
     "internal/**": deny
     "e2e/**": deny
@@ -63,6 +65,8 @@ permission:
     "*": deny
     "apg/.worktrees/*/**/*_test.go": allow
     "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/internal/yamlpos/*_test.go": allow
+    "apg/.worktrees/*/internal/yamlpos/**/*_test.go": allow
     "apg/.worktrees/*/e2e/**": deny
     "apg/.worktrees/*/examples/**": deny
     "apg/.worktrees/*/.opencode/**": deny
@@ -71,6 +75,8 @@ permission:
     "*": deny
     "apg/.worktrees/*/**/*_test.go": allow
     "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/internal/yamlpos/*_test.go": allow
+    "apg/.worktrees/*/internal/yamlpos/**/*_test.go": allow
     "apg/.worktrees/*/e2e/**": deny
     "apg/.worktrees/*/examples/**": deny
     "apg/.worktrees/*/.opencode/**": deny
@@ -79,6 +85,8 @@ permission:
     "*": deny
     "apg/.worktrees/*/**/*_test.go": allow
     "apg/.worktrees/*/**/testdata/**": allow
+    "apg/.worktrees/*/internal/yamlpos/*_test.go": allow
+    "apg/.worktrees/*/internal/yamlpos/**/*_test.go": allow
     "apg/.worktrees/*/e2e/**": deny
     "apg/.worktrees/*/examples/**": deny
     "apg/.worktrees/*/.opencode/**": deny

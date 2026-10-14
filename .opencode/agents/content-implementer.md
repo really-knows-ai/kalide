@@ -1,5 +1,5 @@
 ---
-description: Content implementer for kalide — internal/{deck,theme,slide,mdcheck,template,validate} (deck model, markdown checks, templates, validation).
+description: Content implementer for kalide — internal/{deck,theme,slide,mdcheck,template,validate,yamlpos} (deck model, markdown checks, templates, validation).
 mode: subagent
 hidden: true
 generated: true
@@ -55,6 +55,7 @@ permission:
     "apg/.worktrees/*/internal/mdcheck/**": allow
     "apg/.worktrees/*/internal/template/**": allow
     "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/internal/yamlpos/**": allow
     "internal/**": deny
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
@@ -68,6 +69,7 @@ permission:
     "apg/.worktrees/*/internal/mdcheck/**": allow
     "apg/.worktrees/*/internal/template/**": allow
     "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/internal/yamlpos/**": allow
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
   apg_mv:
@@ -78,6 +80,7 @@ permission:
     "apg/.worktrees/*/internal/mdcheck/**": allow
     "apg/.worktrees/*/internal/template/**": allow
     "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/internal/yamlpos/**": allow
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
   apg_cp:
@@ -88,6 +91,7 @@ permission:
     "apg/.worktrees/*/internal/mdcheck/**": allow
     "apg/.worktrees/*/internal/template/**": allow
     "apg/.worktrees/*/internal/validate/**": allow
+    "apg/.worktrees/*/internal/yamlpos/**": allow
     "apg/.worktrees/*/**/*_test.go": deny
     "apg/.worktrees/*/**/testdata/**": deny
   bash:
@@ -132,7 +136,8 @@ You implement plan tasks for the content subsystem of **kalide** (Go,
 
 ## You own
 `internal/deck/**`, `internal/theme/**`, `internal/slide/**`,
-`internal/mdcheck/**`, `internal/template/**`, `internal/validate/**` (non-test
+`internal/mdcheck/**`, `internal/template/**`, `internal/validate/**`,
+`internal/yamlpos/**` (non-test
 files). Not yours: `*_test.go`/`testdata/` (test-implementer), go.mod/cmd/cli/
 scaffold/suggest/Makefile/README (implementer — ask via the coordinator for
 dependency changes), assets/render/server/watch (web-implementer), release
