@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/template"
@@ -421,16 +420,7 @@ func libraryRoot(deckRoot string) []string {
 // a theme registry exists (deck.LoadConfig needs one, and the registry itself
 // comes from the not-yet-resolved library).
 func configuredTemplates(deckRoot string) string {
-	data, err := os.ReadFile(filepath.Join(deckRoot, deck.ConfigFile))
-	if err != nil {
-		return ""
-	}
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return ""
-	}
-	configured, _ := raw["templates"].(string)
-	return configured
+	return deck.ConfiguredTemplates(os.DirFS(deckRoot))
 }
 
 // loop is the single event-loop goroutine: it reads fsnotify events, keeps the
