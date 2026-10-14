@@ -182,7 +182,7 @@ type Reloader struct {
 
 	// startupTemplates is the raw top-level `templates:` value exactly as
 	// written in kalide.yaml when the built-in pipeline was built, captured
-	// by NewReloader through configuredTemplates (an absent key is ""). Under
+	// by NewReloader through deck.ConfiguredTemplates (an absent key is ""). Under
 	// the layered model it is the external library layer's configured path —
 	// the deck-root templates/ local layer is not addressable here. It is the
 	// session's raw-value baseline: renderDefault refuses any run whose
@@ -285,7 +285,7 @@ func NewReloader(opts ReloadOptions) (*Reloader, error) {
 	// currently-configured raw value against it on every run. Only the
 	// built-in pipeline is pinned; an injected pipeline (handled above) owns
 	// its own view of the deck and never reaches renderDefault.
-	r.startupTemplates = configuredTemplates(fsys)
+	r.startupTemplates = deck.ConfiguredTemplates(fsys)
 
 	r.regOverride = opts.Registry
 	r.themesOverride = opts.Themes
