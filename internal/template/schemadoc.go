@@ -60,6 +60,23 @@ func FieldFormats(f *Field) string {
 	return out
 }
 
+// SectionRepeats renders a section declaration's repeat bounds: "n–m", "≥ n"
+// or "≤ n". It returns "" when the section is unrestricted, which each surface
+// renders in its own form: `kalide templates` prints "any" and the gallery
+// passes the "" through to the page template's "any" fallback.
+func SectionRepeats(d *SectionDecl) string {
+	switch {
+	case d.Min > 0 && d.Max > 0:
+		return strconv.Itoa(d.Min) + "–" + strconv.Itoa(d.Max)
+	case d.Min > 0:
+		return "≥ " + strconv.Itoa(d.Min)
+	case d.Max > 0:
+		return "≤ " + strconv.Itoa(d.Max)
+	default:
+		return ""
+	}
+}
+
 // numberBounds renders inclusive number bounds: "≥ n", "≤ n" or "n–m".
 func numberBounds(min, max *float64) []string {
 	switch {
