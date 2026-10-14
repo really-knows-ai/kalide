@@ -216,22 +216,6 @@ type HelperChild struct {
 	Forward bool
 }
 
-// Declarations returns tmpl's declared sections keyed by section name, each
-// entry a SectionDecl carrying the accepted section templates and the min/max
-// repeat limits. It is the name → SectionDecl resolution the composition engine
-// and the registry consume. The map is a fresh allocation; the declarations
-// themselves are immutable value copies.
-func (s *Section) Declarations(tmpl *Template) map[string]SectionDecl {
-	if tmpl == nil {
-		return nil
-	}
-	out := make(map[string]SectionDecl, len(tmpl.Sections))
-	for i := range tmpl.Sections {
-		out[tmpl.Sections[i].Name] = tmpl.Sections[i]
-	}
-	return out
-}
-
 // Declared returns the declaration for one named section of tmpl. ok is false
 // when tmpl is nil or declares no such section.
 func (s *Section) Declared(tmpl *Template, name string) (SectionDecl, bool) {
