@@ -173,9 +173,9 @@ func TestReloaderLayeredLibraryIntegration(t *testing.T) {
 	if lib.Layers[0].Role != template.LayerRoleExternal || lib.Layers[1].Role != template.LayerRoleLocal {
 		t.Fatalf("startup layer roles = [%v, %v], want [external, local]", lib.Layers[0].Role, lib.Layers[1].Role)
 	}
-	themes, err := loadLibraryThemeRegistry(lib)
+	themes, err := template.LoadThemeRegistry(lib)
 	if err != nil {
-		t.Fatalf("loadLibraryThemeRegistry: %v", err)
+		t.Fatalf("template.LoadThemeRegistry: %v", err)
 	}
 
 	srv := mustListen(t, Options{Root: deckDir, Library: lib, Themes: themes})

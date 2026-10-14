@@ -68,9 +68,9 @@ func TestCheckRenderInt(t *testing.T) {
 		if len(library.Layers) != 2 {
 			t.Fatalf("len(library.Layers) = %d, want 2 (external + local)", len(library.Layers))
 		}
-		themeReg, err := loadLibraryThemeRegistry(library)
+		themeReg, err := template.LoadThemeRegistry(library)
 		if err != nil {
-			t.Fatalf("loadLibraryThemeRegistry: %v", err)
+			t.Fatalf("template.LoadThemeRegistry: %v", err)
 		}
 		registry, err := template.NewRegistryFromLibrary(library)
 		if err != nil {

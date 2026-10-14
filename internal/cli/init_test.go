@@ -990,7 +990,7 @@ func TestInitExternalLibrary(t *testing.T) {
 
 	// A two-layer deck whose theme lives ONLY in the external `templates:`
 	// library loads and validates: assertInitDeckLoads builds the theme registry
-	// from EVERY merged library layer through loadLibraryThemeRegistry, so the
+	// from EVERY merged library layer through template.LoadThemeRegistry, so the
 	// external-only theme resolves (layered-template-library, theme-selection).
 	// theme.LoadDir on the merged Library's primary (local) root would find no
 	// themes/ and fail here.
@@ -1191,7 +1191,7 @@ func newInitExternalLibrary(t *testing.T) (parent, libDir string) {
 // assertInitDeckLoads validates dir exactly as `kalide start` validates a deck
 // before serving: it resolves and loads the deck's template library (honouring
 // the configured `templates:` path), builds the theme registry from EVERY
-// merged library layer through loadLibraryThemeRegistry (so a theme living only
+// merged library layer through template.LoadThemeRegistry (so a theme living only
 // in an external `templates:` layer resolves) and the template registry, and
 // runs the whole-deck validator, failing the test on the first error. It proves
 // a deck written by `kalide init` is loadable and would serve.
@@ -1203,7 +1203,7 @@ func assertInitDeckLoads(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatalf("init deck %s: template library does not load: %v", dir, err)
 	}
-	themes, err := loadLibraryThemeRegistry(library)
+	themes, err := template.LoadThemeRegistry(library)
 	if err != nil {
 		t.Fatalf("init deck %s: theme registry: %v", dir, err)
 	}

@@ -29,7 +29,7 @@ package cli
 // both manifest paths, and errors naming an invalid external path
 // (cli-templates-list, layered-template-library, library-layer-uniqueness).
 // Because runStart blocks until a signal, the start path's merged per-layer
-// theme loading is covered by exercising loadLibraryThemeRegistry directly:
+// theme loading is covered by exercising template.LoadThemeRegistry directly:
 // a theme living only in the external layer resolves in a two-layer deck
 // (theme-selection).
 
@@ -365,7 +365,7 @@ func TestStartAndTemplates(t *testing.T) {
 
 	t.Run("an external-layer theme resolves in a two-layer deck", func(t *testing.T) {
 		// A theme living only in the external `templates:` layer is
-		// resolvable in a two-layer deck: loadLibraryThemeRegistry loads each
+		// resolvable in a two-layer deck: template.LoadThemeRegistry loads each
 		// layer's own themes/ from that layer's root and merges them, so the
 		// external theme is in the registry while the local layer — carrying
 		// no themes/ directory at all — is skipped rather than erroring
@@ -386,12 +386,42 @@ func TestStartAndTemplates(t *testing.T) {
 			t.Fatalf("len(Layers) = %d, want 2 (external + local)", len(lib.Layers))
 		}
 
-		themeReg, err := loadLibraryThemeRegistry(lib)
+		themeReg, err := template.LoadThemeRegistry(lib)
 		if err != nil {
-			t.Fatalf("loadLibraryThemeRegistry: %v (a layer without themes/ must not error)", err)
+			t.Fatalf("template.LoadThemeRegistry: %v (a layer without themes/ must not error)", err)
 		}
 		if _, err := themeReg.Lookup("ext-theme"); err != nil {
 			t.Errorf("Lookup(ext-theme) = error %v, want the theme contributed only by the external layer", err)
+		}
+	})
+
+	t.Run("a single-root library with no themes/ keeps theme.LoadDir's missing-themes error", func(t *testing.T) {
+		// A single-layer library keeps theme.LoadDir's exact behaviour: with
+		// no themes/ directory the registry load fails naming the missing
+		// directory rather than inventing an empty registry, so the shared
+		// loader preserves the single-root contract while it merges layers
+		// (layered-template-library, theme-selection).
+		dir := t.TempDir()
+		writeTestLibrary(t, filepath.Join(dir, template.TemplatesDir), "solo-library",
+			[]string{"solo-slide"}, nil, "")
+
+		lib, err := template.LoadDeckLibrary(dir, "")
+		if err != nil {
+			t.Fatalf("template.LoadDeckLibrary: %v", err)
+		}
+		if len(lib.Layers) != 1 {
+			t.Fatalf("len(Layers) = %d, want 1 (single local root)", len(lib.Layers))
+		}
+
+		_, err = template.LoadThemeRegistry(lib)
+		if err == nil {
+			t.Fatal("template.LoadThemeRegistry succeeded over a single-root library with no themes/, want theme.LoadDir's missing-themes error")
+		}
+		if !strings.Contains(err.Error(), template.ThemesDir) {
+			t.Errorf("template.LoadThemeRegistry error = %q, want it to name the missing %q directory", err, template.ThemesDir)
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("template.LoadThemeRegistry error = %q, want it to say the directory was not found", err)
 		}
 	})
 

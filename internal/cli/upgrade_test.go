@@ -377,7 +377,7 @@ func TestRunUpgrade(t *testing.T) {
 		// carries no themes/, so the deck's theme (`default`) lives ONLY in the
 		// external `templates:` library. assertUpgradeDeckLoads builds the
 		// theme registry from EVERY merged library layer through
-		// loadLibraryThemeRegistry, so the external-only theme resolves and the
+		// template.LoadThemeRegistry, so the external-only theme resolves and the
 		// upgraded layered deck validates (layered-template-library,
 		// theme-selection). theme.LoadDir on the merged Library's primary
 		// (local) root would find no themes/ and fail here.
@@ -751,7 +751,7 @@ func assertUpgradeTreeUnchanged(t *testing.T, root string, before map[string]upg
 // assertUpgradeDeckLoads validates dir exactly as `kalide start` validates a
 // deck before serving: it resolves and loads the deck's template library
 // (honouring a configured `templates:` path), builds the theme registry from
-// EVERY merged library layer through loadLibraryThemeRegistry (so a theme
+// EVERY merged library layer through template.LoadThemeRegistry (so a theme
 // living only in an external `templates:` layer resolves) and the template
 // registry, and runs the whole-deck validator, failing the test on the first
 // error. It proves an upgraded deck still serves.
@@ -763,7 +763,7 @@ func assertUpgradeDeckLoads(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatalf("upgraded deck %s: template library does not load: %v", dir, err)
 	}
-	themes, err := loadLibraryThemeRegistry(library)
+	themes, err := template.LoadThemeRegistry(library)
 	if err != nil {
 		t.Fatalf("upgraded deck %s: theme registry: %v", dir, err)
 	}

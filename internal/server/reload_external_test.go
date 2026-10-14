@@ -24,7 +24,7 @@ import (
 // and recovers.
 //
 // Its startup theme registry is built the way Reloader.loadLibrary builds it —
-// server.loadLibraryThemeRegistry over EVERY merged library layer (reload.go),
+// template.LoadThemeRegistry over EVERY merged library layer (reload.go),
 // not theme.LoadDir on the merged Library's primary root — so a two-layer deck
 // whose theme lives ONLY in the external `templates:` layer still loads and
 // serves (layered-template-library, theme-selection); the external-only-theme
@@ -64,9 +64,9 @@ func TestReloaderExternalLibraryIntegration(t *testing.T) {
 	if lib.RootPath != libDir {
 		t.Fatalf("Library.RootPath = %q, want the resolved external %q", lib.RootPath, libDir)
 	}
-	themes, err := loadLibraryThemeRegistry(lib)
+	themes, err := template.LoadThemeRegistry(lib)
 	if err != nil {
-		t.Fatalf("loadLibraryThemeRegistry: %v", err)
+		t.Fatalf("template.LoadThemeRegistry: %v", err)
 	}
 
 	srv := mustListen(t, Options{Root: deckDir, Library: lib, Themes: themes})
@@ -168,7 +168,7 @@ func TestReloaderExternalLibraryIntegration(t *testing.T) {
 
 	// A two-layer deck whose theme lives ONLY in the external `templates:`
 	// layer still loads and serves: the startup registry is built from every
-	// merged layer through loadLibraryThemeRegistry, so the external-only theme
+	// merged layer through template.LoadThemeRegistry, so the external-only theme
 	// resolves (layered-template-library, theme-selection). theme.LoadDir on
 	// the merged Library's primary (local) root would find no themes/ and fail
 	// here.
@@ -218,9 +218,9 @@ func TestReloaderExternalLibraryIntegration(t *testing.T) {
 
 		// The per-layer theme registry resolves the deck's default theme even
 		// though it lives only in the external layer.
-		themes, err := loadLibraryThemeRegistry(lib)
+		themes, err := template.LoadThemeRegistry(lib)
 		if err != nil {
-			t.Fatalf("loadLibraryThemeRegistry: %v", err)
+			t.Fatalf("template.LoadThemeRegistry: %v", err)
 		}
 		if _, err := themes.Lookup("default"); err != nil {
 			t.Fatalf("the external-only theme default did not resolve: %v", err)
