@@ -37,7 +37,6 @@ import (
 	"fmt"
 	htmltmpl "html/template"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -322,12 +321,6 @@ func gallerySectionExample(t *template.Template, reg *template.Registry, funcMap
 	return render.RenderSlide(parsed, t.Name, nil, deck.Slide{}, 0, rebuilt, funcMap)
 }
 
-// galleryATXHeading matches a CommonMark ATX heading of depth 1-6 with up to
-// three leading spaces or tabs, mirroring internal/slide's atxHeadingRe so the
-// depth shift recognises exactly the lines that parser treats as headings. Its
-// group 1 is the `#` run.
-var galleryATXHeading = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
-
 // galleryExampleFragment returns the section example source to embed beneath the
 // synthetic `# <gallerySectionName>` wrapper heading. For a container template
 // (one that declares child sections) the fragment's headings are deepened one
@@ -359,7 +352,7 @@ func galleryNestExample(src string) string {
 		if inFence {
 			continue
 		}
-		loc := galleryATXHeading.FindStringSubmatchIndex(line)
+		loc := slide.ATXHeadingRe.FindStringSubmatchIndex(line)
 		if loc == nil {
 			continue
 		}
