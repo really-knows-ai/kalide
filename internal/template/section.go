@@ -742,17 +742,6 @@ func walkBoundedSelfNesting(resolve func(name string) (*Template, bool), start *
 	return longest, bounded, longestMaxDepth, nil
 }
 
-// Variant is one enum field's layout-variant selection: the field that selects
-// the variant and the effective variant value.
-type Variant struct {
-	// Field is the enum field's name.
-	Field string
-
-	// Value is the effective variant: the author's value when the field is
-	// present, otherwise the field's Default when it is a string, otherwise "".
-	Value string
-}
-
 // HelperCalls statically extracts every `{{ section "name" [fields] [body] }}`
 // invocation from tmpl's layout, in source order.
 //
