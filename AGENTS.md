@@ -1,8 +1,38 @@
 # AGENTS.md — kalide
 
 Rules for every agent working in this repo (coordinator, planners, reviewers,
-spec-writers, implementers). Keep this file short; add only rules that prevent
-a real failure.
+spec-writers, implementers).
+
+## Core refactoring principles
+
+Make the smallest change that fully solves the task. “Lazy” means avoiding
+unnecessary code—not skipping the work needed to make the change correct.
+
+- Understand the full scope first: read the code being changed and trace
+  affected callers, tests, fixtures, configuration, and exports. Consider what
+  could break for users.
+- Prefer the simplest complete option: skip what isn’t needed; reuse project
+  code and patterns; use the standard library or platform features; use an
+  already-installed dependency; then write the minimum new code that works.
+- Keep the diff lean. Avoid speculative features, abstractions, wrappers,
+  options, configuration, and “for later” code. Prefer deleting code when that
+  solves the problem. Follow the project’s existing structure and conventions.
+- Don’t optimize for line count alone; a few clear lines are simpler than a
+  short, hard-to-understand line.
+- Fix bugs at their shared source. Check a function’s callers before changing
+  it, and fix the root cause once rather than patching individual call sites.
+- Preserve safeguards when moving or merging code, especially validation and
+  error handling that protect against data loss.
+- Choose correctness over cleverness. When similarly small approaches differ,
+  choose the one that handles edge cases correctly.
+- Test meaningful new logic. Branches, loops, parsers, money or security logic,
+  and new scripts or apps need one small test or assert-based check. Trivial
+  changes don’t need tests.
+- Document intentional shortcuts with a comment in this form:
+  `shortcut: <the limit>, <when to upgrade>`.
+- Never cut trust-boundary validation, data-loss protections, security,
+  accessibility, required hardware calibration, or anything the user
+  explicitly asked for.
 
 ## apg plan notes are broken — never use them
 
