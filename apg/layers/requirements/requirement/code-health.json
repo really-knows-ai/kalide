@@ -2,11 +2,21 @@
   "layer": "requirements",
   "type": "requirement",
   "name": "code-health",
-  "body": "kalide's source defines each helper that exists only because two packages cannot import one another exactly once, in the lowest-level package every caller can already import, and each caller uses that one definition — so the behaviour a helper shares is changed in one place. Five helpers are shared this way: the per-layer theme-registry load (shared-theme-registry-load), the YAML parse-error source position and plain-scalar quoting hint (shared-yaml-error-position), the template schema-documentation vocabulary (shared-template-documentation), the raw `templates:` config read (shared-raw-templates-read) and the CommonMark ATX heading grammar (shared-atx-heading-grammar). Each surface a helper serves keeps its own presentation and its own positioned error type; the shared helper carries the logic they have in common (global.constraint.shared-helpers-single-home).",
+  "body": "kalide's source defines each helper that exists only because two packages cannot import one another exactly once, in the lowest-level package every caller can already import, and each caller uses that one definition — so the behaviour a helper shares is changed in one place. Five helpers are shared this way: the per-layer theme-registry load (shared-theme-registry-load), the YAML parse-error source position and plain-scalar quoting hint (shared-yaml-error-position), the template schema-documentation vocabulary (shared-template-documentation), the raw `templates:` config read (shared-raw-templates-read) and the CommonMark ATX heading grammar (shared-atx-heading-grammar). Each surface a helper serves keeps its own presentation and its own positioned error type; the shared helper carries the logic they have in common (global.constraint.shared-helpers-single-home). Beyond the shared helpers, kalide's source keeps no symbol the project's call graph proves unreachable (dead-code-removal) and keeps an abstraction only where it earns its place (one-use-abstraction-simplification).",
   "properties": {
     "feature": "code-health"
   },
   "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.dead-code-removal",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.one-use-abstraction-simplification",
+      "properties": {}
+    },
     {
       "kind": "contains",
       "target": "requirements.requirement.shared-atx-heading-grammar",
@@ -30,16 +40,6 @@
     {
       "kind": "contains",
       "target": "requirements.requirement.shared-yaml-error-position",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.dead-code-removal",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.one-use-abstraction-simplification",
       "properties": {}
     }
   ],
