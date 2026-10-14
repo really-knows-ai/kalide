@@ -1,0 +1,17 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "dead-code-removal",
+  "body": "kalide's source keeps no symbol the project's call graph proves unreachable, and the dead-code removal is evidence-backed: a candidate is removed only when the call graph reports no incoming `Calls` edge for it AND source inspection finds no non-call use the graph does not model — a function or method taken as a value (assigned to a variable, a struct field, a template func map or an `http.Handler`), an interface method reached only through its interface (`error`, `fmt.Stringer`), a package-level variable or constant initializer, a `//go:embed` target, or a test-only caller. A symbol reached by any of those is live and stays; removal is never inferred from a name or a grep alone.\n\nAC:\n- the symbols the call graph reports with no caller, and source inspection reaches through no non-call use — internal/template's `(*Library).Names`, `(*Section).Declarations` and `(*Section).Variants`, internal/template's `isSectionHeading`, and internal/mdcheck's `Mode.String` — are removed;\n- a call-graph query over non-test `src` symbols with no incoming `Calls` edge returns no symbol that source inspection also reaches through no non-call use;\n- the build and the full test suite pass after the removals.",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.code-health",
+      "properties": {}
+    }
+  ]
+}

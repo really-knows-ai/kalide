@@ -9,6 +9,21 @@
   "out": [
     {
       "kind": "contains",
+      "target": "requirements.requirement.shared-atx-heading-grammar",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-raw-templates-read",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-template-documentation",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
       "target": "requirements.requirement.shared-theme-registry-load",
       "properties": {}
     },
@@ -19,17 +34,12 @@
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.shared-template-documentation",
+      "target": "requirements.requirement.dead-code-removal",
       "properties": {}
     },
     {
       "kind": "contains",
-      "target": "requirements.requirement.shared-raw-templates-read",
-      "properties": {}
-    },
-    {
-      "kind": "contains",
-      "target": "requirements.requirement.shared-atx-heading-grammar",
+      "target": "requirements.requirement.one-use-abstraction-simplification",
       "properties": {}
     }
   ],

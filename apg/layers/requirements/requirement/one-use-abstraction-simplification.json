@@ -1,0 +1,17 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "one-use-abstraction-simplification",
+  "body": "kalide's source keeps an abstraction only where it earns its place, and the simplification is evidence-backed: a helper whose call graph shows a single caller and whose body only delegates to another function — adding no behaviour of its own — is folded back into that caller, and a function is split into helpers only where the pieces are reused or independently tested. A one-caller helper stays when it names a distinct step of a long function, is independently tested, or is a function value or interface member; the evidence is the call graph (a single incoming `Calls` edge) plus inspection.\n\nAC:\n- internal/slide's `pathSegments` and `instanceIndexes` collapse to one name — each body is `return parseChain(path).indexes` and `parseSections` is the only caller of each — and `parseSections` calls the survivor;\n- no pass-through helper with a single caller remains that only delegates to another function and adds no behaviour of its own;\n- the build and the internal/slide tests pass.",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.code-health",
+      "properties": {}
+    }
+  ]
+}
