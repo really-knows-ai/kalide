@@ -7,7 +7,7 @@ package cli
 // check is the non-serving validation entry point: it loads the deck's
 // resolved template library layers and its theme exactly as `kalide start`
 // does before serving (template.LoadDeckLibrary +
-// cli.loadLibraryThemeRegistry + template.NewRegistryFromLibrary), then runs
+// template.LoadThemeRegistry + template.NewRegistryFromLibrary), then runs
 // the whole-deck validator over the deck without opening a server, binding a
 // port or reaching the network.
 //
@@ -111,7 +111,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportCheck(opts, stdout, stderr, []validate.ValidationError{templateLoadError(err)})
 	}
-	themeReg, err := loadLibraryThemeRegistry(library)
+	themeReg, err := template.LoadThemeRegistry(library)
 	if err != nil {
 		return reportCheck(opts, stdout, stderr, []validate.ValidationError{templateLoadError(err)})
 	}
