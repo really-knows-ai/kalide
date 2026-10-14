@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-14
+
 ### Added
 
 - `nullable: true` fields. A nullable field accepts an explicit YAML `null`
@@ -465,7 +467,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`,
   `linux/{amd64,arm64}`).
 
-[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.12.3...HEAD
+[Unreleased]: https://github.com/really-knows-ai/kalide/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/really-knows-ai/kalide/compare/v0.12.3...v0.13.0
 [0.12.3]: https://github.com/really-knows-ai/kalide/compare/v0.11.0...v0.12.3
 [0.11.0]: https://github.com/really-knows-ai/kalide/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/really-knows-ai/kalide/compare/v0.10.0...v0.10.1
