@@ -627,7 +627,7 @@ func (r *Reloader) loadLibrary(fsys fs.FS) (*template.Library, *template.Registr
 		return nil, r.regOverride, r.themesOverride, nil
 	}
 
-	lib, err := template.LoadDeckLibrary(r.root, configuredTemplates(fsys))
+	lib, err := template.LoadDeckLibrary(r.root, deck.ConfiguredTemplates(fsys))
 	if err != nil {
 		return nil, nil, nil, err
 	}
