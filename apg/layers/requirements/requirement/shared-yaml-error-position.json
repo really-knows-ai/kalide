@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "shared-yaml-error-position",
+  "body": "Resolving the offending source line of a yaml.v3 parse error — and, when the failure is the plain-scalar quoting problem, the quoting hint — is defined once and used by the three loaders that report a positioned YAML error: the template library loader (internal/template/yamlerror.go, template.parseLibraryErrorLine), the slide and section frontmatter parser (internal/slide/yamlerror.go, slide.yamlErrorWithLine) and the deck config loader (internal/deck/yamlerror.go, deck.yamlErrorWithLine). Each loader keeps its own positioned error type and its own rendered form (`<file>:<line>: …` for the deck config; `<file>:<line>[ › <path>]: invalid YAML: <problem> (<hint>)` for slide/section frontmatter and a library manifest), and the shared resolver returns the line, the undefined-anchor line and the quoting hint they consume. It matches the `yaml: line N:` prefix, strips that prefix so the line is not rendered twice, recovers the line of an undefined-anchor error from the source text, and recognises a plain scalar YAML would read as something other than the author's literal text.\n\nAC: all three loaders call one shared position-and-hint resolver; a malformed kalide.yaml, slide frontmatter and library manifest each render their own positioned message with the resolved line and, where the plain-scalar problem applies, the quoting hint.",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.value.validation-error",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-deck",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.code-health",
+      "properties": {}
+    }
+  ]
+}

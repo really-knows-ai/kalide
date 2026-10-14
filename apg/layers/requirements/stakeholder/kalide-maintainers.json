@@ -9,6 +9,11 @@
       "kind": "contains",
       "target": "requirements.requirement.distribution",
       "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.code-health",
+      "properties": {}
     }
   ],
   "in": []

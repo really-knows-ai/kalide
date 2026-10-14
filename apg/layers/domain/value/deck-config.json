@@ -30,6 +30,11 @@
       "kind": "drives",
       "source": "requirements.requirement.readme-templates-key",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.shared-raw-templates-read",
+      "properties": {}
     }
   ]
 }

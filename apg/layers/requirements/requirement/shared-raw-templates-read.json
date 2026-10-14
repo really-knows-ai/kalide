@@ -1,0 +1,33 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "shared-raw-templates-read",
+  "body": "Reading the deck's raw top-level `templates:` value from kalide.yaml — the value the library resolution needs before a theme registry exists, since deck.LoadConfig needs a theme registry that comes from the not-yet-resolved library — is defined once and used by the reload pipeline (internal/server/reload.go, server.configuredTemplates), the file watcher (internal/watch/watch.go, watch.configuredTemplates) and the CLI's library resolution (internal/cli/templates.go and internal/cli/start.go). A config that cannot be read, cannot be decoded, or has no `templates:` key yields the empty value that selects the deck-root `templates/` layer.\n\nAC: the reload pipeline, the watcher and the CLI's library resolution read the raw `templates:` value through one shared implementation.",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.watch-deck",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.service.load-template-library",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.deck-config",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.code-health",
+      "properties": {}
+    }
+  ]
+}

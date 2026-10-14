@@ -1,0 +1,28 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "shared-template-documentation",
+  "body": "The author-facing template schema documentation is rendered from one shared vocabulary used by both `kalide templates <name>` (internal/cli/templates.go) and the /templates gallery (internal/server/gallery.go). The shared vocabulary renders a field's limits for its type — text max length and plainness, inclusive number bounds (`≥ n`, `≤ n`, `n–m`), inclusive date bounds (`from YYYY-MM-DD`, `to YYYY-MM-DD`, `YYYY-MM-DD–YYYY-MM-DD`) and list item bounds (`n–m items`, `≥ n items`, `≤ m items`) — a field's named formats with its default (`compact, exact, percent (default compact)`), a section's repeat bounds (`n–m`, `≥ n`, `≤ n`) and a body rule's limits (`max N words`, `max N paragraphs`, `max N list items`, `no subheadings`); a numeric bound is rendered without a trailing `.0`. Each surface keeps its own presentation: the CLI its indented text lines and usage-dependent headings (`Sections:`/declares, `Child sections:`/Can hold), the gallery its HTML tables.\n\nAC: a new field-type limit or named format appears on both `kalide templates <name>` and the gallery page from one edit; both surfaces render the same limits, formats, repeats and body limits.",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.service.template-registry",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.field",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.code-health",
+      "properties": {}
+    }
+  ]
+}

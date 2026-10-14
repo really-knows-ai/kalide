@@ -1,0 +1,43 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "code-health",
+  "body": "kalide's source defines each helper that exists only because two packages cannot import one another exactly once, in the lowest-level package every caller can already import, and each caller uses that one definition — so the behaviour a helper shares is changed in one place. Five helpers are shared this way: the per-layer theme-registry load (shared-theme-registry-load), the YAML parse-error source position and plain-scalar quoting hint (shared-yaml-error-position), the template schema-documentation vocabulary (shared-template-documentation), the raw `templates:` config read (shared-raw-templates-read) and the CommonMark ATX heading grammar (shared-atx-heading-grammar). Each surface a helper serves keeps its own presentation and its own positioned error type; the shared helper carries the logic they have in common (global.constraint.shared-helpers-single-home).",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-theme-registry-load",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-yaml-error-position",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-template-documentation",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-raw-templates-read",
+      "properties": {}
+    },
+    {
+      "kind": "contains",
+      "target": "requirements.requirement.shared-atx-heading-grammar",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.stakeholder.kalide-maintainers",
+      "properties": {}
+    }
+  ]
+}

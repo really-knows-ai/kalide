@@ -1,0 +1,9 @@
+{
+  "layer": "global",
+  "type": "constraint",
+  "name": "shared-helpers-single-home",
+  "body": "A helper replicated across packages solely because those packages cannot import one another is defined once, in the lowest-level package all its callers can already import, and every caller uses that one definition; parallel copies do not remain. The shared home is chosen so it imports only packages its callers already depend on, so no caller gains an import it cannot have.",
+  "properties": {},
+  "out": [],
+  "in": []
+}

@@ -1,0 +1,28 @@
+{
+  "layer": "requirements",
+  "type": "requirement",
+  "name": "shared-theme-registry-load",
+  "body": "The per-layer theme-registry load is defined once and used by `kalide start` (internal/cli/start.go, the loader also used by `kalide check` and `kalide render`), the server's reload pipeline (internal/server/reload.go, called by Reloader.loadLibrary) and `kalide upgrade`'s post-refresh validation (internal/scaffold/upgrade.go, scaffold.validateUpgradedDeck). It loads every layer of a deck's merged template library: for a single-layer library it calls theme.LoadDir on that layer's `themes/` directory and keeps theme.LoadDir's error when `themes/` is missing; for a multi-layer library it loads each layer's `themes/` from that layer's own RootPath and merges the layers into one theme.Registry, so a theme a layer contributes keeps that layer's own files and a layer whose `themes/` is absent contributes no themes. template.LoadDeckLibrary enforces theme-name uniqueness across layers before the load, so the merge never collides and no theme silently overrides another.\n\nAC: `kalide start`, the reload pipeline and `kalide upgrade`'s validation all call one shared loader; a two-layer deck whose theme lives in one layer resolves it, and a single-root library's missing-`themes/` error is reported exactly as theme.LoadDir reports it.",
+  "properties": {
+    "feature": "code-health"
+  },
+  "out": [
+    {
+      "kind": "drives",
+      "target": "domain.entity.theme",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "target": "domain.value.library-layer",
+      "properties": {}
+    }
+  ],
+  "in": [
+    {
+      "kind": "contains",
+      "source": "requirements.requirement.code-health",
+      "properties": {}
+    }
+  ]
+}

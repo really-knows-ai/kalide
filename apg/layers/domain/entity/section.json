@@ -26,6 +26,11 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.bounded-self-nesting",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.child-constructor",
       "properties": {}
     },
@@ -61,7 +66,7 @@
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.bounded-self-nesting",
+      "source": "requirements.requirement.shared-atx-heading-grammar",
       "properties": {}
     }
   ]

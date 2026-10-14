@@ -7,12 +7,12 @@
   "out": [
     {
       "kind": "realised-by",
-      "target": "solution.component.template-library-loader",
+      "target": "solution.component.cli-check",
       "properties": {}
     },
     {
       "kind": "realised-by",
-      "target": "solution.component.cli-check",
+      "target": "solution.component.template-library-loader",
       "properties": {}
     }
   ],
@@ -125,6 +125,16 @@
     {
       "kind": "drives",
       "source": "requirements.requirement.yaml-error-messages",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.shared-yaml-error-position",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.shared-raw-templates-read",
       "properties": {}
     }
   ]

@@ -30,6 +30,11 @@
       "kind": "drives",
       "source": "requirements.requirement.text-coercion",
       "properties": {}
+    },
+    {
+      "kind": "drives",
+      "source": "requirements.requirement.shared-template-documentation",
+      "properties": {}
     }
   ]
 }

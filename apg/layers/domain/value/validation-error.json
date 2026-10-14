@@ -28,12 +28,17 @@
     },
     {
       "kind": "drives",
+      "source": "requirements.requirement.table-errors",
+      "properties": {}
+    },
+    {
+      "kind": "drives",
       "source": "requirements.requirement.yaml-error-messages",
       "properties": {}
     },
     {
       "kind": "drives",
-      "source": "requirements.requirement.table-errors",
+      "source": "requirements.requirement.shared-yaml-error-position",
       "properties": {}
     }
   ]
