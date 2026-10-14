@@ -42,8 +42,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/render"
@@ -90,13 +88,7 @@ func runRender(args []string, stdout, stderr io.Writer) int {
 	root = displaypath.CanonicalRoot(root)
 
 	deckFS := os.DirFS(root)
-	configured := ""
-	if data, readErr := fs.ReadFile(deckFS, deck.ConfigFile); readErr == nil {
-		var raw map[string]any
-		if yaml.Unmarshal(data, &raw) == nil {
-			configured, _ = raw["templates"].(string)
-		}
-	}
+	configured := deck.ConfiguredTemplates(deckFS)
 
 	library, err := template.LoadDeckLibrary(root, configured)
 	if err != nil {
