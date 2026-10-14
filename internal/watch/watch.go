@@ -400,7 +400,7 @@ func atOrUnder(dir, name string) bool {
 // the deck's authoritative single root (ResolveLibraryRoot) so that root stays
 // watched, exactly as the single-root resolver did.
 func libraryRoot(deckRoot string) []string {
-	configured := configuredTemplates(deckRoot)
+	configured := deck.ConfiguredTemplates(os.DirFS(deckRoot))
 	if roots, err := template.ResolveLibraryLayers(deckRoot, configured); err == nil {
 		return roots
 	}
