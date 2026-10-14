@@ -48,8 +48,6 @@ import (
 	"syscall"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/server"
@@ -142,18 +140,13 @@ func runStart(args []string, stdout, stderr io.Writer) int {
 	// same way a broken deck is — before anything is served — and never falls
 	// back to any compiled-in content (no-built-in-fallback).
 	//
-	// The raw `templates:` value is read directly here because deck.LoadConfig
-	// needs a theme registry, which comes from the not-yet-resolved library;
-	// this mirrors the reload pipeline. An unreadable config yields "" and the
-	// loader then looks for the local templates/ directory.
+	// The raw `templates:` value is read through the shared
+	// deck.ConfiguredTemplates because deck.LoadConfig needs a theme registry,
+	// which comes from the not-yet-resolved library; this mirrors the reload
+	// pipeline. An unreadable config yields "" and the loader then looks for the
+	// local templates/ directory.
 	deckFS := os.DirFS(root)
-	configured := ""
-	if data, readErr := fs.ReadFile(deckFS, deck.ConfigFile); readErr == nil {
-		var raw map[string]any
-		if yaml.Unmarshal(data, &raw) == nil {
-			configured, _ = raw["templates"].(string)
-		}
-	}
+	configured := deck.ConfiguredTemplates(deckFS)
 
 	library, err := template.LoadDeckLibrary(root, configured)
 	if err != nil {
