@@ -3,6 +3,7 @@ package template
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	htmltemplate "html/template"
 	"io/fs"
 	"path"
@@ -473,8 +474,9 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 				fsys["library.yaml"] = &fstest.MapFile{Data: []byte(tc.yaml)}
 				_, err := LoadLibrary(rootedFS(fsys), TemplatesDir)
 				libErr := asLibraryError(t, err)
-				if want := displaypath.Display(TemplatesDir, LibraryFile); libErr.Path != want {
-					t.Errorf("Path = %q, want %q", libErr.Path, want)
+				wantPath := displaypath.Display(TemplatesDir, LibraryFile)
+				if libErr.Path != wantPath {
+					t.Errorf("Path = %q, want %q", libErr.Path, wantPath)
 				}
 				if libErr.Line != tc.wantLine {
 					t.Errorf("Line = %d, want %d (the offending source line)", libErr.Line, tc.wantLine)
@@ -483,6 +485,7 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 					t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantMessage)
 				}
 				assertQuotingHint(t, libErr, tc.wantHint)
+				wantLibraryErrorRender(t, libErr, wantPath, tc.wantLine, tc.wantMessage, tc.wantHint)
 			})
 		}
 	})
@@ -571,6 +574,7 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 					t.Errorf("Message = %q, want it to contain %q", libErr.Message, tc.wantMessage)
 				}
 				assertQuotingHint(t, libErr, tc.wantHint)
+				wantLibraryErrorRender(t, libErr, wantPath, tc.wantLine, tc.wantMessage, tc.wantHint)
 			})
 		}
 	})
@@ -580,7 +584,7 @@ func TestLoadLibraryStep1BadFormat(t *testing.T) {
 // want is true the error carries exactly the plain-scalar quoting hint the
 // loader shares with the field checker, and when false it carries no hint at
 // all. It pins the literal hint text, so the assertion is independent of the
-// yamlQuotingHint constant.
+// shared resolver's internal hint constant (internal/yamlpos).
 func assertQuotingHint(t *testing.T, libErr *LibraryError, want bool) {
 	t.Helper()
 	const wantHint = "quote the value as a string"
@@ -592,6 +596,28 @@ func assertQuotingHint(t *testing.T, libErr *LibraryError, want bool) {
 	}
 	if libErr.Hint != wantHint {
 		t.Errorf("Hint = %q, want %q", libErr.Hint, wantHint)
+	}
+}
+
+// wantLibraryErrorRender checks that libErr renders its *positioned* message —
+// path:line: message [(hint)], the same file:line: message shape the deck and
+// slide loaders render — rather than carrying the shared resolver's line and
+// hint only in its fields. It pins the rendered form, so a malformed library
+// manifest is proven to surface the resolved line and quoting hint to the
+// reader through the library's own error type.
+func wantLibraryErrorRender(t *testing.T, libErr *LibraryError, wantPath string, wantLine int, wantMessage string, wantHint bool) {
+	t.Helper()
+	const hint = "quote the value as a string"
+	rendered := libErr.Error()
+	prefix := fmt.Sprintf("%s:%d: ", wantPath, wantLine)
+	if !strings.HasPrefix(rendered, prefix) {
+		t.Errorf("Error() = %q, want prefix %q (the resolved line)", rendered, prefix)
+	}
+	if !strings.Contains(rendered, wantMessage) {
+		t.Errorf("Error() = %q, want it to contain %q", rendered, wantMessage)
+	}
+	if got := strings.Contains(rendered, " ("+hint+")"); got != wantHint {
+		t.Errorf("Error() = %q, hint rendered = %v, want %v", rendered, got, wantHint)
 	}
 }
 
