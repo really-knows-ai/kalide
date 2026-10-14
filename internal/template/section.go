@@ -29,9 +29,8 @@ import (
 // looping forever.
 //
 // Variants (template-variants): layout variants are selected only by enum
-// fields (the field's value changes the layout). Variants reports those
-// selections; there is deliberately no other variant mechanism and no
-// author-facing variant key.
+// fields (the field's value changes the layout); there is deliberately no
+// other variant mechanism and no author-facing variant key.
 //
 // Controlled effects (template-controlled-effects): fragments, transitions and
 // backgrounds are set only by template layouts. No function or type here
