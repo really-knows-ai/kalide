@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/really-knows-ai/kalide/internal/displaypath"
+	"github.com/really-knows-ai/kalide/internal/slide"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/theme"
 	"github.com/really-knows-ai/kalide/internal/validate"
@@ -615,6 +616,56 @@ func TestServer(t *testing.T) {
 			t.Errorf("GET a missing asset status %d, want 404", rec.Code)
 		}
 	})
+}
+
+// TestGalleryNestExampleHeadings proves galleryNestExample deepens exactly the
+// lines slide's own parser reads as ATX headings, using the one exported
+// slide.ATXHeadingRe grammar: an ATX heading is up to three leading spaces or
+// tabs, one to six `#`, then whitespace. A line indented four or more columns,
+// seven or more `#`, or `#` with no following whitespace is not a heading and
+// is left untouched. A depth-6 heading is a heading but already at slides'
+// six-level cap, so it is also left as is.
+func TestGalleryNestExampleHeadings(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"depth-one heading", "# Intro", "## Intro"},
+		{"one-space indent", " # Intro", " ## Intro"},
+		{"two-space indent", "  # Intro", "  ## Intro"},
+		{"three-space indent", "   # Intro", "   ## Intro"},
+		{"tab indent", "\t# Intro", "\t## Intro"},
+		{"three columns of mixed indent", "  \t# Intro", "  \t## Intro"},
+		{"four-space indent is not a heading", "    # Intro", "    # Intro"},
+		{"tab then four spaces is not a heading", "\t    # Intro", "\t    # Intro"},
+		{"no space after the hashes is not a heading", "#Intro", "#Intro"},
+		{"seven hashes is not a heading", "####### Intro", "####### Intro"},
+		{"depth-six heading is already at the cap", "###### Intro", "###### Intro"},
+		{"deeper heading keeps deepening", "### Intro", "#### Intro"},
+		{"plain text is untouched", "Intro paragraph", "Intro paragraph"},
+		{"indented plain text is untouched", "   Intro paragraph", "   Intro paragraph"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := galleryNestExample(tc.in)
+			if got != tc.want {
+				t.Fatalf("galleryNestExample(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+
+			// Make the agreement explicit: galleryNestExample deepens a line
+			// exactly when slide's parser grammar reads it as a heading below
+			// the six-level cap. The cap is galleryNestExample's own
+			// slide-sections rule, not a grammar difference.
+			m := slide.ATXHeadingRe.FindStringSubmatch(tc.in)
+			parserDeepens := m != nil && len(m[1]) < 6
+			if deepened := got != tc.in; deepened != parserDeepens {
+				t.Errorf("galleryNestExample deepened %q = %v, but slide.ATXHeadingRe reads it as a heading below depth 6 = %v",
+					tc.in, deepened, parserDeepens)
+			}
+		})
+	}
 }
 
 // mustWriteFile writes data to path, creating parent directories as needed.
