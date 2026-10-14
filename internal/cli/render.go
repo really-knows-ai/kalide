@@ -95,7 +95,7 @@ func runRender(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kalide render: %v\n", err)
 		return 1
 	}
-	themeReg, err := loadLibraryThemeRegistry(library)
+	themeReg, err := template.LoadThemeRegistry(library)
 	if err != nil {
 		fmt.Fprintf(stderr, "kalide render: %v\n", err)
 		return 1
