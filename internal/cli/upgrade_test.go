@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/scaffold"
@@ -760,13 +758,7 @@ func assertUpgradeTreeUnchanged(t *testing.T, root string, before map[string]upg
 func assertUpgradeDeckLoads(t *testing.T, dir string) {
 	t.Helper()
 	deckFS := os.DirFS(dir)
-	configured := ""
-	if data, err := fs.ReadFile(deckFS, deck.ConfigFile); err == nil {
-		var raw map[string]any
-		if yaml.Unmarshal(data, &raw) == nil {
-			configured, _ = raw["templates"].(string)
-		}
-	}
+	configured := deck.ConfiguredTemplates(deckFS)
 	library, err := template.LoadDeckLibrary(dir, configured)
 	if err != nil {
 		t.Fatalf("upgraded deck %s: template library does not load: %v", dir, err)
