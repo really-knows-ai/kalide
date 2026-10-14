@@ -413,16 +413,6 @@ func libraryRoot(deckRoot string) []string {
 	return nil
 }
 
-// configuredTemplates returns the deck's raw top-level `templates:` value as
-// written in kalide.yaml, or "" when the file cannot be read, the key is absent
-// or empty, or the config cannot be decoded. It mirrors internal/server's
-// reader: reading the raw key is what lets the library root be resolved before
-// a theme registry exists (deck.LoadConfig needs one, and the registry itself
-// comes from the not-yet-resolved library).
-func configuredTemplates(deckRoot string) string {
-	return deck.ConfiguredTemplates(os.DirFS(deckRoot))
-}
-
 // loop is the single event-loop goroutine: it reads fsnotify events, keeps the
 // watched set in step with directories appearing and disappearing, coalesces
 // changes into bursts and delivers one Event per burst.
