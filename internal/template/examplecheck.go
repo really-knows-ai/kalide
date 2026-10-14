@@ -973,16 +973,6 @@ func scanFence(lines []string, start int, close string) ([]string, int, bool) {
 	return nil, 0, false
 }
 
-// sectionHeadingPattern matches a top-level `# name` section heading line —
-// exactly one `#`, a space, then the name — never a `##`/`###` subheading.
-func isSectionHeading(line string) (string, bool) {
-	level, name, ok := exampleHeadingLevel(line)
-	if !ok || level != 1 {
-		return "", false
-	}
-	return name, true
-}
-
 // exampleHeadingLevel parses an ATX heading line's depth (1-6) and its name.
 // Heading depth is nesting depth, so a deeper heading is a child instance of
 // the most recent shallower one (slide-sections). Seven or more `#` is not a
