@@ -651,17 +651,6 @@ func (r *Reloader) loadLibrary(fsys fs.FS) (*template.Library, *template.Registr
 	return lib, reg, themes, nil
 }
 
-// configuredTemplates returns the deck's raw top-level `templates:` value as
-// written in kalide.yaml, or "" when the file cannot be read, the key is absent
-// or empty, or the config cannot be decoded. It is the deck-side input to the
-// template loader's single resolution point: it deliberately does not validate
-// the config (deck.LoadConfig needs a theme registry, which itself comes from
-// the not-yet-resolved library) — the whole-deck validator reports any config
-// error afterwards, through the themes loaded from the resolved root.
-func configuredTemplates(fsys fs.FS) string {
-	return deck.ConfiguredTemplates(fsys)
-}
-
 // templatesRetargeted reports whether the currently-configured raw `templates:`
 // value differs from the raw value captured at startup
 // (template-retarget-requires-restart). Under the layered model `templates:`
