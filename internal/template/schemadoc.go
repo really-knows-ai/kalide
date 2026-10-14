@@ -77,6 +77,27 @@ func SectionRepeats(d *SectionDecl) string {
 	}
 }
 
+// BodyLimits renders the limits applied to an implied body rule: "max 120
+// words", "max 2 paragraphs", "max 4 list items" and, when the rule allows a
+// body but no subheadings, "no subheadings", in that order. It returns "" when
+// there are none.
+func BodyLimits(b BodyRule) string {
+	var parts []string
+	if b.MaxWords > 0 {
+		parts = append(parts, "max "+strconv.Itoa(b.MaxWords)+" words")
+	}
+	if b.MaxParagraphs > 0 {
+		parts = append(parts, "max "+strconv.Itoa(b.MaxParagraphs)+" paragraphs")
+	}
+	if b.MaxListItems > 0 {
+		parts = append(parts, "max "+strconv.Itoa(b.MaxListItems)+" list items")
+	}
+	if b.Mode != BodyDisallowed && !b.Subheadings {
+		parts = append(parts, "no subheadings")
+	}
+	return strings.Join(parts, ", ")
+}
+
 // numberBounds renders inclusive number bounds: "≥ n", "≤ n" or "n–m".
 func numberBounds(min, max *float64) []string {
 	switch {
