@@ -13,8 +13,6 @@ import (
 	"strings"
 	"sync"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/render"
@@ -715,16 +713,7 @@ func loadLibraryThemeRegistry(library *template.Library) (*theme.Registry, error
 // the not-yet-resolved library) — the whole-deck validator reports any config
 // error afterwards, through the themes loaded from the resolved root.
 func configuredTemplates(fsys fs.FS) string {
-	data, err := fs.ReadFile(fsys, deck.ConfigFile)
-	if err != nil {
-		return ""
-	}
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return ""
-	}
-	configured, _ := raw["templates"].(string)
-	return configured
+	return deck.ConfiguredTemplates(fsys)
 }
 
 // templatesRetargeted reports whether the currently-configured raw `templates:`
