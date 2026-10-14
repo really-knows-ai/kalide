@@ -33,10 +33,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
@@ -100,17 +97,12 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	// Resolve the deck's template library — every layer it draws from: the
 	// external `templates:` library and the deck-root templates/ — exactly as
 	// `kalide start` does before serving. The raw `templates:` value is read
-	// directly here because deck.LoadConfig needs a theme registry, which comes
-	// from the not-yet-resolved library; an unreadable config yields "" and the
+	// through the shared deck.ConfiguredTemplates because deck.LoadConfig needs
+	// a theme registry, which comes from the not-yet-resolved library; this
+	// mirrors the reload pipeline. An unreadable config yields "" and the
 	// loader then looks for the local templates/ directory.
 	deckFS := os.DirFS(root)
-	configured := ""
-	if data, readErr := fs.ReadFile(deckFS, deck.ConfigFile); readErr == nil {
-		var raw map[string]any
-		if yaml.Unmarshal(data, &raw) == nil {
-			configured, _ = raw["templates"].(string)
-		}
-	}
+	configured := deck.ConfiguredTemplates(deckFS)
 
 	// A library or theme load failure is reported as the first check error: the
 	// report holds exactly this one error, and with --all it still ends there,
