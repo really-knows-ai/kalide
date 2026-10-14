@@ -37,7 +37,6 @@ import (
 	"fmt"
 	htmltmpl "html/template"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/really-knows-ai/kalide/internal/assets"
@@ -226,7 +225,7 @@ func galleryEntries(reg *template.Registry, funcMap htmltmpl.FuncMap) []galleryE
 			Sections:      sections,
 			Body: &galleryBody{
 				Mode:    string(t.Body.Mode),
-				Limits:  bodyLimits(t.Body),
+				Limits:  template.BodyLimits(t.Body),
 				Summary: bodySummary(t.Body),
 			},
 		}
@@ -564,13 +563,20 @@ func galleryFields(t *template.Template) []galleryField {
 	out := make([]galleryField, 0, len(t.Fields))
 	for i := range t.Fields {
 		f := &t.Fields[i]
+		// The shared vocabulary renders a field's type limits but
+		// deliberately returns "" for an enum, so each surface presents the
+		// variants in its own form; the gallery uses its own "one of …" cell.
+		limits := template.FieldLimits(f)
+		if f.Type == template.FieldEnum && len(f.Variants) > 0 {
+			limits = "one of " + strings.Join(f.Variants, ", ")
+		}
 		out = append(out, galleryField{
 			Name:        f.Name,
 			Type:        string(f.Type),
 			Required:    f.Required,
 			Default:     fieldDefault(f),
-			Limits:      fieldLimits(f),
-			Formats:     fieldFormats(f),
+			Limits:      limits,
+			Formats:     template.FieldFormats(f),
 			Description: f.Description,
 		})
 	}
@@ -598,7 +604,7 @@ func gallerySections(t *template.Template) ([]gallerySection, string) {
 			Name:        d.Name,
 			Label:       verb,
 			Accepted:    strings.Join(d.Accepted, ", "),
-			Repeats:     sectionRepeats(d),
+			Repeats:     template.SectionRepeats(d),
 			Description: "",
 		})
 	}
@@ -615,110 +621,6 @@ func fieldDefault(f *template.Field) string {
 	return fmt.Sprint(f.Default)
 }
 
-// fieldLimits renders the rules that apply to a field's type as one human
-// string: text length and plainness, number bounds, date bounds, list item
-// bounds, or the enum variants. It returns "" when no rule applies.
-func fieldLimits(f *template.Field) string {
-	var parts []string
-	switch f.Type {
-	case template.FieldText:
-		if f.MaxLength > 0 {
-			parts = append(parts, fmt.Sprintf("max %d chars", f.MaxLength))
-		}
-		if f.Plain {
-			parts = append(parts, "plain")
-		}
-	case template.FieldNumber:
-		parts = append(parts, numberBounds(f.Min, f.Max)...)
-	case template.FieldDate:
-		parts = append(parts, dateBounds(f.MinDate, f.MaxDate)...)
-	case template.FieldList:
-		parts = append(parts, listBounds(f.MinItems, f.MaxItems)...)
-	case template.FieldEnum:
-		if len(f.Variants) > 0 {
-			parts = append(parts, "one of "+strings.Join(f.Variants, ", "))
-		}
-	}
-	return strings.Join(parts, ", ")
-}
-
-// numberBounds renders inclusive number bounds: "≥ n", "≤ n" or "n–m".
-func numberBounds(min, max *float64) []string {
-	switch {
-	case min != nil && max != nil:
-		return []string{boundText(*min) + "–" + boundText(*max)}
-	case min != nil:
-		return []string{"≥ " + boundText(*min)}
-	case max != nil:
-		return []string{"≤ " + boundText(*max)}
-	default:
-		return nil
-	}
-}
-
-// dateBounds renders inclusive date bounds: "from YYYY-MM-DD", "to YYYY-MM-DD"
-// or "YYYY-MM-DD–YYYY-MM-DD".
-func dateBounds(min, max string) []string {
-	switch {
-	case min != "" && max != "":
-		return []string{min + "–" + max}
-	case min != "":
-		return []string{"from " + min}
-	case max != "":
-		return []string{"to " + max}
-	default:
-		return nil
-	}
-}
-
-// listBounds renders list item bounds: "n–m items", "≥ n items" or
-// "≤ m items". A zero minimum and a non-positive maximum mean unbounded.
-func listBounds(min, max int) []string {
-	switch {
-	case min > 0 && max > 0:
-		return []string{strconv.Itoa(min) + "–" + strconv.Itoa(max) + " items"}
-	case min > 0:
-		return []string{"≥ " + strconv.Itoa(min) + " items"}
-	case max > 0:
-		return []string{"≤ " + strconv.Itoa(max) + " items"}
-	default:
-		return nil
-	}
-}
-
-// fieldFormats renders a field's named formats and its default: for example
-// "compact, exact, percent (default compact)". It returns "" when the field
-// takes no format.
-func fieldFormats(f *template.Field) string {
-	if len(f.Formats) == 0 && f.DefaultFormat == "" {
-		return ""
-	}
-	out := strings.Join(f.Formats, ", ")
-	if f.DefaultFormat != "" {
-		if out != "" {
-			out += " (default " + f.DefaultFormat + ")"
-		} else {
-			out = "default " + f.DefaultFormat
-		}
-	}
-	return out
-}
-
-// sectionRepeats renders a section's repeat bounds: "2–4", "≥ 1" or "≤ 4". It
-// returns "" when the section is unrestricted, which the page renders as "any".
-func sectionRepeats(d *template.SectionDecl) string {
-	switch {
-	case d.Min > 0 && d.Max > 0:
-		return strconv.Itoa(d.Min) + "–" + strconv.Itoa(d.Max)
-	case d.Min > 0:
-		return "≥ " + strconv.Itoa(d.Min)
-	case d.Max > 0:
-		return "≤ " + strconv.Itoa(d.Max)
-	default:
-		return ""
-	}
-}
-
 // bodySummary is the one-line plain-language sentence for an implied body rule.
 func bodySummary(b template.BodyRule) string {
 	switch b.Mode {
@@ -729,32 +631,4 @@ func bodySummary(b template.BodyRule) string {
 	default:
 		return "A body is optional."
 	}
-}
-
-// bodyLimits renders the bounds applied to a body: "max 2 paragraphs",
-// "max 120 words", "max 4 list items" and, when the rule allows a body but no
-// subheadings, "no subheadings". It returns "" when there are none.
-func bodyLimits(b template.BodyRule) string {
-	var parts []string
-	if b.MaxWords > 0 {
-		parts = append(parts, fmt.Sprintf("max %d words", b.MaxWords))
-	}
-	if b.MaxParagraphs > 0 {
-		parts = append(parts, fmt.Sprintf("max %d paragraphs", b.MaxParagraphs))
-	}
-	if b.MaxListItems > 0 {
-		parts = append(parts, fmt.Sprintf("max %d list items", b.MaxListItems))
-	}
-	if b.Mode != template.BodyDisallowed && !b.Subheadings {
-		parts = append(parts, "no subheadings")
-	}
-	return strings.Join(parts, ", ")
-}
-
-// boundText renders a numeric bound without a trailing ".0": 0 becomes "0".
-func boundText(n float64) string {
-	if n == float64(int64(n)) {
-		return strconv.FormatInt(int64(n), 10)
-	}
-	return strconv.FormatFloat(n, 'f', -1, 64)
 }
