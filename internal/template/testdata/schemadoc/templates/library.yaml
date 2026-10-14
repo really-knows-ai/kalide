@@ -1,0 +1,3 @@
+name: schemadoc-fixture
+description: one template carrying bounded repeats, field rules and a limited body, shared by the CLI and gallery schema-documentation tests
+format: 1

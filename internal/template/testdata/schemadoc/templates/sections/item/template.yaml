@@ -1,0 +1,7 @@
+description: a minimal section accepted by the schemadoc probe
+fields:
+  - name: label
+    type: text
+    required: true
+body:
+  mode: optional

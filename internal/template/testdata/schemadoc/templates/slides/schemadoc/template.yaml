@@ -1,0 +1,22 @@
+description: a probe template carrying bounded repeats, field rules and a limited body
+fields:
+  - name: heading
+    type: text
+    required: true
+    max_length: 40
+    plain: true
+  - name: ratio
+    type: number
+    min: 1
+    max: 10
+    formats: [compact, exact]
+    default_format: compact
+sections:
+  - name: items
+    accepted: [item]
+    min: 2
+    max: 4
+body:
+  mode: optional
+  max_words: 120
+  subheadings: false
