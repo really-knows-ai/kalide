@@ -753,37 +753,6 @@ type Variant struct {
 	Value string
 }
 
-// Variants returns the layout variant each enum field of tmpl selects for the
-// author's values, in field declaration order. Enum fields are the only variant
-// mechanism, so every other field type is ignored, and no variant is accepted
-// from anywhere else.
-//
-// It only resolves the selection; whether a value is one of Field.Variants is
-// CheckValues' enum rule, so a non-string or unknown value is passed through
-// here rather than re-validated.
-func (s *Section) Variants(tmpl *Template, values map[string]any) []Variant {
-	if tmpl == nil {
-		return nil
-	}
-	var out []Variant
-	for i := range tmpl.Fields {
-		f := &tmpl.Fields[i]
-		if f.Type != FieldEnum {
-			continue
-		}
-		value := ""
-		if raw, ok := values[f.Name]; ok {
-			if str, ok := raw.(string); ok {
-				value = str
-			}
-		} else if def, ok := f.Default.(string); ok {
-			value = def
-		}
-		out = append(out, Variant{Field: f.Name, Value: value})
-	}
-	return out
-}
-
 // HelperCalls statically extracts every `{{ section "name" [fields] [body] }}`
 // invocation from tmpl's layout, in source order.
 //
