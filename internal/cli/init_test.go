@@ -26,13 +26,13 @@ package cli
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/really-knows-ai/kalide/internal/config"
+	"github.com/really-knows-ai/kalide/internal/deck"
 	"github.com/really-knows-ai/kalide/internal/displaypath"
 	"github.com/really-knows-ai/kalide/internal/template"
 	"github.com/really-knows-ai/kalide/internal/validate"
@@ -1198,13 +1198,7 @@ func newInitExternalLibrary(t *testing.T) (parent, libDir string) {
 func assertInitDeckLoads(t *testing.T, dir string) {
 	t.Helper()
 	deckFS := os.DirFS(dir)
-	configured := ""
-	if data, err := fs.ReadFile(deckFS, "kalide.yaml"); err == nil {
-		var raw map[string]any
-		if yaml.Unmarshal(data, &raw) == nil {
-			configured, _ = raw["templates"].(string)
-		}
-	}
+	configured := deck.ConfiguredTemplates(deckFS)
 	library, err := template.LoadDeckLibrary(dir, configured)
 	if err != nil {
 		t.Fatalf("init deck %s: template library does not load: %v", dir, err)
