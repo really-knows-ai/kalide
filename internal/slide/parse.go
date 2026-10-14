@@ -496,7 +496,7 @@ func parseSections(file string, lines []string, firstHeading int, cat Catalogue,
 				}
 				section.FenceLine = contentStart + 1
 				section.Frontmatter = blk.values
-				resolvePath := containmentPath(instanceNames(path), pathSegments(path))
+				resolvePath := containmentPath(instanceNames(path), instanceIndexes(path))
 				if err := resolveSectionTemplate(file, cat, name,
 					d, blk, section.FenceLine, headingLine, &section, resolvePath); err != nil {
 					return nil, nil, err
