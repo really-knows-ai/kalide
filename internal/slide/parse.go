@@ -27,12 +27,12 @@ const SlideDelimiter = "---"
 // frontmatter. It is a plain fence with no language tag.
 const SectionFence = "```"
 
-// atxHeadingRe matches a CommonMark ATX heading of depth 1-6: up to three
+// ATXHeadingRe matches a CommonMark ATX heading of depth 1-6: up to three
 // leading spaces, one to six `#`, then whitespace and the heading text (which
 // may be empty). Seven or more `#`, or `#` with no following whitespace, is not
 // a heading. Heading depth is nesting depth (slide-sections). Group 1 is the
 // `#` run and group 2 the raw heading text.
-var atxHeadingRe = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
+var ATXHeadingRe = regexp.MustCompile(`^[ \t]{0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
 
 // Slide is one parsed slide file. Every element carries the 1-based line where
 // it begins, so callers can report positioned errors and render from source.
@@ -1076,7 +1076,7 @@ func matchFence(line string) (isFence bool, lang string) {
 // or "" when the line is not a heading or the heading has no name. A CommonMark
 // ATX closing sequence (`# foo #`, `## foo ##`) is stripped at any depth.
 func headingName(line string) string {
-	m := atxHeadingRe.FindStringSubmatch(line)
+	m := ATXHeadingRe.FindStringSubmatch(line)
 	if m == nil {
 		return ""
 	}
@@ -1096,7 +1096,7 @@ func headingName(line string) string {
 // `#` heading is a top-level section and each extra `#` is one level deeper
 // (slide-sections).
 func headingLevel(line string) (level int, name string, ok bool) {
-	m := atxHeadingRe.FindStringSubmatch(line)
+	m := ATXHeadingRe.FindStringSubmatch(line)
 	if m == nil {
 		return 0, "", false
 	}
