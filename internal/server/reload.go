@@ -551,7 +551,7 @@ func injectLiveReload(doc htmltmpl.HTML, eventPath string) htmltmpl.HTML {
 // proceeds exactly as before, and edits under either resolved layer root (the
 // external layer or the deck-root templates/ local layer) still live-reload.
 func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
-	if templatesRetargeted(r.startupTemplates, configuredTemplates(fsys)) {
+	if templatesRetargeted(r.startupTemplates, deck.ConfiguredTemplates(fsys)) {
 		return NewErrorPage(r.title, restartRequiredError())
 	}
 
