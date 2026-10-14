@@ -616,7 +616,7 @@ func (r *Reloader) renderDefault(fsys fs.FS) (*Page, error) {
 // restart-required error before reaching this method
 // (template-retarget-requires-restart). The template registry is built from
 // the merged library and the theme registry from EVERY layer the merged
-// library exposes (loadLibraryThemeRegistry): each layer's themes/ is loaded
+// library exposes (template.LoadThemeRegistry): each layer's themes/ is loaded
 // from that layer's own root, so a theme a layer contributes keeps that
 // layer's own files and either layer's theme resolves for the deck
 // (layered-template-library). An unresolvable root or library is returned as
@@ -642,7 +642,7 @@ func (r *Reloader) loadLibrary(fsys fs.FS) (*template.Library, *template.Registr
 
 	themes := r.themesOverride
 	if themes == nil {
-		themes, err = loadLibraryThemeRegistry(lib)
+		themes, err = template.LoadThemeRegistry(lib)
 		if err != nil {
 			return lib, reg, nil, err
 		}
