@@ -42,6 +42,24 @@ func FieldLimits(f *Field) string {
 	return strings.Join(parts, ", ")
 }
 
+// FieldFormats renders a field's named formats and its default format, for
+// example "compact, exact, percent (default compact)". It returns "" when the
+// field takes no format.
+func FieldFormats(f *Field) string {
+	if len(f.Formats) == 0 && f.DefaultFormat == "" {
+		return ""
+	}
+	out := strings.Join(f.Formats, ", ")
+	if f.DefaultFormat != "" {
+		if out != "" {
+			out += " (default " + f.DefaultFormat + ")"
+		} else {
+			out = "default " + f.DefaultFormat
+		}
+	}
+	return out
+}
+
 // numberBounds renders inclusive number bounds: "≥ n", "≤ n" or "n–m".
 func numberBounds(min, max *float64) []string {
 	switch {
