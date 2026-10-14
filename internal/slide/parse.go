@@ -726,10 +726,6 @@ func instanceNames(path string) []string { return parseChain(path).names }
 // instanceIndexes returns the instance indexes of a rendered containment path.
 func instanceIndexes(path string) []int { return parseChain(path).indexes }
 
-// pathSegments returns the indexes of a rendered containment path (the same as
-// instanceIndexes), named for the containmentPath call sites.
-func pathSegments(path string) []int { return parseChain(path).indexes }
-
 // sectionDecl mirrors a Catalogue SectionDecl result, including the
 // declaration's max_depth bound (maxDepth, 0 when unbounded).
 type sectionDecl struct {
