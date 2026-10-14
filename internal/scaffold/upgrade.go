@@ -476,7 +476,7 @@ func validateUpgradedProject(dir string, kind projectKind) error {
 // template library (template.LoadDeckLibrary, honouring a configured
 // `templates:` path and merging the deck-root templates/ layer alongside it),
 // build the theme registry from EVERY resolved layer's own themes/
-// (loadLibraryThemeRegistry), build the template registry
+// (template.LoadThemeRegistry), build the template registry
 // (template.NewRegistryFromLibrary), and validate the whole deck
 // (validate.Validate, including deck.LoadConfig). It reads the local files and,
 // for an external-library deck, the configured library read-only.
@@ -489,7 +489,7 @@ func validateUpgradedDeck(dir string) error {
 	if err != nil {
 		return err
 	}
-	themes, err := loadLibraryThemeRegistry(library)
+	themes, err := template.LoadThemeRegistry(library)
 	if err != nil {
 		return err
 	}
